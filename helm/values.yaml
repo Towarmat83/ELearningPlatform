@@ -1,0 +1,97 @@
+# Global settings
+replicaCount: 1
+
+# API (Rust backend)
+api:
+  image:
+    repository: elearning-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  env:
+    JWT_EXPIRY_HOURS: "24"
+    RUST_LOG: "info"
+  # Override in production
+  jwtSecret: "change-me-in-production-use-32+-chars"
+
+# Frontend (SvelteKit)
+frontend:
+  image:
+    repository: elearning-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Ingress
+ingress:
+  enabled: true
+  className: traefik  # or nginx
+  annotations: {}
+  # hostname: elearning.example.com
+  hosts:
+    - host: elearning.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          backend: api
+        - path: /metrics
+          pathType: Prefix
+          backend: api
+        - path: /health
+          pathType: Exact
+          backend: api
+        - path: /
+          pathType: Prefix
+          backend: frontend
+  tls: []
+
+# PostgreSQL (bitnami chart)
+postgresql:
+  enabled: true
+  auth:
+    database: elearning
+    username: elearning
+    password: elearning_secret
+    # For production, use existingSecret
+    # existingSecret: elearning-db-secret
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# External PostgreSQL (if postgresql.enabled = false)
+externalDatabase:
+  host: ""
+  port: 5432
+  name: elearning
+  username: elearning
+  password: ""
+  existingSecret: ""
+  existingSecretKey: ""
+
+# Prometheus monitoring
+serviceMonitor:
+  enabled: false  # Set to true if using kube-prometheus-stack
+  namespace: monitoring
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack

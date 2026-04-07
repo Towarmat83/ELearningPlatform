@@ -1,0 +1,12 @@
+apiVersion: v2
+name: elearning
+description: eLearning Platform — Rust API + SvelteKit Frontend
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: postgresql
+    version: "15.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

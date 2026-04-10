@@ -2,8 +2,9 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { labsApi, type Lab, type LabProgress, type SubmissionResult, type FlagResult } from '$lib/api';
+  import { labsApi, type Lab, type LabProgress, type SubmissionResult, type FlagResult, type Submission } from '$lib/api';
   import { auth, isLoggedIn, toasts } from '$lib/stores';
+  import Markdown from '$lib/Markdown.svelte';
 
   const courseId = $page.params.id!;
   const labId = $page.params.labId!;
@@ -14,6 +15,20 @@
   let submitting = false;
   let result: SubmissionResult | null = null;
   let showHint = false;
+  let showHistory = false;
+  let history: Submission[] = [];
+  let loadingHistory = false;
+
+  async function loadHistory() {
+    if (history.length > 0) { showHistory = !showHistory; return; }
+    loadingHistory = true;
+    try {
+      const res = await labsApi.mySubmissions(courseId, labId, $auth.token!);
+      history = res.submissions;
+      showHistory = true;
+    } catch { /* non-fatal */ }
+    finally { loadingHistory = false; }
+  }
 
   // Single-flag CTF state
   let flagInput = '';
@@ -179,7 +194,7 @@
             {/if}
           </div>
           <h1 class="text-2xl font-bold text-gray-900">{lab.title}</h1>
-          <p class="text-gray-600 mt-2">{lab.description}</p>
+          <div class="text-gray-600 mt-2"><Markdown content={lab.description} /></div>
         </div>
 
         {#if progress}
@@ -208,8 +223,8 @@
           </div>
         {/if}
 
-        <div class="prose max-w-none text-gray-700 mb-4 whitespace-pre-wrap leading-relaxed">
-          {lab.content.instructions ?? lab.content.challenge ?? ''}
+        <div class="mb-4">
+          <Markdown content={lab.content.instructions ?? lab.content.challenge ?? ''} />
         </div>
 
         {#if lab.content.resources?.length}
@@ -321,8 +336,8 @@
     {:else if lab.lab_type === 'ctf'}
       <div class="card mb-6">
         <h2 class="text-lg font-semibold mb-4 text-emerald-700">🚩 Challenge</h2>
-        <div class="prose max-w-none text-gray-700 mb-6 whitespace-pre-wrap leading-relaxed">
-          {lab.content.challenge ?? lab.content.instructions ?? 'No challenge description.'}
+        <div class="mb-6">
+          <Markdown content={lab.content.challenge ?? lab.content.instructions ?? 'No challenge description.'} />
         </div>
 
         {#if lab.content.category}
@@ -397,9 +412,9 @@
           {@const questionText = getQuestionText(question, i)}
           <div class="card" class:border-green-300={!!(qr && qr.is_correct)} class:border-red-300={!!(qr && !qr.is_correct)}>
             <div class="flex items-start justify-between gap-2 mb-3">
-              <h3 class="font-medium text-gray-900">
+              <h3 class="font-medium text-gray-900 flex-1">
                 <span class="text-gray-400 text-sm mr-2">Q{i + 1}.</span>
-                {questionText}
+                <Markdown content={questionText} inline={true} />
               </h3>
               <span class="text-sm font-medium text-gray-400 shrink-0">{question.points} pts</span>
             </div>
@@ -460,5 +475,42 @@
         {/if}
       </div>
     {/if}
+  {/if}
+
+  <!-- ═══════════════════════════════════════════════════
+       HISTORIQUE DES SOUMISSIONS
+  ════════════════════════════════════════════════════ -->
+  {#if progress && progress.total_attempts > 0}
+    <div class="mt-6 border-t border-gray-100 pt-4">
+      <button
+        on:click={loadHistory}
+        class="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1"
+        disabled={loadingHistory}
+      >
+        {#if loadingHistory}
+          <span class="animate-spin">↻</span> Loading...
+        {:else}
+          <span>{showHistory ? '▲' : '▼'}</span>
+          Submission history ({progress.total_attempts} attempt{progress.total_attempts !== 1 ? 's' : ''})
+        {/if}
+      </button>
+
+      {#if showHistory && history.length > 0}
+        <div class="mt-3 space-y-1">
+          {#each history as sub}
+            <div class="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2 text-sm">
+              <span class={sub.is_correct ? 'text-green-600 font-bold' : 'text-red-400'}>
+                {sub.is_correct ? '✓' : '✗'}
+              </span>
+              <span class="font-medium text-gray-700">{sub.score} pts</span>
+              <span class="text-gray-400">· attempt #{sub.attempts}</span>
+              <span class="ml-auto text-xs text-gray-300">
+                {new Date(sub.submitted_at).toLocaleString()}
+              </span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>

@@ -111,6 +111,8 @@ export const adminApi = {
     ),
   adminGetLab: (courseId: string, labId: string, token: string) =>
     api.get<Lab>(`/admin/courses/${courseId}/labs/${labId}`, token),
+  adminLabStats: (courseId: string, labId: string, token: string) =>
+    api.get<LabStats>(`/admin/courses/${courseId}/labs/${labId}/stats`, token),
   courseEnrollments: (courseId: string, token: string) =>
     api.get<{ enrollments: AdminEnrollment[] }>(`/admin/courses/${courseId}/enrollments`, token),
   enrollUser: (courseId: string, userId: string, token: string) =>
@@ -350,6 +352,16 @@ export interface AdminEnrollment {
   username: string;
   email: string;
   enrolled_at: string;
+}
+
+export interface LabStats {
+  total_submissions: number;
+  unique_students: number;
+  success_rate: number;
+  avg_score: number;
+  max_score_achieved: number;
+  completed_count: number;
+  avg_attempts_to_complete: number;
 }
 
 export interface AdminSubmission {

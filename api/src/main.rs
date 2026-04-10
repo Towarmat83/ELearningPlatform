@@ -181,6 +181,10 @@ async fn main() -> anyhow::Result<()> {
             get(routes::submissions::admin_lab_submissions).layer(admin_auth.clone()),
         )
         .route(
+            "/api/admin/courses/:course_id/labs/:lab_id/stats",
+            get(routes::submissions::admin_lab_stats).layer(admin_auth.clone()),
+        )
+        .route(
             "/api/admin/courses/:course_id/enrollments",
             get(routes::courses::admin_list_enrollments)
                 .post(routes::courses::admin_enroll_user)

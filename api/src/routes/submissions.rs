@@ -444,6 +444,54 @@ pub async fn admin_lab_submissions(
     })))
 }
 
+/// Admin: per-lab analytics (success rate, unique students, avg attempts)
+pub async fn admin_lab_stats(
+    State(state): State<AppState>,
+    Path((_course_id, lab_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Value>> {
+    let row = sqlx::query(
+        r#"SELECT
+            COUNT(*)::BIGINT                                                   AS total_submissions,
+            COUNT(DISTINCT user_id)::BIGINT                                    AS unique_students,
+            COALESCE(AVG(CASE WHEN is_correct THEN 100.0 ELSE 0.0 END), 0)    AS success_rate,
+            COALESCE(AVG(score::FLOAT8), 0)                                    AS avg_score,
+            COALESCE(MAX(score), 0)::BIGINT                                    AS max_score_achieved
+           FROM lab_submissions WHERE lab_id = $1"#,
+    )
+    .bind(lab_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    let total_submissions: i64 = row.try_get("total_submissions").unwrap_or(0);
+    let unique_students: i64 = row.try_get("unique_students").unwrap_or(0);
+    let success_rate: f64 = row.try_get("success_rate").unwrap_or(0.0);
+    let avg_score: f64 = row.try_get("avg_score").unwrap_or(0.0);
+    let max_score_achieved: i64 = row.try_get("max_score_achieved").unwrap_or(0);
+
+    let progress_row = sqlx::query(
+        r#"SELECT
+            COUNT(*)::BIGINT                                          AS completed_count,
+            COALESCE(AVG(total_attempts::FLOAT8), 0)                 AS avg_attempts_to_complete
+           FROM lab_progress WHERE lab_id = $1 AND completed = TRUE"#,
+    )
+    .bind(lab_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    let completed_count: i64 = progress_row.try_get("completed_count").unwrap_or(0);
+    let avg_attempts_to_complete: f64 = progress_row.try_get("avg_attempts_to_complete").unwrap_or(0.0);
+
+    Ok(Json(json!({
+        "total_submissions": total_submissions,
+        "unique_students": unique_students,
+        "success_rate": (success_rate * 10.0).round() / 10.0,
+        "avg_score": (avg_score * 10.0).round() / 10.0,
+        "max_score_achieved": max_score_achieved,
+        "completed_count": completed_count,
+        "avg_attempts_to_complete": (avg_attempts_to_complete * 10.0).round() / 10.0,
+    })))
+}
+
 /// Global stats for admin dashboard
 pub async fn admin_stats(State(state): State<AppState>) -> Result<Json<Value>> {
     let total_users: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM users")

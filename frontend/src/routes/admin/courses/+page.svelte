@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { adminApi, coursesApi, labsApi, type CourseWithStats, type Lab, type AdminEnrollment, type AdminUser } from '$lib/api';
+  import { adminApi, coursesApi, labsApi, type CourseWithStats, type Lab, type AdminEnrollment, type AdminUser, type LabStats } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   // ─── State ────────────────────────────────────────────────────────────────
@@ -406,6 +406,39 @@
     } catch (e: any) { toasts.error(e.message); }
   }
 
+  // ─── Lab stats ────────────────────────────────────────────────────────────
+
+  let labStats: Record<string, LabStats | null> = {};
+  let loadingStats: Record<string, boolean> = {};
+  let expandedStats: string | null = null;
+
+  async function toggleLabStats(courseId: string, labId: string) {
+    if (expandedStats === labId) { expandedStats = null; return; }
+    expandedStats = labId;
+    if (labStats[labId] !== undefined) return;
+    loadingStats[labId] = true;
+    loadingStats = loadingStats;
+    try {
+      labStats[labId] = await adminApi.adminLabStats(courseId, labId, $auth.token!);
+    } catch { labStats[labId] = null; }
+    finally { loadingStats[labId] = false; loadingStats = loadingStats; }
+  }
+
+  // ─── Lab reorder ──────────────────────────────────────────────────────────
+
+  async function moveLab(courseId: string, labIndex: number, direction: -1 | 1) {
+    const labs = courseLabs[courseId];
+    const swapIndex = labIndex + direction;
+    if (swapIndex < 0 || swapIndex >= labs.length) return;
+    const a = labs[labIndex];
+    const b = labs[swapIndex];
+    try {
+      await labsApi.update(courseId, a.id, { order_index: b.order_index }, $auth.token!);
+      await labsApi.update(courseId, b.id, { order_index: a.order_index }, $auth.token!);
+      await refreshLabs(courseId);
+    } catch (e: any) { toasts.error(e.message); }
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   function labTypeLabel(type: string) {
@@ -514,28 +547,94 @@
 
                 {#if courseLabs[course.id]?.length}
                   <div class="space-y-2">
-                    {#each courseLabs[course.id] as lab (lab.id)}
+                    {#each courseLabs[course.id] as lab, labIdx (lab.id)}
                       {@const isEditing = labFormMode?.mode === 'edit' && labFormMode.labId === lab.id}
-                      <div class="bg-white rounded-lg border-2 transition-colors p-3 flex items-center gap-3
+                      {@const stats = labStats[lab.id]}
+                      <div class="bg-white rounded-lg border-2 transition-colors
                         {isEditing ? 'border-primary-300' : 'border-gray-100'}">
-                        <span class={lab.lab_type === 'ctf' ? 'badge-ctf text-xs' : 'badge-form text-xs'}>
-                          {labTypeLabel(lab.lab_type)}
-                        </span>
-                        <span class="flex-1 text-sm font-medium text-gray-700 truncate">{lab.title}</span>
-                        <span class="text-xs text-gray-400 shrink-0">{lab.points} pts</span>
-                        <button
-                          on:click={() => toggleLabPublish(course.id, lab)}
-                          class="text-xs shrink-0 {lab.is_published ? 'badge-green' : 'badge-yellow'} cursor-pointer hover:opacity-75 transition-opacity">
-                          {lab.is_published ? 'Live' : 'Draft'}
-                        </button>
-                        <button
-                          on:click={() => startEditLab(course.id, lab.id)}
-                          class="text-xs btn-secondary shrink-0">
-                          Edit
-                        </button>
-                        <button on:click={() => deleteLab(course.id, lab.id)} class="text-xs text-red-400 hover:text-red-600 shrink-0">
-                          Delete
-                        </button>
+                        <div class="p-3 flex items-center gap-3">
+                          <!-- Reorder buttons -->
+                          <div class="flex flex-col gap-0.5 shrink-0">
+                            <button
+                              on:click={() => moveLab(course.id, labIdx, -1)}
+                              disabled={labIdx === 0}
+                              class="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-xs px-1"
+                              title="Move up">▲</button>
+                            <button
+                              on:click={() => moveLab(course.id, labIdx, 1)}
+                              disabled={labIdx === courseLabs[course.id].length - 1}
+                              class="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-xs px-1"
+                              title="Move down">▼</button>
+                          </div>
+
+                          <span class={lab.lab_type === 'ctf' ? 'badge-ctf text-xs' : 'badge-form text-xs'}>
+                            {labTypeLabel(lab.lab_type)}
+                          </span>
+                          <span class="flex-1 text-sm font-medium text-gray-700 truncate">{lab.title}</span>
+                          <span class="text-xs text-gray-400 shrink-0">{lab.points} pts</span>
+                          <button
+                            on:click={() => toggleLabStats(course.id, lab.id)}
+                            class="text-xs shrink-0 {expandedStats === lab.id ? 'text-primary-600 font-medium' : 'text-gray-400 hover:text-gray-600'}"
+                            title="Show analytics">
+                            {loadingStats[lab.id] ? '...' : '📊'}
+                          </button>
+                          <button
+                            on:click={() => toggleLabPublish(course.id, lab)}
+                            class="text-xs shrink-0 {lab.is_published ? 'badge-green' : 'badge-yellow'} cursor-pointer hover:opacity-75 transition-opacity">
+                            {lab.is_published ? 'Live' : 'Draft'}
+                          </button>
+                          <button
+                            on:click={() => startEditLab(course.id, lab.id)}
+                            class="text-xs btn-secondary shrink-0">
+                            Edit
+                          </button>
+                          <button on:click={() => deleteLab(course.id, lab.id)} class="text-xs text-red-400 hover:text-red-600 shrink-0">
+                            Delete
+                          </button>
+                        </div>
+
+                        <!-- Stats panel -->
+                        {#if expandedStats === lab.id}
+                          <div class="border-t border-gray-100 bg-gray-50 px-4 py-3">
+                            {#if stats === null}
+                              <p class="text-xs text-red-400">Failed to load stats.</p>
+                            {:else if stats}
+                              <div class="grid grid-cols-3 md:grid-cols-6 gap-3 text-center">
+                                <div>
+                                  <div class="text-lg font-bold text-gray-800">{stats.total_submissions}</div>
+                                  <div class="text-xs text-gray-400">Submissions</div>
+                                </div>
+                                <div>
+                                  <div class="text-lg font-bold text-gray-800">{stats.unique_students}</div>
+                                  <div class="text-xs text-gray-400">Students</div>
+                                </div>
+                                <div>
+                                  <div class="text-lg font-bold {stats.success_rate >= 60 ? 'text-green-600' : stats.success_rate >= 30 ? 'text-yellow-600' : 'text-red-500'}">
+                                    {stats.success_rate}%
+                                  </div>
+                                  <div class="text-xs text-gray-400">Success rate</div>
+                                </div>
+                                <div>
+                                  <div class="text-lg font-bold text-gray-800">{stats.avg_score}</div>
+                                  <div class="text-xs text-gray-400">Avg score</div>
+                                </div>
+                                <div>
+                                  <div class="text-lg font-bold text-gray-800">{stats.completed_count}</div>
+                                  <div class="text-xs text-gray-400">Completed</div>
+                                </div>
+                                <div>
+                                  <div class="text-lg font-bold text-gray-800">{stats.avg_attempts_to_complete}</div>
+                                  <div class="text-xs text-gray-400">Avg attempts</div>
+                                </div>
+                              </div>
+                              {#if stats.total_submissions === 0}
+                                <p class="text-xs text-gray-400 text-center mt-2">No submissions yet.</p>
+                              {/if}
+                            {:else}
+                              <p class="text-xs text-gray-400">Loading stats...</p>
+                            {/if}
+                          </div>
+                        {/if}
                       </div>
                     {/each}
                   </div>

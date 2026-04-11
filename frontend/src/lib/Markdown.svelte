@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { marked } from 'marked';
+  import { marked } from '$lib/markdown';
 
   export let content: string = '';
   export let inline: boolean = false;

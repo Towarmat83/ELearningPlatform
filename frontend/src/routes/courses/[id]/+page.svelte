@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { coursesApi, labsApi, type CourseWithStats, type Lab, type CourseProgress } from '$lib/api';
+  import { coursesApi, labsApi, type CourseWithStats, type Lab, type CourseProgress, type LeaderboardEntry } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   let course: CourseWithStats | null = null;
@@ -10,6 +10,21 @@
   let progress: CourseProgress | null = null;
   let loading = true;
   let enrolled = false;
+
+  let leaderboard: LeaderboardEntry[] = [];
+  let showLeaderboard = false;
+  let loadingLeaderboard = false;
+
+  async function toggleLeaderboard() {
+    if (leaderboard.length > 0) { showLeaderboard = !showLeaderboard; return; }
+    loadingLeaderboard = true;
+    try {
+      const res = await labsApi.leaderboard(courseId, $auth.token!);
+      leaderboard = res.leaderboard;
+      showLeaderboard = true;
+    } catch { /* non-fatal */ }
+    finally { loadingLeaderboard = false; }
+  }
 
   const courseId = $page.params.id!;
 
@@ -191,5 +206,60 @@
         Enroll in this course to access labs.
       </div>
     {/if}
+
+    <!-- Leaderboard -->
+    {#if enrolled}
+      <div class="mt-6">
+        <button
+          on:click={toggleLeaderboard}
+          class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-primary-600 transition-colors"
+          disabled={loadingLeaderboard}
+        >
+          <span class="text-base">🏆</span>
+          {#if loadingLeaderboard}
+            Loading leaderboard...
+          {:else}
+            {showLeaderboard ? 'Hide leaderboard' : 'Show leaderboard'}
+          {/if}
+        </button>
+
+        {#if showLeaderboard && leaderboard.length > 0}
+          <div class="card mt-3">
+            <h3 class="font-semibold text-gray-800 mb-4">🏆 Leaderboard</h3>
+            <div class="space-y-2">
+              {#each leaderboard as entry}
+                <div class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
+                  {entry.is_me ? 'bg-primary-50 border border-primary-200' : 'hover:bg-gray-50'}">
+                  <!-- Rank badge -->
+                  <div class="w-8 text-center shrink-0">
+                    {#if entry.rank === 1}
+                      <span class="text-lg">🥇</span>
+                    {:else if entry.rank === 2}
+                      <span class="text-lg">🥈</span>
+                    {:else if entry.rank === 3}
+                      <span class="text-lg">🥉</span>
+                    {:else}
+                      <span class="text-sm font-mono text-gray-400">#{entry.rank}</span>
+                    {/if}
+                  </div>
+
+                  <span class="flex-1 text-sm font-medium {entry.is_me ? 'text-primary-700' : 'text-gray-800'}">
+                    {entry.username}
+                    {#if entry.is_me}<span class="text-xs text-primary-400 ml-1">(you)</span>{/if}
+                  </span>
+
+                  <span class="text-xs text-gray-400">{entry.completed_labs} labs</span>
+                  <span class="text-sm font-semibold text-gray-700">⭐ {entry.total_points}</span>
+                </div>
+              {/each}
+            </div>
+            {#if leaderboard.length === 0}
+              <p class="text-sm text-gray-400 text-center py-4">No data yet — be the first!</p>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
   {/if}
 </div>

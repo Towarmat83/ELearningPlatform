@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../app.css';
+  import 'highlight.js/styles/github.css';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
@@ -39,6 +40,9 @@
           {#if $isLoggedIn}
             <a href="/dashboard" class="text-gray-600 hover:text-primary-600 font-medium transition-colors">
               My Learning
+            </a>
+            <a href="/profile" class="text-gray-600 hover:text-primary-600 font-medium transition-colors">
+              Profile
             </a>
             {#if $isAdmin}
               <a href="/admin" class="text-gray-600 hover:text-primary-600 font-medium transition-colors">

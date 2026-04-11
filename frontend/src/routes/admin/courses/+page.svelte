@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminApi, coursesApi, labsApi, type CourseWithStats, type Lab, type AdminEnrollment, type AdminUser, type LabStats } from '$lib/api';
+  import Markdown from '$lib/Markdown.svelte';
   import { auth, toasts } from '$lib/stores';
 
   // ─── State ────────────────────────────────────────────────────────────────
@@ -85,6 +86,11 @@
       flag: '',
     };
   }
+
+  // Preview toggles for markdown fields
+  let previewDesc = false;
+  let previewChallenge = false;
+  let previewInstructions = false;
 
   function resetLabForm() {
     labForm = {
@@ -668,8 +674,24 @@
                       </select>
                     </div>
                     <div class="md:col-span-2">
-                      <label class="label">Description</label>
-                      <textarea class="input" rows="2" bind:value={labForm.description} placeholder="Describe this lab..."></textarea>
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="label mb-0">Description</label>
+                        <div class="flex gap-1">
+                          <button type="button" class="text-xs px-2 py-0.5 rounded {!previewDesc ? 'bg-primary-100 text-primary-700 font-medium' : 'text-gray-400 hover:text-gray-600'}" on:click={() => previewDesc = false}>Write</button>
+                          <button type="button" class="text-xs px-2 py-0.5 rounded {previewDesc ? 'bg-primary-100 text-primary-700 font-medium' : 'text-gray-400 hover:text-gray-600'}" on:click={() => previewDesc = true}>Preview</button>
+                        </div>
+                      </div>
+                      {#if previewDesc}
+                        <div class="input min-h-[5rem] bg-gray-50">
+                          {#if labForm.description}
+                            <Markdown content={labForm.description} />
+                          {:else}
+                            <span class="text-gray-300 italic text-sm">Nothing to preview</span>
+                          {/if}
+                        </div>
+                      {:else}
+                        <textarea class="input" rows="2" bind:value={labForm.description} placeholder="Describe this lab... (supports Markdown)"></textarea>
+                      {/if}
                     </div>
                     <div>
                       <label class="label">Points</label>
@@ -806,9 +828,25 @@
                       <!-- Single flag -->
                       {#if labForm.ctf_mode === 'single'}
                         <div>
-                          <label class="label">Challenge description *</label>
-                          <textarea class="input" rows="4" bind:value={labForm.ctf_challenge}
-                            placeholder="Describe the challenge, what the student needs to find..."></textarea>
+                          <div class="flex items-center justify-between mb-1">
+                            <label class="label mb-0">Challenge description *</label>
+                            <div class="flex gap-1">
+                              <button type="button" class="text-xs px-2 py-0.5 rounded {!previewChallenge ? 'bg-primary-100 text-primary-700 font-medium' : 'text-gray-400 hover:text-gray-600'}" on:click={() => previewChallenge = false}>Write</button>
+                              <button type="button" class="text-xs px-2 py-0.5 rounded {previewChallenge ? 'bg-primary-100 text-primary-700 font-medium' : 'text-gray-400 hover:text-gray-600'}" on:click={() => previewChallenge = true}>Preview</button>
+                            </div>
+                          </div>
+                          {#if previewChallenge}
+                            <div class="input min-h-[6rem] bg-gray-50">
+                              {#if labForm.ctf_challenge}
+                                <Markdown content={labForm.ctf_challenge} />
+                              {:else}
+                                <span class="text-gray-300 italic text-sm">Nothing to preview</span>
+                              {/if}
+                            </div>
+                          {:else}
+                            <textarea class="input" rows="4" bind:value={labForm.ctf_challenge}
+                              placeholder="Describe the challenge... (supports **Markdown**, `code`, links)"></textarea>
+                          {/if}
                         </div>
                         <div class="grid md:grid-cols-2 gap-3">
                           <div>
@@ -847,9 +885,25 @@
                       <!-- Multi-flag -->
                       {:else}
                         <div>
-                          <label class="label">Instructions</label>
-                          <textarea class="input" rows="3" bind:value={labForm.ctf_instructions}
-                            placeholder="Overall scenario and instructions for the student..."></textarea>
+                          <div class="flex items-center justify-between mb-1">
+                            <label class="label mb-0">Instructions</label>
+                            <div class="flex gap-1">
+                              <button type="button" class="text-xs px-2 py-0.5 rounded {!previewInstructions ? 'bg-primary-100 text-primary-700 font-medium' : 'text-gray-400 hover:text-gray-600'}" on:click={() => previewInstructions = false}>Write</button>
+                              <button type="button" class="text-xs px-2 py-0.5 rounded {previewInstructions ? 'bg-primary-100 text-primary-700 font-medium' : 'text-gray-400 hover:text-gray-600'}" on:click={() => previewInstructions = true}>Preview</button>
+                            </div>
+                          </div>
+                          {#if previewInstructions}
+                            <div class="input min-h-[5rem] bg-gray-50">
+                              {#if labForm.ctf_instructions}
+                                <Markdown content={labForm.ctf_instructions} />
+                              {:else}
+                                <span class="text-gray-300 italic text-sm">Nothing to preview</span>
+                              {/if}
+                            </div>
+                          {:else}
+                            <textarea class="input" rows="3" bind:value={labForm.ctf_instructions}
+                              placeholder="Overall scenario and instructions... (supports Markdown)"></textarea>
+                          {/if}
                         </div>
 
                         <div>

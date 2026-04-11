@@ -22,6 +22,7 @@
     "vite": "^5.2.11"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
     "lucide-svelte": "^0.379.0",
     "marked": "^18.0.0"
   },

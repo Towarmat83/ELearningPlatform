@@ -90,6 +90,10 @@ async fn main() -> anyhow::Result<()> {
             "/api/auth/password",
             put(routes::auth::change_password).layer(auth.clone()),
         )
+        .route(
+            "/api/auth/profile",
+            put(routes::auth::update_profile).layer(auth.clone()),
+        )
 
         // Courses (public read)
         .route("/api/courses", get(routes::courses::list_courses))
@@ -117,6 +121,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/my/courses",
             get(routes::courses::my_courses).layer(auth.clone()),
+        )
+        .route(
+            "/api/courses/:id/leaderboard",
+            get(routes::courses::course_leaderboard).layer(auth.clone()),
         )
 
         // Labs (protected)

@@ -55,6 +55,8 @@ export const authApi = {
   me: (token: string) => api.get<UserPublic>('/auth/me', token),
   changePassword: (oldPassword: string, newPassword: string, token: string) =>
     api.put('/auth/password', { old_password: oldPassword, new_password: newPassword }, token),
+  updateProfile: (data: { bio?: string; avatar_url?: string }, token: string) =>
+    api.put<UserPublic>('/auth/profile', data, token),
 };
 
 // Courses
@@ -91,6 +93,8 @@ export const labsApi = {
     api.get<{ submissions: Submission[] }>(`/courses/${courseId}/labs/${labId}/submissions`, token),
   myProgress: (courseId: string, token: string) =>
     api.get<CourseProgress>(`/courses/${courseId}/progress`, token),
+  leaderboard: (courseId: string, token: string) =>
+    api.get<{ leaderboard: LeaderboardEntry[] }>(`/courses/${courseId}/leaderboard`, token),
 };
 
 // Admin
@@ -352,6 +356,16 @@ export interface AdminEnrollment {
   username: string;
   email: string;
   enrolled_at: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: string;
+  is_me: boolean;
+  username: string;
+  completed_labs: number;
+  total_points: number;
+  last_activity: string | null;
 }
 
 export interface LabStats {

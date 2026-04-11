@@ -471,3 +471,71 @@ pub async fn admin_unenroll_user(
     crate::metrics::ENROLLMENTS_TOTAL.dec();
     Ok(Json(json!({ "message": "User unenrolled" })))
 }
+
+pub async fn course_leaderboard(
+    State(state): State<AppState>,
+    claims: axum::extract::Extension<Claims>,
+    Path(course_id): Path<Uuid>,
+) -> Result<Json<Value>> {
+    // Must be enrolled or admin
+    if claims.role != "admin" {
+        let enrolled: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM enrollments WHERE user_id = $1 AND course_id = $2",
+        )
+        .bind(claims.sub)
+        .bind(course_id)
+        .fetch_one(&state.db)
+        .await?;
+
+        if enrolled == 0 {
+            return Err(AppError::Forbidden("Enroll to see the leaderboard".to_string()));
+        }
+    }
+
+    use sqlx::Row as _;
+
+    let rows = sqlx::query(
+        r#"SELECT
+            u.id::TEXT        AS user_id,
+            u.username,
+            COUNT(DISTINCT lp.lab_id) FILTER (WHERE lp.completed = TRUE)::BIGINT AS completed_labs,
+            COALESCE(SUM(lp.best_score), 0)::BIGINT                               AS total_points,
+            MAX(lp.last_attempt_at)                                                AS last_activity
+           FROM enrollments e
+           JOIN users u ON u.id = e.user_id
+           LEFT JOIN lab_progress lp ON lp.user_id = u.id AND lp.course_id = $1
+           WHERE e.course_id = $1 AND u.is_active = TRUE
+           GROUP BY u.id, u.username
+           ORDER BY total_points DESC, completed_labs DESC
+           LIMIT 20"#,
+    )
+    .bind(course_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let my_id = claims.sub.to_string();
+
+    let leaderboard: Vec<Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let user_id: String = r.try_get("user_id").unwrap_or_default();
+            let username: String = r.try_get("username").unwrap_or_default();
+            let completed_labs: i64 = r.try_get("completed_labs").unwrap_or(0);
+            let total_points: i64 = r.try_get("total_points").unwrap_or(0);
+            let last_activity: Option<chrono::DateTime<chrono::Utc>> =
+                r.try_get("last_activity").unwrap_or(None);
+            json!({
+                "rank": (i + 1) as i64,
+                "user_id": user_id,
+                "is_me": user_id == my_id,
+                "username": username,
+                "completed_labs": completed_labs,
+                "total_points": total_points,
+                "last_activity": last_activity,
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({ "leaderboard": leaderboard })))
+}

@@ -103,6 +103,31 @@ pub async fn me(
     Ok(Json(UserPublic::from(user)))
 }
 
+pub async fn update_profile(
+    State(state): State<AppState>,
+    claims: axum::extract::Extension<crate::middleware::auth::Claims>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<UserPublic>> {
+    let bio = req["bio"].as_str();
+    let avatar_url = req["avatar_url"].as_str();
+
+    let user = sqlx::query_as::<_, crate::models::user::User>(
+        r#"UPDATE users SET
+            bio = COALESCE($1, bio),
+            avatar_url = COALESCE($2, avatar_url),
+            updated_at = NOW()
+           WHERE id = $3
+           RETURNING *"#,
+    )
+    .bind(bio)
+    .bind(avatar_url)
+    .bind(claims.sub)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(UserPublic::from(user)))
+}
+
 pub async fn change_password(
     State(state): State<AppState>,
     claims: axum::extract::Extension<crate::middleware::auth::Claims>,

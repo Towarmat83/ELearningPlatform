@@ -40,6 +40,12 @@ function createAuthStore() {
       }
       set({ token: null, user: null });
     },
+    setUser: (user: UserPublic) => {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+      update((s) => ({ ...s, user }));
+    },
     init: () => {
       if (typeof localStorage !== 'undefined') {
         const token = localStorage.getItem('token');

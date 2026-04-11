@@ -46,7 +46,14 @@ export const api = {
   delete: <T>(path: string, token?: string) => request<T>('DELETE', path, undefined, token),
 };
 
-// Auth
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface OAuthProvider {
+  id: string;
+  name: string;
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }),
@@ -57,6 +64,42 @@ export const authApi = {
     api.put('/auth/password', { old_password: oldPassword, new_password: newPassword }, token),
   updateProfile: (data: { bio?: string; avatar_url?: string }, token: string) =>
     api.put<UserPublic>('/auth/profile', data, token),
+};
+
+// SSO
+export const ssoApi = {
+  providers: () => api.get<{ providers: OAuthProvider[] }>('/auth/oauth/providers'),
+  authorize: (provider: string) =>
+    api.get<{ url: string; state: string }>(`/auth/oauth/${provider}/authorize`),
+  callback: (code: string, state: string) =>
+    api.post<AuthResponse>('/auth/oauth/callback', { code, state }),
+};
+
+// Public settings (subset exposed to unauthenticated users)
+export interface PublicSettings {
+  registration_enabled: string;     // "true" | "false"
+  sso_local_login_enabled: string;  // "true" | "false"
+  password_min_length: string;      // numeric string
+  password_require_uppercase: string;
+  password_require_number: string;
+}
+
+export const publicSettingsApi = {
+  get: () => api.get<PublicSettings>('/settings/public'),
+};
+
+// Admin settings
+export interface PlatformSetting {
+  key: string;
+  value: string;
+  description: string | null;
+}
+
+export const adminSettingsApi = {
+  get: (token: string) =>
+    api.get<{ settings: PlatformSetting[] }>('/admin/settings', token),
+  update: (data: Record<string, string>, token: string) =>
+    api.put<{ settings: PlatformSetting[] }>('/admin/settings', data, token),
 };
 
 // Courses
@@ -209,13 +252,25 @@ export interface Lab {
   course_id: string;
   title: string;
   description: string;
-  lab_type: 'form' | 'ctf';
+  lab_type: 'form' | 'ctf' | 'interactive';
   content: LabContent;
   flag?: string; // admin only
   points: number;
   order_index: number;
   is_published: boolean;
   created_at: string;
+}
+
+export interface InteractiveCommand {
+  cmd: string;
+  explanation?: string;
+}
+
+export interface InteractiveStep {
+  id: string;
+  title: string;
+  description: string; // markdown
+  commands?: InteractiveCommand[];
 }
 
 export interface LabContent {
@@ -231,6 +286,8 @@ export interface LabContent {
   flag_hint?: string;
   // Form
   questions?: Question[];
+  // Interactive
+  steps?: InteractiveStep[];
 }
 
 export interface CtfFlag {
@@ -253,7 +310,7 @@ export interface Question {
 export interface CreateLab {
   title: string;
   description: string;
-  lab_type: 'form' | 'ctf';
+  lab_type: 'form' | 'ctf' | 'interactive';
   content: unknown;
   flag?: string;
   points?: number;
@@ -315,7 +372,7 @@ export interface CourseProgress {
 export interface LabProgressSummary {
   lab_id: string;
   lab_title: string;
-  lab_type: 'form' | 'ctf';
+  lab_type: 'form' | 'ctf' | 'interactive';
   points: number;
   completed: boolean;
   best_score: number;

@@ -46,10 +46,17 @@
   let labFormMode: LabFormMode = null;
   let labFormSaving = false;
 
+  type InteractiveCommand = { cmd: string; explanation: string };
+  type InteractiveStep = { id: string; title: string; description: string; commands: InteractiveCommand[] };
+
+  function newStep(): InteractiveStep {
+    return { id: `step${Date.now()}`, title: '', description: '', commands: [{ cmd: '', explanation: '' }] };
+  }
+
   let labForm = {
     title: '',
     description: '',
-    lab_type: 'form' as 'form' | 'ctf',
+    lab_type: 'form' as 'form' | 'ctf' | 'interactive',
     points: 100,
     is_published: true,
     order_index: 0,
@@ -64,6 +71,9 @@
     ctf_instructions: '',
     ctf_flags: [] as MultiFlag[],
     ctf_docker_image: '',
+    // Interactive
+    interactive_docker_image: '',
+    interactive_steps: [] as InteractiveStep[],
   };
 
   function newQuestion(): FormQuestion {
@@ -110,6 +120,8 @@
       ctf_instructions: '',
       ctf_flags: [newMultiFlag()],
       ctf_docker_image: '',
+      interactive_docker_image: '',
+      interactive_steps: [newStep()],
     };
   }
 
@@ -199,7 +211,7 @@
       resetLabForm();
       labForm.title = lab.title;
       labForm.description = lab.description;
-      labForm.lab_type = lab.lab_type as 'form' | 'ctf';
+      labForm.lab_type = lab.lab_type as 'form' | 'ctf' | 'interactive';
       labForm.points = lab.points;
       labForm.is_published = lab.is_published;
       labForm.order_index = lab.order_index;
@@ -216,6 +228,16 @@
           explanation: q.explanation ?? '',
         }));
         if (labForm.questions.length === 0) labForm.questions = [newQuestion()];
+      } else if (lab.lab_type === 'interactive') {
+        labForm.interactive_docker_image = (lab.content.docker_image as string) ?? '';
+        const rawSteps = (lab.content.steps ?? []) as any[];
+        labForm.interactive_steps = rawSteps.map(s => ({
+          id: s.id ?? `step${Date.now()}`,
+          title: s.title ?? '',
+          description: s.description ?? '',
+          commands: (s.commands ?? []).map((c: any) => ({ cmd: c.cmd ?? '', explanation: c.explanation ?? '' })),
+        }));
+        if (labForm.interactive_steps.length === 0) labForm.interactive_steps = [newStep()];
       } else {
         const flags = lab.content.flags as any[] | undefined;
         if (flags && flags.length > 0) {
@@ -254,7 +276,20 @@
     let content: unknown;
     let flag: string | undefined;
 
-    if (labForm.lab_type === 'form') {
+    if (labForm.lab_type === 'interactive') {
+      content = {
+        docker_image: labForm.interactive_docker_image.trim(),
+        steps: labForm.interactive_steps.map(s => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          commands: s.commands.filter(c => c.cmd.trim()).map(c => ({
+            cmd: c.cmd.trim(),
+            ...(c.explanation.trim() ? { explanation: c.explanation.trim() } : {}),
+          })),
+        })),
+      };
+    } else if (labForm.lab_type === 'form') {
       content = {
         questions: labForm.questions.map(q => ({
           id: q.id,
@@ -314,6 +349,14 @@
     }
     if (labForm.lab_type === 'form' && labForm.questions.length === 0) {
       toasts.error('Add at least one question');
+      return;
+    }
+    if (labForm.lab_type === 'interactive' && !labForm.interactive_docker_image.trim()) {
+      toasts.error('Docker image required for interactive lab');
+      return;
+    }
+    if (labForm.lab_type === 'interactive' && labForm.interactive_steps.length === 0) {
+      toasts.error('Add at least one step');
       return;
     }
 
@@ -387,6 +430,19 @@
   function addMultiFlag() { labForm.ctf_flags = [...labForm.ctf_flags, newMultiFlag()]; }
   function removeMultiFlag(i: number) { labForm.ctf_flags = labForm.ctf_flags.filter((_, idx) => idx !== i); }
 
+  // ─── Interactive helpers ──────────────────────────────────────────────────
+
+  function addStep() { labForm.interactive_steps = [...labForm.interactive_steps, newStep()]; }
+  function removeStep(i: number) { labForm.interactive_steps = labForm.interactive_steps.filter((_, idx) => idx !== i); }
+  function addCommand(si: number) {
+    labForm.interactive_steps[si].commands = [...labForm.interactive_steps[si].commands, { cmd: '', explanation: '' }];
+    labForm.interactive_steps = labForm.interactive_steps;
+  }
+  function removeCommand(si: number, ci: number) {
+    labForm.interactive_steps[si].commands = labForm.interactive_steps[si].commands.filter((_, i) => i !== ci);
+    labForm.interactive_steps = labForm.interactive_steps;
+  }
+
   // ─── Enrollments ──────────────────────────────────────────────────────────
 
   async function enrollUser(courseId: string) {
@@ -454,7 +510,9 @@
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   function labTypeLabel(type: string) {
-    return type === 'ctf' ? '🚩 CTF' : '📝 Quiz';
+    if (type === 'ctf') return '🚩 CTF';
+    if (type === 'interactive') return '⚡ Interactive';
+    return '📝 Quiz';
   }
 
   function labFormTitle() {
@@ -674,9 +732,14 @@
                     <div>
                       <label class="label">Type</label>
                       <select class="input" bind:value={labForm.lab_type}
-                        on:change={() => { labForm.questions = labForm.questions.length ? labForm.questions : [newQuestion()]; labForm.ctf_flags = labForm.ctf_flags.length ? labForm.ctf_flags : [newMultiFlag()]; }}>
+                        on:change={() => {
+                          labForm.questions = labForm.questions.length ? labForm.questions : [newQuestion()];
+                          labForm.ctf_flags = labForm.ctf_flags.length ? labForm.ctf_flags : [newMultiFlag()];
+                          labForm.interactive_steps = labForm.interactive_steps.length ? labForm.interactive_steps : [newStep()];
+                        }}>
                         <option value="form">📝 Quiz</option>
                         <option value="ctf">🚩 CTF Challenge</option>
+                        <option value="interactive">⚡ Interactive Lab</option>
                       </select>
                     </div>
                     <div class="md:col-span-2">
@@ -713,8 +776,78 @@
                     </div>
                   </div>
 
+                  <!-- ─── INTERACTIVE LAB ──────────────────────────────────── -->
+                  {#if labForm.lab_type === 'interactive'}
+                    <div class="border-t pt-4 space-y-4">
+                      <div>
+                        <label class="label">Docker Image *</label>
+                        <input class="input font-mono text-sm" bind:value={labForm.interactive_docker_image}
+                          placeholder="e.g. ubuntu:22.04" />
+                        <p class="text-xs text-gray-400 mt-1">Container launched for each student. Must have <code>/bin/sh</code>.</p>
+                      </div>
+
+                      <div>
+                        <div class="flex items-center justify-between mb-2">
+                          <label class="label mb-0">Steps ({labForm.interactive_steps.length})</label>
+                          <button class="text-xs btn-secondary" on:click={addStep}>+ Add Step</button>
+                        </div>
+                        <div class="space-y-4">
+                          {#each labForm.interactive_steps as step, si (step.id)}
+                            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                              <div class="flex items-start justify-between gap-2 mb-3">
+                                <span class="text-xs font-mono text-gray-400 mt-1">Step {si + 1}</span>
+                                {#if labForm.interactive_steps.length > 1}
+                                  <button class="text-gray-300 hover:text-red-400 text-lg leading-none ml-auto"
+                                    on:click={() => removeStep(si)}>×</button>
+                                {/if}
+                              </div>
+                              <div class="space-y-2 mb-3">
+                                <div>
+                                  <label class="label text-xs">Title *</label>
+                                  <input class="input text-sm" bind:value={labForm.interactive_steps[si].title}
+                                    placeholder="e.g. 1. Explorer le système de fichiers" />
+                                </div>
+                                <div>
+                                  <label class="label text-xs">Description (Markdown)</label>
+                                  <textarea class="input text-sm" rows="3"
+                                    bind:value={labForm.interactive_steps[si].description}
+                                    placeholder="Explique ce que l'étudiant va faire dans ce step..."></textarea>
+                                </div>
+                              </div>
+
+                              <div>
+                                <div class="flex items-center justify-between mb-1">
+                                  <label class="label text-xs mb-0">Commandes cliquables</label>
+                                  <button class="text-xs text-primary-600 hover:underline"
+                                    on:click={() => addCommand(si)}>+ Ajouter</button>
+                                </div>
+                                <div class="space-y-2">
+                                  {#each step.commands as cmd, ci}
+                                    <div class="flex gap-2 items-start">
+                                      <div class="flex-1 grid grid-cols-2 gap-2">
+                                        <input class="input text-sm font-mono"
+                                          bind:value={labForm.interactive_steps[si].commands[ci].cmd}
+                                          placeholder="ls -la" />
+                                        <input class="input text-sm"
+                                          bind:value={labForm.interactive_steps[si].commands[ci].explanation}
+                                          placeholder="Explication (optionnelle)" />
+                                      </div>
+                                      {#if step.commands.length > 1}
+                                        <button class="text-gray-300 hover:text-red-400 text-lg leading-none pt-1"
+                                          on:click={() => removeCommand(si, ci)}>×</button>
+                                      {/if}
+                                    </div>
+                                  {/each}
+                                </div>
+                              </div>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    </div>
+
                   <!-- ─── FORM / QUIZ ─────────────────────────────────────── -->
-                  {#if labForm.lab_type === 'form'}
+                  {:else if labForm.lab_type === 'form'}
                     <div class="border-t pt-4">
                       <div class="flex items-center justify-between mb-3">
                         <h5 class="text-sm font-semibold text-gray-700">Questions ({labForm.questions.length})</h5>
@@ -816,7 +949,7 @@
                     </div>
 
                   <!-- ─── CTF ────────────────────────────────────────────── -->
-                  {:else}
+                  {:else if labForm.lab_type === 'ctf'}
                     <div class="border-t pt-4 space-y-4">
 
                       <!-- Mode selector -->

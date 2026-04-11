@@ -120,8 +120,8 @@ pub async fn create_lab(
     Json(req): Json<CreateLabRequest>,
 ) -> Result<Json<Value>> {
     // Validate lab type
-    if req.lab_type != "form" && req.lab_type != "ctf" {
-        return Err(AppError::BadRequest("lab_type must be 'form' or 'ctf'".to_string()));
+    if req.lab_type != "form" && req.lab_type != "ctf" && req.lab_type != "interactive" {
+        return Err(AppError::BadRequest("lab_type must be 'form', 'ctf', or 'interactive'".to_string()));
     }
 
     // CTF labs must have a flag

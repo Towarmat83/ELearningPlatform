@@ -97,6 +97,16 @@ export const labsApi = {
     api.get<{ leaderboard: LeaderboardEntry[] }>(`/courses/${courseId}/leaderboard`, token),
 };
 
+// Lab instances (interactive environments)
+export const instanceApi = {
+  start: (courseId: string, labId: string, token: string) =>
+    api.post<LabInstance>(`/courses/${courseId}/labs/${labId}/instance`, {}, token),
+  get: (courseId: string, labId: string, token: string) =>
+    api.get<LabInstance>(`/courses/${courseId}/labs/${labId}/instance`, token),
+  stop: (courseId: string, labId: string, token: string) =>
+    api.delete(`/courses/${courseId}/labs/${labId}/instance`, token),
+};
+
 // Admin
 export const adminApi = {
   stats: (token: string) => api.get<AdminStats>('/admin/stats', token),
@@ -376,6 +386,13 @@ export interface LabStats {
   max_score_achieved: number;
   completed_count: number;
   avg_attempts_to_complete: number;
+}
+
+export interface LabInstance {
+  instance_id?: string;
+  status: 'running' | 'stopped' | 'none';
+  started_at?: string;
+  expires_at?: string;
 }
 
 export interface AdminSubmission {

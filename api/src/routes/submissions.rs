@@ -132,11 +132,14 @@ fn grade_ctf(lab: &Lab, answer: &Value) -> crate::error::Result<SubmissionResult
         .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing 'flag' field in answer".to_string()))?
         .trim();
+    // Strip non-printable/control characters that can sneak in via terminal copy-paste
+    let submitted_flag: String = submitted_flag.chars().filter(|c| !c.is_control()).collect();
 
     let expected_flag = lab
         .flag
         .as_deref()
-        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Lab has no flag configured")))?;
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Lab has no flag configured")))?
+        .trim();
 
     let is_correct = submitted_flag == expected_flag;
 

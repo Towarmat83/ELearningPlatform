@@ -10,6 +10,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+use bollard;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tower_http::{
@@ -24,6 +25,7 @@ use crate::config::Config;
 pub struct AppState {
     pub db: sqlx::PgPool,
     pub config: Config,
+    pub docker: Option<bollard::Docker>,
 }
 
 #[tokio::main]
@@ -52,7 +54,12 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&db).await?;
     tracing::info!("Database migrations applied");
 
-    let state = AppState { db, config: config.clone() };
+    let docker = match bollard::Docker::connect_with_local_defaults() {
+        Ok(d) => { tracing::info!("Docker daemon connected — interactive labs enabled"); Some(d) }
+        Err(e) => { tracing::warn!("Docker not available ({}) — interactive labs disabled", e); None }
+    };
+
+    let state = AppState { db, config: config.clone(), docker };
 
     // CORS
     let cors = CorsLayer::new()
@@ -201,6 +208,20 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/admin/courses/:course_id/enrollments/:user_id",
             delete(routes::courses::admin_unenroll_user).layer(admin_auth.clone()),
+        )
+
+        // Interactive lab instances
+        .route(
+            "/api/courses/:course_id/labs/:lab_id/instance",
+            post(routes::instances::start_instance)
+                .get(routes::instances::get_instance)
+                .delete(routes::instances::stop_instance)
+                .layer(auth.clone()),
+        )
+        // WebSocket terminal (auth via query param token)
+        .route(
+            "/ws/courses/:course_id/labs/:lab_id/terminal",
+            get(routes::instances::terminal_ws),
         )
 
         .layer(cors)

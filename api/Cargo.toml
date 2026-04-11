@@ -8,7 +8,7 @@ name = "elearning-api"
 path = "src/main.rs"
 
 [dependencies]
-axum = { version = "0.7", features = ["multipart"] }
+axum = { version = "0.7", features = ["multipart", "ws"] }
 axum-extra = { version = "0.9", features = ["typed-header"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4" }
@@ -34,6 +34,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 dotenvy = "0.15"
 anyhow = "1"
 thiserror = "1"
+bollard = "0.17"
+futures-util = "0.3"
+bytes = "1"
 
 [profile.release]
 opt-level = 3

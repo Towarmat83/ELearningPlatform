@@ -2,9 +2,10 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { labsApi, type Lab, type LabProgress, type SubmissionResult, type FlagResult, type Submission } from '$lib/api';
+  import { labsApi, instanceApi, type Lab, type LabProgress, type SubmissionResult, type FlagResult, type Submission, type LabInstance } from '$lib/api';
   import { auth, isLoggedIn, toasts } from '$lib/stores';
   import Markdown from '$lib/Markdown.svelte';
+  import Terminal from '$lib/Terminal.svelte';
 
   const courseId = $page.params.id!;
   const labId = $page.params.labId!;
@@ -18,6 +19,11 @@
   let showHistory = false;
   let history: Submission[] = [];
   let loadingHistory = false;
+
+  // Interactive instance state
+  let instance: LabInstance | null = null;
+  let instanceLoading = false;
+  let showTerminal = false;
 
   async function loadHistory() {
     if (history.length > 0) { showHistory = !showHistory; return; }
@@ -48,6 +54,14 @@
       const res = await labsApi.get(courseId, labId, $auth.token!);
       lab = res.lab;
       progress = res.progress;
+
+      // Check for existing running instance
+      if (res.lab.content?.docker_image) {
+        try {
+          instance = await instanceApi.get(courseId, labId, $auth.token!);
+          if (instance?.status === 'running') showTerminal = true;
+        } catch { /* no instance yet */ }
+      }
 
       // For multi-flag CTF: restore confirmed flags from last submission
       if (lab?.lab_type === 'ctf' && lab.content.flags?.length) {
@@ -155,6 +169,40 @@
     }
   }
 
+  async function startInstance() {
+    instanceLoading = true;
+    try {
+      instance = await instanceApi.start(courseId, labId, $auth.token!);
+      showTerminal = true;
+      toasts.success('Lab environment started!');
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to start lab environment');
+    } finally {
+      instanceLoading = false;
+    }
+  }
+
+  async function stopInstance() {
+    instanceLoading = true;
+    try {
+      await instanceApi.stop(courseId, labId, $auth.token!);
+      instance = null;
+      showTerminal = false;
+      toasts.success('Lab environment stopped.');
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to stop lab environment');
+    } finally {
+      instanceLoading = false;
+    }
+  }
+
+  function formatExpiry(iso: string): string {
+    const d = new Date(iso);
+    const diff = Math.max(0, d.getTime() - Date.now());
+    const mins = Math.floor(diff / 60000);
+    return mins > 0 ? `${mins} min remaining` : 'expiring soon';
+  }
+
   function getFlagResult(flagId: string): FlagResult | undefined {
     if (!result || !result.flag_results) return undefined;
     return result.flag_results.find(r => r.flag_id === flagId);
@@ -208,6 +256,56 @@
         {/if}
       </div>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         INTERACTIVE ENVIRONMENT (Docker terminal)
+    ════════════════════════════════════════════════════ -->
+    {#if lab.content?.docker_image}
+      <div class="card mb-6 border-2 border-gray-200">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🖥️</span>
+            <div>
+              <h2 class="font-semibold text-gray-800">Interactive Environment</h2>
+              <p class="text-xs text-gray-400 font-mono">{lab.content.docker_image}</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            {#if instance?.status === 'running'}
+              <span class="text-xs text-gray-400">{formatExpiry(instance.expires_at ?? '')}</span>
+              <button
+                class="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                on:click={() => showTerminal = !showTerminal}
+              >
+                {showTerminal ? '▲ Hide terminal' : '▼ Show terminal'}
+              </button>
+              <button
+                class="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                on:click={stopInstance}
+                disabled={instanceLoading}
+              >
+                ■ Stop
+              </button>
+            {:else}
+              <button
+                class="btn-primary text-sm"
+                on:click={startInstance}
+                disabled={instanceLoading}
+              >
+                {instanceLoading ? 'Starting...' : '▶ Launch Lab'}
+              </button>
+            {/if}
+          </div>
+        </div>
+
+        {#if showTerminal && instance?.status === 'running'}
+          <div class="mt-4">
+            <Terminal {courseId} {labId} token={$auth.token ?? ''} />
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     <!-- ═══════════════════════════════════════════════════
          MULTI-FLAG CTF

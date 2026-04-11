@@ -63,6 +63,7 @@
     ctf_flag: '',
     ctf_instructions: '',
     ctf_flags: [] as MultiFlag[],
+    ctf_docker_image: '',
   };
 
   function newQuestion(): FormQuestion {
@@ -108,6 +109,7 @@
       ctf_flag: '',
       ctf_instructions: '',
       ctf_flags: [newMultiFlag()],
+      ctf_docker_image: '',
     };
   }
 
@@ -219,6 +221,7 @@
         if (flags && flags.length > 0) {
           labForm.ctf_mode = 'multi';
           labForm.ctf_instructions = (lab.content.instructions as string) ?? '';
+          labForm.ctf_docker_image = (lab.content.docker_image as string) ?? '';
           let flagValues: Record<string, string> = {};
           if (lab.flag) {
             try { flagValues = JSON.parse(lab.flag); } catch {}
@@ -237,6 +240,7 @@
           const hints = lab.content.hints as string[] | undefined;
           labForm.ctf_hints = hints && hints.length > 0 ? hints : [''];
           labForm.ctf_flag = lab.flag ?? '';
+          labForm.ctf_docker_image = (lab.content.docker_image as string) ?? '';
         }
       }
 
@@ -267,6 +271,7 @@
         challenge: labForm.ctf_challenge,
         category: labForm.ctf_category,
         hints: labForm.ctf_hints.filter(h => h.trim()),
+        ...(labForm.ctf_docker_image.trim() ? { docker_image: labForm.ctf_docker_image.trim() } : {}),
       };
       flag = labForm.ctf_flag;
     } else {
@@ -278,6 +283,7 @@
           points: f.points,
         })),
         instructions: labForm.ctf_instructions,
+        ...(labForm.ctf_docker_image.trim() ? { docker_image: labForm.ctf_docker_image.trim() } : {}),
       };
       const flagMap: Record<string, string> = {};
       for (const f of labForm.ctf_flags) flagMap[f.id] = f.flag;
@@ -853,6 +859,12 @@
                             <label class="label">Flag (secret) *</label>
                             <input class="input font-mono" bind:value={labForm.ctf_flag} placeholder="FLAG&#123;your_secret_flag&#125;" />
                           </div>
+                          <div class="md:col-span-2">
+                            <label class="label">Docker Image <span class="text-gray-400 font-normal">(optional — enables interactive terminal)</span></label>
+                            <input class="input font-mono text-sm" bind:value={labForm.ctf_docker_image}
+                              placeholder="e.g. ubuntu:22.04, kalilinux/kali-rolling" />
+                            <p class="text-xs text-gray-400 mt-1">When set, students get a live terminal inside this container.</p>
+                          </div>
                           <div>
                             <label class="label">Category</label>
                             <select class="input" bind:value={labForm.ctf_category}>
@@ -904,6 +916,12 @@
                             <textarea class="input" rows="3" bind:value={labForm.ctf_instructions}
                               placeholder="Overall scenario and instructions... (supports Markdown)"></textarea>
                           {/if}
+                        </div>
+
+                        <div>
+                          <label class="label">Docker Image <span class="text-gray-400 font-normal">(optional — interactive terminal)</span></label>
+                          <input class="input font-mono text-sm" bind:value={labForm.ctf_docker_image}
+                            placeholder="e.g. ubuntu:22.04, kalilinux/kali-rolling" />
                         </div>
 
                         <div>

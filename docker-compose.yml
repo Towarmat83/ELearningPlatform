@@ -32,6 +32,8 @@ services:
       PORT: 8080
       RUST_LOG: info
       CORS_ORIGINS: http://localhost:3000,${FRONTEND_URL:-http://localhost:3000}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8080:8080"
     depends_on:

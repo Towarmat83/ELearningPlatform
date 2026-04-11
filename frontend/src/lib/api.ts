@@ -252,13 +252,25 @@ export interface Lab {
   course_id: string;
   title: string;
   description: string;
-  lab_type: 'form' | 'ctf';
+  lab_type: 'form' | 'ctf' | 'interactive';
   content: LabContent;
   flag?: string; // admin only
   points: number;
   order_index: number;
   is_published: boolean;
   created_at: string;
+}
+
+export interface InteractiveCommand {
+  cmd: string;
+  explanation?: string;
+}
+
+export interface InteractiveStep {
+  id: string;
+  title: string;
+  description: string; // markdown
+  commands?: InteractiveCommand[];
 }
 
 export interface LabContent {
@@ -274,6 +286,8 @@ export interface LabContent {
   flag_hint?: string;
   // Form
   questions?: Question[];
+  // Interactive
+  steps?: InteractiveStep[];
 }
 
 export interface CtfFlag {
@@ -296,7 +310,7 @@ export interface Question {
 export interface CreateLab {
   title: string;
   description: string;
-  lab_type: 'form' | 'ctf';
+  lab_type: 'form' | 'ctf' | 'interactive';
   content: unknown;
   flag?: string;
   points?: number;
@@ -358,7 +372,7 @@ export interface CourseProgress {
 export interface LabProgressSummary {
   lab_id: string;
   lab_title: string;
-  lab_type: 'form' | 'ctf';
+  lab_type: 'form' | 'ctf' | 'interactive';
   points: number;
   completed: boolean;
   best_score: number;

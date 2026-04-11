@@ -7,6 +7,13 @@
   export let labId: string;
   export let token: string;
 
+  /** Send a command to the running terminal (adds a newline automatically). */
+  export function sendCommand(cmd: string) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const data = new TextEncoder().encode(cmd + '\n');
+    ws.send(data);
+  }
+
   let container: HTMLElement;
   let term: Terminal | null = null;
   let fitAddon: FitAddon | null = null;

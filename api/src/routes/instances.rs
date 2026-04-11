@@ -6,6 +6,7 @@ use axum::{
 use bollard::{
     container::{Config as ContainerConfig, CreateContainerOptions, LogOutput, RemoveContainerOptions},
     exec::{CreateExecOptions, ResizeExecOptions, StartExecOptions, StartExecResults},
+    image::CreateImageOptions,
     models::HostConfig,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -113,6 +114,27 @@ pub async fn start_instance(
                 Some(RemoveContainerOptions { force: true, v: false, link: false }),
             )
             .await;
+    }
+
+    // ── Pull image if not present locally ──────────────────────────────────
+    let image_present = docker.inspect_image(&docker_image).await.is_ok();
+    if !image_present {
+        tracing::info!("Pulling image {} for lab {}", docker_image, lab_id);
+        let mut stream = docker.create_image(
+            Some(CreateImageOptions {
+                from_image: docker_image.as_str(),
+                ..Default::default()
+            }),
+            None,
+            None,
+        );
+        // Drain the stream to completion (pull progress events)
+        while let Some(event) = stream.next().await {
+            if let Err(e) = event {
+                return Err(AppError::Internal(anyhow::anyhow!("Failed to pull image {}: {}", docker_image, e)));
+            }
+        }
+        tracing::info!("Image {} pulled successfully", docker_image);
     }
 
     // ── Create & start a new container ─────────────────────────────────────

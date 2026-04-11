@@ -84,9 +84,17 @@ async fn main() -> anyhow::Result<()> {
         // Prometheus metrics
         .route("/metrics", get(metrics::metrics_handler))
 
+        // Public settings (registration flags, password policy)
+        .route("/api/settings/public", get(routes::settings::public_settings))
+
         // Auth (public)
         .route("/api/auth/register", post(routes::auth::register))
         .route("/api/auth/login", post(routes::auth::login))
+
+        // OAuth SSO (public)
+        .route("/api/auth/oauth/providers", get(routes::oauth::list_providers))
+        .route("/api/auth/oauth/:provider/authorize", get(routes::oauth::authorize))
+        .route("/api/auth/oauth/callback", post(routes::oauth::callback))
 
         // Auth (protected)
         .route(
@@ -164,6 +172,14 @@ async fn main() -> anyhow::Result<()> {
         )
 
         // Admin routes
+        // Admin settings
+        .route(
+            "/api/admin/settings",
+            get(routes::settings::get_settings)
+                .put(routes::settings::update_settings)
+                .layer(admin_auth.clone()),
+        )
+
         .route(
             "/api/admin/stats",
             get(routes::submissions::admin_stats).layer(admin_auth.clone()),

@@ -3,4 +3,6 @@ pub mod auth;
 pub mod courses;
 pub mod instances;
 pub mod labs;
+pub mod oauth;
+pub mod settings;
 pub mod submissions;

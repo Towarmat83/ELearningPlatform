@@ -9,11 +9,13 @@ pub struct User {
     pub username: String,
     pub email: String,
     #[serde(skip_serializing)]
-    pub password_hash: String,
+    pub password_hash: Option<String>, // None for SSO-only accounts
     pub role: String,
     pub avatar_url: Option<String>,
     pub bio: Option<String>,
     pub is_active: bool,
+    pub auth_provider: String, // "local" | "google" | "github"
+    pub provider_user_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -27,6 +29,7 @@ pub struct UserPublic {
     pub avatar_url: Option<String>,
     pub bio: Option<String>,
     pub is_active: bool,
+    pub auth_provider: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -40,6 +43,7 @@ impl From<User> for UserPublic {
             avatar_url: u.avatar_url,
             bio: u.bio,
             is_active: u.is_active,
+            auth_provider: u.auth_provider,
             created_at: u.created_at,
         }
     }

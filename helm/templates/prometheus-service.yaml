@@ -1,0 +1,17 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "elearning.fullname" . }}-prometheus
+  labels:
+    {{- include "elearning.prometheus.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.prometheus.service.type }}
+  ports:
+    - port: {{ .Values.prometheus.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "elearning.prometheus.selectorLabels" . | nindent 4 }}
+{{- end }}

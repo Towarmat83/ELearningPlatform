@@ -1,0 +1,96 @@
+╔══════════════════════════════════════════════════════╗
+║          eLearning Platform — Deployed!              ║
+╚══════════════════════════════════════════════════════╝
+
+Release : {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SERVICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Frontend   → {{ include "elearning.publicUrl" . }}
+  API        → {{ include "elearning.publicUrl" . }}/api
+  Health     → {{ include "elearning.publicUrl" . }}/health
+  Metrics    → {{ include "elearning.publicUrl" . }}/metrics
+
+{{- if .Values.grafana.enabled }}
+  Grafana    → port-forward to access:
+               kubectl port-forward -n {{ .Release.Namespace }} \
+                 svc/{{ include "elearning.fullname" . }}-grafana 3001:3000
+               Then open http://localhost:3001
+               Login: admin / {{ .Values.grafana.adminPassword }}
+{{- if .Values.grafanaIngress.enabled }}
+               Or via ingress: http://{{ .Values.grafanaIngress.host }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.prometheus.enabled }}
+  Prometheus → port-forward to access:
+               kubectl port-forward -n {{ .Release.Namespace }} \
+                 svc/{{ include "elearning.fullname" . }}-prometheus 9090:9090
+               Then open http://localhost:9090
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  DEFAULT ADMIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Email    : admin@elearning.local
+  Password : Admin@1234
+
+  ⚠  Change this password immediately in production!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  INTERACTIVE LABS (Docker socket)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{- if .Values.api.dockerSocket.enabled }}
+  Docker socket is ENABLED. The API pod mounts
+  /var/run/docker.sock from the host node.
+
+  ⚠  This requires that lab container images are
+     pre-pulled on every node, OR network access to
+     Docker Hub from nodes (for auto-pull).
+
+  Pre-pull ubuntu:22.04 on all nodes:
+    kubectl get nodes -o name | xargs -I{} \
+      kubectl debug {} --image=ubuntu:22.04 -- true
+{{- else }}
+  Docker socket is DISABLED (api.dockerSocket.enabled=false).
+  Interactive labs will return 500 errors.
+  Enable with: --set api.dockerSocket.enabled=true
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WEBSOCKET (Interactive terminal)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The terminal uses WebSocket at /ws/...
+  With nginx ingress, add these annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+  With Traefik, WebSocket works natively.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PRODUCTION CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [ ] Set a strong JWT secret:
+      --set api.jwtSecret=$(openssl rand -hex 32)
+
+  [ ] Set a strong Grafana password:
+      --set grafana.adminPassword=<strong-password>
+
+  [ ] Set a strong DB password:
+      --set postgresql.auth.password=<strong-password>
+
+  [ ] Enable TLS in ingress.tls[]
+
+  [ ] Enable autoscaling:
+      --set api.autoscaling.enabled=true
+      --set frontend.autoscaling.enabled=true
+
+  [ ] Enable ServiceMonitor if using kube-prometheus-stack:
+      --set serviceMonitor.enabled=true

@@ -1,7 +1,12 @@
-# Global settings
+# ─────────────────────────────────────────────────────────────────────────────
+# eLearning Platform — Helm Values
+# Override any value with: helm upgrade --set key=value ...
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Global replica count (applies to API and frontend)
 replicaCount: 1
 
-# API (Rust backend)
+# ── API (Rust backend) ────────────────────────────────────────────────────────
 api:
   image:
     repository: elearning-api
@@ -20,10 +25,21 @@ api:
   env:
     JWT_EXPIRY_HOURS: "24"
     RUST_LOG: "info"
-  # Override in production
+  # JWT secret — override with a strong random string in production
+  # Use: --set api.jwtSecret=$(openssl rand -hex 32)
   jwtSecret: "change-me-in-production-use-32+-chars"
+  # Docker socket for interactive labs (mounts /var/run/docker.sock)
+  # Disable on managed clusters that don't allow host socket access
+  dockerSocket:
+    enabled: true
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
 
-# Frontend (SvelteKit)
+# ── Frontend (SvelteKit) ──────────────────────────────────────────────────────
 frontend:
   image:
     repository: elearning-frontend
@@ -39,17 +55,31 @@ frontend:
     limits:
       memory: "256Mi"
       cpu: "200m"
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
 
-# Ingress
+# ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:
   enabled: true
   className: traefik  # or nginx
   annotations: {}
-  # hostname: elearning.example.com
+    # nginx: set these for WebSocket terminal support:
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # nginx.ingress.kubernetes.io/configuration-snippet: |
+    #   proxy_set_header Upgrade $http_upgrade;
+    #   proxy_set_header Connection "upgrade";
   hosts:
     - host: elearning.local
       paths:
         - path: /api
+          pathType: Prefix
+          backend: api
+        - path: /ws
           pathType: Prefix
           backend: api
         - path: /metrics
@@ -62,22 +92,43 @@ ingress:
           pathType: Prefix
           backend: frontend
   tls: []
+  # tls:
+  #   - secretName: elearning-tls
+  #     hosts:
+  #       - elearning.local
 
-# PostgreSQL (bitnami chart)
+# Separate ingress for Grafana (optional)
+grafanaIngress:
+  enabled: false
+  className: traefik
+  annotations: {}
+  host: grafana.elearning.local
+  tls: []
+
+# ── PostgreSQL (Bitnami chart) ────────────────────────────────────────────────
 postgresql:
   enabled: true
   auth:
     database: elearning
     username: elearning
     password: elearning_secret
-    # For production, use existingSecret
+    # Production: use an existing secret instead of plain password
     # existingSecret: elearning-db-secret
+    # existingSecretPasswordKey: postgres-password
   primary:
     persistence:
       enabled: true
       size: 10Gi
+      # storageClass: ""
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
 
-# External PostgreSQL (if postgresql.enabled = false)
+# External PostgreSQL (when postgresql.enabled = false)
 externalDatabase:
   host: ""
   port: 5432
@@ -85,11 +136,66 @@ externalDatabase:
   username: elearning
   password: ""
   existingSecret: ""
-  existingSecretKey: ""
+  existingSecretKey: "DATABASE_URL"
 
-# Prometheus monitoring
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  enabled: true
+  image:
+    repository: prom/prometheus
+    tag: v3.1.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 9090
+  retention: 15d
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  # Extra scrape configs appended to the default API scrape
+  extraScrapeConfigs: []
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+  image:
+    repository: grafana/grafana
+    tag: "11.4.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  # Admin password — override in production
+  adminPassword: "admin"
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+  # Extra environment variables for Grafana
+  extraEnv: []
+  # - name: GF_AUTH_ANONYMOUS_ENABLED
+  #   value: "true"
+
+# ── Prometheus ServiceMonitor (kube-prometheus-stack) ─────────────────────────
 serviceMonitor:
-  enabled: false  # Set to true if using kube-prometheus-stack
+  enabled: false
   namespace: monitoring
   interval: 30s
   scrapeTimeout: 10s

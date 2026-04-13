@@ -3,6 +3,12 @@
   import { adminApi, coursesApi, labsApi, type CourseWithStats, type Lab, type AdminEnrollment, type AdminUser, type LabStats } from '$lib/api';
   import Markdown from '$lib/Markdown.svelte';
   import { auth, toasts } from '$lib/stores';
+  import {
+    validateLabJSON,
+    type LabExport,
+    INTERACTIVE_JSON_TEMPLATE, FORM_JSON_TEMPLATE, CTF_JSON_TEMPLATE,
+  } from '$lib/labCodec';
+  import { labLibrary, type LibraryEntry } from '$lib/labLibrary';
 
   // ─── State ────────────────────────────────────────────────────────────────
 
@@ -123,12 +129,20 @@
       interactive_docker_image: '',
       interactive_steps: [newStep()],
     };
+    labInputMode = 'visual';
+    labFormStep = 1;
+    jsonEditorText = '';
+    jsonEditorError = '';
+    showJsonTemplate = false;
+    libraryPickerOpen = false;
+    libraryPickerSearch = '';
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   onMount(async () => {
     if (!$auth.token) { toasts.error('Not authenticated'); return; }
+    labLibrary.init();
     loadCourses();
     try {
       const res = await adminApi.users($auth.token!);
@@ -519,6 +533,184 @@
     if (!labFormMode) return '';
     return labFormMode.mode === 'create' ? 'New Lab' : 'Edit Lab';
   }
+
+  // ─── Labs as Code ─────────────────────────────────────────────────────────
+
+  let labInputMode: 'visual' | 'json' = 'visual';
+  let labFormStep: 1 | 2 = 1;
+  let jsonEditorText = '';
+  let jsonEditorError = '';
+  let showJsonTemplate = false;
+  let selectedJsonTemplate = 'interactive';
+  let libraryPickerOpen = false;
+  let libraryPickerSearch = '';
+
+  $: filteredLibraryPicker = $labLibrary.filter(e => {
+    if (!libraryPickerSearch) return true;
+    const q = libraryPickerSearch.toLowerCase();
+    return e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q);
+  });
+
+  function formToLabExport(): LabExport {
+    const p = buildLabPayload() as any;
+    return {
+      version: '1.0',
+      type: p.lab_type,
+      title: p.title,
+      description: p.description,
+      points: p.points,
+      order_index: p.order_index,
+      is_published: p.is_published,
+      ...(p.flag ? { flag: p.flag } : {}),
+      content: p.content as LabExport['content'],
+    };
+  }
+
+  function applyLabExport(exp: LabExport) {
+    labForm.title = exp.title;
+    labForm.description = exp.description;
+    labForm.lab_type = exp.type;
+    labForm.points = exp.points;
+    labForm.order_index = exp.order_index ?? 0;
+    labForm.is_published = exp.is_published ?? false;
+
+    if (exp.type === 'form') {
+      const qs = exp.content.questions ?? [];
+      labForm.questions = qs.map(q => ({
+        id: q.id || newQuestion().id,
+        text: q.text,
+        type: q.type,
+        options: q.options ?? ['', '', '', ''],
+        correct_answer: q.correct_answer,
+        points: q.points,
+        explanation: q.explanation ?? '',
+      }));
+      if (labForm.questions.length === 0) labForm.questions = [newQuestion()];
+    } else if (exp.type === 'interactive') {
+      labForm.interactive_docker_image = exp.content.docker_image ?? '';
+      labForm.interactive_steps = (exp.content.steps ?? []).map(s => ({
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        commands: (s.commands ?? []).map(c => ({ cmd: c.cmd, explanation: c.explanation ?? '' })),
+      }));
+      if (labForm.interactive_steps.length === 0) labForm.interactive_steps = [newStep()];
+    } else {
+      const flags = exp.content.flags;
+      if (flags && flags.length > 0) {
+        labForm.ctf_mode = 'multi';
+        labForm.ctf_instructions = exp.content.instructions ?? '';
+        labForm.ctf_docker_image = exp.content.docker_image ?? '';
+        let flagValues: Record<string, string> = {};
+        if (exp.flag) {
+          try { flagValues = JSON.parse(exp.flag); } catch {}
+        }
+        labForm.ctf_flags = flags.map(f => ({
+          id: f.id,
+          name: f.name,
+          description: f.description,
+          points: f.points,
+          flag: (f as any).flag ?? flagValues[f.id] ?? '',
+        }));
+      } else {
+        labForm.ctf_mode = 'single';
+        labForm.ctf_challenge = exp.content.challenge ?? '';
+        labForm.ctf_category = exp.content.category ?? 'misc';
+        labForm.ctf_hints = exp.content.hints?.length ? exp.content.hints : [''];
+        labForm.ctf_flag = exp.flag ?? '';
+        labForm.ctf_docker_image = exp.content.docker_image ?? '';
+      }
+    }
+  }
+
+  function openJsonTab() {
+    try {
+      const exp = formToLabExport();
+      jsonEditorText = JSON.stringify(exp, null, 2);
+    } catch {
+      jsonEditorText = '';
+    }
+    jsonEditorError = '';
+    labInputMode = 'json';
+  }
+
+  function applyJSON() {
+    jsonEditorError = '';
+    try {
+      const parsed = JSON.parse(jsonEditorText);
+      const validated = validateLabJSON(parsed);
+      applyLabExport(validated);
+      labInputMode = 'visual';
+      labFormStep = 1;
+      toasts.success('JSON loaded into form');
+    } catch (e: any) {
+      jsonEditorError = e.message ?? 'Invalid JSON';
+    }
+  }
+
+  function goToStep2() {
+    if (!labForm.title.trim()) { toasts.error('Lab title required'); return; }
+    labFormStep = 2;
+  }
+
+  function selectLabType(v: string) {
+    labForm.lab_type = v as 'form' | 'ctf' | 'interactive';
+    if (!labForm.questions.length) labForm.questions = [newQuestion()];
+    if (!labForm.ctf_flags.length) labForm.ctf_flags = [newMultiFlag()];
+    if (!labForm.interactive_steps.length) labForm.interactive_steps = [newStep()];
+  }
+
+  function loadFromLibrary(entry: LibraryEntry) {
+    applyLabExport(entry.lab);
+    libraryPickerOpen = false;
+    libraryPickerSearch = '';
+    labFormStep = 1;
+    labInputMode = 'visual';
+    toasts.success(`"${entry.name}" loaded from library`);
+  }
+
+  async function exportLabJSON(courseId: string, labId: string) {
+    try {
+      const lab = await adminApi.adminGetLab(courseId, labId, $auth.token!);
+      const exp: LabExport = {
+        version: '1.0',
+        type: lab.lab_type as 'form' | 'ctf' | 'interactive',
+        title: lab.title,
+        description: lab.description,
+        points: lab.points,
+        order_index: lab.order_index,
+        is_published: lab.is_published,
+        ...(lab.flag ? { flag: lab.flag } : {}),
+        content: lab.content as LabExport['content'],
+      };
+      // For CTF multi, embed flag values inside flags array for readability
+      if (exp.type === 'ctf' && exp.content.flags && exp.flag) {
+        try {
+          const flagMap = JSON.parse(exp.flag) as Record<string, string>;
+          exp.content.flags = exp.content.flags.map(f => ({
+            ...f,
+            flag: flagMap[f.id] ?? '',
+          }));
+          delete exp.flag; // encoded in content.flags.flag
+        } catch {}
+      }
+      const blob = new Blob([JSON.stringify(exp, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${lab.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.lab.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toasts.error(e.message || 'Export failed');
+    }
+  }
+
+  function currentJsonTemplate() {
+    if (selectedJsonTemplate === 'form') return FORM_JSON_TEMPLATE;
+    if (selectedJsonTemplate === 'ctf') return CTF_JSON_TEMPLATE;
+    return INTERACTIVE_JSON_TEMPLATE;
+  }
 </script>
 
 <svelte:head><title>Courses — Admin</title></svelte:head>
@@ -658,6 +850,12 @@
                             class="text-xs btn-secondary shrink-0">
                             Edit
                           </button>
+                          <button
+                            on:click={() => exportLabJSON(course.id, lab.id)}
+                            class="text-xs text-gray-400 hover:text-gray-700 shrink-0"
+                            title="Export as JSON">
+                            ↓ JSON
+                          </button>
                           <button on:click={() => deleteLab(course.id, lab.id)} class="text-xs text-red-400 hover:text-red-600 shrink-0">
                             Delete
                           </button>
@@ -717,32 +915,204 @@
                    LAB FORM (create or edit)
               ══════════════════════════════════════════ -->
               {#if labFormMode && labFormMode.courseId === course.id}
-                <div class="bg-white border-2 border-primary-200 rounded-xl p-5">
+                <div class="bg-white border-2 border-primary-200 rounded-xl p-5 relative">
+
+                  <!-- Library picker modal -->
+                  {#if libraryPickerOpen}
+                    <div class="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-xl z-10 flex flex-col p-4">
+                      <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-semibold text-gray-800 text-sm">Load from Library</h3>
+                        <button on:click={() => libraryPickerOpen = false} class="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                      </div>
+                      <input
+                        class="input text-sm mb-3"
+                        bind:value={libraryPickerSearch}
+                        placeholder="Search templates..."
+                        autofocus
+                      />
+                      <div class="flex-1 overflow-y-auto space-y-2 min-h-0 max-h-72">
+                        {#if filteredLibraryPicker.length === 0}
+                          <div class="text-center py-8 text-gray-400 text-sm">
+                            {#if $labLibrary.length === 0}
+                              No templates saved yet. Go to <a href="/admin/labs" target="_blank" class="text-primary-500 underline">Lab Tools</a> to add templates.
+                            {:else}
+                              No templates match your search.
+                            {/if}
+                          </div>
+                        {:else}
+                          {#each filteredLibraryPicker as entry (entry.id)}
+                            <button
+                              class="w-full text-left bg-gray-50 hover:bg-primary-50 border border-gray-200 hover:border-primary-300 rounded-lg p-3 transition-colors"
+                              on:click={() => loadFromLibrary(entry)}>
+                              <div class="flex items-center gap-2 mb-0.5">
+                                <span class="{entry.type === 'ctf' ? 'badge-ctf' : 'badge-form'} text-xs">
+                                  {labTypeLabel(entry.type)}
+                                </span>
+                                <span class="font-medium text-gray-800 text-sm">{entry.name}</span>
+                                <span class="text-xs text-gray-400 ml-auto">{entry.lab.points} pts</span>
+                              </div>
+                              {#if entry.description}
+                                <p class="text-xs text-gray-500 truncate">{entry.description}</p>
+                              {/if}
+                            </button>
+                          {/each}
+                        {/if}
+                      </div>
+                      <p class="text-xs text-gray-400 mt-2 pt-2 border-t">
+                        <a href="/admin/labs" target="_blank" class="text-primary-500 hover:underline">Manage library →</a>
+                      </p>
+                    </div>
+                  {/if}
+
                   <div class="flex items-center justify-between mb-4">
                     <h4 class="font-semibold text-gray-800 text-base">{labFormTitle()}</h4>
                     <button on:click={() => labFormMode = null} class="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
                   </div>
 
-                  <!-- Base fields -->
-                  <div class="grid md:grid-cols-2 gap-3 mb-4">
+                  <!-- ─── Input mode tabs + Library button ───────────────── -->
+                  <div class="flex items-center gap-1 mb-4 border-b border-gray-100 pb-3">
+                    <button
+                      type="button"
+                      class="text-xs px-3 py-1.5 rounded-md font-medium transition-colors {labInputMode === 'visual' ? 'bg-primary-100 text-primary-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}"
+                      on:click={() => { labInputMode = 'visual'; jsonEditorError = ''; }}>
+                      Visual Builder
+                    </button>
+                    <button
+                      type="button"
+                      class="text-xs px-3 py-1.5 rounded-md font-medium transition-colors {labInputMode === 'json' ? 'bg-primary-100 text-primary-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}"
+                      on:click={openJsonTab}>
+                      &#123;&#125; JSON
+                    </button>
+                    <div class="ml-auto flex gap-2">
+                      <a href="/admin/labs" target="_blank" class="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5">
+                        Markdown → JSON ↗
+                      </a>
+                      <button
+                        type="button"
+                        class="text-xs px-3 py-1.5 rounded-md font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200"
+                        on:click={() => { libraryPickerOpen = true; libraryPickerSearch = ''; }}>
+                        From Library {#if $labLibrary.length}({$labLibrary.length}){/if}
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- ─── JSON editor panel ──────────────────────────────── -->
+                  {#if labInputMode === 'json'}
+                    <div class="space-y-3">
+                      <p class="text-xs text-gray-500">Paste a lab JSON or edit the current form state, then click <strong>Validate &amp; Load</strong> to apply it.</p>
+
+                      <textarea
+                        class="input font-mono text-xs leading-relaxed"
+                        rows="20"
+                        bind:value={jsonEditorText}
+                        placeholder="Paste your lab JSON here..."
+                        spellcheck="false"
+                      ></textarea>
+
+                      {#if jsonEditorError}
+                        <div class="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600 font-mono">{jsonEditorError}</div>
+                      {/if}
+
+                      <div class="flex gap-2 flex-wrap">
+                        <button class="btn-primary text-xs" on:click={applyJSON}>Validate &amp; Load into form</button>
+                        <button class="btn-secondary text-xs" on:click={openJsonTab}>Refresh from current form</button>
+                      </div>
+
+                      <!-- Template reference -->
+                      <div class="border border-gray-200 rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          class="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100"
+                          on:click={() => showJsonTemplate = !showJsonTemplate}>
+                          <span>JSON format reference</span>
+                          <span>{showJsonTemplate ? '▲' : '▼'}</span>
+                        </button>
+                        {#if showJsonTemplate}
+                          <div class="p-3 space-y-2">
+                            <div class="flex gap-1">
+                              {#each [['interactive', 'Interactive'], ['form', 'Quiz'], ['ctf', 'CTF']] as [val, label]}
+                                <button
+                                  type="button"
+                                  class="text-xs px-2 py-1 rounded {selectedJsonTemplate === val ? 'bg-primary-100 text-primary-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}"
+                                  on:click={() => selectedJsonTemplate = val}>
+                                  {label}
+                                </button>
+                              {/each}
+                            </div>
+                            <textarea
+                              class="input font-mono text-xs leading-relaxed bg-gray-50"
+                              rows="20"
+                              readonly
+                              value={currentJsonTemplate()}
+                            ></textarea>
+                            <button
+                              type="button"
+                              class="text-xs text-primary-600 hover:underline"
+                              on:click={() => { jsonEditorText = currentJsonTemplate(); jsonEditorError = ''; }}>
+                              Copy template to editor
+                            </button>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+
+                  {:else}
+
+                  <!-- Step indicator -->
+                  <div class="flex items-center gap-2 mb-5">
+                    <button type="button"
+                      class="flex items-center gap-2 text-sm font-medium transition-colors cursor-pointer"
+                      on:click={() => labFormStep = 1}>
+                      <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors
+                        {labFormStep === 2 ? 'bg-green-500 text-white' : 'bg-primary-500 text-white'}">
+                        {labFormStep === 2 ? '✓' : '1'}
+                      </span>
+                      <span class="{labFormStep === 1 ? 'text-primary-600' : 'text-gray-500'}">Basics</span>
+                    </button>
+                    <div class="flex-1 h-px bg-gray-200 mx-1"></div>
+                    <div class="flex items-center gap-2 text-sm font-medium">
+                      <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors
+                        {labFormStep === 2 ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-400'}">
+                        2
+                      </span>
+                      <span class="{labFormStep === 2 ? 'text-primary-600' : 'text-gray-400'}">Content</span>
+                    </div>
+                  </div>
+
+                  {#if labFormStep === 1}
+                  <!-- ─── STEP 1: BASICS ─────────────────────────────────── -->
+
+                  <!-- Type picker cards -->
+                  <div class="grid grid-cols-3 gap-3 mb-5">
+                    {#each [
+                      { value: 'form', icon: '📝', label: 'Quiz', desc: 'Questions & réponses' },
+                      { value: 'ctf', icon: '🚩', label: 'CTF', desc: 'Capture the flag' },
+                      { value: 'interactive', icon: '⚡', label: 'Interactive', desc: 'Terminal en direct' },
+                    ] as t}
+                      <button
+                        type="button"
+                        class="relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-center transition-all
+                          {labForm.lab_type === t.value
+                            ? 'border-primary-400 bg-primary-50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}"
+                        on:click={() => selectLabType(t.value)}>
+                        <span class="text-2xl">{t.icon}</span>
+                        <span class="text-sm font-semibold {labForm.lab_type === t.value ? 'text-primary-700' : 'text-gray-700'}">{t.label}</span>
+                        <span class="text-xs {labForm.lab_type === t.value ? 'text-primary-500' : 'text-gray-400'}">{t.desc}</span>
+                        {#if labForm.lab_type === t.value}
+                          <span class="absolute top-2 right-2 text-primary-500 text-sm font-bold">✓</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+
+                  <!-- Basics fields -->
+                  <div class="space-y-3">
                     <div>
                       <label class="label">Title *</label>
                       <input class="input" bind:value={labForm.title} placeholder="Lab title" />
                     </div>
                     <div>
-                      <label class="label">Type</label>
-                      <select class="input" bind:value={labForm.lab_type}
-                        on:change={() => {
-                          labForm.questions = labForm.questions.length ? labForm.questions : [newQuestion()];
-                          labForm.ctf_flags = labForm.ctf_flags.length ? labForm.ctf_flags : [newMultiFlag()];
-                          labForm.interactive_steps = labForm.interactive_steps.length ? labForm.interactive_steps : [newStep()];
-                        }}>
-                        <option value="form">📝 Quiz</option>
-                        <option value="ctf">🚩 CTF Challenge</option>
-                        <option value="interactive">⚡ Interactive Lab</option>
-                      </select>
-                    </div>
-                    <div class="md:col-span-2">
                       <div class="flex items-center justify-between mb-1">
                         <label class="label mb-0">Description</label>
                         <div class="flex gap-1">
@@ -759,22 +1129,27 @@
                           {/if}
                         </div>
                       {:else}
-                        <textarea class="input" rows="2" bind:value={labForm.description} placeholder="Describe this lab... (supports Markdown)"></textarea>
+                        <textarea class="input" rows="3" bind:value={labForm.description} placeholder="Describe this lab... (supports Markdown)"></textarea>
                       {/if}
                     </div>
-                    <div>
-                      <label class="label">Points</label>
-                      <input type="number" class="input" bind:value={labForm.points} min="0" />
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="label">Points</label>
+                        <input type="number" class="input" bind:value={labForm.points} min="0" />
+                      </div>
+                      <div>
+                        <label class="label">Order</label>
+                        <input type="number" class="input" bind:value={labForm.order_index} min="0" />
+                      </div>
                     </div>
-                    <div>
-                      <label class="label">Order</label>
-                      <input type="number" class="input" bind:value={labForm.order_index} min="0" />
-                    </div>
-                    <div class="flex items-center gap-2 pt-1">
+                    <div class="flex items-center gap-2">
                       <input type="checkbox" id="lab-pub" bind:checked={labForm.is_published} />
                       <label for="lab-pub" class="text-sm text-gray-700">Publish immediately</label>
                     </div>
                   </div>
+
+                  {:else}
+                  <!-- ─── STEP 2: CONTENT ────────────────────────────────── -->
 
                   <!-- ─── INTERACTIVE LAB ──────────────────────────────────── -->
                   {#if labForm.lab_type === 'interactive'}
@@ -1097,14 +1472,34 @@
                     </div>
                   {/if}
 
-                  <!-- Save / Cancel -->
-                  <div class="flex gap-2 mt-5 pt-4 border-t">
-                    <button class="btn-primary" on:click={saveLab} disabled={labFormSaving}>
-                      {labFormSaving ? 'Saving...' : labFormMode?.mode === 'edit' ? 'Save Changes' : 'Create Lab'}
-                    </button>
-                    <button class="btn-secondary" on:click={() => labFormMode = null} disabled={labFormSaving}>
+                  {/if}<!-- end step 1/2 -->
+                  {/if}<!-- end visual builder {:else} block -->
+
+                  <!-- Wizard / Save navigation -->
+                  <div class="flex items-center gap-2 mt-5 pt-4 border-t">
+                    <button class="btn-secondary text-sm" on:click={() => labFormMode = null} disabled={labFormSaving}>
                       Cancel
                     </button>
+                    {#if labInputMode === 'visual'}
+                      {#if labFormStep === 2}
+                        <button class="btn-secondary text-sm" on:click={() => labFormStep = 1} disabled={labFormSaving}>
+                          ← Back
+                        </button>
+                      {/if}
+                      <div class="ml-auto">
+                        {#if labFormStep === 1}
+                          <button class="btn-primary text-sm" on:click={goToStep2}>
+                            Next: Content →
+                          </button>
+                        {:else}
+                          <button class="btn-primary text-sm" on:click={saveLab} disabled={labFormSaving}>
+                            {labFormSaving ? 'Saving...' : labFormMode?.mode === 'edit' ? 'Save Changes' : 'Create Lab'}
+                          </button>
+                        {/if}
+                      </div>
+                    {:else}
+                      <!-- JSON mode: load button is inside the panel, just show cancel -->
+                    {/if}
                   </div>
                 </div>
               {/if}

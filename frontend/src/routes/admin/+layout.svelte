@@ -15,6 +15,7 @@
     { href: '/admin', label: 'Dashboard', icon: '📊' },
     { href: '/admin/users', label: 'Users', icon: '👥' },
     { href: '/admin/courses', label: 'Courses', icon: '📚' },
+    { href: '/admin/labs', label: 'Lab Tools', icon: '🧪' },
     { href: '/admin/monitoring', label: 'Monitoring', icon: '📈' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
   ];

@@ -19,10 +19,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # Rust API
+  # Go API
   api:
     build:
-      context: ./api
+      context: ./api-go
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
@@ -30,8 +30,13 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-32-chars}
       JWT_EXPIRY_HOURS: 24
       PORT: 8080
-      RUST_LOG: info
       CORS_ORIGINS: http://localhost:3000,${FRONTEND_URL:-http://localhost:3000}
+      GITLAB_CLIENT_ID: ${GITLAB_CLIENT_ID:-}
+      GITLAB_CLIENT_SECRET: ${GITLAB_CLIENT_SECRET:-}
+      GITLAB_URL: ${GITLAB_URL:-https://gitlab.com}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-http://localhost:3000}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
@@ -44,7 +49,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 10s
 
   # SvelteKit Frontend
   frontend:

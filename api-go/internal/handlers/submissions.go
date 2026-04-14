@@ -244,7 +244,7 @@ func (s *State) SubmitLab(w http.ResponseWriter, r *http.Request) {
 	case "form":
 		result, err = gradeForm(labPoints, json.RawMessage(contentStr), reqBody.Answer)
 	default:
-		s.Error(w, http.StatusInternalServerError, "Unknown lab type")
+		s.Error(w, http.StatusBadRequest, "This lab type does not accept submissions")
 		return
 	}
 	if err != nil {

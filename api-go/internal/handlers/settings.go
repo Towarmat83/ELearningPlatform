@@ -30,12 +30,10 @@ func ReadSetting(ctx context.Context, pool *pgxpool.Pool, key, fallback string) 
 
 // GET /api/settings/public
 func (s *State) PublicSettings(w http.ResponseWriter, r *http.Request) {
-	const pubKeys = "registration_enabled,sso_local_login_enabled,password_min_length,password_require_uppercase,password_require_number"
 	keys := []string{
 		"registration_enabled", "sso_local_login_enabled",
 		"password_min_length", "password_require_uppercase", "password_require_number",
 	}
-	_ = pubKeys
 	out := make(map[string]string, len(keys))
 	for _, k := range keys {
 		out[k] = ReadSetting(r.Context(), s.Pool, k, "")

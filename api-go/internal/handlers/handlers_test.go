@@ -619,7 +619,7 @@ func TestAPI(t *testing.T) {
 	t.Run("Admin/CourseMonitoring", func(t *testing.T) {
 		status, body := c.get("/api/admin/courses/"+courseID+"/monitoring", adminToken)
 		assertStatus(t, status, 200, body)
-		hasKey(t, body, "students")
+		hasKey(t, body, "student_progress")
 		hasKey(t, body, "total_enrolled")
 	})
 

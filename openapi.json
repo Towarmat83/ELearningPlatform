@@ -1,0 +1,1422 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "eLearning Platform API",
+    "description": "REST API for the eLearning Platform. Authentication uses Bearer JWT tokens. Admin routes require a user with role `admin`.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "OAuth" },
+    { "name": "Settings" },
+    { "name": "Courses" },
+    { "name": "Labs" },
+    { "name": "Submissions" },
+    { "name": "Instances" },
+    { "name": "Admin – Users" },
+    { "name": "Admin – Courses" },
+    { "name": "Admin – Settings" },
+    { "name": "Admin – Stats" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "UserPublic": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "string", "format": "uuid" },
+          "username":   { "type": "string" },
+          "email":      { "type": "string", "format": "email" },
+          "role":       { "type": "string", "enum": ["student", "admin"] },
+          "is_active":  { "type": "boolean" },
+          "avatar_url": { "type": "string", "nullable": true },
+          "bio":        { "type": "string", "nullable": true },
+          "auth_provider": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "description": "JWT Bearer token" },
+          "user":  { "$ref": "#/components/schemas/UserPublic" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["username", "email", "password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 3 },
+          "email":    { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 8 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email":    { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "Course": {
+        "type": "object",
+        "properties": {
+          "id":               { "type": "string", "format": "uuid" },
+          "title":            { "type": "string" },
+          "description":      { "type": "string", "nullable": true },
+          "thumbnail":        { "type": "string", "nullable": true },
+          "category":         { "type": "string", "nullable": true },
+          "difficulty":       { "type": "string", "nullable": true },
+          "is_published":     { "type": "boolean" },
+          "created_by":       { "type": "string", "format": "uuid" },
+          "creator_username": { "type": "string", "nullable": true },
+          "lab_count":        { "type": "integer" },
+          "enrollment_count": { "type": "integer" },
+          "created_at":       { "type": "string", "format": "date-time" },
+          "updated_at":       { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateCourseRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title":        { "type": "string" },
+          "description":  { "type": "string" },
+          "thumbnail":    { "type": "string" },
+          "category":     { "type": "string" },
+          "difficulty":   { "type": "string" },
+          "is_published": { "type": "boolean", "default": false }
+        }
+      },
+      "UpdateCourseRequest": {
+        "type": "object",
+        "properties": {
+          "title":        { "type": "string" },
+          "description":  { "type": "string" },
+          "thumbnail":    { "type": "string" },
+          "category":     { "type": "string" },
+          "difficulty":   { "type": "string" },
+          "is_published": { "type": "boolean" }
+        }
+      },
+      "Lab": {
+        "type": "object",
+        "properties": {
+          "id":          { "type": "string", "format": "uuid" },
+          "course_id":   { "type": "string", "format": "uuid" },
+          "title":       { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "lab_type":    { "type": "string", "enum": ["form", "ctf", "interactive"] },
+          "content":     { "type": "object", "description": "Lab content (questions for form, flags for ctf, docker_image for interactive)" },
+          "points":      { "type": "integer" },
+          "order_index": { "type": "integer" },
+          "is_published":{ "type": "boolean" },
+          "created_at":  { "type": "string", "format": "date-time" },
+          "updated_at":  { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateLabRequest": {
+        "type": "object",
+        "required": ["title", "lab_type"],
+        "properties": {
+          "title":       { "type": "string" },
+          "description": { "type": "string" },
+          "lab_type":    { "type": "string", "enum": ["form", "ctf", "interactive"] },
+          "content":     { "type": "object" },
+          "flag":        { "type": "string", "description": "Required for CTF labs" },
+          "points":      { "type": "integer", "default": 100 },
+          "order_index": { "type": "integer", "default": 0 },
+          "is_published":{ "type": "boolean", "default": false }
+        }
+      },
+      "UpdateLabRequest": {
+        "type": "object",
+        "properties": {
+          "title":       { "type": "string" },
+          "description": { "type": "string" },
+          "content":     { "type": "object" },
+          "flag":        { "type": "string" },
+          "points":      { "type": "integer" },
+          "order_index": { "type": "integer" },
+          "is_published":{ "type": "boolean" }
+        }
+      },
+      "SubmitLabRequest": {
+        "type": "object",
+        "required": ["answer"],
+        "properties": {
+          "answer": {
+            "type": "object",
+            "description": "For CTF (single flag): `{\"flag\": \"FLAG{...}\"}`. For CTF (multi-flag): `{\"flags\": {\"flag_id\": \"FLAG{...}\"}}`. For form: `{\"answers\": {\"question_id\": \"answer\"}}`."
+          }
+        }
+      },
+      "SubmissionResult": {
+        "type": "object",
+        "properties": {
+          "is_correct":        { "type": "boolean" },
+          "score":             { "type": "integer" },
+          "max_score":         { "type": "integer" },
+          "feedback":          { "type": "string", "nullable": true },
+          "question_results":  {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "question_id":    { "type": "string" },
+                "is_correct":     { "type": "boolean" },
+                "points_earned":  { "type": "integer" },
+                "correct_answer": { "type": "string", "nullable": true },
+                "explanation":    { "type": "string", "nullable": true }
+              }
+            }
+          },
+          "flag_results": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "flag_id":       { "type": "string" },
+                "name":          { "type": "string" },
+                "is_correct":    { "type": "boolean" },
+                "points_earned": { "type": "integer" }
+              }
+            }
+          }
+        }
+      },
+      "CourseProgress": {
+        "type": "object",
+        "properties": {
+          "course_id":             { "type": "string", "format": "uuid" },
+          "user_id":               { "type": "string", "format": "uuid" },
+          "total_labs":            { "type": "integer" },
+          "completed_labs":        { "type": "integer" },
+          "total_points_possible": { "type": "integer" },
+          "total_points_earned":   { "type": "integer" },
+          "completion_percentage": { "type": "number" },
+          "lab_progress": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lab_id":         { "type": "string", "format": "uuid" },
+                "lab_title":      { "type": "string" },
+                "lab_type":       { "type": "string" },
+                "points":         { "type": "integer" },
+                "completed":      { "type": "boolean" },
+                "best_score":     { "type": "integer" },
+                "total_attempts": { "type": "integer" },
+                "completed_at":   { "type": "string", "format": "date-time", "nullable": true }
+              }
+            }
+          }
+        }
+      },
+      "InstanceStatus": {
+        "type": "object",
+        "properties": {
+          "instance_id": { "type": "string", "format": "uuid" },
+          "status":      { "type": "string", "enum": ["running", "stopped", "none"] },
+          "started_at":  { "type": "string", "format": "date-time", "nullable": true },
+          "expires_at":  { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status":  { "type": "string", "example": "ok" },
+                    "service": { "type": "string", "example": "elearning-api" },
+                    "version": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/public": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Get public platform settings",
+        "description": "Returns non-sensitive settings used by the frontend (registration flags, password policy).",
+        "responses": {
+          "200": {
+            "description": "Public settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "registration_enabled":      { "type": "string" },
+                    "sso_local_login_enabled":   { "type": "string" },
+                    "password_min_length":        { "type": "string" },
+                    "password_require_uppercase": { "type": "string" },
+                    "password_require_number":    { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User created — returns JWT and user info",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "400": { "description": "Validation error (username too short, password policy)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Registration disabled or domain not allowed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "409": { "description": "Email or username already taken", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login with email and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "401": { "description": "Invalid credentials", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Local login disabled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current authenticated user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserPublic" }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/profile": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Update current user's profile",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username":   { "type": "string", "minLength": 3 },
+                  "bio":        { "type": "string" },
+                  "avatar_url": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserPublic" }
+              }
+            }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Username changes disabled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "409": { "description": "Username already taken", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/password": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Change current user's password",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["old_password", "new_password"],
+                "properties": {
+                  "old_password": { "type": "string" },
+                  "new_password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password changed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "400": { "description": "Missing fields or password policy violation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Incorrect current password", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/oauth/providers": {
+      "get": {
+        "tags": ["OAuth"],
+        "summary": "List enabled OAuth providers",
+        "responses": {
+          "200": {
+            "description": "List of providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id":   { "type": "string", "example": "github" },
+                          "name": { "type": "string", "example": "GitHub" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/{provider}/authorize": {
+      "get": {
+        "tags": ["OAuth"],
+        "summary": "Get OAuth authorization URL",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "enum": ["github", "gitlab"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization URL and CSRF state token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url":   { "type": "string" },
+                    "state": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Unknown or unconfigured provider", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/auth/oauth/callback": {
+      "post": {
+        "tags": ["OAuth"],
+        "summary": "Exchange OAuth code for a platform JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "state"],
+                "properties": {
+                  "code":  { "type": "string", "description": "Authorization code from the OAuth provider" },
+                  "state": { "type": "string", "description": "CSRF state token returned by /authorize" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "401": { "description": "Invalid or expired state token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses": {
+      "get": {
+        "tags": ["Courses"],
+        "summary": "List published courses",
+        "parameters": [
+          { "name": "page",       "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page",   "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
+          { "name": "category",   "in": "query", "schema": { "type": "string" } },
+          { "name": "difficulty", "in": "query", "schema": { "type": "string" } },
+          { "name": "search",     "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of courses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courses":     { "type": "array", "items": { "$ref": "#/components/schemas/Course" } },
+                    "total":       { "type": "integer" },
+                    "page":        { "type": "integer" },
+                    "per_page":    { "type": "integer" },
+                    "total_pages": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Courses"],
+        "summary": "Create a new course",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCourseRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Course created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Course" }
+              }
+            }
+          },
+          "400": { "description": "Title is required", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{id}": {
+      "get": {
+        "tags": ["Courses"],
+        "summary": "Get a published course by ID",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Course", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Course" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "put": {
+        "tags": ["Courses"],
+        "summary": "Update a course (owner or admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateCourseRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated course", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Course" } } } },
+          "403": { "description": "Not the course owner", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Courses"],
+        "summary": "Delete a course (owner or admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Course deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "403": { "description": "Not the course owner", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{id}/enroll": {
+      "post": {
+        "tags": ["Courses"],
+        "summary": "Enroll in a course",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "404": { "description": "Course not found or not published", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{id}/unenroll": {
+      "delete": {
+        "tags": ["Courses"],
+        "summary": "Unenroll from a course",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Unenrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } }
+        }
+      }
+    },
+    "/api/my/courses": {
+      "get": {
+        "tags": ["Courses"],
+        "summary": "Get courses the current user is enrolled in",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Enrolled courses with progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courses": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          { "$ref": "#/components/schemas/Course" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "completed_labs": { "type": "integer" },
+                              "total_score":    { "type": "integer" }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/courses/{id}/leaderboard": {
+      "get": {
+        "tags": ["Courses"],
+        "summary": "Get the course leaderboard (must be enrolled)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top 20 students",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "leaderboard": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rank":           { "type": "integer" },
+                          "user_id":        { "type": "string" },
+                          "is_me":          { "type": "boolean" },
+                          "username":       { "type": "string" },
+                          "completed_labs": { "type": "integer" },
+                          "total_points":   { "type": "integer" },
+                          "last_activity":  { "type": "string", "format": "date-time", "nullable": true }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Not enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{course_id}/labs": {
+      "get": {
+        "tags": ["Labs"],
+        "summary": "List labs for a course (must be enrolled)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of labs (correct_answers stripped for students)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "labs": { "type": "array", "items": { "$ref": "#/components/schemas/Lab" } }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Not enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "post": {
+        "tags": ["Labs"],
+        "summary": "Create a lab (course owner or admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateLabRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Lab created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Lab" } } } },
+          "400": { "description": "Invalid lab_type or missing flag for CTF", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Not the course owner", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{course_id}/labs/{lab_id}": {
+      "get": {
+        "tags": ["Labs"],
+        "summary": "Get a single lab with user progress",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lab + progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lab": { "$ref": "#/components/schemas/Lab" },
+                    "progress": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "completed":       { "type": "boolean" },
+                        "best_score":      { "type": "integer" },
+                        "total_attempts":  { "type": "integer" },
+                        "completed_at":    { "type": "string", "format": "date-time", "nullable": true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Not enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Lab not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "put": {
+        "tags": ["Labs"],
+        "summary": "Update a lab (course owner or admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateLabRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated lab", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Lab" } } } },
+          "403": { "description": "Not the course owner", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Lab not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Labs"],
+        "summary": "Delete a lab (course owner or admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Lab deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "403": { "description": "Not the course owner", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{course_id}/labs/{lab_id}/submit": {
+      "post": {
+        "tags": ["Submissions"],
+        "summary": "Submit an answer for a lab",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SubmitLabRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Grading result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubmissionResult" } } } },
+          "400": { "description": "Bad answer format", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Not enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Lab not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/courses/{course_id}/labs/{lab_id}/submissions": {
+      "get": {
+        "tags": ["Submissions"],
+        "summary": "Get current user's submission history for a lab",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Last 20 submissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "submissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id":           { "type": "string", "format": "uuid" },
+                          "answer":       { "type": "object" },
+                          "is_correct":   { "type": "boolean" },
+                          "score":        { "type": "integer" },
+                          "attempts":     { "type": "integer" },
+                          "submitted_at": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/courses/{course_id}/progress": {
+      "get": {
+        "tags": ["Submissions"],
+        "summary": "Get current user's progress for a course",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Course progress", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CourseProgress" } } } }
+        }
+      }
+    },
+    "/api/courses/{course_id}/labs/{lab_id}/instance": {
+      "post": {
+        "tags": ["Instances"],
+        "summary": "Start an interactive lab container",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Instance started or already running", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InstanceStatus" } } } },
+          "400": { "description": "Docker not available or lab not configured for interactive use", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Not enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "get": {
+        "tags": ["Instances"],
+        "summary": "Get current instance status",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Instance status (`status: none` if no instance)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InstanceStatus" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Instances"],
+        "summary": "Stop and remove the running instance",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Instance stopped", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "404": { "description": "No running instance", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/ws/courses/{course_id}/labs/{lab_id}/terminal": {
+      "get": {
+        "tags": ["Instances"],
+        "summary": "WebSocket — interactive terminal proxy",
+        "description": "Upgrades to a WebSocket that proxies the container's PTY. Auth via `?token=<JWT>`. Send binary frames for stdin. Send `{\"type\":\"resize\",\"rows\":N,\"cols\":N}` as text to resize the PTY.",
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "token",     "in": "query", "required": true, "schema": { "type": "string" }, "description": "JWT Bearer token" }
+        ],
+        "responses": {
+          "101": { "description": "Switching Protocols — WebSocket connection established" },
+          "401": { "description": "Missing or invalid token" },
+          "404": { "description": "No running instance" }
+        }
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "tags": ["Admin – Stats"],
+        "summary": "Global platform statistics",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Aggregated stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_users":       { "type": "integer" },
+                    "total_courses":     { "type": "integer" },
+                    "total_labs":        { "type": "integer" },
+                    "total_submissions": { "type": "integer" },
+                    "total_enrollments": { "type": "integer" },
+                    "success_rate":      { "type": "string", "example": "72.4" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/settings": {
+      "get": {
+        "tags": ["Admin – Settings"],
+        "summary": "Get all platform settings",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "All settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key":         { "type": "string" },
+                          "value":       { "type": "string" },
+                          "description": { "type": "string", "nullable": true }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Admin – Settings"],
+        "summary": "Update platform settings",
+        "description": "Allowed keys: `gitlab_url`, `registration_enabled`, `registration_email_whitelist`, `password_min_length`, `password_require_uppercase`, `password_require_number`, `profile_allow_username_change`, `sso_local_login_enabled`.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "example": {
+                  "registration_enabled": "true",
+                  "password_min_length": "10"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated settings (same shape as GET)", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "400": { "description": "Unknown key or non-string value", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["Admin – Users"],
+        "summary": "List all users",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "All users with stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          { "$ref": "#/components/schemas/UserPublic" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "enrolled_courses": { "type": "integer" },
+                              "completed_labs":   { "type": "integer" }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}": {
+      "get": {
+        "tags": ["Admin – Users"],
+        "summary": "Get a user by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "user_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "User detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/UserPublic" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "enrolled_courses": { "type": "integer" },
+                        "completed_labs":   { "type": "integer" },
+                        "total_score":      { "type": "integer" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": { "description": "User not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "put": {
+        "tags": ["Admin – Users"],
+        "summary": "Update a user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "user_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username":   { "type": "string" },
+                  "bio":        { "type": "string" },
+                  "avatar_url": { "type": "string" },
+                  "is_active":  { "type": "boolean" },
+                  "role":       { "type": "string", "enum": ["admin", "student"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserPublic" } } } },
+          "400": { "description": "Invalid role", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "User not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Admin – Users"],
+        "summary": "Delete a user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "user_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "User deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "404": { "description": "User not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/admin/courses": {
+      "get": {
+        "tags": ["Admin – Courses"],
+        "summary": "List all courses including unpublished",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page",     "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 50 } },
+          { "name": "search",   "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "All courses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "courses":  { "type": "array", "items": { "$ref": "#/components/schemas/Course" } },
+                    "total":    { "type": "integer" },
+                    "page":     { "type": "integer" },
+                    "per_page": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/courses/{course_id}/monitoring": {
+      "get": {
+        "tags": ["Admin – Courses"],
+        "summary": "Course monitoring — progress of all enrolled students",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Monitoring data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "course_id":        { "type": "string", "format": "uuid" },
+                    "course_title":     { "type": "string" },
+                    "total_enrolled":   { "type": "integer" },
+                    "student_progress": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "user_id":        { "type": "string", "format": "uuid" },
+                          "username":       { "type": "string" },
+                          "email":          { "type": "string" },
+                          "completed_labs": { "type": "integer" },
+                          "total_points":   { "type": "integer" },
+                          "last_activity":  { "type": "string", "format": "date-time", "nullable": true }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/courses/{course_id}/labs/{lab_id}": {
+      "get": {
+        "tags": ["Admin – Courses"],
+        "summary": "Get a lab with flag and correct answers exposed",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Full lab data including flag", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Lab" } } } },
+          "404": { "description": "Lab not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/admin/courses/{course_id}/labs/{lab_id}/submissions": {
+      "get": {
+        "tags": ["Admin – Courses"],
+        "summary": "All student submissions for a lab",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "submissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id":           { "type": "string", "format": "uuid" },
+                          "user_id":      { "type": "string", "format": "uuid" },
+                          "username":     { "type": "string" },
+                          "is_correct":   { "type": "boolean" },
+                          "score":        { "type": "integer" },
+                          "attempts":     { "type": "integer" },
+                          "submitted_at": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/courses/{course_id}/labs/{lab_id}/stats": {
+      "get": {
+        "tags": ["Admin – Courses"],
+        "summary": "Per-lab analytics (success rate, avg score, etc.)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "lab_id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lab analytics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_submissions":         { "type": "integer" },
+                    "unique_students":            { "type": "integer" },
+                    "success_rate":               { "type": "number" },
+                    "avg_score":                  { "type": "number" },
+                    "max_score_achieved":          { "type": "integer" },
+                    "completed_count":             { "type": "integer" },
+                    "avg_attempts_to_complete":    { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/courses/{course_id}/enrollments": {
+      "get": {
+        "tags": ["Admin – Courses"],
+        "summary": "List enrollments for a course",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrollments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enrollments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "user_id":     { "type": "string", "format": "uuid" },
+                          "username":    { "type": "string" },
+                          "email":       { "type": "string" },
+                          "enrolled_at": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Admin – Courses"],
+        "summary": "Enroll a user in a course",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                  "user_id": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "User enrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } }
+        }
+      }
+    },
+    "/api/admin/courses/{course_id}/enrollments/{user_id}": {
+      "delete": {
+        "tags": ["Admin – Courses"],
+        "summary": "Unenroll a user from a course",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "course_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "user_id",   "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "User unenrolled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } }
+        }
+      }
+    }
+  }
+}

@@ -1,13 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
   import { lessonsApi, type LessonDetail, type LessonSummary } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
   import Markdown from '$lib/Markdown.svelte';
-
-  const courseId = $page.params.id!;
-  const lessonId = $page.params.lessonId!;
 
   let lesson: LessonDetail | null = null;
   let allLessons: LessonSummary[] = [];
@@ -24,7 +20,7 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       markdownFileCache[url] = text;
-      markdownFileCache = markdownFileCache; // trigger reactivity
+      markdownFileCache = markdownFileCache;
       return text;
     } catch (e: any) {
       const msg = `> ⚠️ Failed to load \`${url}\`: ${e.message}`;
@@ -41,27 +37,38 @@
     }
   }
 
+  $: courseId = $page.params.id;
+  $: lessonId = $page.params.lessonId;
   $: currentIndex = allLessons.findIndex(l => l.id === lessonId);
   $: prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
   $: nextLesson = currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
 
-  onMount(async () => {
+  // afterNavigate fires on initial load AND on every goto() — handles both cases
+  afterNavigate(async ({ from }) => {
     auth.init();
     const token = $auth.token;
     if (!token) {
       goto('/login?redirect=' + encodeURIComponent($page.url.pathname));
       return;
     }
+    const cId = $page.params.id;
+    const lId = $page.params.lessonId;
+    const prevCourse = from?.params?.id;
+
+    loading = true;
+    lesson = null;
     try {
+      // Re-fetch lesson list only on first load or if we switched course
+      const needsList = allLessons.length === 0 || prevCourse !== cId;
       const [lessonRes, listRes] = await Promise.all([
-        lessonsApi.get(courseId, lessonId, token),
-        lessonsApi.list(courseId, token),
+        lessonsApi.get(cId, lId, token),
+        needsList ? lessonsApi.list(cId, token) : Promise.resolve(null),
       ]);
       lesson = lessonRes.lesson;
-      allLessons = listRes.lessons;
+      if (listRes) allLessons = listRes.lessons;
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load lesson');
-      goto('/courses/' + courseId);
+      goto('/courses/' + cId);
     } finally {
       loading = false;
     }
@@ -73,7 +80,6 @@
     try {
       await lessonsApi.complete(courseId, lessonId, $auth.token!);
       lesson = { ...lesson, viewed: true };
-      // Update in list too
       allLessons = allLessons.map(l => l.id === lessonId ? { ...l, viewed: true } : l);
       toasts.success('Lesson completed!');
     } catch (e: any) {

@@ -114,6 +114,14 @@ func (s *State) StartInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Run init_script if provided (sets up challenge files, flags, etc.)
+	if initScript, _ := contentMap["init_script"].(string); initScript != "" {
+		if err := runInitScript(ctx, s.Docker, createResp.ID, initScript); err != nil {
+			slog.Error("init_script failed", "container", createResp.ID, "err", err)
+			// Non-fatal: log but continue — student still gets a terminal
+		}
+	}
+
 	var newInstanceID string
 	var newExpiresAt time.Time
 	err = s.Pool.QueryRow(ctx, `
@@ -290,5 +298,24 @@ func runTerminal(ctx context.Context, conn *websocket.Conn, docker *dockerclient
 			return nil
 		}
 	}
+	return nil
+}
+
+// runInitScript executes a shell script inside a running container to set up the challenge.
+func runInitScript(ctx context.Context, docker *dockerclient.Client, containerID, script string) error {
+	execResp, err := docker.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          []string{"/bin/sh", "-c", script},
+	})
+	if err != nil {
+		return err
+	}
+	resp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+	io.Copy(io.Discard, resp.Reader) //nolint:errcheck
 	return nil
 }

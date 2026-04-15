@@ -452,6 +452,89 @@ export interface LabInstance {
   expires_at?: string;
 }
 
+// ── Lessons ───────────────────────────────────────────────────────────────────
+
+export type LessonBlock =
+  | { id: string; type: 'text'; markdown: string }
+  | { id: string; type: 'video'; title: string; url: string; duration?: number }
+  | { id: string; type: 'markdown_file'; title?: string; url: string };
+
+// Student view — no content, has viewed
+export interface LessonSummary {
+  id: string;
+  course_id: string;
+  title: string;
+  order_index: number;
+  is_published: boolean;
+  viewed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Admin list view — has content, no viewed
+export interface LessonAdminRow {
+  id: string;
+  course_id: string;
+  title: string;
+  order_index: number;
+  is_published: boolean;
+  content: LessonBlock[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Single lesson GET — has content + viewed
+export interface LessonDetail extends LessonSummary {
+  content: LessonBlock[];
+}
+
+export interface CreateLesson {
+  title: string;
+  order_index?: number;
+  is_published?: boolean;
+  content?: LessonBlock[];   // omit to preserve existing content (partial update)
+}
+
+export const lessonsApi = {
+  list: (courseId: string, token: string) =>
+    api.get<{ lessons: LessonSummary[] }>(`/courses/${courseId}/lessons`, token),
+  get: (courseId: string, lessonId: string, token: string) =>
+    api.get<{ lesson: LessonDetail }>(`/courses/${courseId}/lessons/${lessonId}`, token),
+  complete: (courseId: string, lessonId: string, token: string) =>
+    api.post(`/courses/${courseId}/lessons/${lessonId}/complete`, {}, token),
+};
+
+export const adminLessonsApi = {
+  list: (courseId: string, token: string) =>
+    api.get<{ lessons: LessonAdminRow[] }>(`/courses/${courseId}/lessons`, token),
+  get: (courseId: string, lessonId: string, token: string) =>
+    api.get<{ lesson: LessonDetail }>(`/courses/${courseId}/lessons/${lessonId}`, token),
+  create: (courseId: string, data: CreateLesson, token: string) =>
+    api.post<{ lesson: LessonAdminRow }>(`/admin/courses/${courseId}/lessons`, data, token),
+  update: (courseId: string, lessonId: string, data: CreateLesson, token: string) =>
+    api.put<{ lesson: LessonAdminRow }>(`/admin/courses/${courseId}/lessons/${lessonId}`, data, token),
+  delete: (courseId: string, lessonId: string, token: string) =>
+    api.delete(`/admin/courses/${courseId}/lessons/${lessonId}`, token),
+};
+
+export const uploadsApi = {
+  video: async (file: File, token: string): Promise<{ url: string; filename: string; kind: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/admin/uploads/video', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const e = await res.json(); msg = e.error || msg; } catch {}
+      throw new ApiError(res.status, msg);
+    }
+    return res.json();
+  },
+};
+
 export interface AdminSubmission {
   id: string;
   user_id: string;

@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { adminApi, coursesApi, labsApi, type CourseWithStats, type Lab, type AdminEnrollment, type AdminUser, type LabStats } from '$lib/api';
+  import {
+    adminApi, coursesApi, labsApi, adminLessonsApi, uploadsApi,
+    type CourseWithStats, type Lab, type AdminEnrollment, type AdminUser, type LabStats,
+    type LessonAdminRow, type LessonBlock,
+  } from '$lib/api';
   import Markdown from '$lib/Markdown.svelte';
   import { auth, toasts } from '$lib/stores';
   import {
@@ -196,7 +200,10 @@
     if (expandedCourse === courseId) { expandedCourse = null; return; }
     expandedCourse = courseId;
     if (!selectedUserId[courseId]) selectedUserId[courseId] = '';
-    await refreshLabs(courseId);
+    await Promise.all([
+      refreshLabs(courseId),
+      refreshLessons(courseId),
+    ]);
     if (!courseEnrollments[courseId]) {
       try {
         const res = await adminApi.courseEnrollments(courseId, $auth.token!);
@@ -485,6 +492,232 @@
       const c = courses.find(c => c.id === courseId);
       if (c) { c.enrollment_count = Math.max(0, c.enrollment_count - 1); courses = courses; }
       toasts.success('User unenrolled');
+    } catch (e: any) { toasts.error(e.message); }
+  }
+
+  // ─── Lessons ──────────────────────────────────────────────────────────────
+
+  let courseLessons: Record<string, LessonAdminRow[]> = {};
+  let lessonFormMode: { mode: 'create' | 'edit'; courseId: string; lessonId?: string } | null = null;
+  let lessonFormSaving = false;
+  let lessonUploading = false;
+  let lessonInputMode: 'visual' | 'json' = 'visual';
+  let lessonJsonText = '';
+  let lessonJsonError = '';
+
+  // Flat (non-discriminated) for easy Svelte template binding
+  interface LessonBlockEdit {
+    id: string;
+    type: 'text' | 'video' | 'markdown_file';
+    markdown: string;  // text blocks
+    title: string;     // video / markdown_file blocks
+    url: string;       // video / markdown_file blocks
+    duration: string;  // video blocks only
+  }
+
+  let lessonForm = {
+    title: '',
+    order_index: 0,
+    is_published: true,
+    blocks: [] as LessonBlockEdit[],
+  };
+
+  function resetLessonForm() {
+    lessonForm = { title: '', order_index: 0, is_published: true, blocks: [] };
+    lessonInputMode = 'visual';
+    lessonJsonText = '';
+    lessonJsonError = '';
+  }
+
+  function newTextBlock(): LessonBlockEdit {
+    return { id: `b${Date.now()}_${Math.random().toString(36).slice(2,6)}`, type: 'text', markdown: '', title: '', url: '', duration: '' };
+  }
+  function newVideoBlock(): LessonBlockEdit {
+    return { id: `b${Date.now()}_${Math.random().toString(36).slice(2,6)}`, type: 'video', markdown: '', title: '', url: '', duration: '' };
+  }
+  function newMarkdownFileBlock(): LessonBlockEdit {
+    return { id: `b${Date.now()}_${Math.random().toString(36).slice(2,6)}`, type: 'markdown_file', markdown: '', title: '', url: '', duration: '' };
+  }
+
+  function addLessonBlock(type: 'text' | 'video' | 'markdown_file') {
+    const block = type === 'text' ? newTextBlock() : type === 'video' ? newVideoBlock() : newMarkdownFileBlock();
+    lessonForm.blocks = [...lessonForm.blocks, block];
+  }
+  function removeLessonBlock(i: number) {
+    lessonForm.blocks = lessonForm.blocks.filter((_, idx) => idx !== i);
+  }
+  function moveLessonBlock(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= lessonForm.blocks.length) return;
+    const arr = [...lessonForm.blocks];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    lessonForm.blocks = arr;
+  }
+
+  async function refreshLessons(courseId: string) {
+    try {
+      const res = await adminLessonsApi.list(courseId, $auth.token!);
+      courseLessons[courseId] = res.lessons;
+      courseLessons = courseLessons;
+    } catch { courseLessons[courseId] = []; courseLessons = courseLessons; }
+  }
+
+  function startCreateLesson(courseId: string) {
+    resetLessonForm();
+    lessonFormMode = { mode: 'create', courseId };
+  }
+
+  function startEditLesson(courseId: string, lesson: LessonAdminRow) {
+    resetLessonForm();
+    lessonForm.title = lesson.title;
+    lessonForm.order_index = lesson.order_index;
+    lessonForm.is_published = lesson.is_published;
+    lessonForm.blocks = lesson.content.map(b => ({
+      id: b.id,
+      type: b.type as 'text' | 'video' | 'markdown_file',
+      markdown: b.type === 'text' ? (b as any).markdown ?? '' : '',
+      title: b.type !== 'text' ? ((b as any).title ?? '') : '',
+      url: b.type !== 'text' ? ((b as any).url ?? '') : '',
+      duration: b.type === 'video' ? ((b as any).duration?.toString() ?? '') : '',
+    }));
+    lessonFormMode = { mode: 'edit', courseId, lessonId: lesson.id };
+  }
+
+  function buildLessonContent(): LessonBlock[] {
+    return lessonForm.blocks.map(b => {
+      if (b.type === 'text') {
+        return { id: b.id, type: 'text' as const, markdown: b.markdown };
+      }
+      if (b.type === 'markdown_file') {
+        return { id: b.id, type: 'markdown_file' as const, url: b.url, ...(b.title ? { title: b.title } : {}) };
+      }
+      return {
+        id: b.id,
+        type: 'video' as const,
+        title: b.title,
+        url: b.url,
+        ...(b.duration ? { duration: parseInt(b.duration, 10) } : {}),
+      };
+    });
+  }
+
+  function openLessonJsonTab() {
+    const content = buildLessonContent();
+    lessonJsonText = JSON.stringify(content, null, 2);
+    lessonJsonError = '';
+    lessonInputMode = 'json';
+  }
+
+  function applyLessonJSON() {
+    lessonJsonError = '';
+    try {
+      const parsed = JSON.parse(lessonJsonText);
+      if (!Array.isArray(parsed)) throw new Error('Content must be a JSON array of blocks');
+      for (const b of parsed) {
+        if (!b.type || !b.id) throw new Error('Each block must have "id" and "type"');
+        if (b.type !== 'text' && b.type !== 'video') throw new Error(`Unknown block type: ${b.type}`);
+        if (b.type === 'text' && typeof b.markdown !== 'string') throw new Error('text block must have "markdown" string');
+        if (b.type === 'video' && typeof b.url !== 'string') throw new Error('video block must have "url" string');
+      }
+      lessonForm.blocks = parsed.map((b: any) => ({
+        ...b,
+        duration: b.duration?.toString() ?? '',
+      }));
+      lessonInputMode = 'visual';
+      toasts.success('JSON loaded');
+    } catch (e: any) {
+      lessonJsonError = e.message ?? 'Invalid JSON';
+    }
+  }
+
+  async function uploadLessonFile(blockIndex: number) {
+    const blockType = lessonForm.blocks[blockIndex].type;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = blockType === 'markdown_file'
+      ? '.md,text/markdown'
+      : 'video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      lessonUploading = true;
+      try {
+        const res = await uploadsApi.video(file, $auth.token!);
+        lessonForm.blocks[blockIndex].url = res.url;
+        lessonForm.blocks = lessonForm.blocks;
+        toasts.success(res.kind === 'markdown' ? 'Markdown file uploaded' : 'Video uploaded');
+      } catch (e: any) {
+        toasts.error(e.message || 'Upload failed');
+      } finally {
+        lessonUploading = false;
+      }
+    };
+    input.click();
+  }
+  // Keep old name as alias for compatibility
+  const uploadLessonVideo = uploadLessonFile;
+
+  async function saveLesson() {
+    if (!lessonForm.title.trim()) { toasts.error('Lesson title required'); return; }
+    lessonFormSaving = true;
+    const mode = lessonFormMode!;
+    try {
+      const payload = {
+        title: lessonForm.title,
+        order_index: lessonForm.order_index,
+        is_published: lessonForm.is_published,
+        content: buildLessonContent(),
+      };
+      if (mode.mode === 'create') {
+        await adminLessonsApi.create(mode.courseId, payload, $auth.token!);
+        toasts.success('Lesson created');
+      } else {
+        await adminLessonsApi.update(mode.courseId, mode.lessonId!, payload, $auth.token!);
+        toasts.success('Lesson updated');
+      }
+      lessonFormMode = null;
+      await refreshLessons(mode.courseId);
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to save lesson');
+    } finally {
+      lessonFormSaving = false;
+    }
+  }
+
+  async function deleteLesson(courseId: string, lessonId: string) {
+    if (!confirm('Delete this lesson?')) return;
+    try {
+      await adminLessonsApi.delete(courseId, lessonId, $auth.token!);
+      courseLessons[courseId] = courseLessons[courseId].filter(l => l.id !== lessonId);
+      courseLessons = courseLessons;
+      if (lessonFormMode?.lessonId === lessonId) lessonFormMode = null;
+      toasts.success('Lesson deleted');
+    } catch (e: any) { toasts.error(e.message); }
+  }
+
+  async function moveLessonOrder(courseId: string, lessonIndex: number, dir: -1 | 1) {
+    const ls = courseLessons[courseId];
+    const j = lessonIndex + dir;
+    if (j < 0 || j >= ls.length) return;
+    const a = ls[lessonIndex];
+    const b = ls[j];
+    try {
+      // content omitted → preserved server-side
+      await adminLessonsApi.update(courseId, a.id, { title: a.title, order_index: b.order_index, is_published: a.is_published }, $auth.token!);
+      await adminLessonsApi.update(courseId, b.id, { title: b.title, order_index: a.order_index, is_published: b.is_published }, $auth.token!);
+      await refreshLessons(courseId);
+    } catch (e: any) { toasts.error(e.message); }
+  }
+
+  async function toggleLessonPublish(courseId: string, lesson: LessonAdminRow) {
+    try {
+      // content omitted → preserved server-side
+      await adminLessonsApi.update(courseId, lesson.id, {
+        title: lesson.title, order_index: lesson.order_index, is_published: !lesson.is_published,
+      }, $auth.token!);
+      lesson.is_published = !lesson.is_published;
+      courseLessons = courseLessons;
+      toasts.success(lesson.is_published ? 'Lesson published' : 'Lesson unpublished');
     } catch (e: any) { toasts.error(e.message); }
   }
 
@@ -795,6 +1028,240 @@
           <!-- Expanded content -->
           {#if expandedCourse === course.id}
             <div class="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
+
+              <!-- ══════════════════════════════════════════
+                   LESSONS
+              ══════════════════════════════════════════ -->
+              <div class="mb-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-gray-600">📖 Lessons ({courseLessons[course.id]?.length ?? 0})</h3>
+                  {#if !lessonFormMode || lessonFormMode.courseId !== course.id}
+                    <button class="text-xs btn-primary" on:click={() => startCreateLesson(course.id)}>
+                      + Add Lesson
+                    </button>
+                  {/if}
+                </div>
+
+                {#if courseLessons[course.id]?.length}
+                  <div class="space-y-2 mb-3">
+                    {#each courseLessons[course.id] as lesson, li (lesson.id)}
+                      <div class="bg-white rounded-lg border-2 transition-colors
+                        {lessonFormMode?.lessonId === lesson.id ? 'border-primary-300' : 'border-gray-100'}">
+                        <div class="p-3 flex items-center gap-3">
+                          <!-- Reorder -->
+                          <div class="flex flex-col gap-0.5 shrink-0">
+                            <button on:click={() => moveLessonOrder(course.id, li, -1)}
+                              disabled={li === 0}
+                              class="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-xs px-1">▲</button>
+                            <button on:click={() => moveLessonOrder(course.id, li, 1)}
+                              disabled={li === courseLessons[course.id].length - 1}
+                              class="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-xs px-1">▼</button>
+                          </div>
+
+                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded font-medium shrink-0">📖 Lesson</span>
+                          <span class="flex-1 text-sm font-medium text-gray-700 truncate">{lesson.title}</span>
+                          <span class="text-xs text-gray-400 shrink-0">{lesson.content?.length ?? 0} blocks</span>
+                          <button
+                            on:click={() => toggleLessonPublish(course.id, lesson)}
+                            class="text-xs shrink-0 {lesson.is_published ? 'badge-green' : 'badge-yellow'} cursor-pointer hover:opacity-75 transition-opacity">
+                            {lesson.is_published ? 'Live' : 'Draft'}
+                          </button>
+                          <button on:click={() => startEditLesson(course.id, lesson)} class="text-xs btn-secondary shrink-0">Edit</button>
+                          <button on:click={() => deleteLesson(course.id, lesson.id)} class="text-xs text-red-400 hover:text-red-600 shrink-0">Delete</button>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="text-sm text-gray-400 mb-3">No lessons yet.</p>
+                {/if}
+
+                <!-- ── LESSON FORM ──────────────────────────────── -->
+                {#if lessonFormMode && lessonFormMode.courseId === course.id}
+                  <div class="bg-white border-2 border-blue-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                      <h4 class="font-semibold text-gray-800 text-base">
+                        {lessonFormMode.mode === 'create' ? 'New Lesson' : 'Edit Lesson'}
+                      </h4>
+                      <button on:click={() => lessonFormMode = null} class="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                    </div>
+
+                    <!-- Input mode toggle -->
+                    <div class="flex items-center gap-1 mb-4 border-b border-gray-100 pb-3">
+                      <button type="button"
+                        class="text-xs px-3 py-1.5 rounded-md font-medium transition-colors {lessonInputMode === 'visual' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}"
+                        on:click={() => { lessonInputMode = 'visual'; lessonJsonError = ''; }}>
+                        Visual Builder
+                      </button>
+                      <button type="button"
+                        class="text-xs px-3 py-1.5 rounded-md font-medium transition-colors {lessonInputMode === 'json' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}"
+                        on:click={openLessonJsonTab}>
+                        &#123;&#125; JSON
+                      </button>
+                    </div>
+
+                    <!-- ── JSON EDITOR ─────────────────────────────── -->
+                    {#if lessonInputMode === 'json'}
+                      <div class="space-y-3">
+                        <p class="text-xs text-gray-500">JSON array of blocks. Each block: <code class="bg-gray-100 px-1 rounded">&#123;"id":"b1","type":"text","markdown":"..."&#125;</code> or <code class="bg-gray-100 px-1 rounded">&#123;"id":"b2","type":"video","title":"...","url":"/uploads/x.mp4"&#125;</code></p>
+                        <textarea
+                          class="input font-mono text-xs leading-relaxed"
+                          rows="16"
+                          bind:value={lessonJsonText}
+                          spellcheck="false"
+                          placeholder="Paste JSON array of blocks..."></textarea>
+                        {#if lessonJsonError}
+                          <div class="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600 font-mono">{lessonJsonError}</div>
+                        {/if}
+                        <div class="flex gap-2">
+                          <button class="btn-primary text-xs" on:click={applyLessonJSON}>Validate &amp; Load</button>
+                          <button class="btn-secondary text-xs" on:click={openLessonJsonTab}>Refresh from form</button>
+                        </div>
+                      </div>
+
+                    {:else}
+                    <!-- ── VISUAL BUILDER ──────────────────────────── -->
+                      <div class="space-y-4">
+                        <!-- Metadata -->
+                        <div class="grid md:grid-cols-3 gap-3">
+                          <div class="md:col-span-2">
+                            <label class="label">Title *</label>
+                            <input class="input" bind:value={lessonForm.title} placeholder="Lesson title" />
+                          </div>
+                          <div>
+                            <label class="label">Order</label>
+                            <input type="number" class="input" bind:value={lessonForm.order_index} min="0" />
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <input type="checkbox" id="lesson-pub" bind:checked={lessonForm.is_published} />
+                          <label for="lesson-pub" class="text-sm text-gray-700">Publish immediately</label>
+                        </div>
+
+                        <!-- Content blocks -->
+                        <div>
+                          <div class="flex items-center justify-between mb-2">
+                            <label class="label mb-0">Content Blocks ({lessonForm.blocks.length})</label>
+                            <div class="flex gap-2">
+                              <button type="button" class="text-xs btn-secondary" on:click={() => addLessonBlock('text')}>+ Text</button>
+                              <button type="button" class="text-xs btn-secondary" on:click={() => addLessonBlock('video')}>+ Video</button>
+                              <button type="button" class="text-xs btn-secondary" on:click={() => addLessonBlock('markdown_file')}>+ MD File</button>
+                            </div>
+                          </div>
+
+                          {#if lessonForm.blocks.length === 0}
+                            <div class="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                              No blocks yet. Add a Text or Video block.
+                            </div>
+                          {:else}
+                            <div class="space-y-3">
+                              {#each lessonForm.blocks as block, bi (block.id)}
+                                <div class="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                  <div class="flex items-center gap-2 mb-3">
+                                    <!-- Move block -->
+                                    <div class="flex gap-0.5 shrink-0">
+                                      <button type="button" on:click={() => moveLessonBlock(bi, -1)} disabled={bi === 0}
+                                        class="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs px-1">▲</button>
+                                      <button type="button" on:click={() => moveLessonBlock(bi, 1)} disabled={bi === lessonForm.blocks.length - 1}
+                                        class="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs px-1">▼</button>
+                                    </div>
+                                    <span class="text-xs font-medium px-2 py-0.5 rounded
+                                      {block.type === 'text' ? 'bg-gray-200 text-gray-700' : block.type === 'video' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">
+                                      {block.type === 'text' ? '📝 Text' : block.type === 'video' ? '🎬 Video' : '📄 MD File'}
+                                    </span>
+                                    <span class="text-xs text-gray-400 font-mono">#{bi + 1}</span>
+                                    <button type="button" on:click={() => removeLessonBlock(bi)}
+                                      class="ml-auto text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                                  </div>
+
+                                  {#if block.type === 'text'}
+                                    <div>
+                                      <label class="label text-xs">Markdown content</label>
+                                      <textarea
+                                        class="input font-mono text-sm leading-relaxed"
+                                        rows="8"
+                                        bind:value={lessonForm.blocks[bi].markdown}
+                                        placeholder="# Titre&#10;&#10;Contenu en **markdown**..."></textarea>
+                                    </div>
+
+                                  {:else if block.type === 'video'}
+                                    <div class="space-y-2">
+                                      <div>
+                                        <label class="label text-xs">Video title</label>
+                                        <input class="input text-sm" bind:value={lessonForm.blocks[bi].title}
+                                          placeholder="e.g. Introduction vidéo" />
+                                      </div>
+                                      <div>
+                                        <label class="label text-xs">Video URL</label>
+                                        <div class="flex gap-2">
+                                          <input class="input text-sm font-mono flex-1"
+                                            bind:value={lessonForm.blocks[bi].url}
+                                            placeholder="/uploads/video.mp4 or https://..." />
+                                          <button
+                                            type="button"
+                                            class="btn-secondary text-xs shrink-0 {lessonUploading ? 'opacity-60' : ''}"
+                                            disabled={lessonUploading}
+                                            on:click={() => uploadLessonFile(bi)}>
+                                            {lessonUploading ? 'Uploading...' : '↑ Upload MP4'}
+                                          </button>
+                                        </div>
+                                        {#if lessonForm.blocks[bi].url?.startsWith('/uploads/')}
+                                          <p class="text-xs text-green-600 mt-1">✓ Video uploaded</p>
+                                        {/if}
+                                      </div>
+                                      <div>
+                                        <label class="label text-xs">Duration (seconds, optional)</label>
+                                        <input type="number" class="input text-sm w-32"
+                                          bind:value={lessonForm.blocks[bi].duration}
+                                          placeholder="e.g. 180" min="0" />
+                                      </div>
+                                    </div>
+
+                                  {:else if block.type === 'markdown_file'}
+                                    <div class="space-y-2">
+                                      <div>
+                                        <label class="label text-xs">Title (optional)</label>
+                                        <input class="input text-sm" bind:value={lessonForm.blocks[bi].title}
+                                          placeholder="e.g. Fiche de référence" />
+                                      </div>
+                                      <div>
+                                        <label class="label text-xs">Markdown file URL</label>
+                                        <div class="flex gap-2">
+                                          <input class="input text-sm font-mono flex-1"
+                                            bind:value={lessonForm.blocks[bi].url}
+                                            placeholder="/uploads/cours.md or https://..." />
+                                          <button
+                                            type="button"
+                                            class="btn-secondary text-xs shrink-0 {lessonUploading ? 'opacity-60' : ''}"
+                                            disabled={lessonUploading}
+                                            on:click={() => uploadLessonFile(bi)}>
+                                            {lessonUploading ? 'Uploading...' : '↑ Upload .md'}
+                                          </button>
+                                        </div>
+                                        {#if lessonForm.blocks[bi].url?.startsWith('/uploads/')}
+                                          <p class="text-xs text-green-600 mt-1">✓ File uploaded — will be fetched and rendered at reading time</p>
+                                        {/if}
+                                      </div>
+                                    </div>
+                                  {/if}
+                                </div>
+                              {/each}
+                            </div>
+                          {/if}
+                        </div>
+                      </div>
+                    {/if}
+
+                    <!-- Save / Cancel -->
+                    <div class="flex items-center gap-2 mt-5 pt-4 border-t">
+                      <button class="btn-secondary text-sm" on:click={() => lessonFormMode = null} disabled={lessonFormSaving}>Cancel</button>
+                      <button class="btn-primary text-sm ml-auto" on:click={saveLesson} disabled={lessonFormSaving}>
+                        {lessonFormSaving ? 'Saving...' : lessonFormMode?.mode === 'edit' ? 'Save Changes' : 'Create Lesson'}
+                      </button>
+                    </div>
+                  </div>
+                {/if}
+              </div>
 
               <!-- Labs list -->
               <div>

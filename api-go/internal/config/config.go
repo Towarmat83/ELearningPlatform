@@ -14,6 +14,7 @@ type Config struct {
 	JWTExpiryH   int
 	Port         int
 	CORSOrigins  []string
+	UploadsDir   string
 
 	GitLabClientID     string
 	GitLabClientSecret string
@@ -32,6 +33,7 @@ func Load() *Config {
 		JWTExpiryH:  getEnvInt("JWT_EXPIRY_HOURS", 24),
 		Port:        getEnvInt("PORT", 8080),
 		CORSOrigins: strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173"), ","),
+		UploadsDir:  getEnv("UPLOADS_DIR", "./uploads"),
 
 		GitLabClientID:     os.Getenv("GITLAB_CLIENT_ID"),
 		GitLabClientSecret: os.Getenv("GITLAB_CLIENT_SECRET"),

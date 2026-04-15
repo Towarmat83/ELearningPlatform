@@ -3,7 +3,7 @@ import type { Handle } from '@sveltejs/kit';
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith('/api')) {
+  if (event.url.pathname.startsWith('/api') || event.url.pathname.startsWith('/uploads')) {
     const targetUrl = `${API_URL}${event.url.pathname}${event.url.search}`;
 
     const headers = new Headers(event.request.headers);

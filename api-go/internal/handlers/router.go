@@ -52,6 +52,9 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 	r.Get("/api/courses", s.ListCourses)
 	r.Get("/api/courses/{id}", s.GetCourse)
 
+	// Static uploads (videos)
+	r.Get("/uploads/{filename}", s.ServeUpload)
+
 	// WebSocket terminal — auth via ?token= query param, no JWT middleware
 	r.Get("/ws/courses/{course_id}/labs/{lab_id}/terminal", s.TerminalWS)
 
@@ -82,6 +85,10 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Get("/api/courses/{course_id}/labs/{lab_id}/submissions", s.MySubmissions)
 		r.Get("/api/courses/{course_id}/progress", s.MyProgress)
 
+		r.Get("/api/courses/{course_id}/lessons", s.ListLessons)
+		r.Get("/api/courses/{course_id}/lessons/{lesson_id}", s.GetLesson)
+		r.Post("/api/courses/{course_id}/lessons/{lesson_id}/complete", s.MarkLessonComplete)
+
 		r.Post("/api/courses/{course_id}/labs/{lab_id}/instance", s.StartInstance)
 		r.Get("/api/courses/{course_id}/labs/{lab_id}/instance", s.GetInstance)
 		r.Delete("/api/courses/{course_id}/labs/{lab_id}/instance", s.StopInstance)
@@ -111,6 +118,12 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Get("/api/admin/courses/{course_id}/enrollments", s.AdminListEnrollments)
 		r.Post("/api/admin/courses/{course_id}/enrollments", s.AdminEnrollUser)
 		r.Delete("/api/admin/courses/{course_id}/enrollments/{user_id}", s.AdminUnenrollUser)
+
+		r.Post("/api/admin/courses/{course_id}/lessons", s.AdminCreateLesson)
+		r.Put("/api/admin/courses/{course_id}/lessons/{lesson_id}", s.AdminUpdateLesson)
+		r.Delete("/api/admin/courses/{course_id}/lessons/{lesson_id}", s.AdminDeleteLesson)
+
+		r.Post("/api/admin/uploads/video", s.UploadVideo)
 	})
 
 	return r

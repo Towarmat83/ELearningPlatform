@@ -1,5 +1,5 @@
 -- Migration 005 — Platform settings: runtime-configurable key/value store
-CREATE TABLE platform_settings (
+CREATE TABLE IF NOT EXISTS platform_settings (
     key         VARCHAR(64) PRIMARY KEY,
     value       TEXT        NOT NULL,
     description TEXT,

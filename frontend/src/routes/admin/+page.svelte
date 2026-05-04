@@ -30,10 +30,7 @@
       {#each [
         { label: 'Total Users', value: stats.total_users, icon: '👥', color: 'text-blue-600' },
         { label: 'Total Courses', value: stats.total_courses, icon: '📚', color: 'text-purple-600' },
-        { label: 'Total Labs', value: stats.total_labs, icon: '🧪', color: 'text-orange-600' },
-        { label: 'Submissions', value: stats.total_submissions, icon: '📨', color: 'text-green-600' },
         { label: 'Enrollments', value: stats.total_enrollments, icon: '🎓', color: 'text-cyan-600' },
-        { label: 'Success Rate', value: stats.success_rate + '%', icon: '🎯', color: 'text-red-600' },
       ] as s}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div class="text-3xl mb-2">{s.icon}</div>

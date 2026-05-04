@@ -9,14 +9,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elearning/api-go/internal/config"
+	"github.com/elearning/api-go/internal/content"
 	"github.com/elearning/api-go/internal/middleware"
 )
 
 // State is the shared application state passed to every handler.
 type State struct {
-	Pool   *pgxpool.Pool
-	Config *config.Config
-	Docker *dockerclient.Client
+	Pool    *pgxpool.Pool
+	Config  *config.Config
+	Docker  *dockerclient.Client
+	Content *content.Store
 }
 
 // Health returns a simple liveness response.

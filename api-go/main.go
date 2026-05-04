@@ -13,6 +13,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 
 	"github.com/elearning/api-go/internal/config"
+	"github.com/elearning/api-go/internal/content"
 	"github.com/elearning/api-go/internal/db"
 	"github.com/elearning/api-go/internal/handlers"
 	"github.com/elearning/api-go/migrations"
@@ -59,10 +60,17 @@ func main() {
 		slog.Info("Docker daemon connected — interactive labs enabled")
 	}
 
+	// Content store — load local courses on startup
+	store := content.NewStore()
+	if err := store.LoadDir(cfg.CoursesDir, "local"); err != nil {
+		slog.Warn("could not load courses directory", "dir", cfg.CoursesDir, "err", err)
+	}
+
 	s := &handlers.State{
-		Pool:   pool,
-		Config: cfg,
-		Docker: docker,
+		Pool:    pool,
+		Config:  cfg,
+		Docker:  docker,
+		Content: store,
 	}
 
 	r := handlers.BuildRouter(s, cfg, pool, true)

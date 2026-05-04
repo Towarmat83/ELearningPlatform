@@ -1,102 +1,96 @@
--- Users table
+-- Schema initial — content-as-code / GitOps
+-- Single source of truth: courses live in files, only user data in DB.
+
+-- ── Users ────────────────────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS users (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username    VARCHAR(64) UNIQUE NOT NULL,
-    email       VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    role        VARCHAR(16) NOT NULL DEFAULT 'student' CHECK (role IN ('admin', 'student')),
-    avatar_url  TEXT,
-    bio         TEXT,
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    username         VARCHAR(64) UNIQUE NOT NULL,
+    email            VARCHAR(255) UNIQUE NOT NULL,
+    password_hash    TEXT,                          -- nullable: SSO users have no password
+    role             VARCHAR(16) NOT NULL DEFAULT 'student' CHECK (role IN ('admin', 'student')),
+    avatar_url       TEXT,
+    bio              TEXT,
+    is_active        BOOLEAN     NOT NULL DEFAULT TRUE,
+    auth_provider    VARCHAR(32) NOT NULL DEFAULT 'local',
+    provider_user_id VARCHAR(255),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT users_provider_uid_key UNIQUE (auth_provider, provider_user_id)
 );
 
--- Courses table
-CREATE TABLE IF NOT EXISTS courses (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title       VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    thumbnail   TEXT,
-    category    VARCHAR(64),
-    difficulty  VARCHAR(16) CHECK (difficulty IN ('beginner', 'intermediate', 'advanced')),
-    is_published BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by  UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- ── Platform settings ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS platform_settings (
+    key        VARCHAR(64) PRIMARY KEY,
+    value      TEXT        NOT NULL,
+    description TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Labs table
-CREATE TABLE IF NOT EXISTS labs (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_id   UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    title       VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    lab_type    VARCHAR(16) NOT NULL CHECK (lab_type IN ('form', 'ctf')),
-    -- For 'form' labs: JSON array of questions with options and correct answers
-    -- For 'ctf' labs: challenge description, hints
-    content     JSONB NOT NULL DEFAULT '{}',
-    -- Only used for ctf labs: the expected flag
-    flag        TEXT,
-    points      INTEGER NOT NULL DEFAULT 100,
-    order_index INTEGER NOT NULL DEFAULT 0,
-    is_published BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+INSERT INTO platform_settings (key, value, description) VALUES
+    ('gitlab_url',                   'https://gitlab.com', 'Base URL of the GitLab instance for SSO'),
+    ('registration_enabled',         'true',  'Allow new users to self-register'),
+    ('registration_email_whitelist', '',      'Comma-separated allowed email domains (empty = all)'),
+    ('password_min_length',          '8',     'Minimum password length'),
+    ('password_require_uppercase',   'false', 'Require at least one uppercase letter'),
+    ('password_require_number',      'false', 'Require at least one number'),
+    ('profile_allow_username_change','true',  'Allow users to change their own username'),
+    ('sso_local_login_enabled',      'true',  'Allow local email/password login alongside SSO')
+ON CONFLICT (key) DO NOTHING;
 
--- Enrollments
+-- ── Enrollments ───────────────────────────────────────────────────────────────
+-- Courses are identified by slug (filesystem), not a UUID.
+
 CREATE TABLE IF NOT EXISTS enrollments (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    course_id   UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_slug TEXT        NOT NULL,
     enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, course_id)
+    UNIQUE(user_id, course_slug)
 );
 
--- Lab submissions (both form and ctf)
-CREATE TABLE IF NOT EXISTS lab_submissions (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    lab_id          UUID NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    -- For ctf: the flag submitted
-    -- For form: JSON of {question_id: answer}
-    answer          JSONB NOT NULL,
-    is_correct      BOOLEAN NOT NULL DEFAULT FALSE,
-    score           INTEGER NOT NULL DEFAULT 0,
-    attempts        INTEGER NOT NULL DEFAULT 1,
-    submitted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- ── Lesson progress ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS lesson_progress (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_slug TEXT        NOT NULL,
+    lesson_slug TEXT        NOT NULL,
+    viewed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, course_slug, lesson_slug)
 );
 
--- Progress tracking (best submission per user per lab)
-CREATE TABLE IF NOT EXISTS lab_progress (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    lab_id          UUID NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
-    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    completed       BOOLEAN NOT NULL DEFAULT FALSE,
-    best_score      INTEGER NOT NULL DEFAULT 0,
-    total_attempts  INTEGER NOT NULL DEFAULT 0,
-    completed_at    TIMESTAMPTZ,
-    last_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, lab_id)
+-- ── Git repositories ──────────────────────────────────────────────────────────
+-- Users can connect any git host (GitHub, GitLab, Gitea, self-hosted…).
+
+CREATE TABLE IF NOT EXISTS git_repos (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    url            TEXT        NOT NULL,
+    branch         TEXT        NOT NULL DEFAULT 'main',
+    token_enc      TEXT,                              -- AES-256-GCM encrypted PAT, nullable
+    status         TEXT        NOT NULL DEFAULT 'pending', -- pending|syncing|synced|error
+    error_message  TEXT,
+    last_synced_at TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, url)
 );
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_courses_created_by ON courses(created_by);
-CREATE INDEX IF NOT EXISTS idx_labs_course_id ON labs(course_id);
-CREATE INDEX IF NOT EXISTS idx_enrollments_user ON enrollments(user_id);
-CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_lab ON lab_submissions(lab_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_user ON lab_submissions(user_id);
-CREATE INDEX IF NOT EXISTS idx_progress_user ON lab_progress(user_id);
-CREATE INDEX IF NOT EXISTS idx_progress_course ON lab_progress(course_id);
+-- ── Indexes ───────────────────────────────────────────────────────────────────
 
--- Default admin user (password: Admin@1234)
-INSERT INTO users (username, email, password_hash, role)
-VALUES (
+CREATE INDEX IF NOT EXISTS idx_enrollments_user     ON enrollments(user_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_slug     ON enrollments(course_slug);
+CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(user_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_progress_key  ON lesson_progress(course_slug, lesson_slug);
+CREATE INDEX IF NOT EXISTS idx_git_repos_user       ON git_repos(user_id);
+
+-- ── Default admin ─────────────────────────────────────────────────────────────
+-- Password: Admin@1234  (bcrypt cost 12)
+
+INSERT INTO users (username, email, password_hash, role) VALUES (
     'admin',
     'admin@elearning.local',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewRO1cGxbEj7RTUG',
+    '$2y$12$U6BVYjCKzHaIu2VrJNHDhuBUNTiOrcP0xoovwKbGSvOMd29qwZz.y',
     'admin'
 ) ON CONFLICT DO NOTHING;

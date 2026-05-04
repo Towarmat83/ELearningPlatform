@@ -10,10 +10,7 @@
 
   onMount(async () => {
     auth.init();
-    if (!$isLoggedIn) {
-      goto('/login');
-      return;
-    }
+    if (!$isLoggedIn) { goto('/login'); return; }
     try {
       const res = await coursesApi.myCourses($auth.token!);
       myCourses = res.courses;
@@ -24,35 +21,39 @@
     }
   });
 
-  function difficultyColor(d: string | null) {
+  function difficultyColor(d: string) {
     if (d === 'beginner') return 'badge-green';
     if (d === 'intermediate') return 'badge-yellow';
     if (d === 'advanced') return 'badge-red';
     return 'badge-blue';
   }
 
-  $: totalPoints = myCourses.reduce((sum, c) => sum + c.total_score, 0);
-  $: totalCompleted = myCourses.reduce((sum, c) => sum + c.completed_labs, 0);
+  $: totalViewed = myCourses.reduce((sum, c) => sum + c.viewed_lessons, 0);
+  $: totalLessons = myCourses.reduce((sum, c) => sum + c.lesson_count, 0);
 </script>
 
 <svelte:head><title>My Dashboard — LearnLab</title></svelte:head>
 
 <div class="max-w-7xl mx-auto px-6 py-8">
   <!-- Header -->
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-gray-900">
-      Welcome back, {$currentUser?.username} 👋
-    </h1>
-    <p class="text-gray-500 mt-1">Track your learning progress</p>
+  <div class="mb-8 flex items-start justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">
+        Welcome back, {$currentUser?.username} 👋
+      </h1>
+      <p class="text-gray-500 mt-1">Track your learning progress</p>
+    </div>
+    <a href="/dashboard/repos" class="btn-secondary text-sm flex items-center gap-2">
+      ⎇ Git Repositories
+    </a>
   </div>
 
-  <!-- Stats cards -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+  <!-- Stats -->
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
     {#each [
       { label: 'Enrolled Courses', value: myCourses.length, icon: '📚', color: 'text-blue-600' },
-      { label: 'Labs Completed', value: totalCompleted, icon: '✅', color: 'text-green-600' },
-      { label: 'Total Points', value: totalPoints, icon: '⭐', color: 'text-yellow-500' },
-      { label: 'Completion Rate', value: myCourses.length > 0 ? Math.round(totalCompleted / myCourses.reduce((s,c) => s+c.lab_count, 0) * 100 || 0) + '%' : '0%', icon: '📈', color: 'text-purple-600' },
+      { label: 'Lessons Viewed', value: totalViewed, icon: '✅', color: 'text-green-600' },
+      { label: 'Total Lessons', value: totalLessons, icon: '📖', color: 'text-purple-600' },
     ] as stat}
       <div class="card text-center">
         <div class="text-2xl mb-1">{stat.icon}</div>
@@ -78,18 +79,13 @@
   {:else}
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       {#each myCourses as course}
-        {@const pct = course.lab_count > 0
-          ? Math.round(course.completed_labs / course.lab_count * 100)
+        {@const pct = course.lesson_count > 0
+          ? Math.round(course.viewed_lessons / course.lesson_count * 100)
           : 0}
-        <a href="/courses/{course.id}" class="card hover:shadow-md transition-shadow cursor-pointer group">
-          {#if course.thumbnail}
-            <img src={course.thumbnail} alt={course.title}
-              class="w-full h-36 object-cover rounded-lg mb-4" />
-          {:else}
-            <div class="w-full h-36 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mb-4 flex items-center justify-center">
-              <span class="text-4xl">📚</span>
-            </div>
-          {/if}
+        <a href="/courses/{course.slug}" class="card hover:shadow-md transition-shadow cursor-pointer group">
+          <div class="w-full h-36 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mb-4 flex items-center justify-center">
+            <span class="text-4xl">📚</span>
+          </div>
 
           <div class="flex items-start justify-between gap-2 mb-2">
             <h3 class="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors line-clamp-2">
@@ -100,24 +96,25 @@
             {/if}
           </div>
 
-          <!-- Progress bar -->
           <div class="mt-3">
             <div class="flex justify-between text-xs text-gray-500 mb-1">
-              <span>{course.completed_labs}/{course.lab_count} labs</span>
+              <span>{course.viewed_lessons}/{course.lesson_count} lessons</span>
               <span>{pct}%</span>
             </div>
             <div class="w-full bg-gray-100 rounded-full h-2">
-              <div class="bg-primary-500 h-2 rounded-full transition-all"
-                style="width: {pct}%"></div>
+              <div class="bg-primary-500 h-2 rounded-full transition-all" style="width: {pct}%"></div>
             </div>
           </div>
 
-          <div class="mt-3 flex items-center justify-between text-sm text-gray-400">
-            <span>⭐ {course.total_score} pts</span>
-            {#if pct === 100}
-              <span class="badge-green">Completed!</span>
-            {/if}
-          </div>
+          {#if course.last_activity}
+            <p class="mt-3 text-xs text-gray-400">
+              Last activity: {new Date(course.last_activity).toLocaleDateString()}
+            </p>
+          {/if}
+
+          {#if pct === 100}
+            <div class="mt-2"><span class="badge-green">Completed!</span></div>
+          {/if}
         </a>
       {/each}
     </div>

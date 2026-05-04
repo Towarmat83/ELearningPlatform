@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,7 @@ func (s *State) AddRepo(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusBadRequest, "only http/https URLs are supported")
 		return
 	}
+	req.URL = normalizeRepoURL(req.URL)
 	if req.Branch == "" {
 		req.Branch = "main"
 	}
@@ -190,4 +192,28 @@ func (s *State) updateRepoStatus(id, status, errMsg string) {
 	s.Pool.Exec(context.Background(), //nolint:errcheck
 		`UPDATE git_repos SET status = $2, error_message = $3 WHERE id = $1::uuid`,
 		id, status, errMsg)
+}
+
+// normalizeRepoURL strips GitHub/GitLab sub-paths so pasted tree URLs become repo roots.
+// https://github.com/user/repo/tree/branch/path → https://github.com/user/repo
+// https://gitlab.com/user/repo/-/tree/branch    → https://gitlab.com/user/repo
+func normalizeRepoURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	// Remove trailing .git if present
+	u.Path = strings.TrimSuffix(u.Path, ".git")
+	// Split path into segments, keep only the first two non-empty ones (user + repo)
+	parts := strings.FieldsFunc(u.Path, func(r rune) bool { return r == '/' })
+	if len(parts) <= 2 {
+		u.Path = "/" + strings.Join(parts, "/")
+		u.RawQuery = ""
+		u.Fragment = ""
+		return u.String()
+	}
+	u.Path = "/" + parts[0] + "/" + parts[1]
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
 }

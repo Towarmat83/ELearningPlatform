@@ -149,8 +149,12 @@
         <input
           type="url"
           class="input w-full"
-          placeholder="https://github.com/you/my-courses"
+          placeholder="https://github.com/you/my-courses  (root repo URL)"
           bind:value={newUrl} />
+        <p class="text-xs text-gray-400 mt-1">
+          Colle l'URL racine du repo — pas l'URL d'un dossier ou d'une branche.
+          Le serveur extrait automatiquement la racine si tu colles une URL GitHub complète.
+        </p>
       </div>
 
       <div class="flex gap-3">

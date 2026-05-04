@@ -1,6 +1,7 @@
 package content
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -22,22 +23,28 @@ func (s *Store) SyncRepo(rawURL, branch, token, repoDir, source string) error {
 			return fmt.Errorf("mkdir %s: %w", repoDir, err)
 		}
 		slog.Info("cloning repository", "url", rawURL, "branch", branch)
+		var stderr bytes.Buffer
 		cmd := exec.Command("git", "clone", "--depth=1", "--branch="+branch, authURL, repoDir)
-		cmd.Stderr = os.Stderr
+		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("git clone: %w", err)
+			slog.Error("git clone failed", "stderr", stderr.String())
+			return fmt.Errorf("git clone failed: %s", sanitizeGitOutput(stderr.String(), token))
 		}
 	} else {
 		slog.Info("pulling repository", "url", rawURL, "branch", branch)
+		var stderr bytes.Buffer
 		fetch := exec.Command("git", "-C", repoDir, "fetch", "--depth=1", "origin", branch)
-		fetch.Stderr = os.Stderr
+		fetch.Stderr = &stderr
 		if err := fetch.Run(); err != nil {
-			return fmt.Errorf("git fetch: %w", err)
+			slog.Error("git fetch failed", "stderr", stderr.String())
+			return fmt.Errorf("git fetch failed: %s", sanitizeGitOutput(stderr.String(), token))
 		}
+		stderr.Reset()
 		reset := exec.Command("git", "-C", repoDir, "reset", "--hard", "origin/"+branch)
-		reset.Stderr = os.Stderr
+		reset.Stderr = &stderr
 		if err := reset.Run(); err != nil {
-			return fmt.Errorf("git reset: %w", err)
+			slog.Error("git reset failed", "stderr", stderr.String())
+			return fmt.Errorf("git reset failed: %s", sanitizeGitOutput(stderr.String(), token))
 		}
 	}
 
@@ -49,6 +56,18 @@ func (s *Store) SyncRepo(rawURL, branch, token, repoDir, source string) error {
 	// Remove stale courses from this source before reloading
 	s.DeleteBySource(source)
 	return s.LoadDir(coursesDir, source)
+}
+
+// sanitizeGitOutput removes token from git error output before surfacing it.
+func sanitizeGitOutput(output, token string) string {
+	out := strings.TrimSpace(output)
+	if token != "" && strings.Contains(out, token) {
+		out = strings.ReplaceAll(out, token, "***")
+	}
+	if out == "" {
+		return "(no output)"
+	}
+	return out
 }
 
 // buildAuthURL injects a token into an HTTPS URL for authentication.

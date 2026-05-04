@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o elearning-api .
 # Stage 2: Runtime
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates curl
+RUN apk add --no-cache ca-certificates curl git
 
 WORKDIR /app
 

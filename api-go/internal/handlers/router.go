@@ -12,7 +12,6 @@ import (
 )
 
 // BuildRouter assembles the chi router with all routes and middleware.
-// Set withLogger=true in production to enable the request log middleware.
 func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(pool, cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(pool, cfg.JWTSecret)
@@ -48,15 +47,12 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 	r.Get("/api/auth/oauth/{provider}/authorize", s.OAuthAuthorize)
 	r.Post("/api/auth/oauth/callback", s.OAuthCallback)
 
-	// Public course reads
+	// Public course reads (slug-based)
 	r.Get("/api/courses", s.ListCourses)
-	r.Get("/api/courses/{id}", s.GetCourse)
+	r.Get("/api/courses/{slug}", s.GetCourse)
 
-	// Static uploads (videos)
+	// Static uploads
 	r.Get("/uploads/{filename}", s.ServeUpload)
-
-	// WebSocket terminal — auth via ?token= query param, no JWT middleware
-	r.Get("/ws/courses/{course_id}/labs/{lab_id}/terminal", s.TerminalWS)
 
 	// ── Authenticated ────────────────────────────────────────────────────────────
 
@@ -67,31 +63,21 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Put("/api/auth/profile", s.UpdateProfile)
 		r.Put("/api/auth/password", s.ChangePassword)
 
-		r.Post("/api/courses", s.CreateCourse)
-		r.Put("/api/courses/{id}", s.UpdateCourse)
-		r.Delete("/api/courses/{id}", s.DeleteCourse)
-		r.Post("/api/courses/{id}/enroll", s.Enroll)
-		r.Delete("/api/courses/{id}/unenroll", s.Unenroll)
+		// Course enrollment (slug-based)
+		r.Post("/api/courses/{slug}/enroll", s.Enroll)
+		r.Delete("/api/courses/{slug}/unenroll", s.Unenroll)
+
+		// Lessons (slug-based)
+		r.Get("/api/courses/{slug}/lessons", s.ListLessons)
+		r.Get("/api/courses/{slug}/lessons/{lesson_slug}", s.GetLesson)
+		r.Post("/api/courses/{slug}/lessons/{lesson_slug}/complete", s.MarkLessonComplete)
+
+		// My courses + git repos
 		r.Get("/api/my/courses", s.MyCourses)
-		r.Get("/api/courses/{id}/leaderboard", s.CourseLeaderboard)
-
-		r.Get("/api/courses/{course_id}/labs", s.ListLabs)
-		r.Post("/api/courses/{course_id}/labs", s.CreateLab)
-		r.Get("/api/courses/{course_id}/labs/{lab_id}", s.GetLab)
-		r.Put("/api/courses/{course_id}/labs/{lab_id}", s.UpdateLab)
-		r.Delete("/api/courses/{course_id}/labs/{lab_id}", s.DeleteLab)
-
-		r.Post("/api/courses/{course_id}/labs/{lab_id}/submit", s.SubmitLab)
-		r.Get("/api/courses/{course_id}/labs/{lab_id}/submissions", s.MySubmissions)
-		r.Get("/api/courses/{course_id}/progress", s.MyProgress)
-
-		r.Get("/api/courses/{course_id}/lessons", s.ListLessons)
-		r.Get("/api/courses/{course_id}/lessons/{lesson_id}", s.GetLesson)
-		r.Post("/api/courses/{course_id}/lessons/{lesson_id}/complete", s.MarkLessonComplete)
-
-		r.Post("/api/courses/{course_id}/labs/{lab_id}/instance", s.StartInstance)
-		r.Get("/api/courses/{course_id}/labs/{lab_id}/instance", s.GetInstance)
-		r.Delete("/api/courses/{course_id}/labs/{lab_id}/instance", s.StopInstance)
+		r.Get("/api/my/repos", s.ListRepos)
+		r.Post("/api/my/repos", s.AddRepo)
+		r.Delete("/api/my/repos/{id}", s.DeleteRepo)
+		r.Post("/api/my/repos/{id}/sync", s.SyncRepo)
 	})
 
 	// ── Admin ─────────────────────────────────────────────────────────────────────
@@ -110,18 +96,6 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Delete("/api/admin/users/{user_id}", s.DeleteUser)
 
 		r.Get("/api/admin/courses", s.AdminListCourses)
-		r.Get("/api/admin/courses/{course_id}/monitoring", s.AdminCourseMonitoring)
-		r.Get("/api/admin/courses/{course_id}/labs/{lab_id}", s.AdminGetLab)
-		r.Get("/api/admin/courses/{course_id}/labs/{lab_id}/submissions", s.AdminLabSubmissions)
-		r.Get("/api/admin/courses/{course_id}/labs/{lab_id}/stats", s.AdminLabStats)
-
-		r.Get("/api/admin/courses/{course_id}/enrollments", s.AdminListEnrollments)
-		r.Post("/api/admin/courses/{course_id}/enrollments", s.AdminEnrollUser)
-		r.Delete("/api/admin/courses/{course_id}/enrollments/{user_id}", s.AdminUnenrollUser)
-
-		r.Post("/api/admin/courses/{course_id}/lessons", s.AdminCreateLesson)
-		r.Put("/api/admin/courses/{course_id}/lessons/{lesson_id}", s.AdminUpdateLesson)
-		r.Delete("/api/admin/courses/{course_id}/lessons/{lesson_id}", s.AdminDeleteLesson)
 
 		r.Post("/api/admin/uploads/video", s.UploadVideo)
 	})

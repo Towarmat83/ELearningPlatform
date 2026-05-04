@@ -38,7 +38,12 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-http://localhost:3000}
       UPLOADS_DIR: /app/uploads
+      COURSES_DIR: /app/courses
+      REPOS_DIR: /app/data/repos
+      REPO_TOKEN_SECRET: ${REPO_TOKEN_SECRET:-change-me-use-a-long-random-secret-32chars}
     volumes:
+      - ./courses:/app/courses:ro
+      - repos_data:/app/data/repos
       - /var/run/docker.sock:/var/run/docker.sock
       - uploads_data:/app/uploads
     ports:
@@ -109,3 +114,4 @@ volumes:
   prometheus_data:
   grafana_data:
   uploads_data:
+  repos_data:

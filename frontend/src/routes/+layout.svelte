@@ -13,8 +13,6 @@
     goto('/login');
   }
 
-  let reposOpen = false;
-
   $: isAuthPage = ['/login', '/register'].includes($page.url.pathname);
   $: isActive = (href: string) => $page.url.pathname.startsWith(href);
 </script>
@@ -48,42 +46,6 @@
                 {$page.url.pathname === '/dashboard' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}">
               My Learning
             </a>
-
-            <!-- Repos dropdown -->
-            <div class="relative">
-              <button
-                on:click={() => reposOpen = !reposOpen}
-                on:blur={() => setTimeout(() => reposOpen = false, 150)}
-                class="px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1
-                  {isActive('/dashboard/repos') ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
-                Repos
-                <svg class="w-3 h-3 transition-transform {reposOpen ? 'rotate-180' : ''}"
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {#if reposOpen}
-                <div class="absolute left-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
-                  <a href="/dashboard/repos"
-                    class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                    </svg>
-                    My Repositories
-                  </a>
-                  <div class="border-t border-gray-100 my-1"></div>
-                  <p class="px-4 py-1.5 text-xs text-gray-400">
-                    Connect GitHub, GitLab, Gitea<br>or any self-hosted git instance.
-                  </p>
-                </div>
-              {/if}
-            </div>
 
             <a href="/profile"
               class="px-3 py-2 rounded-lg text-sm font-medium transition-colors

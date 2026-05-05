@@ -121,9 +121,15 @@
 
           <div class="flex gap-2 mt-auto">
             <a href="/courses/{course.slug}" class="btn-secondary text-sm flex-1 text-center">View</a>
-            <button on:click={() => enrollAndGo(course.slug)} class="btn-primary text-sm">
-              Enroll
-            </button>
+            {#if course.auto_enroll}
+              <button on:click={() => enrollAndGo(course.slug)} class="btn-primary text-sm">
+                Enroll
+              </button>
+            {:else}
+              <span class="text-xs text-gray-400 self-center px-2" title="Enrollment managed by admin">
+                🔒 By invite
+              </span>
+            {/if}
           </div>
         </div>
       {/each}

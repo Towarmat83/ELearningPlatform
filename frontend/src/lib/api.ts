@@ -36,9 +36,10 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(path: string, token?: string) => request<T>('GET', path, undefined, token),
-  post: <T>(path: string, body: unknown, token?: string) => request<T>('POST', path, body, token),
-  put: <T>(path: string, body: unknown, token?: string) => request<T>('PUT', path, body, token),
+  get:    <T>(path: string, token?: string) => request<T>('GET',    path, undefined, token),
+  post:   <T>(path: string, body: unknown, token?: string) => request<T>('POST',   path, body, token),
+  put:    <T>(path: string, body: unknown, token?: string) => request<T>('PUT',    path, body, token),
+  patch:  <T>(path: string, body: unknown, token?: string) => request<T>('PATCH',  path, body, token),
   delete: <T>(path: string, token?: string) => request<T>('DELETE', path, undefined, token),
 };
 
@@ -68,7 +69,6 @@ export interface AuthResponse {
   user: UserPublic;
 }
 
-// Course — content is file-based, identified by slug
 export interface Course {
   slug: string;
   title: string;
@@ -76,8 +76,13 @@ export interface Course {
   category: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced' | '';
   is_published: boolean;
+  auto_enroll: boolean;
   lesson_count: number;
-  source?: string; // "local" or git repo URL
+  source?: string;
+}
+
+export interface AdminCourse extends Course {
+  enrollment_count: number;
 }
 
 export interface MyCourse extends Course {
@@ -91,7 +96,6 @@ export interface CourseFilter {
   search?: string;
 }
 
-// Lesson — simple Markdown content
 export interface LessonSummary {
   slug: string;
   title: string;
@@ -100,10 +104,9 @@ export interface LessonSummary {
 }
 
 export interface LessonDetail extends LessonSummary {
-  content: string; // raw Markdown
+  content: string;
 }
 
-// Git repository
 export interface GitRepo {
   id: string;
   url: string;
@@ -115,7 +118,6 @@ export interface GitRepo {
   created_at: string;
 }
 
-// Admin
 export interface AdminStats {
   total_users: number;
   total_courses: number;
@@ -147,6 +149,19 @@ export interface PlatformSetting {
   key: string;
   value: string;
   description: string | null;
+}
+
+export interface UserSearchResult {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface CourseEnrollment {
+  user_id: string;
+  username: string;
+  email: string;
+  enrolled_at: string;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -209,24 +224,13 @@ export const lessonsApi = {
     api.post(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
 };
 
-// ── Git repos ─────────────────────────────────────────────────────────────────
-
-export const reposApi = {
-  list: (token: string) =>
-    api.get<{ repos: GitRepo[] }>('/my/repos', token),
-  add: (data: { url: string; branch: string; token?: string }, token: string) =>
-    api.post<GitRepo>('/my/repos', data, token),
-  remove: (id: string, token: string) =>
-    api.delete(`/my/repos/${id}`, token),
-  sync: (id: string, token: string) =>
-    api.post<{ message: string; last_synced_at: string }>(`/my/repos/${id}/sync`, {}, token),
-};
-
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const adminApi = {
   stats: (token: string) =>
     api.get<AdminStats>('/admin/stats', token),
+
+  // Users
   users: (token: string) =>
     api.get<{ users: AdminUser[]; total: number }>('/admin/users', token),
   getUser: (id: string, token: string) =>
@@ -235,6 +239,30 @@ export const adminApi = {
     api.put(`/admin/users/${id}`, data, token),
   deleteUser: (id: string, token: string) =>
     api.delete(`/admin/users/${id}`, token),
+  searchUsers: (q: string, token: string) =>
+    api.get<{ users: UserSearchResult[] }>(`/admin/users/search?q=${encodeURIComponent(q)}`, token),
+
+  // Courses
   courses: (token: string) =>
-    api.get<{ courses: Course[]; total: number }>('/admin/courses', token),
+    api.get<{ courses: AdminCourse[]; total: number }>('/admin/courses', token),
+  updateCourseSettings: (slug: string, data: { is_published?: boolean; auto_enroll?: boolean }, token: string) =>
+    api.patch<Course>(`/admin/courses/${slug}/settings`, data, token),
+  listEnrollments: (slug: string, token: string) =>
+    api.get<{ enrollments: CourseEnrollment[] }>(`/admin/courses/${slug}/enrollments`, token),
+  enrollUser: (slug: string, userId: string, token: string) =>
+    api.post(`/admin/courses/${slug}/enrollments`, { user_id: userId }, token),
+  unenrollUser: (slug: string, userId: string, token: string) =>
+    api.delete(`/admin/courses/${slug}/enrollments/${userId}`, token),
+
+  // Git repos (admin-only)
+  repos: {
+    list: (token: string) =>
+      api.get<{ repos: GitRepo[] }>('/admin/repos', token),
+    add: (data: { url: string; branch: string; token?: string }, token: string) =>
+      api.post<GitRepo>('/admin/repos', data, token),
+    remove: (id: string, token: string) =>
+      api.delete(`/admin/repos/${id}`, token),
+    sync: (id: string, token: string) =>
+      api.post<{ message: string; last_synced_at: string }>(`/admin/repos/${id}/sync`, {}, token),
+  },
 };

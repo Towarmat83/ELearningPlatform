@@ -127,8 +127,10 @@ func (s *State) DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove courses loaded from this repo
+	// Remove courses and their settings loaded from this repo
 	s.Content.DeleteBySource(repoURL)
+	s.Pool.Exec(r.Context(), //nolint:errcheck
+		`DELETE FROM course_settings WHERE source = $1`, repoURL)
 
 	// Clean up cloned directory
 	repoDir := filepath.Join(s.Config.ReposDir, id)
@@ -175,6 +177,16 @@ func (s *State) SyncRepo(w http.ResponseWriter, r *http.Request) {
 		s.updateRepoStatus(id, "error", syncErr.Error())
 		s.Error(w, http.StatusBadGateway, fmt.Sprintf("Sync failed: %s", syncErr))
 		return
+	}
+
+	// Seed course_settings for newly synced git courses (unpublished by default, never overwrite)
+	for _, c := range s.Content.All() {
+		if c.Source == repoURL {
+			s.Pool.Exec(r.Context(), //nolint:errcheck
+				`INSERT INTO course_settings (course_slug, is_published, auto_enroll, source)
+				 VALUES ($1, false, false, $2) ON CONFLICT (course_slug) DO NOTHING`,
+				c.Slug, repoURL)
+		}
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)

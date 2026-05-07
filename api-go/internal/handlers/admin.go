@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 )
 
 // GET /api/admin/stats
@@ -139,4 +140,130 @@ func (s *State) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.JSON(w, http.StatusOK, map[string]string{"message": "User deleted"})
+}
+
+// GET /api/admin/users/search?q=...
+func (s *State) SearchUsers(w http.ResponseWriter, r *http.Request) {
+	q := "%" + strings.ToLower(r.URL.Query().Get("q")) + "%"
+	rows, err := s.Pool.Query(r.Context(), `
+		SELECT id::text, username, email FROM users
+		WHERE LOWER(username) LIKE $1 OR LOWER(email) LIKE $1
+		ORDER BY username LIMIT 10`, q)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer rows.Close()
+	type result struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+	users := make([]result, 0)
+	for rows.Next() {
+		var u result
+		if rows.Scan(&u.ID, &u.Username, &u.Email) == nil {
+			users = append(users, u)
+		}
+	}
+	s.JSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+// PATCH /api/admin/courses/{slug}/settings
+func (s *State) UpdateCourseSettings(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	if s.Content.Get(slug) == nil {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+	var req struct {
+		IsPublished *bool `json:"is_published"`
+		AutoEnroll  *bool `json:"auto_enroll"`
+	}
+	if err := decode(r, &req); err != nil {
+		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	_, err := s.Pool.Exec(r.Context(), `
+		INSERT INTO course_settings (course_slug, is_published, auto_enroll, source, updated_at)
+		VALUES ($1,
+		        COALESCE($2, false),
+		        COALESCE($3, false),
+		        COALESCE((SELECT source FROM course_settings WHERE course_slug = $1), 'local'),
+		        NOW())
+		ON CONFLICT (course_slug) DO UPDATE SET
+		    is_published = COALESCE($2, course_settings.is_published),
+		    auto_enroll  = COALESCE($3, course_settings.auto_enroll),
+		    updated_at   = NOW()`,
+		slug, req.IsPublished, req.AutoEnroll)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	dbSettings := s.loadAllCourseSettings(r.Context())
+	c := s.Content.Get(slug)
+	s.JSON(w, http.StatusOK, toCourseResponse(c, dbSettings))
+}
+
+// GET /api/admin/courses/{slug}/enrollments
+func (s *State) ListCourseEnrollments(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	rows, err := s.Pool.Query(r.Context(), `
+		SELECT u.id::text, u.username, u.email, e.enrolled_at::text
+		FROM enrollments e
+		JOIN users u ON u.id = e.user_id
+		WHERE e.course_slug = $1
+		ORDER BY e.enrolled_at DESC`, slug)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer rows.Close()
+	type enrollment struct {
+		UserID     string `json:"user_id"`
+		Username   string `json:"username"`
+		Email      string `json:"email"`
+		EnrolledAt string `json:"enrolled_at"`
+	}
+	list := make([]enrollment, 0)
+	for rows.Next() {
+		var e enrollment
+		if rows.Scan(&e.UserID, &e.Username, &e.Email, &e.EnrolledAt) == nil {
+			list = append(list, e)
+		}
+	}
+	s.JSON(w, http.StatusOK, map[string]any{"enrollments": list})
+}
+
+// POST /api/admin/courses/{slug}/enrollments  body: {"user_id": "uuid"}
+func (s *State) AdminEnrollUser(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := decode(r, &req); err != nil || req.UserID == "" {
+		s.Error(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+	_, err := s.Pool.Exec(r.Context(),
+		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
+		req.UserID, slug)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	s.JSON(w, http.StatusOK, map[string]string{"message": "User enrolled"})
+}
+
+// DELETE /api/admin/courses/{slug}/enrollments/{user_id}
+func (s *State) AdminUnenrollUser(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	userID := param(r, "user_id")
+	_, err := s.Pool.Exec(r.Context(),
+		`DELETE FROM enrollments WHERE course_slug = $1 AND user_id = $2::uuid`, slug, userID)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	s.JSON(w, http.StatusOK, map[string]string{"message": "User unenrolled"})
 }

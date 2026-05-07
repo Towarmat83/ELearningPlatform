@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/elearning/api-go/internal/metrics"
 )
 
-// courseResponse is the public course representation sent to clients.
 type courseResponse struct {
 	Slug        string `json:"slug"`
 	Title       string `json:"title"`
@@ -16,33 +16,79 @@ type courseResponse struct {
 	Category    string `json:"category"`
 	Difficulty  string `json:"difficulty"`
 	IsPublished bool   `json:"is_published"`
+	AutoEnroll  bool   `json:"auto_enroll"`
 	LessonCount int    `json:"lesson_count"`
 	Source      string `json:"source,omitempty"`
 }
 
-func toCourseResponse(c *content.Course) courseResponse {
+type dbCourseSettings struct {
+	IsPublished bool
+	AutoEnroll  bool
+	Source      string
+}
+
+// loadAllCourseSettings fetches all rows from course_settings.
+func (s *State) loadAllCourseSettings(ctx context.Context) map[string]dbCourseSettings {
+	rows, err := s.Pool.Query(ctx, "SELECT course_slug, is_published, auto_enroll, source FROM course_settings")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	m := map[string]dbCourseSettings{}
+	for rows.Next() {
+		var slug string
+		var cs dbCourseSettings
+		if err := rows.Scan(&slug, &cs.IsPublished, &cs.AutoEnroll, &cs.Source); err == nil {
+			m[slug] = cs
+		}
+	}
+	return m
+}
+
+// effectiveSettings returns (isPublished, autoEnroll) for a course,
+// using DB override when present, falling back to YAML defaults.
+func effectiveSettings(c *content.Course, dbSettings map[string]dbCourseSettings) (bool, bool) {
+	if cs, ok := dbSettings[c.Slug]; ok {
+		return cs.IsPublished, cs.AutoEnroll
+	}
+	// No DB row: local courses use YAML value, git courses default to unpublished
+	if c.Source == "local" {
+		return c.IsPublished, false
+	}
+	return false, false
+}
+
+func toCourseResponse(c *content.Course, dbSettings map[string]dbCourseSettings) courseResponse {
+	pub, autoEnroll := effectiveSettings(c, dbSettings)
 	return courseResponse{
 		Slug:        c.Slug,
 		Title:       c.Title,
 		Description: c.Description,
 		Category:    c.Category,
 		Difficulty:  c.Difficulty,
-		IsPublished: c.IsPublished,
+		IsPublished: pub,
+		AutoEnroll:  autoEnroll,
 		LessonCount: len(c.Lessons),
 		Source:      c.Source,
 	}
 }
 
-// GET /api/courses
+// GET /api/courses — only published courses, public endpoint
 func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	category := strings.ToLower(q.Get("category"))
 	difficulty := strings.ToLower(q.Get("difficulty"))
 	search := strings.ToLower(q.Get("search"))
 
+	dbSettings := s.loadAllCourseSettings(r.Context())
+
 	all := s.Content.List()
 	out := make([]courseResponse, 0, len(all))
 	for _, c := range all {
+		pub, _ := effectiveSettings(c, dbSettings)
+		if !pub {
+			continue
+		}
 		if category != "" && strings.ToLower(c.Category) != category {
 			continue
 		}
@@ -55,7 +101,7 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		out = append(out, toCourseResponse(c))
+		out = append(out, toCourseResponse(c, dbSettings))
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"courses": out, "total": len(out)})
 }
@@ -64,19 +110,35 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	c := s.Content.Get(slug)
-	if c == nil || !c.IsPublished {
+	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	s.JSON(w, http.StatusOK, toCourseResponse(c))
+	dbSettings := s.loadAllCourseSettings(r.Context())
+	pub, _ := effectiveSettings(c, dbSettings)
+	if !pub {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+	s.JSON(w, http.StatusOK, toCourseResponse(c, dbSettings))
 }
 
-// POST /api/courses/{slug}/enroll
+// POST /api/courses/{slug}/enroll — requires auto_enroll enabled
 func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	c := s.Content.Get(slug)
-	if c == nil || !c.IsPublished {
+	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+	dbSettings := s.loadAllCourseSettings(r.Context())
+	pub, autoEnroll := effectiveSettings(c, dbSettings)
+	if !pub {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+	if !autoEnroll {
+		s.Error(w, http.StatusForbidden, "Enrollment for this course requires admin approval")
 		return
 	}
 	claims := s.claims(r)
@@ -130,6 +192,7 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		LastActivity  *string `json:"last_activity"`
 	}
 
+	dbSettings := s.loadAllCourseSettings(r.Context())
 	courses := make([]myCourse, 0)
 	for rows.Next() {
 		var slug string
@@ -140,7 +203,6 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		}
 		c := s.Content.Get(slug)
 		if c == nil {
-			// Course was removed from disk but enrollment still exists — include minimal info
 			courses = append(courses, myCourse{
 				courseResponse: courseResponse{Slug: slug, Title: slug},
 				ViewedLessons:  viewed,
@@ -149,7 +211,7 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		courses = append(courses, myCourse{
-			courseResponse: toCourseResponse(c),
+			courseResponse: toCourseResponse(c, dbSettings),
 			ViewedLessons:  viewed,
 			LastActivity:   lastActivity,
 		})
@@ -157,12 +219,37 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"courses": courses})
 }
 
-// GET /api/admin/courses  (admin: sees all, including unpublished)
+// GET /api/admin/courses — all courses with settings, for admins
 func (s *State) AdminListCourses(w http.ResponseWriter, r *http.Request) {
+	dbSettings := s.loadAllCourseSettings(r.Context())
+
+	// Enrollment counts per course
+	enrollCounts := map[string]int64{}
+	ecRows, err := s.Pool.Query(r.Context(),
+		`SELECT course_slug, COUNT(*)::bigint FROM enrollments GROUP BY course_slug`)
+	if err == nil {
+		defer ecRows.Close()
+		for ecRows.Next() {
+			var slug string
+			var cnt int64
+			if ecRows.Scan(&slug, &cnt) == nil {
+				enrollCounts[slug] = cnt
+			}
+		}
+	}
+
+	type adminCourseResponse struct {
+		courseResponse
+		EnrollmentCount int64 `json:"enrollment_count"`
+	}
+
 	all := s.Content.All()
-	out := make([]courseResponse, 0, len(all))
+	out := make([]adminCourseResponse, 0, len(all))
 	for _, c := range all {
-		out = append(out, toCourseResponse(c))
+		out = append(out, adminCourseResponse{
+			courseResponse:  toCourseResponse(c, dbSettings),
+			EnrollmentCount: enrollCounts[c.Slug],
+		})
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"courses": out, "total": len(out)})
 }

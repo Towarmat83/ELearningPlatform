@@ -66,6 +66,16 @@ func main() {
 		slog.Warn("could not load courses directory", "dir", cfg.CoursesDir, "err", err)
 	}
 
+	// Seed course_settings for local courses (respects is_published from YAML; never overwrites)
+	for _, c := range store.All() {
+		if c.Source == "local" {
+			pool.Exec(ctx, `
+				INSERT INTO course_settings (course_slug, is_published, auto_enroll, source)
+				VALUES ($1, $2, false, 'local') ON CONFLICT (course_slug) DO NOTHING`,
+				c.Slug, c.IsPublished)
+		}
+	}
+
 	s := &handlers.State{
 		Pool:    pool,
 		Config:  cfg,

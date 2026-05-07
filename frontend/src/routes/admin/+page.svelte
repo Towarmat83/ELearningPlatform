@@ -45,7 +45,10 @@
         <h2 class="font-semibold text-gray-700 mb-4">Quick Actions</h2>
         <div class="space-y-2">
           <a href="/admin/courses" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
-            📚 Manage Courses & Labs →
+            📚 Manage Courses →
+          </a>
+          <a href="/admin/repos" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
+            ⎇ Git Repositories →
           </a>
           <a href="/admin/users" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
             👥 Manage Users →

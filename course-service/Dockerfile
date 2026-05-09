@@ -24,7 +24,7 @@ COPY --from=builder /app/course-service /app/course-service
 
 # ── All configuration via env vars (ConfigMap friendly) ──────────────────────
 
-ENV PORT=8080 \
+ENV PORT=8082 \
     CONFIG_PATH="" \
     JWT_SECRET="change-me-in-production-use-a-long-random-string" \
     JWT_EXPIRY_HOURS=24 \
@@ -32,11 +32,13 @@ ENV PORT=8080 \
     UPLOADS_DIR="./uploads" \
     KUBECONFIG="" \
     K8S_NAMESPACE="default" \
-    USER_SERVICE_URL="http://user-service:8081"
+    USER_SERVICE_URL="http://user-service:8081" \
+    GIT_TOKEN="" \
+    GIT_CREDENTIALS_PATH="/etc/course-service/git-credentials.yaml"
 
-EXPOSE 8080
+EXPOSE 8082
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8082/health || exit 1
 
 ENTRYPOINT ["/app/course-service"]

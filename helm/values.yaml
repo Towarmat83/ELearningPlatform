@@ -10,7 +10,7 @@ jwtSecret: "change-me-in-production-use-a-long-random-string"
 courseService:
   replicaCount: 1
   image:
-    repository: elearning-course-service
+    repository: localhost/elearning-course-service
     tag: latest
     pullPolicy: IfNotPresent
   service:
@@ -40,7 +40,7 @@ courseService:
 userService:
   replicaCount: 1
   image:
-    repository: elearning-user-service
+    repository: localhost/elearning-user-service
     tag: latest
     pullPolicy: IfNotPresent
   service:
@@ -67,7 +67,7 @@ userService:
 # ── Frontend (SvelteKit) ────────────────────────────────────────────────────
 frontend:
   image:
-    repository: elearning-frontend
+    repository: localhost/elearning-frontend
     tag: latest
     pullPolicy: IfNotPresent
   service:
@@ -130,31 +130,16 @@ grafanaIngress:
   host: grafana.elearning.local
   tls: []
 
-# ── PostgreSQL (Bitnami chart) ────────────────────────────────────────────────
+# ── PostgreSQL (internal — deployed manually as standalone deployment) ───────
 postgresql:
-  enabled: true
-  auth:
-    database: elearning
-    username: elearning
-    password: elearning_secret
-  primary:
-    persistence:
-      enabled: true
-      size: 10Gi
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "100m"
-      limits:
-        memory: "1Gi"
-        cpu: "500m"
+  enabled: false
 
 externalDatabase:
-  host: ""
+  host: "elearning-postgresql"
   port: 5432
   name: elearning
   username: elearning
-  password: ""
+  password: "elearning_secret"
   existingSecret: ""
   existingSecretKey: "DATABASE_URL"
 

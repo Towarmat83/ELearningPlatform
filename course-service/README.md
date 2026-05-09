@@ -40,6 +40,42 @@ All config via environment variables:
 | `KUBECONFIG` | (empty) | Path to kubeconfig (out-of-cluster); uses in-cluster config when empty |
 | `K8S_NAMESPACE` | `default` | Namespace for Course CRDs |
 | `USER_SERVICE_URL` | `http://localhost:8081` | Base URL of User Service |
+| `GIT_TOKEN` | (empty) | Global token for private git repos (fallback) |
+| `GIT_CREDENTIALS_PATH` | `/etc/course-service/git-credentials.yaml` | Path to per-repo credential mappings |
+
+## Git Credentials
+
+For `text` modules that reference a private git repo, the service needs a token to authenticate.
+
+### Global token (all repos)
+
+```sh
+export GIT_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+### Per-repo tokens (mount a Secret as volume)
+
+Create a Secret with a `git-credentials.yaml` key:
+
+```yaml
+credentials:
+  - url: "github.com/myorg/*"
+    token: "ghp_xxx"
+  - url: "gitlab.com/other/*"
+    token: "glpat_yyy"
+```
+
+Apply it:
+
+```sh
+kubectl create secret generic course-repo-secret \
+  --from-file=git-credentials.yaml=./git-credentials.yaml
+```
+
+The Helm chart mounts this secret at `GIT_CREDENTIALS_PATH` automatically.  
+URL matching uses glob patterns (`path.Match`). The first match wins.  
+If no credential matches, `GIT_TOKEN` is used as a fallback.  
+If both are empty, the clone is unauthenticated (public repos only).
 
 ## How to Run
 

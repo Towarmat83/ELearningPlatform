@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "elearning.fullname" . }}-user-service
+  labels:
+    {{- include "elearning.userService.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.userService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "elearning.userService.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "elearning.userService.labels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.userService.service.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: user-service
+        image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"
+        imagePullPolicy: {{ .Values.userService.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.userService.service.port }}
+          protocol: TCP
+        env:
+        - name: CONFIG_PATH
+          value: /etc/user-service/config.yaml
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.fullname" . }}-secrets
+              key: JWT_SECRET
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.fullname" . }}-secrets
+              key: DATABASE_URL
+        volumeMounts:
+        - name: config
+          mountPath: /etc/user-service
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.userService.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "elearning.fullname" . }}-user-service-config
+      {{- with .Values.userService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

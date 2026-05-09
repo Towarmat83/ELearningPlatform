@@ -3,18 +3,49 @@
 # Override any value with: helm upgrade --set key=value ...
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Global replica count (applies to API and frontend)
-replicaCount: 1
+# Shared JWT secret (must match between services)
+jwtSecret: "change-me-in-production-use-a-long-random-string"
 
-# ── API (Rust backend) ────────────────────────────────────────────────────────
-api:
+# ── Course Service (Go, stateless) ──────────────────────────────────────────
+courseService:
+  replicaCount: 1
   image:
-    repository: elearning-api
+    repository: elearning-course-service
     tag: latest
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
-    port: 8080
+    port: 8082
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  env:
+    JWT_EXPIRY_HOURS: "24"
+    CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+    UPLOADS_DIR: "/data/uploads"
+    K8S_NAMESPACE: "default"
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  nodeSelector: {}
+
+# ── User Service (Go, PostgreSQL) ───────────────────────────────────────────
+userService:
+  replicaCount: 1
+  image:
+    repository: elearning-user-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8081
   resources:
     requests:
       memory: "128Mi"
@@ -24,22 +55,16 @@ api:
       cpu: "500m"
   env:
     JWT_EXPIRY_HOURS: "24"
-    RUST_LOG: "info"
-  # JWT secret — override with a strong random string in production
-  # Use: --set api.jwtSecret=$(openssl rand -hex 32)
-  jwtSecret: "change-me-in-production-use-32+-chars"
-  # Docker socket for interactive labs (mounts /var/run/docker.sock)
-  # Disable on managed clusters that don't allow host socket access
-  dockerSocket:
-    enabled: true
+    GITLAB_URL: "https://gitlab.com"
   autoscaling:
     enabled: false
     minReplicas: 1
     maxReplicas: 4
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
+  nodeSelector: {}
 
-# ── Frontend (SvelteKit) ──────────────────────────────────────────────────────
+# ── Frontend (SvelteKit) ────────────────────────────────────────────────────
 frontend:
   image:
     repository: elearning-frontend
@@ -64,40 +89,40 @@ frontend:
 # ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:
   enabled: true
-  className: traefik  # or nginx
+  className: traefik
   annotations: {}
-    # nginx: set these for WebSocket terminal support:
-    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    # nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    # nginx.ingress.kubernetes.io/configuration-snippet: |
-    #   proxy_set_header Upgrade $http_upgrade;
-    #   proxy_set_header Connection "upgrade";
   hosts:
     - host: elearning.local
       paths:
-        - path: /api
+        - path: /api/auth
           pathType: Prefix
-          backend: api
-        - path: /ws
+          backend: user-service
+        - path: /api/settings
           pathType: Prefix
-          backend: api
-        - path: /metrics
+          backend: user-service
+        - path: /api/my
           pathType: Prefix
-          backend: api
+          backend: user-service
+        - path: /api/admin
+          pathType: Prefix
+          backend: user-service
+        - path: /api/courses
+          pathType: Prefix
+          backend: course-service
+        - path: /uploads
+          pathType: Prefix
+          backend: course-service
         - path: /health
           pathType: Exact
-          backend: api
+          backend: course-service
+        - path: /metrics
+          pathType: Prefix
+          backend: course-service
         - path: /
           pathType: Prefix
           backend: frontend
   tls: []
-  # tls:
-  #   - secretName: elearning-tls
-  #     hosts:
-  #       - elearning.local
 
-# Separate ingress for Grafana (optional)
 grafanaIngress:
   enabled: false
   className: traefik
@@ -112,14 +137,10 @@ postgresql:
     database: elearning
     username: elearning
     password: elearning_secret
-    # Production: use an existing secret instead of plain password
-    # existingSecret: elearning-db-secret
-    # existingSecretPasswordKey: postgres-password
   primary:
     persistence:
       enabled: true
       size: 10Gi
-      # storageClass: ""
     resources:
       requests:
         memory: "256Mi"
@@ -128,7 +149,6 @@ postgresql:
         memory: "1Gi"
         cpu: "500m"
 
-# External PostgreSQL (when postgresql.enabled = false)
 externalDatabase:
   host: ""
   port: 5432
@@ -150,7 +170,7 @@ prometheus:
     port: 9090
   retention: 15d
   persistence:
-    enabled: true
+    enabled: false
     size: 10Gi
     storageClass: ""
     accessMode: ReadWriteOnce
@@ -161,7 +181,6 @@ prometheus:
     limits:
       memory: "1Gi"
       cpu: "500m"
-  # Extra scrape configs appended to the default API scrape
   extraScrapeConfigs: []
 
 # ── Grafana ───────────────────────────────────────────────────────────────────
@@ -174,7 +193,6 @@ grafana:
   service:
     type: ClusterIP
     port: 3000
-  # Admin password — override in production
   adminPassword: "admin"
   persistence:
     enabled: true
@@ -188,10 +206,7 @@ grafana:
     limits:
       memory: "512Mi"
       cpu: "200m"
-  # Extra environment variables for Grafana
   extraEnv: []
-  # - name: GF_AUTH_ANONYMOUS_ENABLED
-  #   value: "true"
 
 # ── Prometheus ServiceMonitor (kube-prometheus-stack) ─────────────────────────
 serviceMonitor:

@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "elearning.fullname" . }}-course-service
+  labels:
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.courseService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "elearning.courseService.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "elearning.courseService.labels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.courseService.service.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ include "elearning.fullname" . }}-course-service
+      automountServiceAccountToken: true
+      containers:
+      - name: course-service
+        image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag }}"
+        imagePullPolicy: {{ .Values.courseService.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.courseService.service.port }}
+          protocol: TCP
+        env:
+        - name: CONFIG_PATH
+          value: /etc/course-service/config.yaml
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.fullname" . }}-secrets
+              key: JWT_SECRET
+        - name: USER_SERVICE_URL
+          value: http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/course-service
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.courseService.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "elearning.fullname" . }}-course-service-config-file
+      {{- with .Values.courseService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

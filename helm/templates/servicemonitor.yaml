@@ -1,19 +1,42 @@
 {{- if .Values.serviceMonitor.enabled }}
+---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "elearning.fullname" . }}-api
+  name: {{ include "elearning.fullname" . }}-course-service
   namespace: {{ .Values.serviceMonitor.namespace }}
   labels:
-    {{- include "elearning.api.labels" . | nindent 4 }}
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
     {{- with .Values.serviceMonitor.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "elearning.name" . }}
-      app.kubernetes.io/component: api
+      {{- include "elearning.courseService.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "elearning.fullname" . }}-user-service
+  namespace: {{ .Values.serviceMonitor.namespace }}
+  labels:
+    {{- include "elearning.userService.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "elearning.userService.selectorLabels" . | nindent 6 }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "elearning.frontend.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.frontend.replicaCount | default 1 }}
   selector:
     matchLabels:
       {{- include "elearning.frontend.selectorLabels" . | nindent 6 }}
@@ -29,8 +29,10 @@ spec:
               value: production
             - name: ORIGIN
               value: {{ include "elearning.publicUrl" . | quote }}
-            - name: API_URL
-              value: "http://{{ include "elearning.fullname" . }}-api:{{ .Values.api.service.port }}"
+            - name: PUBLIC_API_URL
+              value: {{ include "elearning.publicUrl" . | quote }}
+            - name: INTERNAL_API_URL
+              value: "http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}"
           livenessProbe:
             httpGet:
               path: /

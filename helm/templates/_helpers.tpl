@@ -20,9 +20,14 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{- define "elearning.api.labels" -}}
+{{- define "elearning.courseService.labels" -}}
 {{ include "elearning.labels" . }}
-app.kubernetes.io/component: api
+app.kubernetes.io/component: course-service
+{{- end }}
+
+{{- define "elearning.userService.labels" -}}
+{{ include "elearning.labels" . }}
+app.kubernetes.io/component: user-service
 {{- end }}
 
 {{- define "elearning.frontend.labels" -}}
@@ -41,11 +46,16 @@ app.kubernetes.io/component: grafana
 {{- end }}
 
 {{/*
-Selector labels (subset — no chart version, stable for matchLabels)
+Selector labels
 */}}
-{{- define "elearning.api.selectorLabels" -}}
+{{- define "elearning.courseService.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "elearning.name" . }}
-app.kubernetes.io/component: api
+app.kubernetes.io/component: course-service
+{{- end }}
+
+{{- define "elearning.userService.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "elearning.name" . }}
+app.kubernetes.io/component: user-service
 {{- end }}
 
 {{- define "elearning.frontend.selectorLabels" -}}

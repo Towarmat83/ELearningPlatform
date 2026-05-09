@@ -39,11 +39,7 @@ func main() {
 	}
 	slog.Info("K8s CRD watcher started", "namespace", cfg.K8sNamespace)
 
-	s := &handlers.State{
-		Config:         cfg,
-		Content:        store,
-		UserServiceURL: cfg.UserServiceURL,
-	}
+	s := handlers.NewState(cfg, store)
 
 	r := handlers.BuildRouter(s, cfg, true)
 

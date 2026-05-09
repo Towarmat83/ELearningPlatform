@@ -25,7 +25,7 @@ type lessonDetail struct {
 }
 
 func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
-	u, err := url.Parse(s.UserServiceURL + "/internal/enrollments/check")
+	u, err := url.Parse(s.Config.UserServiceURL + "/internal/enrollments/check")
 	if err != nil {
 		return false
 	}
@@ -127,8 +127,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 		if m.Slug() == lessonSlug {
 			body := m.Content()
 			if m.HasGitContent() {
-				token := ""
-				data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, token)
+				data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 				if err != nil {
 					s.Error(w, http.StatusInternalServerError, "Failed to fetch module content")
 					return
@@ -193,7 +192,7 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	var buf bytes.Buffer
 	json.NewEncoder(&buf).Encode(body)
 
-	resp, err := http.Post(s.UserServiceURL+"/internal/progress/complete", "application/json", &buf)
+	resp, err := http.Post(s.Config.UserServiceURL+"/internal/progress/complete", "application/json", &buf)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to mark lesson as complete")
 		return

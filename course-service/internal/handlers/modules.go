@@ -19,7 +19,7 @@ type moduleResponse struct {
 }
 
 func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[string]bool {
-	u, err := url.Parse(s.UserServiceURL + "/internal/progress/viewed")
+	u, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/viewed")
 	if err != nil {
 		return nil
 	}
@@ -114,8 +114,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 		resp.Content = m.Content()
 	case "text":
 		if m.HasGitContent() {
-			token := ""
-			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, token)
+			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 			if err != nil {
 				s.Error(w, http.StatusInternalServerError, "Failed to fetch module content")
 				return

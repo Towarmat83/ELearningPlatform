@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,11 +15,31 @@ import (
 	"github.com/elearning/course-service/internal/middleware"
 )
 
-// State is the shared application state passed to every handler.
 type State struct {
-	Config         *config.Config
-	Content        *content.Store
-	UserServiceURL string
+	Config   *config.Config
+	Content  *content.Store
+	GitCreds *content.GitCredentialStore
+}
+
+func NewState(cfg *config.Config, store *content.Store) *State {
+	s := &State{Config: cfg, Content: store}
+	if cfg.GitCredentialsPath != "" {
+		if creds, err := content.LoadCredentials(cfg.GitCredentialsPath); err == nil {
+			s.GitCreds = creds
+		} else if !os.IsNotExist(err) {
+			slog.Warn("failed to load git credentials", "path", cfg.GitCredentialsPath, "err", err)
+		}
+	}
+	return s
+}
+
+func (s *State) tokenForRepo(repoURL string) string {
+	if s.GitCreds != nil {
+		if t := s.GitCreds.Match(repoURL); t != "" {
+			return t
+		}
+	}
+	return s.Config.GitToken
 }
 
 // JSON writes v as JSON with the given status code.

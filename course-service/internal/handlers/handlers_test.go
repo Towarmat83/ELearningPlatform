@@ -48,18 +48,15 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 	})
 
 	cfg := &config.Config{
-		JWTSecret:      "test-secret",
-		JWTExpiryH:     24,
-		UploadsDir:     "./testdata",
-		K8sNamespace:   "default",
-		UserServiceURL: userSrv.URL,
+		JWTSecret:          "test-secret",
+		JWTExpiryH:         24,
+		UploadsDir:         "./testdata",
+		K8sNamespace:       "default",
+		UserServiceURL:     userSrv.URL,
+		GitCredentialsPath: "",
 	}
 
-	return &State{
-		Config:         cfg,
-		Content:        store,
-		UserServiceURL: userSrv.URL,
-	}
+	return NewState(cfg, store)
 }
 
 func newUserServiceMock() *httptest.Server {

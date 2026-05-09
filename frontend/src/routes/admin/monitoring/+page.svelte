@@ -9,7 +9,7 @@
   onMount(async () => {
     if (!$auth.token) return;
     try {
-      const res = await adminApi.courses($auth.token);
+      const res = await adminApi.adminCourses($auth.token);
       courses = res.courses;
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load courses');
@@ -39,9 +39,9 @@
         <div class="text-xs text-gray-500 mt-1">Published</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl mb-1">📖</div>
-        <div class="text-2xl font-bold text-purple-600">{courses.reduce((s, c) => s + c.lesson_count, 0)}</div>
-        <div class="text-xs text-gray-500 mt-1">Total Lessons</div>
+        <div class="text-2xl mb-1">📝</div>
+        <div class="text-2xl font-bold text-purple-600">{courses.reduce((s, c) => s + c.lab_count, 0)}</div>
+        <div class="text-xs text-gray-500 mt-1">Total Labs</div>
       </div>
     </div>
 
@@ -54,9 +54,8 @@
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left px-3 py-2 text-gray-500 font-medium">Course</th>
-              <th class="text-left px-3 py-2 text-gray-500 font-medium">Slug</th>
-              <th class="text-left px-3 py-2 text-gray-500 font-medium">Lessons</th>
-              <th class="text-left px-3 py-2 text-gray-500 font-medium">Source</th>
+              <th class="text-left px-3 py-2 text-gray-500 font-medium">Labs</th>
+              <th class="text-left px-3 py-2 text-gray-500 font-medium">Enrolled</th>
               <th class="text-left px-3 py-2 text-gray-500 font-medium">Status</th>
             </tr>
           </thead>
@@ -64,11 +63,8 @@
             {#each courses as course}
               <tr class="border-b border-gray-50 hover:bg-gray-50">
                 <td class="px-3 py-2 font-medium text-gray-800">{course.title}</td>
-                <td class="px-3 py-2 font-mono text-xs text-gray-400">{course.slug}</td>
-                <td class="px-3 py-2 text-gray-600">{course.lesson_count}</td>
-                <td class="px-3 py-2 text-gray-400 text-xs">
-                  {course.source === 'local' ? '📁 local' : '⎇ git'}
-                </td>
+                <td class="px-3 py-2 text-gray-600">{course.lab_count}</td>
+                <td class="px-3 py-2 text-gray-600">{course.enrollment_count}</td>
                 <td class="px-3 py-2">
                   {#if course.is_published}
                     <span class="badge-green">published</span>

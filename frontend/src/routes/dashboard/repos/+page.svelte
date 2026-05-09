@@ -1,13 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { isAdmin } from '$lib/stores';
+  import { onMount } from 'svelte';
 
   onMount(() => {
-    if ($isAdmin) {
-      goto('/admin/repos');
-    } else {
-      goto('/dashboard');
-    }
+    goto('/dashboard', { replaceState: true });
   });
 </script>

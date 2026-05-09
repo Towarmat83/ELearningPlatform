@@ -110,7 +110,7 @@
                 </button>
               </td>
               <td class="px-4 py-3 text-gray-600">{user.enrolled_courses}</td>
-              <td class="px-4 py-3 text-gray-600">{user.viewed_lessons}</td>
+              <td class="px-4 py-3 text-gray-600">{user.completed_labs}</td>
               <td class="px-4 py-3 text-gray-400">
                 {new Date(user.created_at).toLocaleDateString()}
               </td>

@@ -48,7 +48,6 @@
         $auth.token!
       );
       user = updated;
-      // Update the auth store so the navbar username stays in sync
       auth.setUser(updated);
       editing = false;
       toasts.success('Profile updated');
@@ -75,8 +74,8 @@
     }
   }
 
-  $: totalViewed = myCourses.reduce((s, c) => s + c.viewed_lessons, 0);
-  $: totalLessons = myCourses.reduce((s, c) => s + c.lesson_count, 0);
+  $: totalCompleted = myCourses.reduce((s, c) => s + c.completed_labs, 0);
+  $: totalLabs = myCourses.reduce((s, c) => s + c.lab_count, 0);
 </script>
 
 <svelte:head><title>Profile — LearnLab</title></svelte:head>
@@ -87,7 +86,7 @@
   {:else if user}
     <div class="grid md:grid-cols-3 gap-6">
 
-      <!-- ═══════════════════════ LEFT: AVATAR + STATS ═══════════════════ -->
+      <!-- LEFT: AVATAR + STATS -->
       <div class="space-y-4">
         <!-- Avatar card -->
         <div class="card text-center">
@@ -114,7 +113,7 @@
           <div class="space-y-3">
             {#each [
               { label: 'Courses', value: myCourses.length, icon: '📚' },
-              { label: 'Lessons viewed', value: `${totalViewed}/${totalLessons}`, icon: '✅' },
+              { label: 'Labs completed', value: `${totalCompleted}/${totalLabs}`, icon: '✅' },
             ] as stat}
               <div class="flex items-center justify-between">
                 <span class="text-sm text-gray-500">{stat.icon} {stat.label}</span>
@@ -125,7 +124,7 @@
         </div>
       </div>
 
-      <!-- ═══════════════════════ RIGHT: EDIT + COURSES ═══════════════════ -->
+      <!-- RIGHT: EDIT + COURSES -->
       <div class="md:col-span-2 space-y-4">
 
         <!-- Edit profile card -->
@@ -215,8 +214,8 @@
           {:else}
             <div class="space-y-2">
               {#each myCourses as course}
-                {@const pct = course.lesson_count > 0 ? Math.round(course.viewed_lessons / course.lesson_count * 100) : 0}
-                <a href="/courses/{course.slug}" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                {@const pct = course.lab_count > 0 ? Math.round(course.completed_labs / course.lab_count * 100) : 0}
+                <a href="/courses/{course.id}" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors group">
                   <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-sm shrink-0">
                     📚
                   </div>
@@ -229,7 +228,7 @@
                       <span class="text-xs text-gray-400 shrink-0">{pct}%</span>
                     </div>
                   </div>
-                  <span class="text-xs text-gray-400 shrink-0">{course.viewed_lessons}/{course.lesson_count}</span>
+                  <span class="text-xs text-gray-400 shrink-0">{course.completed_labs}/{course.lab_count}</span>
                 </a>
               {/each}
             </div>

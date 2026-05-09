@@ -30,19 +30,19 @@
 
   onMount(loadCourses);
 
-  async function enrollAndGo(slug: string) {
+  async function enrollAndGo(id: string) {
     const token = $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
     if (!token) {
-      goto(`/login?redirect=/courses/${slug}`);
+      goto(`/login?redirect=/courses/${id}`);
       return;
     }
     try {
-      await coursesApi.enroll(slug, token);
+      await coursesApi.enroll(id, token);
       toasts.success('Enrolled successfully!');
     } catch (e: any) {
       if (e.status !== 409) toasts.error(e.message || 'Failed to enroll');
     }
-    goto(`/courses/${slug}`);
+    goto(`/courses/${id}`);
   }
 
   function difficultyColor(d: string) {
@@ -109,27 +109,18 @@
             <p class="text-sm text-gray-500 line-clamp-2 mb-3">{course.description}</p>
 
             <div class="flex items-center gap-3 text-xs text-gray-400 mb-4">
-              <span>📖 {course.lesson_count} lesson{course.lesson_count !== 1 ? 's' : ''}</span>
+              <span>📝 {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''}</span>
               {#if course.category}
                 <span class="badge-blue">{course.category}</span>
-              {/if}
-              {#if course.source && course.source !== 'local'}
-                <span title={course.source} class="text-gray-300">⎇ git</span>
               {/if}
             </div>
           </div>
 
           <div class="flex gap-2 mt-auto">
-            <a href="/courses/{course.slug}" class="btn-secondary text-sm flex-1 text-center">View</a>
-            {#if course.auto_enroll}
-              <button on:click={() => enrollAndGo(course.slug)} class="btn-primary text-sm">
-                Enroll
-              </button>
-            {:else}
-              <span class="text-xs text-gray-400 self-center px-2" title="Enrollment managed by admin">
-                🔒 By invite
-              </span>
-            {/if}
+            <a href="/courses/{course.id}" class="btn-secondary text-sm flex-1 text-center">View</a>
+            <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm">
+              Enroll
+            </button>
           </div>
         </div>
       {/each}

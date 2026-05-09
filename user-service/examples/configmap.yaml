@@ -1,0 +1,21 @@
+---
+# ConfigMap for user-service
+# Mount as file: /etc/user-service/config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+  labels:
+    app: user-service
+data:
+  config.yaml: |
+    port: 8081
+    database_url: "postgres://elearning:elearning@postgres:5432/elearning"
+    jwt_secret: "change-me-in-production-use-a-long-random-string"
+    jwt_expiry_hours: 24
+    cors_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+    gitlab_url: "https://gitlab.com"
+    oauth_redirect_base: "http://localhost:3000"
+    course_service_url: "http://course-service:8082"

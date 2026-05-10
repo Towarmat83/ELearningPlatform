@@ -16,13 +16,18 @@ import (
 )
 
 type State struct {
-	Config   *config.Config
-	Content  *content.Store
-	GitCreds *content.GitCredentialStore
+	Config          *config.Config
+	Content         *content.Store
+	GitCreds        *content.GitCredentialStore
+	CooldownTracker *content.CooldownTracker
 }
 
 func NewState(cfg *config.Config, store *content.Store) *State {
-	s := &State{Config: cfg, Content: store}
+	s := &State{
+		Config:          cfg,
+		Content:         store,
+		CooldownTracker: content.NewCooldownTracker(),
+	}
 	if cfg.GitCredentialsPath != "" {
 		if creds, err := content.LoadCredentials(cfg.GitCredentialsPath); err == nil {
 			s.GitCreds = creds

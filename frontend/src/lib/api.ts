@@ -1,9 +1,11 @@
 const API_BASE = '/api';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  body: Record<string, unknown> | null;
+  constructor(public status: number, message: string, body?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
+    this.body = body ?? null;
   }
 }
 
@@ -26,11 +28,13 @@ async function request<T>(
   });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let body: Record<string, unknown> | null = null;
     try {
       const err = await res.json();
+      body = err;
       message = err.error || message;
     } catch {}
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, body);
   }
   return res.json();
 }
@@ -136,7 +140,7 @@ export interface Lab {
   title: string;
   description: string | null;
   lab_type: 'form' | 'ctf' | 'interactive';
-  module_type?: 'video' | 'image' | 'text';
+  module_type?: 'video' | 'image' | 'text' | 'quiz';
   content: Record<string, unknown>;
   points: number;
   order_index: number;
@@ -260,6 +264,100 @@ export const labsApi = {
     api.post<SubmissionResult>(`/courses/${courseId}/labs/${labId}/submit`, { answer }, token),
   progress: (courseId: string, token: string) =>
     api.get<CourseProgress>(`/courses/${courseId}/progress`, token),
+};
+
+// ── Quiz Types ─────────────────────────────────────────────────────────────────
+
+export interface QuizQuestion {
+  id: string;
+  type: 'single' | 'multiple' | 'boolean' | 'order';
+  difficulty?: string;
+  points: number;
+  question: string;
+  answers?: { id: string; text: string }[];
+  items?: { id: string; text: string }[];
+  source_refs?: { course: string; module: string; anchor: string; priority: number }[];
+}
+
+export interface QuizUserAnswer {
+  single?: string;
+  multiple?: string[];
+  boolean?: boolean;
+  order?: string[];
+}
+
+export interface QuizQuestionResult {
+  question_id: string;
+  type: string;
+  is_correct: boolean;
+  points_earned: number;
+  points_max: number;
+  correct_answer?: unknown;
+  feedback?: string;
+  source_refs?: { course: string; module: string; anchor: string; priority: number }[];
+}
+
+export interface QuizCooldown {
+  remaining_seconds: number;
+  attempts: number;
+  locked: boolean;
+}
+
+export interface QuizSubmitResponse {
+  total_score: number;
+  max_score: number;
+  passed: boolean;
+  question_results: QuizQuestionResult[];
+  cooldowns?: Record<string, QuizCooldown>;
+}
+
+export interface QuizCooldownError {
+  error: string;
+  cooldowns: Record<string, QuizCooldown>;
+}
+
+// ── Module API (quiz-type modules use these) ──────────────────────────────────────
+
+export interface ModuleSummary {
+  index: number;
+  name: string;
+  slug: string;
+  type: 'text' | 'video' | 'image' | 'quiz';
+  viewed: boolean;
+  hidden: boolean;
+}
+
+export interface ModuleQuizConfig {
+  passing_score: number;
+  cooldown: {
+    strategy: string;
+    base_seconds: number;
+    multiplier: number;
+    max_seconds: number;
+  };
+  max_attempts_per_question: number | null;
+  lock_on_max_attempts: boolean;
+}
+
+export interface ModuleDetail {
+  index: number;
+  name: string;
+  slug: string;
+  type: 'text' | 'video' | 'image' | 'quiz';
+  content: string | null;
+  viewed: boolean;
+  hidden: boolean;
+  questions?: QuizQuestion[];
+  quiz_config?: ModuleQuizConfig;
+}
+
+export const modulesApi = {
+  list: (courseSlug: string, token: string) =>
+    api.get<{ modules: ModuleSummary[] }>(`/courses/${courseSlug}/modules`, token),
+  get: (courseSlug: string, index: number, token: string) =>
+    api.get<ModuleDetail>(`/courses/${courseSlug}/modules/${index}`, token),
+  submit: (courseSlug: string, index: number, answers: Record<string, QuizUserAnswer>, token: string) =>
+    api.post<QuizSubmitResponse>(`/courses/${courseSlug}/modules/${index}/submit`, { answers }, token),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

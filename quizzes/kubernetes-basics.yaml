@@ -1,0 +1,125 @@
+id: kubernetes-basics
+title: "Kubernetes Basics Quiz"
+description: "Test your knowledge of Kubernetes fundamentals: Pods, Deployments, and Services."
+version: "1.0.0"
+covers:
+  - course: kubernetes-basics
+    modules:
+      - "What is Kubernetes"
+      - "Pods and Containers"
+passing_score: 80
+cooldown:
+  strategy: exponential
+  base_seconds: 30
+  multiplier: 2.0
+  max_seconds: 600
+max_attempts_per_question: 5
+lock_on_max_attempts: false
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    points: 1
+    question: |
+      Qu'est-ce qu'un Pod dans Kubernetes ?
+    answers:
+      - id: a
+        text: "La plus petite unité déployable, contenant un ou plusieurs conteneurs"
+        correct: true
+      - id: b
+        text: "Un nœud physique du cluster"
+        correct: false
+      - id: c
+        text: "Un service réseau exposant une application"
+        correct: false
+    feedback:
+      wrong: "Un Pod n'est ni un nœud ni un service. Relisez la définition."
+      correct: "Exact ! Un Pod encapsule un ou plusieurs conteneurs."
+      source_refs:
+        - course: kubernetes-basics
+          module: "What is Kubernetes"
+          anchor: definition-pod
+          priority: 1
+
+  - id: q2
+    type: single
+    difficulty: easy
+    points: 1
+    question: |
+      Quelle commande permet de déployer une application sur un cluster Kubernetes ?
+    answers:
+      - id: a
+        text: "kubectl run"
+        correct: false
+      - id: b
+        text: "kubectl apply"
+        correct: true
+      - id: c
+        text: "kubectl expose"
+        correct: false
+      - id: d
+        text: "kubectl get"
+        correct: false
+    feedback:
+      wrong: "kubectl apply -f deployment.yaml est la méthode déclarative standard."
+      correct: "Correct ! kubectl apply est utilisé pour appliquer des manifests."
+
+  - id: q3
+    type: boolean
+    difficulty: easy
+    points: 1
+    question: |
+      Un Service de type ClusterIP est accessible depuis l'extérieur du cluster
+      sans configuration supplémentaire.
+    correct_answer: false
+    feedback:
+      wrong: |
+        ClusterIP est interne uniquement. Pour l'extérieur : NodePort, LoadBalancer
+        ou Ingress.
+      correct: "Exact ! ClusterIP n'est accessible que depuis l'intérieur du cluster."
+
+  - id: q4
+    type: multiple
+    difficulty: medium
+    points: 2
+    question: |
+      Quels objets Kubernetes permettent de maintenir un nombre défini de réplicas ?
+    answers:
+      - id: a
+        text: "Deployment"
+        correct: true
+      - id: b
+        text: "ConfigMap"
+        correct: false
+      - id: c
+        text: "ReplicaSet"
+        correct: true
+      - id: d
+        text: "Service"
+        correct: false
+    partial_scoring:
+      enabled: true
+      allow_negative: false
+    feedback:
+      wrong: "ConfigMap stocke de la config. Service expose le réseau."
+      correct: "Exact ! Deployment et ReplicaSet gèrent les réplicas."
+
+  - id: q5
+    type: order
+    difficulty: hard
+    points: 3
+    question: |
+      Remettez dans l'ordre les étapes de déploiement avec kubectl.
+    items:
+      - id: i1
+        text: "kubectl apply -f deployment.yaml"
+      - id: i2
+        text: "Écrire le fichier deployment.yaml"
+      - id: i3
+        text: "kubectl get pods (vérification)"
+      - id: i4
+        text: "kubectl expose deployment"
+    correct_order: [i2, i1, i3, i4]
+    feedback:
+      wrong: "On écrit le manifest, on l'applique, on vérifie, puis on expose."
+      correct: "Parfait ! L'ordre est logique : écrire → appliquer → vérifier → exposer."

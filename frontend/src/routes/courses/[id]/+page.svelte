@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { coursesApi, labsApi, type Course, type Lab } from '$lib/api';
+  import { coursesApi, labsApi, modulesApi, type Course, type Lab, type ModuleSummary } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   let course: Course | null = null;
@@ -10,6 +10,7 @@
   let loading = true;
   let enrolled = false;
   let progress: { completed_labs: number; total_labs: number } | null = null;
+  let quizModules: ModuleSummary[] = [];
 
   const courseId = $page.params.id as string;
 
@@ -41,11 +42,13 @@
       enrolled = await checkEnrollment(token);
       if (enrolled) {
         try {
-          const [labsRes, progRes] = await Promise.all([
+          const [labsRes, progRes, modulesRes] = await Promise.all([
             labsApi.list(courseId, token),
             labsApi.progress(courseId, token),
+            modulesApi.list(courseId, token).catch(() => ({ modules: [] })),
           ]);
           labs = labsRes.labs;
+          quizModules = modulesRes.modules.filter(m => m.type === 'quiz');
           progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
         } catch (e: any) {
           if (e.status !== 403) toasts.error('Failed to load labs: ' + e.message);
@@ -64,11 +67,13 @@
     try {
       await coursesApi.enroll(courseId, token);
       toasts.success('Enrolled successfully!');
-      const [labsRes, progRes] = await Promise.all([
+      const [labsRes, progRes, modulesRes] = await Promise.all([
         labsApi.list(courseId, token),
         labsApi.progress(courseId, token),
+        modulesApi.list(courseId, token).catch(() => ({ modules: [] })),
       ]);
       labs = labsRes.labs;
+      quizModules = modulesRes.modules.filter(m => m.type === 'quiz');
       progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
       enrolled = true;
     } catch (e: any) {
@@ -155,8 +160,8 @@
 
     <!-- Lab list -->
     {#if enrolled}
-      {#if labs.length === 0}
-        <div class="card text-center py-8 text-gray-400">No labs available yet.</div>
+      {#if labs.length === 0 && quizModules.length === 0}
+        <div class="card text-center py-8 text-gray-400">No content available yet.</div>
       {:else}
         <div class="space-y-2">
           {#each labs as lab}
@@ -181,6 +186,22 @@
               </div>
               <div class="text-right shrink-0">
                 <div class="text-sm font-medium text-gray-700">{lab.points} pts</div>
+              </div>
+              <svg class="w-5 h-5 text-gray-300 group-hover:text-primary-400 transition-colors shrink-0"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          {/each}
+          {#each quizModules as qm}
+            <a href="/courses/{courseId}/quiz/{qm.index}"
+              class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4">
+              <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-lg">📝</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-gray-900 group-hover:text-primary-600 transition-colors">{qm.name}</span>
+                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">quiz</span>
+                </div>
               </div>
               <svg class="w-5 h-5 text-gray-300 group-hover:text-primary-400 transition-colors shrink-0"
                 fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -129,6 +129,10 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 
 	for i, m := range modules {
 		if m.Slug() == lessonSlug {
+			if m.Type == "quiz" {
+				s.Error(w, http.StatusNotFound, "Quiz modules use a separate endpoint")
+				return
+			}
 			body := m.Content()
 			if m.Type != "text" {
 				body = content.ReplicatedPath(m, s.Config.UploadsDir)

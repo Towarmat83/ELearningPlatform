@@ -39,7 +39,7 @@ spec:
                         type: string
                       type:
                         type: string
-                        enum: [video, text, image]
+                        enum: [video, text, image, quiz]
                       src:
                         type: string
                       ref:
@@ -50,3 +50,5 @@ spec:
                         type: boolean
                       hidden:
                         type: boolean
+                      quiz_ref:
+                        type: string

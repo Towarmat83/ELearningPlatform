@@ -34,3 +34,8 @@ spec:
       src: "https://github.com/paulmascarilla/course-example"
       ref: "main"
       path: "lessons/04-compose.md"
+    - name: "Kubernetes Basics Quiz"
+      type: "quiz"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "quizzes/kubernetes-basics.yaml"

@@ -27,6 +27,8 @@ func main() {
 	// Content store — populated from K8s CRD watcher
 	store := content.NewStore()
 
+	s := handlers.NewState(cfg, store)
+
 	watcher, err := content.NewK8sWatcher(store, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
 		slog.Error("failed to create K8s watcher", "err", err)
@@ -38,8 +40,6 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("K8s CRD watcher started", "namespace", cfg.K8sNamespace)
-
-	s := handlers.NewState(cfg, store)
 
 	r := handlers.BuildRouter(s, cfg, true)
 

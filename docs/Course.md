@@ -37,6 +37,7 @@ spec:
 - `spec.modules[].src` : URL de la ressource (git pour text, URL serveur pour video/image)
 - `spec.modules[].ref` : branche git (uniquement pour type: text)
 - `spec.modules[].path` : chemin du fichier dans le dépôt (uniquement pour type: text)
+- `spec.modules[].replication` : boolean (optionnel) — si `true`, le serveur télécharge la ressource distante (video/image) et la sert localement via `/uploads/`
 
 ### Endpoints
 

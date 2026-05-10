@@ -125,6 +125,7 @@ func (w *K8sWatcher) upsert(obj *unstructured.Unstructured) {
 		slog.Warn("invalid Course CRD, skipping", "name", obj.GetName(), "err", err)
 		return
 	}
+
 	w.store.Put(c)
 	slog.Debug("course upserted from K8s", "slug", c.Slug)
 }
@@ -164,21 +165,123 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 			if !ok {
 				continue
 			}
-			mod := Module{
-				Name:        getStr(m, "name"),
-				Type:        getStr(m, "type"),
-				Src:         getStr(m, "src"),
-				Ref:         getStr(m, "ref"),
-				Path:        getStr(m, "path"),
-				Replication: getBool(m, "replication"),
-				Hidden:      getBool(m, "hidden"),
-			}
+mod := Module{
+			Name:        getStr(m, "name"),
+			Type:        getStr(m, "type"),
+			Src:         getStr(m, "src"),
+			Ref:         getStr(m, "ref"),
+			Path:        getStr(m, "path"),
+			Replication: getBool(m, "replication"),
+			Hidden:      getBool(m, "hidden"),
+		}
 			if mod.Name == "" {
 				mod.Name = fmt.Sprintf("module-%d", i+1)
 			}
 			if mod.Type == "" {
 				mod.Type = "text"
 			}
+
+			// Parse inline questions for quiz-type modules
+			if mod.Type == "quiz" {
+				if rawQuestions, ok := m["questions"].([]interface{}); ok {
+					for _, rq := range rawQuestions {
+						q, ok := rq.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						question := Question{
+							ID:        getStr(q, "id"),
+							Type:      getStr(q, "type"),
+							Difficulty: getStr(q, "difficulty"),
+							Points:     getInt(q, "points"),
+							Question:   getStr(q, "question"),
+							CorrectAnswer: func() *bool {
+								if v, ok := q["correct_answer"]; ok {
+									if b, ok := v.(bool); ok {
+										return &b
+									}
+								}
+								return nil
+							}(),
+						}
+						if question.ID == "" {
+							question.ID = fmt.Sprintf("q-%d", i+1)
+						}
+						if question.Difficulty == "" {
+							question.Difficulty = "medium"
+						}
+						if question.Points == 0 {
+							question.Points = 1
+						}
+
+						if rawAnswers, ok := q["answers"].([]interface{}); ok {
+							for _, ra := range rawAnswers {
+								a, ok := ra.(map[string]interface{})
+								if !ok {
+									continue
+								}
+								question.Answers = append(question.Answers, Answer{
+									ID:      getStr(a, "id"),
+									Text:    getStr(a, "text"),
+									Correct: getBool(a, "correct"),
+								})
+							}
+						}
+
+						if rawItems, ok := q["items"].([]interface{}); ok {
+							for _, rit := range rawItems {
+								it, ok := rit.(map[string]interface{})
+								if !ok {
+									continue
+								}
+								question.Items = append(question.Items, OrderItem{
+									ID:   getStr(it, "id"),
+									Text: getStr(it, "text"),
+								})
+							}
+						}
+
+						if rawOrder, ok := q["correct_order"].([]interface{}); ok {
+							for _, ro := range rawOrder {
+								if s, ok := ro.(string); ok {
+									question.CorrectOrder = append(question.CorrectOrder, s)
+								}
+							}
+						}
+
+						if rawPS, ok := q["partial_scoring"].(map[string]interface{}); ok {
+							question.PartialScoring = &PartialScoring{
+								Enabled:       getBool(rawPS, "enabled"),
+								AllowNegative: getBool(rawPS, "allow_negative"),
+							}
+						}
+
+						if rawFb, ok := q["feedback"].(map[string]interface{}); ok {
+							question.Feedback = Feedback{
+								Wrong:   getStr(rawFb, "wrong"),
+								Correct: getStr(rawFb, "correct"),
+							}
+							if rawRefs, ok := rawFb["source_refs"].([]interface{}); ok {
+								for _, rawRef := range rawRefs {
+									sr, ok := rawRef.(map[string]interface{})
+									if !ok {
+										continue
+									}
+									question.Feedback.SourceRefs = append(question.Feedback.SourceRefs, SourceRef{
+										Course:   getStr(sr, "course"),
+										Module:   getStr(sr, "module"),
+										Anchor:   getStr(sr, "anchor"),
+										Priority: getInt(sr, "priority"),
+									})
+								}
+							}
+						}
+
+						mod.Questions = append(mod.Questions, question)
+					}
+				}
+			}
+
 			modules = append(modules, mod)
 		}
 	}
@@ -198,6 +301,17 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 func getStr(m map[string]interface{}, key string) string {
 	v, _ := m[key].(string)
 	return v
+}
+
+func getInt(m map[string]interface{}, key string) int {
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }
 
 func getBool(m map[string]interface{}, key string) bool {

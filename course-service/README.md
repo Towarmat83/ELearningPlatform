@@ -77,6 +77,27 @@ URL matching uses glob patterns (`path.Match`). The first match wins.
 If no credential matches, `GIT_TOKEN` is used as a fallback.  
 If both are empty, the clone is unauthenticated (public repos only).
 
+## Resource Replication
+
+When a module has `replication: true` and type is `video` or `image`, the service
+downloads the remote resource and caches it locally in the `UPLOADS_DIR`. The API
+then returns the local `/uploads/` URL instead of the remote URL.
+
+This is useful for:
+- Reducing external dependency (resource served even if remote goes down)
+- Improving load times (no redirect to external CDN)
+- Air-gapped deployments
+
+Replication has no effect on `text` modules.
+
+```yaml
+modules:
+  - name: "Architecture Overview"
+    type: "video"
+    src: "https://example.com/videos/k8s-arch.mp4"
+    replication: true   # ← cached locally at /uploads/<hash>.mp4
+```
+
 ## How to Run
 
 ### Locally

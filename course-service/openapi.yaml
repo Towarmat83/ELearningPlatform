@@ -445,6 +445,9 @@ components:
           enum: [video, text, image]
         viewed:
           type: boolean
+        replication:
+          type: boolean
+          description: When true, video/image resources are downloaded and served locally via /uploads/
 
     ModuleDetail:
       allOf:

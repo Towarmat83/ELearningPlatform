@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { api, labsApi, type Lab, type LabProgress, type SubmissionResult } from '$lib/api';
+  import { api, labsApi, modulesApi, type Lab, type LabProgress, type SubmissionResult } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
   import Markdown from '$lib/Markdown.svelte';
 
@@ -38,8 +38,21 @@
       const res = await labsApi.get(courseId, labId, token);
       lab = res.lab;
       progress = res.progress;
+
+      // Redirect quiz-type modules to the quiz page
+      if (lab?.module_type === 'quiz') {
+        const modRes = await modulesApi.list(courseId, token).catch(() => null);
+        if (modRes) {
+          const match = modRes.modules.find(m => m.type === 'quiz' && m.name === lab!.title);
+          if (match) {
+            goto(`/courses/${courseId}/quiz/${match.index}`, { replaceState: true });
+            return;
+          }
+        }
+      }
+
       // If no interactive content, fetch and show lesson content instead
-      if (lab && lab.lab_type !== 'ctf' && !lab.content?.questions) {
+      if (lab && lab.lab_type !== 'ctf' && !lab.content?.questions && lab.module_type !== 'quiz') {
         try {
           const lessonRes: any = await api.get(`/courses/${courseId}/lessons/${labId}`, token);
           lessonContent = lessonRes.lesson?.content ?? null;
@@ -115,6 +128,65 @@
   function displayType(lab: Lab): string {
     return lab.module_type ?? lab.lab_type;
   }
+
+  function explode() {
+    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#a855f7', '#fbbf24'];
+    const shapes = ['circle', 'square', 'star', 'triangle'];
+    for (let i = 0; i < 300; i++) {
+      const el = document.createElement('div');
+      const shape = shapes[Math.floor(Math.random() * shapes.length)];
+      const size = Math.random() * 16 + 6;
+      const x = Math.random() * 100;
+      const drift = (Math.random() - 0.5) * 400;
+      const rotateEnd = Math.random() * 1080 - 540;
+
+      el.style.cssText = `
+        position: fixed;
+        left: ${x}vw;
+        top: -20px;
+        width: ${size}px;
+        height: ${size}px;
+        background: ${colors[Math.floor(Math.random() * colors.length)]};
+        border-radius: ${shape === 'circle' ? '50%' : shape === 'square' ? '2px' : shape === 'star' ? '50% 50% 0 50%' : '0'};
+        transform: rotate(0deg);
+        z-index: 9999;
+        pointer-events: none;
+        animation: none;
+        --drift: ${drift}px;
+        --rotate: ${rotateEnd}deg;
+      `;
+      el.className = 'confetti-piece';
+      el.style.animation = `confetti-explode 0.6s ease-out forwards, confetti-fall ${Math.random() * 2 + 2}s ${0.6 + Math.random() * 0.3}s ease-in forwards`;
+      el.style.setProperty('--tx', `${drift}px`);
+      el.style.setProperty('--ty', `${-Math.random() * 300 - 200}px`);
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 5000);
+    }
+  }
+
+  $: if (progress?.completed) {
+    setTimeout(explode, 300);
+  }
+
+  let explodeObserver: IntersectionObserver | null = null;
+
+  afterUpdate(() => {
+    explodeObserver?.disconnect();
+    const triggers = document.querySelectorAll('[data-explode]');
+    if (triggers.length === 0) return;
+    explodeObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            explode();
+            explodeObserver?.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+    triggers.forEach((el) => explodeObserver?.observe(el));
+  });
 
   function retry() {
     result = null;

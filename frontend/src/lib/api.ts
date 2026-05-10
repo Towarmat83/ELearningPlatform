@@ -141,6 +141,7 @@ export interface Lab {
   points: number;
   order_index: number;
   is_published: boolean;
+  hidden: boolean;
   created_at: string;
   updated_at: string;
 }

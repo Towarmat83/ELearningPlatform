@@ -84,6 +84,7 @@ type labResponse struct {
 	Points      int    `json:"points"`
 	OrderIndex  int    `json:"order_index"`
 	IsPublished bool   `json:"is_published"`
+	Hidden      bool   `json:"hidden"`
 }
 
 func moduleTypeToLabType(t string) string {
@@ -119,6 +120,7 @@ func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 					Points:      0,
 					OrderIndex:  0,
 					IsPublished: true,
+					Hidden:      m.Hidden,
 				},
 				"progress": nil,
 			})
@@ -150,6 +152,7 @@ func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 			Points:      0,
 			OrderIndex:  i + 1,
 			IsPublished: true,
+			Hidden:      m.Hidden,
 		})
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"labs": labs})

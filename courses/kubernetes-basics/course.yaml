@@ -19,11 +19,11 @@ spec:
       src: "https://github.com/paulmascarilla/course-example"
       ref: "main"
       path: "lessons/02-images.md"
-      hidden: true
     - name: "Kubernetes Architecture Overview"
       type: "video"
       src: "https://video-previews.elements.envatousercontent.com/files/bb160b9d-c332-4865-9a90-1123440f86d0/video_preview_h264.mp4"
       replication: true
+      hidden: true
     - name: "Deployments"
       type: "text"
       src: "https://github.com/paulmascarilla/course-example"

@@ -16,6 +16,7 @@ type moduleResponse struct {
 	Type    string `json:"type"`
 	Content string `json:"content,omitempty"`
 	Viewed  bool   `json:"viewed"`
+	Hidden  bool   `json:"hidden"`
 }
 
 func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[string]bool {
@@ -72,6 +73,7 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			Slug:   m.Slug(),
 			Type:   m.Type,
 			Viewed: viewed[m.Slug()],
+			Hidden: m.Hidden,
 		})
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"modules": out})
@@ -103,10 +105,11 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 
 	m := modules[idx]
 	resp := moduleResponse{
-		Index: idx,
-		Name:  m.Name,
-		Slug:  m.Slug(),
-		Type:  m.Type,
+		Index:  idx,
+		Name:   m.Name,
+		Slug:   m.Slug(),
+		Type:   m.Type,
+		Hidden: m.Hidden,
 	}
 
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)

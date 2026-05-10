@@ -103,24 +103,16 @@ create-git-secret:
 
 .PHONY: port-forward
 port-forward:
-	@pkill -f "kubectl port-forward.*18082" 2>/dev/null; \
-	pkill -f "kubectl port-forward.*18081" 2>/dev/null; \
-	pkill -f "kubectl port-forward.*3000"  2>/dev/null; \
-	sleep 1; \
-	nohup kubectl port-forward svc/$(HELM_RELEASE)-course-service 18082:8082 \
-		>> $(PORT_FWDS_LOG) 2>&1 & \
-	nohup kubectl port-forward svc/$(HELM_RELEASE)-user-service  18081:8081 \
-		>> $(PORT_FWDS_LOG) 2>&1 & \
-	nohup kubectl port-forward svc/$(HELM_RELEASE)-frontend      3000:3000 \
-		>> $(PORT_FWDS_LOG) 2>&1 & \
-	echo "Port-forwards started (course:18082, user:18081, frontend:3000)"
+	kubectl port-forward svc/$(HELM_RELEASE)-course-service 18082:8082 &
+	kubectl port-forward svc/$(HELM_RELEASE)-user-service  18081:8081 &
+	kubectl port-forward svc/$(HELM_RELEASE)-frontend      3000:3000 &
+	sleep 2
+	@echo "Port-forwards started (course:18082, user:18081, frontend:3000)"
 
 .PHONY: port-forward-stop
 port-forward-stop:
-	pkill -f "kubectl port-forward.*18082" 2>/dev/null || true
-	pkill -f "kubectl port-forward.*18081" 2>/dev/null || true
-	pkill -f "kubectl port-forward.*3000"  2>/dev/null || true
-	echo "Port-forwards stopped"
+	-pkill -f "kubectl port-forward" 2>/dev/null
+	@echo "Port-forwards stopped"
 
 # ── Full lifecycle ────────────────────────────────────────────────────────────
 

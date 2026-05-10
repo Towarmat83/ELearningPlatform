@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { api, labsApi, type Lab, type LabProgress, type SubmissionResult } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
+  import Markdown from '$lib/Markdown.svelte';
 
   const courseId = $page.params.id as string;
   const labId = $page.params.labId as string;
@@ -101,10 +102,18 @@
     }
   }
 
-  function labTypeIcon(type: string) {
-    if (type === 'form') return '📝';
-    if (type === 'ctf') return '🏴';
+  function labTypeIcon(lab: Lab) {
+    const mt = lab.module_type;
+    if (mt === 'video') return '🎬';
+    if (mt === 'image') return '🖼️';
+    if (mt === 'text') return '📝';
+    if (lab.lab_type === 'form') return '📝';
+    if (lab.lab_type === 'ctf') return '🏴';
     return '💻';
+  }
+
+  function displayType(lab: Lab): string {
+    return lab.module_type ?? lab.lab_type;
   }
 
   function retry() {
@@ -136,9 +145,9 @@
     <div class="flex items-start justify-between gap-4 mb-6">
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-xl">{labTypeIcon(lab.lab_type)}</span>
+          <span class="text-xl">{labTypeIcon(lab)}</span>
           <h1 class="text-2xl font-bold text-gray-900">{lab.title}</h1>
-          <span class="badge-blue text-xs">{lab.lab_type}</span>
+          <span class="badge-blue text-xs">{displayType(lab)}</span>
         </div>
         {#if lab.description}
           <p class="text-gray-500 mt-1">{lab.description}</p>
@@ -158,17 +167,21 @@
 
     <!-- Content -->
     <div class="card mb-6">
-      {#if lessonContent !== null}
+      {#if lab?.module_type === 'video' && lessonContent}
+        <div class="flex justify-center">
+          <video controls class="max-w-full rounded-lg">
+            <source src={lessonContent} type="video/mp4" />
+          </video>
+        </div>
+
+      {:else if lab?.module_type === 'image' && lessonContent}
+        <div class="flex justify-center">
+          <img src={lessonContent} alt={lab.title} class="max-w-full rounded-lg" />
+        </div>
+
+      {:else if lessonContent !== null}
         <div class="prose max-w-none">
-          {#if lab?.lab_type === 'interactive' && lessonContent.startsWith('/uploads/')}
-            <div class="flex justify-center">
-              <video controls class="max-w-full rounded-lg">
-                <source src={lessonContent} type="video/mp4" />
-              </video>
-            </div>
-          {:else}
-            <div class="whitespace-pre-wrap text-gray-700">{lessonContent}</div>
-          {/if}
+          <Markdown content={lessonContent} />
         </div>
 
       {:else if lab?.lab_type === 'ctf'}

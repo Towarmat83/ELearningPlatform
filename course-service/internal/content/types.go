@@ -29,11 +29,13 @@ type Lesson struct {
 
 // Module is a course element as defined in the CRD spec.modules[].
 type Module struct {
-	Name string `json:"name"`
-	Type string `json:"type"` // video, text, image
-	Src  string `json:"src,omitempty"`
-	Ref  string `json:"ref,omitempty"`
-	Path string `json:"path,omitempty"`
+	Name        string `json:"name"`
+	Type        string `json:"type"` // video, text, image
+	Src         string `json:"src,omitempty"`
+	Ref         string `json:"ref,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Replication bool   `json:"replication,omitempty"`
+	Hidden      bool   `json:"hidden,omitempty"`
 }
 
 // Slug returns a DNS-compliant slug derived from the module name.
@@ -70,8 +72,8 @@ func (m Module) HasGitContent() bool {
 
 // CourseYAML represents the course.yaml file (CRD or flat format).
 type CourseYAML struct {
-	APIVersion string     `yaml:"apiVersion,omitempty"`
-	Kind       string     `yaml:"kind,omitempty"`
+	APIVersion string      `yaml:"apiVersion,omitempty"`
+	Kind       string      `yaml:"kind,omitempty"`
 	Spec       *CourseSpec `yaml:"spec,omitempty"`
 
 	Title       string       `yaml:"title,omitempty"`
@@ -96,11 +98,13 @@ type CourseSpec struct {
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
 type ModuleYAML struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
-	Src  string `yaml:"src,omitempty"`
-	Ref  string `yaml:"ref,omitempty"`
-	Path string `yaml:"path,omitempty"`
+	Name        string `yaml:"name"`
+	Type        string `yaml:"type"`
+	Src         string `yaml:"src,omitempty"`
+	Ref         string `yaml:"ref,omitempty"`
+	Path        string `yaml:"path,omitempty"`
+	Replication bool   `yaml:"replication,omitempty"`
+	Hidden      bool   `yaml:"hidden,omitempty"`
 }
 
 // lessonFrontmatter is the YAML front matter in NN-slug.md files.

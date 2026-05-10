@@ -21,9 +21,14 @@ userService:
     nodePort: 30081
 
 frontend:
+  image:
+    repository: localhost/elearning-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
   service:
-    type: ClusterIP
+    type: NodePort
     port: 3000
+    nodePort: 30080
 
 ingress:
   enabled: false

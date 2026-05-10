@@ -33,6 +33,21 @@ func NewState(cfg *config.Config, store *content.Store) *State {
 	return s
 }
 
+// visibleModules returns all modules for admins, or only non-hidden for regular users.
+func (s *State) visibleModules(c *content.Course, r *http.Request) []content.Module {
+	claims := s.claims(r)
+	if claims != nil && claims.Role == "admin" {
+		return c.Modules
+	}
+	var out []content.Module
+	for _, m := range c.Modules {
+		if !m.Hidden {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 func (s *State) tokenForRepo(repoURL string) string {
 	if s.GitCreds != nil {
 		if t := s.GitCreds.Match(repoURL); t != "" {

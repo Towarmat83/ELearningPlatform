@@ -46,3 +46,7 @@ spec:
                         type: string
                       path:
                         type: string
+                      replication:
+                        type: boolean
+                      hidden:
+                        type: boolean

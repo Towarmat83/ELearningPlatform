@@ -20,6 +20,7 @@ type lessonDetail struct {
 	Slug    string `json:"slug"`
 	Title   string `json:"title"`
 	Order   int    `json:"order"`
+	Type    string `json:"type"`
 	Content string `json:"content"`
 	Viewed  bool   `json:"viewed"`
 }
@@ -66,6 +67,8 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
 
+	modules := s.visibleModules(c, r)
+
 	if len(c.Lessons) > 0 {
 		out := make([]lessonSummary, 0, len(c.Lessons))
 		for _, l := range c.Lessons {
@@ -80,8 +83,8 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := make([]lessonSummary, 0, len(c.Modules))
-	for i, m := range c.Modules {
+	out := make([]lessonSummary, 0, len(modules))
+	for i, m := range modules {
 		out = append(out, lessonSummary{
 			Slug:   m.Slug(),
 			Title:  m.Name,
@@ -109,6 +112,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
+	modules := s.visibleModules(c, r)
 
 	for i := range c.Lessons {
 		if c.Lessons[i].Slug == lessonSlug {
@@ -123,9 +127,12 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for i, m := range c.Modules {
+	for i, m := range modules {
 		if m.Slug() == lessonSlug {
 			body := m.Content()
+			if m.Type != "text" {
+				body = content.ReplicatedPath(m, s.Config.UploadsDir)
+			}
 			if m.HasGitContent() {
 				data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 				if err != nil {
@@ -138,6 +145,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 				Slug:    m.Slug(),
 				Title:   m.Name,
 				Order:   i + 1,
+				Type:    m.Type,
 				Content: body,
 				Viewed:  viewed[m.Slug()],
 			}})

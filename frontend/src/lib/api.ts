@@ -136,6 +136,7 @@ export interface Lab {
   title: string;
   description: string | null;
   lab_type: 'form' | 'ctf' | 'interactive';
+  module_type?: 'video' | 'image' | 'text';
   content: Record<string, unknown>;
   points: number;
   order_index: number;

@@ -165,11 +165,13 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 				continue
 			}
 			mod := Module{
-				Name: getStr(m, "name"),
-				Type: getStr(m, "type"),
-				Src:  getStr(m, "src"),
-				Ref:  getStr(m, "ref"),
-				Path: getStr(m, "path"),
+				Name:        getStr(m, "name"),
+				Type:        getStr(m, "type"),
+				Src:         getStr(m, "src"),
+				Ref:         getStr(m, "ref"),
+				Path:        getStr(m, "path"),
+				Replication: getBool(m, "replication"),
+				Hidden:      getBool(m, "hidden"),
 			}
 			if mod.Name == "" {
 				mod.Name = fmt.Sprintf("module-%d", i+1)
@@ -196,6 +198,18 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 func getStr(m map[string]interface{}, key string) string {
 	v, _ := m[key].(string)
 	return v
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	v, ok := m[key].(bool)
+	if ok {
+		return v
+	}
+	s, ok := m[key].(string)
+	if ok {
+		return s == "true" || s == "yes" || s == "1"
+	}
+	return false
 }
 
 func sourceK8s(slug string) string {

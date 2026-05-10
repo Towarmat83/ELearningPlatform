@@ -62,9 +62,10 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	modules := s.visibleModules(c, r)
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
-	out := make([]moduleResponse, 0, len(c.Modules))
-	for i, m := range c.Modules {
+	out := make([]moduleResponse, 0, len(modules))
+	for i, m := range modules {
 		out = append(out, moduleResponse{
 			Index:  i,
 			Name:   m.Name,
@@ -92,13 +93,15 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	modules := s.visibleModules(c, r)
+
 	idx, err := strconv.Atoi(indexStr)
-	if err != nil || idx < 0 || idx >= len(c.Modules) {
+	if err != nil || idx < 0 || idx >= len(modules) {
 		s.Error(w, http.StatusNotFound, "Module not found")
 		return
 	}
 
-	m := c.Modules[idx]
+	m := modules[idx]
 	resp := moduleResponse{
 		Index: idx,
 		Name:  m.Name,
@@ -111,7 +114,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 
 	switch m.Type {
 	case "video", "image":
-		resp.Content = m.Content()
+		resp.Content = content.ReplicatedPath(m, s.Config.UploadsDir)
 	case "text":
 		if m.HasGitContent() {
 			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))

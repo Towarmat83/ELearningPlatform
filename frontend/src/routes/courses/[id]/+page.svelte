@@ -82,10 +82,18 @@
     return 'badge-red';
   }
 
-  function labTypeIcon(type: string) {
-    if (type === 'form') return '📝';
-    if (type === 'ctf') return '🏴';
+  function labTypeIcon(lab: Lab) {
+    const mt = lab.module_type;
+    if (mt === 'video') return '🎬';
+    if (mt === 'image') return '🖼️';
+    if (mt === 'text') return '📝';
+    if (lab.lab_type === 'form') return '📝';
+    if (lab.lab_type === 'ctf') return '🏴';
     return '💻';
+  }
+
+  function displayType(lab: Lab): string {
+    return lab.module_type ?? lab.lab_type;
   }
 
   $: completedCount = progress?.completed_labs ?? 0;
@@ -155,14 +163,14 @@
             <a href="/courses/{courseId}/labs/{lab.id}"
               class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4">
               <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg bg-gray-100">
-                {labTypeIcon(lab.lab_type)}
+                {labTypeIcon(lab)}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="font-medium text-gray-900 group-hover:text-primary-600 transition-colors">
                     {lab.title}
                   </span>
-                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{lab.lab_type}</span>
+                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{displayType(lab)}</span>
                 </div>
                 {#if lab.description}
                   <p class="text-xs text-gray-500 mt-0.5">{lab.description}</p>

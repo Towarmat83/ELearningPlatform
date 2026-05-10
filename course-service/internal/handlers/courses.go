@@ -80,6 +80,7 @@ type labResponse struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	LabType     string `json:"lab_type"`
+	ModuleType  string `json:"module_type"`
 	Points      int    `json:"points"`
 	OrderIndex  int    `json:"order_index"`
 	IsPublished bool   `json:"is_published"`
@@ -105,7 +106,7 @@ func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	for _, m := range c.Modules {
+	for _, m := range s.visibleModules(c, r) {
 		if m.Slug() == labID {
 			s.JSON(w, http.StatusOK, map[string]any{
 				"lab": labResponse{
@@ -114,6 +115,7 @@ func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 					Title:       m.Name,
 					Description: "",
 					LabType:     moduleTypeToLabType(m.Type),
+					ModuleType:  m.Type,
 					Points:      0,
 					OrderIndex:  0,
 					IsPublished: true,
@@ -135,14 +137,16 @@ func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	labs := make([]labResponse, 0, len(c.Modules))
-	for i, m := range c.Modules {
+	modules := s.visibleModules(c, r)
+	labs := make([]labResponse, 0, len(modules))
+	for i, m := range modules {
 		labs = append(labs, labResponse{
 			ID:          m.Slug(),
 			CourseID:    c.Slug,
 			Title:       m.Name,
 			Description: "",
 			LabType:     moduleTypeToLabType(m.Type),
+			ModuleType:  m.Type,
 			Points:      0,
 			OrderIndex:  i + 1,
 			IsPublished: true,
@@ -157,7 +161,7 @@ func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 	c := s.Content.Get(courseSlug)
 	total := 0
 	if c != nil {
-		total = len(c.Modules)
+		total = len(s.visibleModules(c, r))
 	}
 	s.JSON(w, http.StatusOK, map[string]any{
 		"course_id":             courseSlug,

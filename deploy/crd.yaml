@@ -1,0 +1,48 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: courses.elearning.example.com
+spec:
+  group: elearning.example.com
+  names:
+    kind: Course
+    plural: courses
+    singular: course
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                hidden:
+                  type: boolean
+                category:
+                  type: string
+                difficulty:
+                  type: string
+                modules:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      type:
+                        type: string
+                        enum: [video, text, image]
+                      src:
+                        type: string
+                      ref:
+                        type: string
+                      path:
+                        type: string

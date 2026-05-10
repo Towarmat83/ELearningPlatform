@@ -1,61 +1,30 @@
 # E-Learning Platform
 
+Micro-services platform for online courses with Kubernetes CRD-based course definitions.
+
 ## Architecture
 
-The platform is split into two micro-services split from a single monolith:
-
 ```
-┌──────────────────────┐     Internal HTTP      ┌──────────────────────┐
-│    Course Service    │ ◄──────────────────────► │    User Service      │
-│  (stateless, K8s)   │   /internal/enrollments  │   (PostgreSQL DB)    │
-│                      │   /internal/progress    │                      │
-│  Port 8082           │                          │  Port 8081            │
-└──────────────────────┘                          └──────────────────────┘
-```
-
-### Course Service
-
-Stateless service that owns course content. Source of truth is Kubernetes CRDs
-(`elearning.example.com/v1`, kind `Course`). Watches the K8s API and maintains
-an in-memory store. Calls User Service for enrollment checks and progress.
-
-- **Source:** `course-service/`
-- **API:** `course-service/openapi.yaml`
-- **README:** `course-service/README.md`
-
-### User Service
-
-Database-backed service that owns auth, user profiles, OAuth, platform settings,
-enrollments, and lesson progress. Exposes an internal REST API for Course Service.
-
-- **Source:** `user-service/`
-- **API:** `user-service/openapi.yaml`
-- **README:** `user-service/README.md`
-
-## Development
-
-```sh
-# Start PostgreSQL
-docker run -d --name pg -e POSTGRES_USER=elearning -e POSTGRES_PASSWORD=elearning -e POSTGRES_DB=elearning -p 5432:5432 postgres:17
-
-# Start User Service (DB required)
-cd user-service && go run .
-
-# Start Course Service (K8s CRD + User Service required)
-cd course-service && go run .
+┌──────────┐     ┌──────────────┐     ┌──────────────┐
+│ Frontend  │────▶│ Course API   │◀───▶│ K8s CRD      │
+│ :3000     │     │ :8082        │     │ (courses)    │
+└────┬──────┘     └──────┬───────┘     └──────────────┘
+     │                   │
+     │            ┌──────▼───────┐     ┌──────────────┐
+     └───────────▶│ User API     │◀───▶│ PostgreSQL   │
+                  │ :8081        │     │ :5432        │
+                  └──────────────┘     └──────────────┘
 ```
 
-## Internal API Contract
+| Service | Role | Tech |
+|---------|------|------|
+| **Course Service** | Course content, media serving, K8s CRD watcher | Go + chi + client-go |
+| **User Service** | Auth, enrollments, progress, admin | Go + chi + pgx |
+| **Frontend** | SvelteKit SPA, server-side API proxy | SvelteKit |
 
-| Course Service → User Service | Description |
-|---|---|
-| `GET /internal/enrollments/check?user_id=&course_slug=` | Check enrollment |
-| `GET /internal/progress/viewed?user_id=&course_slug=` | Get viewed lessons |
-| `POST /internal/progress/complete` | Mark lesson complete |
+## Source of truth
 
-## CRD Source of Truth
-
-Courses are defined as Kubernetes Custom Resources:
+Courses are Kubernetes CRDs (`elearning.example.com/v1`, kind `Course`).
 
 ```yaml
 apiVersion: elearning.example.com/v1
@@ -64,12 +33,12 @@ metadata:
   name: kubernetes-basics
 spec:
   title: "Kubernetes Basics"
-  description: "Intro to K8s"
+  description: "Learn the fundamentals of Kubernetes"
   hidden: false
   category: "kubernetes"
   difficulty: "beginner"
   modules:
-    - name: "What is K8s"
+    - name: "What is Kubernetes"
       type: "text"
       src: "https://github.com/user/repo"
       ref: "main"
@@ -78,3 +47,49 @@ spec:
       type: "video"
       src: "/uploads/architecture.mp4"
 ```
+
+Module types: `text` (markdown from git), `video` (server-hosted URL), `image` (server-hosted URL).
+
+## Quick start
+
+```bash
+make dev
+```
+
+See `CONTRIB.md` for the full step-by-step guide.
+
+## Known issue: Bitnami PostgreSQL
+
+The Helm chart uses Bitnami PostgreSQL by default (`postgresql.enabled: true`), which may get stuck `Pending` on KinD due to `Insufficient ephemeral-storage`. If that happens, set `postgresql.enabled: false` in `deploy/kind-values.yaml` and run `make helm-install` — the Makefile auto-deploys a standalone PostgreSQL (`deploy/postgresql.yaml`) instead.
+
+## Project structure
+
+```
+./
+├── course-service/       # Go service (port 8082)
+│   ├── internal/
+│   │   ├── content/      # Store, K8s watcher, git fetch
+│   │   ├── handlers/     # HTTP routes
+│   │   ├── middleware/   # JWT auth
+│   │   ├── config/      # Env config
+│   │   └── metrics/     # Prometheus
+│   └── examples/        # Sample k8s manifests
+├── user-service/         # Go service (port 8081)
+│   ├── internal/
+│   │   ├── db/          # PG + migrations
+│   │   ├── handlers/    # Auth, OAuth, admin, progress
+│   │   ├── middleware/  # JWT
+│   │   └── config/      # Env config
+│   └── migrations/      # SQL migrations (embed)
+├── frontend/            # SvelteKit
+├── helm/                # Helm chart
+└── courses/             # Course CRD manifests (examples)
+```
+
+## Internal API
+
+| Course Service → User Service | Description |
+|---|---|
+| `GET /internal/enrollments/check?user_id=&course_slug=` | Check enrollment |
+| `GET /internal/progress/viewed?user_id=&course_slug=` | Get viewed lessons |
+| `POST /internal/progress/complete` | Mark lesson complete |

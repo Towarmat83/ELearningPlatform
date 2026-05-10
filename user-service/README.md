@@ -102,6 +102,37 @@ docker run -p 8081:8081 \
   user-service
 ```
 
+## Development Workflow (KinD)
+
+### Quick rebuild after code changes
+
+```sh
+# From project root — build, load, restart in one command
+make rebuild-user
+
+# Or manually:
+docker build -t localhost/elearning-user-service:latest user-service/
+kind load docker-image localhost/elearning-user-service:latest --name elearning
+kubectl rollout restart deploy/elearning-user-service
+
+# Check logs
+make logs
+```
+
+### Local testing (with Docker PostgreSQL)
+
+```sh
+# Start PostgreSQL
+docker run -d --name pg \
+  -e POSTGRES_USER=elearning \
+  -e POSTGRES_PASSWORD=elearning \
+  -e POSTGRES_DB=elearning \
+  -p 5432:5432 postgres:17
+
+# Run the service
+cd user-service && go run .
+```
+
 ## Dependencies
 
 - Go 1.26+

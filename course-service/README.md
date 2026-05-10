@@ -98,6 +98,31 @@ docker run -p 8082:8082 -e KUBECONFIG=/app/kubeconfig -v /path/to/kubeconfig:/ap
 
 Deploy as a standard Deployment. The service will use in-cluster config to watch Course CRDs.
 
+## Development Workflow (KinD)
+
+### Quick rebuild after code changes
+
+```sh
+# From project root — build, load, restart in one command
+make rebuild-course
+
+# Or manually:
+docker build -t localhost/elearning-course-service:latest course-service/
+kind load docker-image localhost/elearning-course-service:latest --name elearning
+kubectl rollout restart deploy/elearning-course-service
+
+# Check logs
+make logs
+```
+
+### Local testing (without Helm/KinD)
+
+```sh
+# Prerequisites: KinD cluster running + CRD installed
+cd course-service
+go run . -kubeconfig ~/.kube/config
+```
+
 ## Dependencies
 
 - **Kubernetes cluster** with `elearning.example.com/v1` Course CRD installed

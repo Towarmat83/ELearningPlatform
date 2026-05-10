@@ -1,0 +1,31 @@
+apiVersion: elearning.example.com/v1
+kind: Course
+metadata:
+  name: kubernetes-basics
+spec:
+  title: "Kubernetes Basics"
+  description: "Learn the fundamentals of Kubernetes: pods, deployments, services, and more. A hands-on course for beginners."
+  hidden: false
+  category: "kubernetes"
+  difficulty: "beginner"
+  modules:
+    - name: "What is Kubernetes"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/intro.md"
+    - name: "Pods and Containers"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/pods.md"
+    - name: "Deployments"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/deployments.md"
+    - name: "Services"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/services.md"

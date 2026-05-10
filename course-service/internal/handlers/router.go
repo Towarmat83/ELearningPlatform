@@ -41,8 +41,14 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
 
+		r.Get("/api/admin/courses", s.ListAdminCourses)
+
 		r.Get("/api/courses/{slug}/modules", s.ListModules)
 		r.Get("/api/courses/{slug}/modules/{index}", s.GetModule)
+
+		r.Get("/api/courses/{slug}/labs", s.ListLabs)
+		r.Get("/api/courses/{slug}/labs/{lab_id}", s.GetLab)
+		r.Get("/api/courses/{slug}/progress", s.GetCourseProgress)
 
 		r.Get("/api/courses/{slug}/lessons", s.ListLessons)
 		r.Get("/api/courses/{slug}/lessons/{lesson_slug}", s.GetLesson)

@@ -17,6 +17,15 @@
     return $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
   }
 
+  async function checkEnrollment(token: string): Promise<boolean> {
+    try {
+      const res: { courses: { slug: string }[] } = await coursesApi.myCourses(token) as any;
+      return res.courses?.some((c) => c.slug === courseId) ?? false;
+    } catch {
+      return false;
+    }
+  }
+
   onMount(async () => {
     auth.init();
     try {
@@ -29,17 +38,18 @@
 
     const token = getToken();
     if (token) {
-      try {
-        const [labsRes, progRes] = await Promise.all([
-          labsApi.list(courseId, token),
-          labsApi.progress(courseId, token),
-        ]);
-        labs = labsRes.labs;
-        progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
-        enrolled = true;
-      } catch (e: any) {
-        if (e.status !== 403) toasts.error('Failed to load labs: ' + e.message);
-        enrolled = false;
+      enrolled = await checkEnrollment(token);
+      if (enrolled) {
+        try {
+          const [labsRes, progRes] = await Promise.all([
+            labsApi.list(courseId, token),
+            labsApi.progress(courseId, token),
+          ]);
+          labs = labsRes.labs;
+          progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
+        } catch (e: any) {
+          if (e.status !== 403) toasts.error('Failed to load labs: ' + e.message);
+        }
       }
     }
     loading = false;

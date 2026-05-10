@@ -129,10 +129,10 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 			if m.HasGitContent() {
 				data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 				if err != nil {
-					s.Error(w, http.StatusInternalServerError, "Failed to fetch module content")
-					return
+					body = "⚠️ This content is not yet available. Please check back later.\n\n_Failed to load from remote repository._"
+				} else {
+					body = string(data)
 				}
-				body = string(data)
 			}
 			s.JSON(w, http.StatusOK, map[string]any{"lesson": lessonDetail{
 				Slug:    m.Slug(),

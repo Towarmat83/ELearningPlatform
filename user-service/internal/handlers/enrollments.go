@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/elearning/user-service/internal/metrics"
 )
@@ -14,7 +16,12 @@ func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		claims.Subject, slug)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		slog.Error("enroll failed", "user_id", claims.Subject, "course_slug", slug, "err", err)
+		if strings.Contains(err.Error(), "foreign key constraint") {
+			s.Error(w, http.StatusUnauthorized, "Session expired, please log in again")
+		} else {
+			s.Error(w, http.StatusInternalServerError, "Database error")
+		}
 		return
 	}
 	metrics.EnrollmentsTotal.Inc()

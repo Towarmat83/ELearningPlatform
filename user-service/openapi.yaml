@@ -500,6 +500,14 @@ paths:
                     type: integer
                   total_enrollments:
                     type: integer
+                  total_courses:
+                    type: integer
+                  total_labs:
+                    type: integer
+                  total_submissions:
+                    type: integer
+                  success_rate:
+                    type: string
 
   # ── Admin: Users ──────────────────────────────────────────────────────────────
   /api/admin/users:

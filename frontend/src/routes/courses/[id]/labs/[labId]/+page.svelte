@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { labsApi, type Lab, type LabProgress, type SubmissionResult } from '$lib/api';
+  import { api, labsApi, type Lab, type LabProgress, type SubmissionResult } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   const courseId = $page.params.id as string;
@@ -11,6 +11,10 @@
   let lab: Lab | null = null;
   let progress: LabProgress | null = null;
   let loading = true;
+
+  // Module/lesson content
+  let lessonContent: string | null = null;
+  let lessonTitle = '';
 
   // Form submission
   let submitting = false;
@@ -33,6 +37,18 @@
       const res = await labsApi.get(courseId, labId, token);
       lab = res.lab;
       progress = res.progress;
+      // If no interactive content, fetch and show lesson content instead
+      if (lab && lab.lab_type !== 'ctf' && !lab.content?.questions) {
+        try {
+          const lessonRes: any = await api.get(`/courses/${courseId}/lessons/${labId}`, token);
+          lessonContent = lessonRes.lesson?.content ?? null;
+          lessonTitle = lessonRes.lesson?.title ?? lab.title;
+        } catch {
+          // fallback: show lab without lesson content
+        }
+        loading = false;
+        return;
+      }
       // Initialize form answers
       if (lab.lab_type === 'form' && lab.content?.questions) {
         questions = lab.content.questions as any[];
@@ -142,7 +158,20 @@
 
     <!-- Content -->
     <div class="card mb-6">
-      {#if lab.lab_type === 'ctf'}
+      {#if lessonContent !== null}
+        <div class="prose max-w-none">
+          {#if lab?.lab_type === 'interactive' && lessonContent.startsWith('/uploads/')}
+            <div class="flex justify-center">
+              <video controls class="max-w-full rounded-lg">
+                <source src={lessonContent} type="video/mp4" />
+              </video>
+            </div>
+          {:else}
+            <div class="whitespace-pre-wrap text-gray-700">{lessonContent}</div>
+          {/if}
+        </div>
+
+      {:else if lab?.lab_type === 'ctf'}
         <div class="space-y-4">
           <p class="text-gray-700">Enter the flag to complete this challenge.</p>
 
@@ -183,7 +212,7 @@
           {/if}
         </div>
 
-      {:else if lab.lab_type === 'form'}
+      {:else if lab?.lab_type === 'form'}
         <div class="space-y-6">
           {#if result}
             <div class="p-4 rounded-lg {result.is_correct ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}">

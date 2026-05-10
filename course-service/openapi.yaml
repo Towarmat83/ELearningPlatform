@@ -162,6 +162,92 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/courses/{slug}/labs:
+    get:
+      summary: List course modules as labs
+      operationId: listLabs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of labs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Lab"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/labs/{lab_id}:
+    get:
+      summary: Get a single lab
+      operationId: getLab
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lab_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lab detail with progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lab:
+                    $ref: "#/components/schemas/Lab"
+                  progress:
+                    type: object
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/progress:
+    get:
+      summary: Get course progress
+      operationId: getCourseProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course progress stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseProgress"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/courses/{slug}/lessons:
     get:
       summary: List lessons for a course
@@ -262,6 +348,27 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/admin/courses:
+    get:
+      summary: List all courses including hidden (admin)
+      operationId: listAdminCourses
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of all courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Course"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /uploads/{filename}:
     get:
       summary: Serve an uploaded media file
@@ -297,6 +404,9 @@ components:
         slug:
           type: string
           example: kubernetes-basics
+        id:
+          type: string
+          example: kubernetes-basics
         title:
           type: string
           example: Kubernetes Basics
@@ -312,6 +422,10 @@ components:
         is_published:
           type: boolean
         module_count:
+          type: integer
+        lab_count:
+          type: integer
+        enrollment_count:
           type: integer
         source:
           type: string
@@ -341,6 +455,27 @@ components:
               type: string
               description: URL for video/image, markdown body for text
 
+    Lab:
+      type: object
+      properties:
+        id:
+          type: string
+        course_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        lab_type:
+          type: string
+          enum: [form, interactive]
+        points:
+          type: integer
+        order_index:
+          type: integer
+        is_published:
+          type: boolean
+
     LessonSummary:
       type: object
       properties:
@@ -366,6 +501,28 @@ components:
           type: string
         viewed:
           type: boolean
+
+    CourseProgress:
+      type: object
+      properties:
+        course_id:
+          type: string
+        user_id:
+          type: string
+        total_labs:
+          type: integer
+        completed_labs:
+          type: integer
+        total_points_possible:
+          type: integer
+        total_points_earned:
+          type: integer
+        completion_percentage:
+          type: integer
+        lab_progress:
+          type: array
+          items:
+            type: object
 
   responses:
     Unauthorized:

@@ -4,7 +4,7 @@ const COURSE_API = process.env.COURSE_API || 'http://elearning-course-service:80
 const USER_API = process.env.USER_API || 'http://elearning-user-service:8081';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname === '/api/admin/courses') {
+  if (event.url.pathname === '/api/admin/courses' || event.url.pathname === '/api/admin/cache/clear') {
     const targetUrl = `${COURSE_API}${event.url.pathname}${event.url.search}`;
 
     const headers = new Headers(event.request.headers);

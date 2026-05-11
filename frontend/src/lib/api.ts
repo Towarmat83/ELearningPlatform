@@ -364,6 +364,9 @@ export const modulesApi = {
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const adminApi = {
+  clearCache: (token: string) =>
+    api.post<{ status: string }>('/admin/cache/clear', {}, token),
+
   stats: (token: string) =>
     api.get<AdminStats>('/admin/stats', token),
 

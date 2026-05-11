@@ -5,6 +5,7 @@
 
   let stats: AdminStats | null = null;
   let loading = true;
+  let clearing = false;
 
   onMount(async () => {
     if (!$auth.token) { loading = false; return; }
@@ -16,6 +17,18 @@
       loading = false;
     }
   });
+
+  async function clearCache() {
+    clearing = true;
+    try {
+      await adminApi.clearCache($auth.token!);
+      toasts.success('Git cache cleared');
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to clear cache');
+    } finally {
+      clearing = false;
+    }
+  }
 </script>
 
 <svelte:head><title>Admin Dashboard — LearnLab</title></svelte:head>
@@ -56,6 +69,10 @@
           <a href="/admin/monitoring" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
             📈 View Monitoring →
           </a>
+          <button on:click={clearCache} disabled={clearing}
+            class="block w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm disabled:opacity-50">
+            {clearing ? '⏳ Clearing...' : '🗑️ Clear Git Cache'}
+          </button>
         </div>
       </div>
       <div class="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">

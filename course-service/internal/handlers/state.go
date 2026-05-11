@@ -25,7 +25,7 @@ type State struct {
 }
 
 func NewState(cfg *config.Config, store *content.Store) *State {
-	gc := content.NewGitCache("/tmp/elearning-git-cache", 10*time.Minute)
+	gc := content.NewGitCache("/tmp/elearning-git-cache", time.Duration(cfg.GitCacheTTL)*time.Minute)
 	content.SetGlobalGitCache(gc)
 
 	s := &State{
@@ -109,6 +109,14 @@ func derefStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// POST /api/admin/cache/clear — clears the git cache to force re-clone on next access.
+// Requires admin role.
+func (s *State) ClearCache(w http.ResponseWriter, r *http.Request) {
+	s.GitCache.Clear()
+	slog.Info("git cache cleared by admin")
+	s.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // GET /uploads/{filename}

@@ -42,6 +42,7 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 		r.Use(authMW)
 
 		r.Get("/api/admin/courses", s.ListAdminCourses)
+		r.Post("/api/admin/cache/clear", s.ClearCache)
 
 		r.Get("/api/courses/{slug}/modules", s.ListModules)
 		r.Get("/api/courses/{slug}/modules/{index}", s.GetModule)

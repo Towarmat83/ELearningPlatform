@@ -19,6 +19,7 @@ type Config struct {
 	UserServiceURL     string   `yaml:"user_service_url"`
 	GitToken           string   `yaml:"git_token"`
 	GitCredentialsPath string   `yaml:"git_credentials_path"`
+	GitCacheTTL        int      `yaml:"git_cache_ttl_minutes"`
 }
 
 func Load() *Config {
@@ -32,6 +33,7 @@ func Load() *Config {
 		K8sNamespace:       "default",
 		UserServiceURL:     "http://user-service:8081",
 		GitCredentialsPath: "/etc/course-service/git-credentials.yaml",
+		GitCacheTTL:        10,
 	}
 
 	if path := os.Getenv("CONFIG_PATH"); path != "" {
@@ -73,6 +75,11 @@ func Load() *Config {
 	}
 	if v := os.Getenv("GIT_CREDENTIALS_PATH"); v != "" {
 		c.GitCredentialsPath = v
+	}
+	if v := os.Getenv("GIT_CACHE_TTL"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			c.GitCacheTTL = n
+		}
 	}
 
 	return c

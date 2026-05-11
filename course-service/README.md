@@ -29,6 +29,7 @@ Stateless micro-service that serves course/module content for the e-learning pla
 | GET | `/api/courses/{slug}/lessons` | JWT | List lessons with viewed status |
 | GET | `/api/courses/{slug}/lessons/{lesson_slug}` | JWT | Get lesson content |
 | POST | `/api/courses/{slug}/lessons/{lesson_slug}/complete` | JWT | Mark lesson complete |
+| POST | `/api/admin/cache/clear` | JWT+Admin | Clear git cache (force re-clone on next access) |
 | GET | `/api/admin/courses` | JWT+Admin | List all courses including hidden |
 | GET | `/uploads/{filename}` | No | Serve uploaded media |
 
@@ -48,6 +49,7 @@ All config via environment variables:
 | `USER_SERVICE_URL` | `http://localhost:8081` | Base URL of User Service |
 | `GIT_TOKEN` | (empty) | Global token for private git repos (fallback) |
 | `GIT_CREDENTIALS_PATH` | `/etc/course-service/git-credentials.yaml` | Path to per-repo credential mappings |
+| `GIT_CACHE_TTL` | `10` | Git cache TTL in minutes (how long before re-cloning remote repos) |
 
 ## Git Credentials
 

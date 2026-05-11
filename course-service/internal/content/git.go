@@ -22,20 +22,22 @@ type cachedRepo struct {
 }
 
 type GitCache struct {
-	mu       sync.Mutex
-	cacheDir string
-	ttl      time.Duration
-	repos    map[string]*cachedRepo
-	cloning  map[string]chan struct{}
+	mu             sync.Mutex
+	cacheDir       string
+	ttl            time.Duration
+	failureBackoff time.Duration
+	repos          map[string]*cachedRepo
+	cloning        map[string]chan struct{}
 }
 
 func NewGitCache(cacheDir string, ttl time.Duration) *GitCache {
 	os.MkdirAll(cacheDir, 0755)
 	return &GitCache{
-		cacheDir: cacheDir,
-		ttl:      ttl,
-		repos:    make(map[string]*cachedRepo),
-		cloning:  make(map[string]chan struct{}),
+		cacheDir:       cacheDir,
+		ttl:            ttl,
+		failureBackoff: 30 * time.Second,
+		repos:          make(map[string]*cachedRepo),
+		cloning:        make(map[string]chan struct{}),
 	}
 }
 
@@ -114,7 +116,7 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 		os.RemoveAll(repoDir)
 
 		gc.mu.Lock()
-		gc.repos[key] = &cachedRepo{failedUntil: time.Now().Add(gc.ttl)}
+		gc.repos[key] = &cachedRepo{failedUntil: time.Now().Add(gc.failureBackoff)}
 		delete(gc.cloning, key)
 		gc.mu.Unlock()
 		close(done)

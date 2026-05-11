@@ -6,6 +6,7 @@ Stateless micro-service that serves course/module content for the e-learning pla
 
 - **Stateless** — no database. All course data comes from Kubernetes CRDs (`elearning.example.com/v1`, kind `Course`) via an in-cluster watcher.
 - **Source of truth** — courses are defined as Kubernetes custom resources. The service watches the K8s API and populates an in-memory store.
+- **Module types** — `text` (markdown from git), `video` / `image` (server-hosted URLs with optional replication), `quiz` (inline questions or git-fetched YAML). Quiz modules support cooldown tracking, locking, and scoring.
 - **User Service calls** — enrollment checks, lesson progress (viewed, complete) are delegated to the User Service via HTTP:
   - `GET /internal/enrollments/check` — enrollment check
   - `GET /internal/progress/viewed` — viewed lessons set
@@ -20,10 +21,15 @@ Stateless micro-service that serves course/module content for the e-learning pla
 | GET | `/api/courses` | No | List published courses |
 | GET | `/api/courses/{slug}` | No | Get single course |
 | GET | `/api/courses/{slug}/modules` | JWT | List modules with viewed status |
-| GET | `/api/courses/{slug}/modules/{index}` | JWT | Get module with content |
+| GET | `/api/courses/{slug}/modules/{index}` | JWT | Get module with content (inline quiz questions for quiz type) |
+| POST | `/api/courses/{slug}/modules/{index}/submit` | JWT | Submit quiz answers for a quiz-type module |
+| GET | `/api/courses/{slug}/labs` | JWT | List labs |
+| GET | `/api/courses/{slug}/labs/{lab_id}` | JWT | Get lab detail with progress |
+| GET | `/api/courses/{slug}/progress` | JWT | Get course progress |
 | GET | `/api/courses/{slug}/lessons` | JWT | List lessons with viewed status |
 | GET | `/api/courses/{slug}/lessons/{lesson_slug}` | JWT | Get lesson content |
 | POST | `/api/courses/{slug}/lessons/{lesson_slug}/complete` | JWT | Mark lesson complete |
+| GET | `/api/admin/courses` | JWT+Admin | List all courses including hidden |
 | GET | `/uploads/{filename}` | No | Serve uploaded media |
 
 ## Configuration
@@ -45,7 +51,7 @@ All config via environment variables:
 
 ## Git Credentials
 
-For `text` modules that reference a private git repo, the service needs a token to authenticate.
+For `text` and `quiz` modules that reference a private git repo (`src` + `ref` + `path`), the service needs a token to authenticate.
 
 ### Global token (all repos)
 
@@ -97,6 +103,63 @@ modules:
     src: "https://example.com/videos/k8s-arch.mp4"
     replication: true   # ← cached locally at /uploads/<hash>.mp4
 ```
+
+## Quiz Modules
+
+Modules with `type: "quiz"` support inline questions or git-fetched quiz YAML.
+
+### Inline questions
+
+```yaml
+modules:
+  - name: "K8s Basics Quiz"
+    type: "quiz"
+    passing_score: 80
+    max_attempts_per_question: 3
+    lock_on_max_attempts: true
+    cooldown:
+      strategy: "exponential"
+      base_seconds: 30
+      multiplier: 2.0
+      max_seconds: 600
+    questions:
+      - id: "q1"
+        type: "single"
+        points: 1
+        question: "What is a Pod?"
+        answers:
+          - id: "a"
+            text: "Smallest deployable unit"
+            correct: true
+```
+
+### Git-fetched quiz
+
+Use `src`, `ref`, and `path` to reference a YAML file in a git repo (same as `text` modules):
+
+```yaml
+  - name: "K8s Basics Quiz"
+    type: "quiz"
+    src: "https://github.com/user/repo"
+    ref: "main"
+    path: "quizzes/kubernetes-basics.yaml"
+```
+
+### Cooldown tracking
+
+When a user answers incorrectly, a cooldown is applied before they can retry that question. Strategies:
+
+| Strategy | Formula |
+|----------|---------|
+| `fixed` | `base_seconds` |
+| `linear` | `base_seconds * attempts` |
+| `exponential` (default) | `base_seconds * multiplier^(attempts-1)` capped at `max_seconds` |
+
+Cooldowns are in-memory only (lost on restart). If `max_attempts_per_question` + `lock_on_max_attempts` is set, the question locks permanently after exhausting attempts.
+
+### Scoring
+
+Supported question types: `single` (radio), `multiple` (checkbox with optional partial scoring), `boolean` (true/false), `order` (drag-to-rank). Results include per-question feedback, correct answers, and source references.
 
 ## How to Run
 

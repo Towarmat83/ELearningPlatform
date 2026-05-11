@@ -83,6 +83,7 @@ Tout ce qui est DB + auth + relations user↔course.
 - Résout le contenu des modules :
   - `type: video/image` → sert l'URL
   - `type: text` avec `src` git → clone et lit le fichier
+  - `type: quiz` → questions inline ou YAML depuis git, avec score et cooldown
 - Upload et serve de médias (vidéo, image)
 - Appels HTTP vers User Service pour enrollments et progress
 

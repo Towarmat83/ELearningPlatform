@@ -18,7 +18,7 @@ Micro-services platform for online courses with Kubernetes CRD-based course defi
 
 | Service | Role | Tech |
 |---------|------|------|
-| **Course Service** | Course content, media serving, K8s CRD watcher | Go + chi + client-go |
+| **Course Service** | Course content, media serving, K8s CRD watcher, quiz scoring & cooldown | Go + chi + client-go |
 | **User Service** | Auth, enrollments, progress, admin | Go + chi + pgx |
 | **Frontend** | SvelteKit SPA, server-side API proxy | SvelteKit |
 
@@ -46,9 +46,31 @@ spec:
     - name: "Architecture Overview"
       type: "video"
       src: "/uploads/architecture.mp4"
+    - name: "Kubernetes Basics Quiz"
+      type: "quiz"
+      passing_score: 80
+      max_attempts_per_question: 3
+      lock_on_max_attempts: true
+      cooldown:
+        strategy: "exponential"
+        base_seconds: 30
+        multiplier: 2.0
+        max_seconds: 600
+      questions:
+        - id: "q1"
+          type: "single"
+          points: 1
+          question: "What is a Pod?"
+          answers:
+            - id: "a"
+              text: "Smallest deployable unit"
+              correct: true
+            - id: "b"
+              text: "A physical node"
+              correct: false
 ```
 
-Module types: `text` (markdown from git), `video` (server-hosted URL), `image` (server-hosted URL).
+Module types: `text` (markdown from git), `video` / `image` (server-hosted URL), `quiz` (inline or git-fetched questions).
 
 ## Quick start
 
@@ -68,7 +90,7 @@ The Helm chart uses Bitnami PostgreSQL by default (`postgresql.enabled: true`), 
 ./
 ├── course-service/       # Go service (port 8082)
 │   ├── internal/
-│   │   ├── content/      # Store, K8s watcher, git fetch
+│   │   ├── content/      # Store, K8s watcher, git fetch, quiz types & scoring
 │   │   ├── handlers/     # HTTP routes
 │   │   ├── middleware/   # JWT auth
 │   │   ├── config/      # Env config

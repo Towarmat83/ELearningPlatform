@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -20,13 +21,18 @@ type State struct {
 	Content         *content.Store
 	GitCreds        *content.GitCredentialStore
 	CooldownTracker *content.CooldownTracker
+	GitCache        *content.GitCache
 }
 
 func NewState(cfg *config.Config, store *content.Store) *State {
+	gc := content.NewGitCache("/tmp/elearning-git-cache", 10*time.Minute)
+	content.SetGlobalGitCache(gc)
+
 	s := &State{
 		Config:          cfg,
 		Content:         store,
 		CooldownTracker: content.NewCooldownTracker(),
+		GitCache:        gc,
 	}
 	if cfg.GitCredentialsPath != "" {
 		if creds, err := content.LoadCredentials(cfg.GitCredentialsPath); err == nil {

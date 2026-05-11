@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -43,6 +45,36 @@ func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Unenrolled successfully"})
 }
 
+type courseServiceCourse struct {
+	Slug            string `json:"slug"`
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Description     string `json:"description"`
+	Category        string `json:"category"`
+	Difficulty      string `json:"difficulty"`
+	IsPublished     bool   `json:"is_published"`
+	LabCount        int    `json:"lab_count"`
+	EnrollmentCount int    `json:"enrollment_count"`
+	Source          string `json:"source,omitempty"`
+}
+
+func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
+	url := fmt.Sprintf("%s/api/courses/%s", s.Config.CourseServiceURL, slug)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("course-service returned %d", resp.StatusCode)
+	}
+	var c courseServiceCourse
+	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 // GET /api/my/courses
 func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
@@ -61,19 +93,68 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	type myCourse struct {
-		Slug          string  `json:"slug"`
-		ViewedLessons int64   `json:"viewed_lessons"`
-		LastActivity  *string `json:"last_activity"`
+	type enrollmentRow struct {
+		Slug          string
+		ViewedLessons int64
+		LastActivity  *string
 	}
 
-	courses := make([]myCourse, 0)
+	var rowsData []enrollmentRow
 	for rows.Next() {
-		var c myCourse
-		if err := rows.Scan(&c.Slug, &c.ViewedLessons, &c.LastActivity); err != nil {
+		var r enrollmentRow
+		if err := rows.Scan(&r.Slug, &r.ViewedLessons, &r.LastActivity); err != nil {
 			continue
 		}
-		courses = append(courses, c)
+		rowsData = append(rowsData, r)
+	}
+
+	type myCourse struct {
+		Slug            string  `json:"slug"`
+		ID              string  `json:"id"`
+		Title           string  `json:"title"`
+		Description     string  `json:"description"`
+		Category        string  `json:"category"`
+		Difficulty      string  `json:"difficulty"`
+		IsPublished     bool    `json:"is_published"`
+		LabCount        int     `json:"lab_count"`
+		EnrollmentCount int     `json:"enrollment_count"`
+		CompletedLabs   int64   `json:"completed_labs"`
+		TotalScore      int64   `json:"total_score"`
+		LastActivity    *string `json:"last_activity"`
+	}
+
+	courses := make([]myCourse, 0, len(rowsData))
+	for _, row := range rowsData {
+		details, err := s.fetchCourseDetails(row.Slug)
+		if err != nil {
+			slog.Warn("failed to fetch course details", "slug", row.Slug, "err", err)
+			courses = append(courses, myCourse{
+				Slug:          row.Slug,
+				ID:            row.Slug,
+				Title:         row.Slug,
+				CompletedLabs: row.ViewedLessons,
+				TotalScore:    0,
+				LastActivity:  row.LastActivity,
+			})
+			continue
+		}
+		courses = append(courses, myCourse{
+			Slug:            details.Slug,
+			ID:              details.ID,
+			Title:           details.Title,
+			Description:     details.Description,
+			Category:        details.Category,
+			Difficulty:      details.Difficulty,
+			IsPublished:     details.IsPublished,
+			LabCount:        details.LabCount,
+			EnrollmentCount: details.EnrollmentCount,
+			CompletedLabs:   row.ViewedLessons,
+			TotalScore:      0,
+			LastActivity:    row.LastActivity,
+		})
+	}
+	if courses == nil {
+		courses = make([]myCourse, 0)
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"courses": courses})
 }

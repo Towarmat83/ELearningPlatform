@@ -29,14 +29,18 @@ type Lesson struct {
 
 // Module is a course element as defined in the CRD spec.modules[].
 type Module struct {
-	Name        string     `json:"name"`
-	Type        string     `json:"type"` // video, text, image, quiz
-	Src         string     `json:"src,omitempty"`
-	Ref         string     `json:"ref,omitempty"`
-	Path        string     `json:"path,omitempty"`
-	Replication bool       `json:"replication,omitempty"`
-	Hidden      bool       `json:"hidden,omitempty"`
-	Questions   []Question `json:"questions,omitempty"`
+	Name                   string       `json:"name"`
+	Type                   string       `json:"type"` // video, text, image, quiz
+	Src                    string       `json:"src,omitempty"`
+	Ref                    string       `json:"ref,omitempty"`
+	Path                   string       `json:"path,omitempty"`
+	Replication            bool         `json:"replication,omitempty"`
+	Hidden                 bool         `json:"hidden,omitempty"`
+	Questions              []Question   `json:"questions,omitempty"`
+	PassingScore           int          `json:"passing_score,omitempty"`
+	Cooldown               CooldownSpec `json:"cooldown,omitempty"`
+	MaxAttemptsPerQuestion *int         `json:"max_attempts_per_question,omitempty"`
+	LockOnMaxAttempts      bool         `json:"lock_on_max_attempts,omitempty"`
 }
 
 // Slug returns a DNS-compliant slug derived from the module name.
@@ -104,14 +108,18 @@ type CourseSpec struct {
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
 type ModuleYAML struct {
-	Name      string         `yaml:"name"`
-	Type      string         `yaml:"type"`
-	Src       string         `yaml:"src,omitempty"`
-	Ref       string         `yaml:"ref,omitempty"`
-	Path      string         `yaml:"path,omitempty"`
-	Replication bool         `yaml:"replication,omitempty"`
-	Hidden    bool           `yaml:"hidden,omitempty"`
-	Questions []QuestionYAML `yaml:"questions,omitempty"`
+	Name                   string           `yaml:"name"`
+	Type                   string           `yaml:"type"`
+	Src                    string           `yaml:"src,omitempty"`
+	Ref                    string           `yaml:"ref,omitempty"`
+	Path                   string           `yaml:"path,omitempty"`
+	Replication            bool             `yaml:"replication,omitempty"`
+	Hidden                 bool             `yaml:"hidden,omitempty"`
+	Questions              []QuestionYAML   `yaml:"questions,omitempty"`
+	PassingScore           int              `yaml:"passing_score"`
+	Cooldown               CooldownSpecYAML `yaml:"cooldown"`
+	MaxAttemptsPerQuestion *int             `yaml:"max_attempts_per_question"`
+	LockOnMaxAttempts      bool             `yaml:"lock_on_max_attempts"`
 }
 
 // lessonFrontmatter is the YAML front matter in NN-slug.md files.

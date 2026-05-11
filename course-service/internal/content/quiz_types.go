@@ -145,7 +145,7 @@ type Question struct {
 type Answer struct {
 	ID      string `json:"id"`
 	Text    string `json:"text"`
-	Correct bool   `json:"correct"`
+	Correct bool   `json:"correct,omitempty"`
 }
 
 type OrderItem struct {

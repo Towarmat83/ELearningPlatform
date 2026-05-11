@@ -9,23 +9,68 @@ import (
 	"github.com/elearning/course-service/internal/content"
 )
 
+type publicAnswer struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+type publicQuestion struct {
+	ID             string                  `json:"id"`
+	Type           string                  `json:"type"`
+	Difficulty     string                  `json:"difficulty,omitempty"`
+	Points         int                     `json:"points"`
+	Question       string                  `json:"question"`
+	Answers        []publicAnswer          `json:"answers,omitempty"`
+	Items          []content.OrderItem     `json:"items,omitempty"`
+	PartialScoring *content.PartialScoring `json:"partial_scoring,omitempty"`
+}
+
+func sanitizeQuestions(qq []content.Question, admin bool) []any {
+	if admin {
+		out := make([]any, len(qq))
+		for i := range qq {
+			out[i] = qq[i]
+		}
+		return out
+	}
+	out := make([]any, len(qq))
+	for i, q := range qq {
+		pq := publicQuestion{
+			ID:             q.ID,
+			Type:           q.Type,
+			Difficulty:     q.Difficulty,
+			Points:         q.Points,
+			Question:       q.Question,
+			Items:          q.Items,
+			PartialScoring: q.PartialScoring,
+		}
+		for _, a := range q.Answers {
+			pq.Answers = append(pq.Answers, publicAnswer{ID: a.ID, Text: a.Text})
+		}
+		out[i] = pq
+	}
+	return out
+}
+
 type moduleResponse struct {
-	Index      int                   `json:"index"`
-	Name       string                `json:"name"`
-	Slug       string                `json:"slug"`
-	Type       string                `json:"type"`
-	Content    string                `json:"content,omitempty"`
-	Viewed     bool                  `json:"viewed"`
-	Hidden     bool                  `json:"hidden"`
-	Questions  []content.Question    `json:"questions,omitempty"`
-	QuizConfig *quizConfig           `json:"quiz_config,omitempty"`
+	Index         int                      `json:"index"`
+	Name          string                   `json:"name"`
+	Slug          string                   `json:"slug"`
+	Type          string                   `json:"type"`
+	Content       string                   `json:"content,omitempty"`
+	Viewed        bool                     `json:"viewed"`
+	Hidden        bool                     `json:"hidden"`
+	QuestionCount int                      `json:"question_count,omitempty"`
+	Questions     []any                    `json:"questions,omitempty"`
+	QuizConfig    *quizConfig              `json:"quiz_config,omitempty"`
+	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
 }
 
 type quizConfig struct {
-	PassingScore           int       `json:"passing_score"`
-	Cooldown               cooldown  `json:"cooldown,omitempty"`
-	MaxAttemptsPerQuestion *int      `json:"max_attempts_per_question,omitempty"`
-	LockOnMaxAttempts      bool      `json:"lock_on_max_attempts"`
+	PassingScore           int      `json:"passing_score"`
+	Cooldown               cooldown `json:"cooldown,omitempty"`
+	MaxAttemptsPerQuestion *int     `json:"max_attempts_per_question,omitempty"`
+	LockOnMaxAttempts      bool     `json:"lock_on_max_attempts"`
 }
 
 type cooldown struct {
@@ -108,14 +153,22 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
 	out := make([]moduleResponse, 0, len(modules))
 	for i, m := range modules {
-		out = append(out, moduleResponse{
+		resp := moduleResponse{
 			Index:  i,
 			Name:   m.Name,
 			Slug:   m.Slug(),
 			Type:   m.Type,
 			Viewed: viewed[m.Slug()],
 			Hidden: m.Hidden,
-		})
+		}
+		if m.Type == "quiz" {
+			if m.HasQuestions() {
+				resp.QuestionCount = len(m.Questions)
+			} else if m.HasGitContent() {
+				resp.QuestionCount = 0 // unknown until fetched
+			}
+		}
+		out = append(out, resp)
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"modules": out})
 }
@@ -152,6 +205,9 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 		Type:   m.Type,
 		Hidden: m.Hidden,
 	}
+	if m.Type == "quiz" && m.HasQuestions() {
+		resp.QuestionCount = len(m.Questions)
+	}
 
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
 	resp.Viewed = viewed[m.Slug()]
@@ -171,13 +227,16 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 			resp.Content = m.Content()
 		}
 	case "quiz":
+		var quizQuestions []content.Question
 		if m.HasGitContent() {
 			quiz, err := content.FetchQuizContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 			if err != nil {
 				s.Error(w, http.StatusInternalServerError, "Failed to fetch quiz content")
 				return
 			}
-			resp.Questions = quiz.Questions
+			quizQuestions = quiz.Questions
+			isAdmin := claims != nil && claims.Role == "admin"
+			resp.Questions = sanitizeQuestions(quiz.Questions, isAdmin)
 			resp.QuizConfig = &quizConfig{
 				PassingScore:           quiz.PassingScore,
 				Cooldown:               cooldown(quiz.Cooldown),
@@ -185,9 +244,35 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 				LockOnMaxAttempts:      quiz.LockOnMaxAttempts,
 			}
 		} else if m.HasQuestions() {
-			resp.Questions = m.Questions
+			quizQuestions = m.Questions
+			isAdmin := claims != nil && claims.Role == "admin"
+			resp.Questions = sanitizeQuestions(m.Questions, isAdmin)
+			resp.QuizConfig = &quizConfig{
+				PassingScore:           m.PassingScore,
+				Cooldown:               cooldown(m.Cooldown),
+				MaxAttemptsPerQuestion: m.MaxAttemptsPerQuestion,
+				LockOnMaxAttempts:      m.LockOnMaxAttempts,
+			}
 		}
 		resp.Content = ""
+
+		// Include current cooldown state so frontend persists it across refreshes
+		if len(quizQuestions) > 0 && claims != nil {
+			cooldowns := make(map[string]cooldownState)
+			for _, qq := range quizQuestions {
+				remaining, attempts := s.CooldownTracker.CheckModule(claims.Subject, courseSlug, idx, qq.ID)
+				if remaining > 0 || attempts > 0 {
+					cooldowns[qq.ID] = cooldownState{
+						RemainingSeconds: int(remaining.Seconds()),
+						Attempts:         attempts,
+						Locked:           false, // GetModule doesn't know if locked; submit will enforce
+					}
+				}
+			}
+			if len(cooldowns) > 0 {
+				resp.Cooldowns = cooldowns
+			}
+		}
 	}
 
 	s.JSON(w, http.StatusOK, resp)
@@ -243,7 +328,8 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		cooldownSpec = content.CooldownSpec(quiz.Cooldown)
 	} else if m.HasQuestions() {
 		questions = m.Questions
-		cooldownSpec = content.CooldownSpec{Strategy: "fixed", BaseSeconds: 30}
+		passingScore = m.PassingScore
+		cooldownSpec = m.Cooldown
 	} else {
 		s.Error(w, http.StatusNotFound, "No questions found for this quiz")
 		return
@@ -286,7 +372,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	respCooldowns := make(map[string]cooldownState)
 	for _, qr := range result.QuestionResults {
 		if !qr.IsCorrect {
-			remaining, locked := s.CooldownTracker.RecordModule(userID, courseSlug, idx, qr.QuestionID, cooldownSpec, nil, false)
+			remaining, locked := s.CooldownTracker.RecordModule(userID, courseSlug, idx, qr.QuestionID, cooldownSpec, m.MaxAttemptsPerQuestion, m.LockOnMaxAttempts)
 			_, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, qr.QuestionID)
 			respCooldowns[qr.QuestionID] = cooldownState{
 				RemainingSeconds: int(remaining.Seconds()),

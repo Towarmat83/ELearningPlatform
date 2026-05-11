@@ -7,7 +7,7 @@
   import Markdown from '$lib/Markdown.svelte';
 
   const courseId = $page.params.id as string;
-  const moduleIndex = parseInt($page.params.quizId, 10);
+  const moduleIndex = parseInt($page.params.quizId ?? '', 10);
 
   let quiz: ModuleDetail | null = null;
   let loading = true;
@@ -69,6 +69,7 @@
       const res = await modulesApi.get(courseId, moduleIndex, token);
       quiz = res;
       initAnswers(quiz);
+      if (res.cooldowns) startCooldownTimer(res.cooldowns);
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load quiz');
     } finally {

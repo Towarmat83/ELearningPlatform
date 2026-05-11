@@ -36,7 +36,7 @@ ENV PORT=8081 \
     GITHUB_CLIENT_ID="" \
     GITHUB_CLIENT_SECRET="" \
     OAUTH_REDIRECT_BASE="http://localhost:3000" \
-    COURSE_SERVICE_URL="http://course-service:8082"
+    COURSE_SERVICE_URL="http://elearning-course-service:8082"
 
 EXPOSE 8081
 

@@ -165,15 +165,29 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 			if !ok {
 				continue
 			}
-mod := Module{
-			Name:        getStr(m, "name"),
-			Type:        getStr(m, "type"),
-			Src:         getStr(m, "src"),
-			Ref:         getStr(m, "ref"),
-			Path:        getStr(m, "path"),
-			Replication: getBool(m, "replication"),
-			Hidden:      getBool(m, "hidden"),
-		}
+			mod := Module{
+				Name:         getStr(m, "name"),
+				Type:         getStr(m, "type"),
+				Src:          getStr(m, "src"),
+				Ref:          getStr(m, "ref"),
+				Path:         getStr(m, "path"),
+				Replication:  getBool(m, "replication"),
+				Hidden:       getBool(m, "hidden"),
+				PassingScore: getInt(m, "passing_score"),
+				MaxAttemptsPerQuestion: func() *int {
+					if v, ok := m["max_attempts_per_question"]; ok {
+						switch n := v.(type) {
+						case int:
+							return &n
+						case float64:
+							i := int(n)
+							return &i
+						}
+					}
+					return nil
+				}(),
+				LockOnMaxAttempts: getBool(m, "lock_on_max_attempts"),
+			}
 			if mod.Name == "" {
 				mod.Name = fmt.Sprintf("module-%d", i+1)
 			}
@@ -181,8 +195,33 @@ mod := Module{
 				mod.Type = "text"
 			}
 
-			// Parse inline questions for quiz-type modules
+			// Parse inline quiz config for quiz-type modules
 			if mod.Type == "quiz" {
+				if rawCD, ok := m["cooldown"].(map[string]interface{}); ok {
+					mod.Cooldown = CooldownSpec{
+						Strategy:    getStr(rawCD, "strategy"),
+						BaseSeconds: getInt(rawCD, "base_seconds"),
+						Multiplier: func() float64 {
+							if v, ok := rawCD["multiplier"]; ok {
+								switch n := v.(type) {
+								case float64:
+									return n
+								case int:
+									return float64(n)
+								}
+							}
+							return 1.0
+						}(),
+						MaxSeconds: getInt(rawCD, "max_seconds"),
+					}
+					if mod.Cooldown.Strategy == "" {
+						mod.Cooldown.Strategy = "exponential"
+					}
+					if mod.Cooldown.BaseSeconds == 0 {
+						mod.Cooldown.BaseSeconds = 30
+					}
+				}
+				// Parse inline questions for quiz-type modules
 				if rawQuestions, ok := m["questions"].([]interface{}); ok {
 					for _, rq := range rawQuestions {
 						q, ok := rq.(map[string]interface{})
@@ -190,8 +229,8 @@ mod := Module{
 							continue
 						}
 						question := Question{
-							ID:        getStr(q, "id"),
-							Type:      getStr(q, "type"),
+							ID:         getStr(q, "id"),
+							Type:       getStr(q, "type"),
 							Difficulty: getStr(q, "difficulty"),
 							Points:     getInt(q, "points"),
 							Question:   getStr(q, "question"),

@@ -349,6 +349,7 @@ export interface ModuleDetail {
   hidden: boolean;
   questions?: QuizQuestion[];
   quiz_config?: ModuleQuizConfig;
+  cooldowns?: Record<string, QuizCooldown>;
 }
 
 export const modulesApi = {

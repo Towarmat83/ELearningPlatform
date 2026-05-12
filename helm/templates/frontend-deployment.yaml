@@ -33,6 +33,16 @@ spec:
               value: {{ include "elearning.publicUrl" . | quote }}
             - name: INTERNAL_API_URL
               value: "http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}"
+            - name: COURSE_API
+              value: "http://{{ include "elearning.fullname" . }}-course-service:{{ .Values.courseService.service.port }}"
+            - name: USER_API
+              value: "http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}"
+            - name: FRONTEND_CONFIG
+              value: /etc/frontend/config.env
+          volumeMounts:
+            - name: config
+              mountPath: /etc/frontend
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /
@@ -51,3 +61,7 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "elearning.fullname" . }}-frontend-config

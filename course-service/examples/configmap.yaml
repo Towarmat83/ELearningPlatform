@@ -1,6 +1,6 @@
 ---
 # ConfigMap for course-service
-# Mount as file: /etc/course-service/config.yaml
+# Mount as file: /etc/course-service/config.yaml (+ envFrom for env-style keys)
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -18,5 +18,6 @@ data:
     uploads_dir: "/data/uploads"
     k8s_namespace: "default"
     user_service_url: "http://user-service:8081"
-    new_feature_enabled: true
-    module_content_cache_ttl: 300
+    git_cache_ttl_minutes: 10
+    git_credentials_path: "/etc/git-credentials/git-credentials.yaml"
+    git_token: ""

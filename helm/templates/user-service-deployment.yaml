@@ -34,6 +34,8 @@ spec:
             secretKeyRef:
               name: {{ include "elearning.fullname" . }}-secrets
               key: JWT_SECRET
+        - name: CORS_ORIGINS
+          value: {{ .Values.userService.env.CORS_ORIGINS | default (include "elearning.publicUrl" .) | quote }}
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:

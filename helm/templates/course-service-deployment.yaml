@@ -42,6 +42,8 @@ spec:
           value: {{ .Values.courseService.service.port | quote }}
         - name: USER_SERVICE_URL
           value: http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}
+        - name: CORS_ORIGINS
+          value: {{ .Values.courseService.env.CORS_ORIGINS | default (include "elearning.publicUrl" .) | quote }}
         volumeMounts:
         - name: config
           mountPath: /etc/course-service
@@ -66,7 +68,7 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: {{ include "elearning.fullname" . }}-course-service-config-file
+          name: {{ include "elearning.fullname" . }}-course-service-config
       - name: git-credentials
         secret:
           secretName: course-repo-secret

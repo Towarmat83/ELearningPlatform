@@ -230,3 +230,12 @@ If it says "connection refused" to PostgreSQL, the database isn't ready yet.
 kubectl delete secret course-repo-secret
 kubectl create secret generic course-repo-secret --from-file=git-credentials.yaml=./git-credentials.yaml
 ```
+
+**ConfigMaps**: after modifying a ConfigMap, restart the pod to pick up the changes:
+```bash
+kubectl rollout restart deploy/elearning-course-service
+kubectl rollout restart deploy/elearning-user-service
+kubectl rollout restart deploy/elearning-frontend
+```
+
+The Go services read the mounted YAML at startup. The frontend entrypoint sources the `.env` file on each container start. All three also respect env var overrides — see `docs/ARCHITECTURE.md` (section "Configuration des services").

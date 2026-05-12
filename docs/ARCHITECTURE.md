@@ -91,6 +91,59 @@ Tout ce qui est DB + auth + relations user↔course.
 
 Clé secrète partagée entre les deux services. Seul User Service produit les tokens, Course Service les valide.
 
+## Configuration des services
+
+Chaque service charge sa configuration depuis une **ConfigMap montée en fichier** dans le conteneur. Les variables d'environnement explicites dans le déploiement coexistent et **surchargent** les valeurs du fichier.
+
+### Mécanisme de chargement
+
+1. Le service Go lit son fichier YAML (`config.yaml`) monté via `CONFIG_PATH`
+2. Les variables d'environnement définies dans le déploiement écrasent les valeurs YAML
+3. Les secrets sensibles (JWT, DB) restent dans des K8s Secrets
+
+| Service | Fichier ConfigMap monté | Env vars en override |
+|---|---|---|
+| **course-service** | `/etc/course-service/config.yaml` | PORT, CORS_ORIGINS, USER_SERVICE_URL, JWT_SECRET (Secret) |
+| **user-service** | `/etc/user-service/config.yaml` | CORS_ORIGINS, JWT_SECRET (Secret), DATABASE_URL (Secret) |
+| **frontend** | `/etc/frontend/config.env` (format `KEY=VALUE`) | PORT, NODE_ENV, ORIGIN, PUBLIC_API_URL, INTERNAL_API_URL, COURSE_API, USER_API |
+
+Le frontend utilise un script d'entrée (`docker-entrypoint.sh`) qui source le fichier `.env` du ConfigMap avant de lancer Node.js.
+
+### Personnalisation
+
+```bash
+# Surcharger une valeur via Helm
+helm upgrade elearning helm/ --set courseService.env.GIT_CACHE_TTL=30
+
+# Ou modifier les valeurs.yaml puis helm upgrade
+```
+
+## Secret git — course-repo-secret
+
+Pour les modules de cours qui référencent un **dépôt git privé**, le course-service a besoin d'un token d'accès. Ce token est fourni via un Secret K8s monté dans le pod :
+
+```
+course-repo-secret (type: Opaque)
+  └── git-credentials.yaml
+        └── credentials:
+              - url: "github.com/org/*"        # glob pattern
+                token: "github_pat_xxx..."
+```
+
+Le fichier suit le format YAML avec une liste d'entrées **url → token**. La première entrée qui correspond (via `path.Match`) est utilisée.
+
+**Création :**
+```bash
+kubectl create secret generic course-repo-secret \
+  --from-file=git-credentials.yaml=./git-credentials.yaml
+```
+
+**Chemin de montage dans le pod :** `/etc/git-credentials/git-credentials.yaml`
+
+La variable d'environnement `GIT_CREDENTIALS_PATH` (ConfigMap ou valeur par défaut) indique l'emplacement. Si le secret n'existe pas, le pod démarre mais le clone de repos privés échouera avec une erreur 403.
+
+Voir `course-service/examples/course-secret.yaml` pour un exemple complet.
+
 ## CRD
 
 ```yaml

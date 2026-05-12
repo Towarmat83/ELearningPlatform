@@ -108,6 +108,29 @@ The Helm chart uses Bitnami PostgreSQL by default (`postgresql.enabled: true`), 
 └── courses/             # Course CRD manifests (examples)
 ```
 
+## Configuration
+
+Chaque service est configuré via une **ConfigMap montée en fichier** dans le conteneur. Les variables d'environnement coexistent et surchargent les valeurs du fichier.
+
+| Service | Fichier monté |
+|---|---|
+| **course-service** | `/etc/course-service/config.yaml` |
+| **user-service** | `/etc/user-service/config.yaml` |
+| **frontend** | `/etc/frontend/config.env` (sourcé par l'entrypoint) |
+
+Voir `docs/ARCHITECTURE.md` (section "Configuration des services") pour les détails.
+
+## Git credentials — course-repo-secret
+
+Les cours avec modules git privés nécessitent un secret K8s :
+
+```bash
+kubectl create secret generic course-repo-secret \
+  --from-file=git-credentials.yaml=./git-credentials.yaml
+```
+
+Voir `course-service/examples/course-secret.yaml` pour le format.
+
 ## Internal API
 
 | Course Service → User Service | Description |

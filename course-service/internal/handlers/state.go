@@ -17,10 +17,11 @@ import (
 )
 
 type State struct {
-	Config   *config.Config
-	Content  *content.Store
-	GitCreds *content.GitCredentialStore
-	GitCache *content.GitCache
+	Config          *config.Config
+	Content         *content.Store
+	GitCreds        *content.GitCredentialStore
+	CooldownTracker *content.CooldownTracker
+	GitCache        *content.GitCache
 }
 
 func NewState(cfg *config.Config, store *content.Store) *State {
@@ -28,9 +29,10 @@ func NewState(cfg *config.Config, store *content.Store) *State {
 	content.SetGlobalGitCache(gc)
 
 	s := &State{
-		Config:   cfg,
-		Content:  store,
-		GitCache: gc,
+		Config:          cfg,
+		Content:         store,
+		CooldownTracker: content.NewCooldownTracker(),
+		GitCache:        gc,
 	}
 	if cfg.GitCredentialsPath != "" {
 		if creds, err := content.LoadCredentials(cfg.GitCredentialsPath); err == nil {

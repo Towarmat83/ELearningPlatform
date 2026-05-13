@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { modulesApi, type ModuleDetail, type QuizQuestion, type QuizSubmitResponse } from '$lib/api';
+  import { modulesApi, type ModuleDetail, type QuizQuestion, type QuizSubmitResponse, type QuizCooldown } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
   import Markdown from '$lib/Markdown.svelte';
 
@@ -16,6 +16,9 @@
   let submitted = false;
   let submitting = false;
   let result: QuizSubmitResponse | null = null;
+
+  let cooldowns: Record<string, { remaining: number; attempts: number; locked: boolean }> = {};
+  let cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
   let dragSource: { qId: string; idx: number } | null = null;
   let dropTarget: { qId: string; idx: number } | null = null;
@@ -66,6 +69,7 @@
       const res = await modulesApi.get(courseId, moduleIndex, token);
       quiz = res;
       initAnswers(quiz);
+      if (res.cooldowns) startCooldownTimer(res.cooldowns);
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load quiz');
     } finally {
@@ -73,8 +77,43 @@
     }
   });
 
+  onDestroy(() => {
+    if (cooldownTimer) clearInterval(cooldownTimer);
+  });
+
+  function startCooldownTimer(cds: Record<string, QuizCooldown>) {
+    const next: Record<string, any> = {};
+    for (const [key, cd] of Object.entries(cds)) {
+      next[key] = { remaining: cd.remaining_seconds, attempts: cd.attempts, locked: cd.locked };
+    }
+    cooldowns = next;
+    if (cooldownTimer) clearInterval(cooldownTimer);
+    cooldownTimer = setInterval(() => {
+      let anyActive = false;
+      for (const key of Object.keys(cooldowns)) {
+        if (cooldowns[key].remaining > 0) {
+          cooldowns[key].remaining -= 1;
+          anyActive = true;
+        }
+      }
+      cooldowns = { ...cooldowns };
+      if (!anyActive && cooldownTimer) {
+        clearInterval(cooldownTimer);
+        cooldownTimer = null;
+      }
+    }, 1000);
+  }
+
+  function questionCooldown(qId: string): { remaining: number; attempts: number; locked: boolean } | null {
+    return cooldowns[qId] ?? null;
+  }
+
   function canRetry(): boolean {
-    return !!result && !result.passed;
+    if (!result || result.passed) return false;
+    for (const cd of Object.values(cooldowns)) {
+      if (cd.remaining > 0) return false;
+    }
+    return true;
   }
 
   async function submit() {
@@ -93,8 +132,13 @@
       const res = await modulesApi.submit(courseId, moduleIndex, payload, token);
       result = res;
       submitted = true;
+      if (res.cooldowns) startCooldownTimer(res.cooldowns);
     } catch (e: any) {
-      toasts.error(e.message || 'Submission failed');
+      if (e.status === 425 && e.body?.cooldowns) {
+        startCooldownTimer(e.body.cooldowns as Record<string, QuizCooldown>);
+      } else {
+        toasts.error(e.message || 'Submission failed');
+      }
     } finally {
       submitting = false;
     }
@@ -230,7 +274,7 @@
           <div class="flex gap-4 mt-2 text-sm text-gray-400">
             <span>{quiz.questions?.length ?? 0} questions</span>
             {#if quiz.quiz_config}
-              <span>Score requis : {quiz.quiz_config.passing_score}%</span>
+              <span>Pass score: {quiz.quiz_config.passing_score}%</span>
             {/if}
           </div>
         </div>
@@ -245,17 +289,17 @@
           </p>
           <p class="text-sm text-gray-500 mt-1">
             {#if result.passed}
-              ✓ Quiz réussi !
+              ✓ Quiz passed!
             {:else if quiz.quiz_config}
-              Score insuffisant ({Math.round(result.total_score / result.max_score * 100)}% &lt; {quiz.quiz_config.passing_score}%)
+              Score too low ({Math.round(result.total_score / result.max_score * 100)}% &lt; {quiz.quiz_config.passing_score}%)
             {:else}
-              Score insuffisant
+              Score too low
             {/if}
           </p>
           {#if result.passed}
             <a href="/courses/{courseId}" class="btn-primary text-sm mt-3 inline-block">← Back to course</a>
           {:else if canRetry()}
-            <button on:click={retry} class="btn-primary text-sm mt-3">Réessayer</button>
+            <button on:click={retry} class="btn-primary text-sm mt-3">Retry</button>
           {/if}
         </div>
       </div>
@@ -263,7 +307,8 @@
 
     <div class="space-y-6">
       {#each quiz.questions ?? [] as qq, i}
-        <div class="card p-6" id="q-{qq.id}">
+        {@const cd = questionCooldown(qq.id)}
+        <div class="card p-6 {cd && cd.remaining > 0 ? 'opacity-50' : ''}" id="q-{qq.id}">
           <div class="flex items-start gap-3 mb-4">
             <span class="text-lg font-mono shrink-0">{questionTypeIcon(qq)}</span>
             <div class="flex-1">
@@ -277,7 +322,7 @@
                   {#each qq.source_refs as ref}
                     <a href="/courses/{ref.course}/lessons/{ref.module}"
                       class="ml-auto text-xs text-primary-500 hover:text-primary-700 underline underline-offset-2 shrink-0">
-                      📖 Voir le module {ref.module}{#if ref.anchor} › {ref.anchor}{/if}
+                      📖 View module {ref.module}{#if ref.anchor} › {ref.anchor}{/if}
                     </a>
                   {/each}
                 {/if}
@@ -287,6 +332,16 @@
               </div>
             </div>
           </div>
+
+          {#if cd && cd.remaining > 0 && !(submitted && result?.question_results.find(r => r.question_id === qq.id)?.is_correct)}
+            <div class="mb-3 p-3 rounded bg-orange-50 border border-orange-200 text-sm text-orange-700">
+              {#if cd.locked}
+                🔒 Question locked
+              {:else}
+                ⏳ Retry in {cd.remaining}s
+              {/if}
+            </div>
+          {/if}
 
           {#if submitted && result}
             {@const qr = result.question_results.find(r => r.question_id === qq.id)}
@@ -312,7 +367,7 @@
                     on:click={() => setAnswer(qq.id, ans.id)}
                     class="w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-colors
                       {answers[qq.id] === ans.id ? 'border-primary-400 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
-                    disabled={submitted && !canRetry()}>
+                    disabled={submitted && !canRetry() || (cd?.remaining ?? 0) > 0}>
                     <span class="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center
                       {answers[qq.id] === ans.id ? 'border-primary-500 bg-primary-500' : 'border-gray-300'}">
                       {#if answers[qq.id] === ans.id}
@@ -323,7 +378,6 @@
                   </button>
                 {/each}
               </div>
-
             {:else if qq.type === 'multiple'}
               <div class="space-y-2">
                 {#each qq.answers ?? [] as ans}
@@ -332,7 +386,7 @@
                     on:click={() => toggleMultiple(qq.id, ans.id)}
                     class="w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-colors
                       {checked ? 'border-primary-400 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
-                    disabled={submitted && !canRetry()}>
+                    disabled={submitted && !canRetry() || (cd?.remaining ?? 0) > 0}>
                     <span class="w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center
                       {checked ? 'border-primary-500 bg-primary-500' : 'border-gray-300'}">
                       {#if checked}
@@ -346,12 +400,12 @@
 
             {:else if qq.type === 'boolean'}
               <div class="flex gap-3">
-                {#each [{ value: true, label: 'Vrai' }, { value: false, label: 'Faux' }] as opt}
+                {#each [{ value: true, label: 'True' }, { value: false, label: 'False' }] as opt}
                   <button
                     on:click={() => setAnswer(qq.id, opt.value)}
                     class="flex-1 p-3 rounded-lg border text-center text-sm font-medium transition-colors
                       {answers[qq.id] === opt.value ? 'bg-primary-50 border-primary-400 text-primary-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}"
-                    disabled={submitted && !canRetry()}>
+                    disabled={submitted && !canRetry() || (cd?.remaining ?? 0) > 0}>
                     {opt.label}
                   </button>
                 {/each}
@@ -380,7 +434,7 @@
                         : dragSource?.qId === qq.id && dragSource?.idx === idx
                         ? 'border-gray-200 bg-gray-50 opacity-30'
                         : 'border-gray-200 bg-white hover:border-primary-300'}"
-                    draggable={!(submitted && !canRetry())}
+                    draggable={!((submitted && !canRetry()) || (cd?.remaining ?? 0) > 0)}
                     on:dragstart={(e) => onDragStart(qq.id, idx, e)}
                     on:dragover={(e) => onDragOver(qq.id, idx, e)}
                     on:drop={(e) => onDrop(qq.id, idx, e)}
@@ -391,10 +445,10 @@
                     <div class="flex gap-1 shrink-0">
                       <button on:click={() => moveUp(qq.id, idx)} type="button"
                         class="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 text-sm"
-                        disabled={idx === 0 || (submitted && !canRetry())}>▲</button>
+                        disabled={idx === 0 || (submitted && !canRetry()) || (cd?.remaining ?? 0) > 0}>▲</button>
                       <button on:click={() => moveDown(qq.id, idx)} type="button"
                         class="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 text-sm"
-                        disabled={idx === answers[qq.id].length - 1 || (submitted && !canRetry())}>▼</button>
+                        disabled={idx === answers[qq.id].length - 1 || (submitted && !canRetry()) || (cd?.remaining ?? 0) > 0}>▼</button>
                     </div>
                   </div>
                   {#if idx === answers[qq.id].length - 1 && dropTarget?.qId === qq.id && dropTarget.idx === idx + 1}
@@ -419,10 +473,10 @@
     {#if !submitted || !result?.passed}
       <div class="text-center mt-8">
         {#if submitted && canRetry()}
-          <button on:click={retry} class="btn-primary">Réessayer le quiz</button>
+          <button on:click={retry} class="btn-primary">Retry quiz</button>
         {:else if !submitted}
           <button on:click={submit} class="btn-primary" disabled={submitting || !allAnswered}>
-            {submitting ? 'Correction...' : 'Soumettre les réponses'}
+            {submitting ? 'Marking...' : 'Submit answers'}
           </button>
           {#if !allAnswered}
             <p class="text-xs text-gray-400 mt-2">Répondez à toutes les questions avant de soumettre.</p>

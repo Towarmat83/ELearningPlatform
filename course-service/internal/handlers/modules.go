@@ -53,27 +53,45 @@ func sanitizeQuestions(qq []content.Question, admin bool) []any {
 }
 
 type moduleResponse struct {
-	Index         int         `json:"index"`
-	Name          string      `json:"name"`
-	Slug          string      `json:"slug"`
-	Type          string      `json:"type"`
-	Content       string      `json:"content,omitempty"`
-	Viewed        bool        `json:"viewed"`
-	Hidden        bool        `json:"hidden"`
-	QuestionCount int         `json:"question_count,omitempty"`
-	Questions     []any       `json:"questions,omitempty"`
-	QuizConfig    *quizConfig `json:"quiz_config,omitempty"`
+	Index         int                      `json:"index"`
+	Name          string                   `json:"name"`
+	Slug          string                   `json:"slug"`
+	Type          string                   `json:"type"`
+	Content       string                   `json:"content,omitempty"`
+	Viewed        bool                     `json:"viewed"`
+	Hidden        bool                     `json:"hidden"`
+	QuestionCount int                      `json:"question_count,omitempty"`
+	Questions     []any                    `json:"questions,omitempty"`
+	QuizConfig    *quizConfig              `json:"quiz_config,omitempty"`
+	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
 }
 
 type quizConfig struct {
-	PassingScore int `json:"passing_score"`
+	PassingScore           int      `json:"passing_score"`
+	Cooldown               cooldown `json:"cooldown,omitempty"`
+	MaxAttemptsPerQuestion *int     `json:"max_attempts_per_question,omitempty"`
+	LockOnMaxAttempts      bool     `json:"lock_on_max_attempts"`
+}
+
+type cooldown struct {
+	Strategy    string  `json:"strategy"`
+	BaseSeconds int     `json:"base_seconds"`
+	Multiplier  float64 `json:"multiplier"`
+	MaxSeconds  int     `json:"max_seconds"`
 }
 
 type submitResponse struct {
-	TotalScore      int                 `json:"total_score"`
-	MaxScore        int                 `json:"max_score"`
-	Passed          bool                `json:"passed"`
-	QuestionResults []questionResultAPI `json:"question_results"`
+	TotalScore      int                      `json:"total_score"`
+	MaxScore        int                      `json:"max_score"`
+	Passed          bool                     `json:"passed"`
+	QuestionResults []questionResultAPI      `json:"question_results"`
+	Cooldowns       map[string]cooldownState `json:"cooldowns,omitempty"`
+}
+
+type cooldownState struct {
+	RemainingSeconds int  `json:"remaining_seconds"`
+	Attempts         int  `json:"attempts"`
+	Locked           bool `json:"locked"`
 }
 
 type questionResultAPI struct {
@@ -209,25 +227,52 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 			resp.Content = m.Content()
 		}
 	case "quiz":
+		var quizQuestions []content.Question
 		if m.HasGitContent() {
 			quiz, err := content.FetchQuizContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 			if err != nil {
 				s.Error(w, http.StatusInternalServerError, "Failed to fetch quiz content")
 				return
 			}
+			quizQuestions = quiz.Questions
 			isAdmin := claims != nil && claims.Role == "admin"
 			resp.Questions = sanitizeQuestions(quiz.Questions, isAdmin)
 			resp.QuizConfig = &quizConfig{
-				PassingScore: quiz.PassingScore,
+				PassingScore:           quiz.PassingScore,
+				Cooldown:               cooldown(quiz.Cooldown),
+				MaxAttemptsPerQuestion: quiz.MaxAttemptsPerQuestion,
+				LockOnMaxAttempts:      quiz.LockOnMaxAttempts,
 			}
 		} else if m.HasQuestions() {
+			quizQuestions = m.Questions
 			isAdmin := claims != nil && claims.Role == "admin"
 			resp.Questions = sanitizeQuestions(m.Questions, isAdmin)
 			resp.QuizConfig = &quizConfig{
-				PassingScore: m.PassingScore,
+				PassingScore:           m.PassingScore,
+				Cooldown:               cooldown(m.Cooldown),
+				MaxAttemptsPerQuestion: m.MaxAttemptsPerQuestion,
+				LockOnMaxAttempts:      m.LockOnMaxAttempts,
 			}
 		}
 		resp.Content = ""
+
+		// Include current cooldown state so frontend persists it across refreshes
+		if len(quizQuestions) > 0 && claims != nil {
+			cooldowns := make(map[string]cooldownState)
+			for _, qq := range quizQuestions {
+				remaining, attempts := s.CooldownTracker.CheckModule(claims.Subject, courseSlug, idx, qq.ID)
+				if remaining > 0 || attempts > 0 {
+					cooldowns[qq.ID] = cooldownState{
+						RemainingSeconds: int(remaining.Seconds()),
+						Attempts:         attempts,
+						Locked:           false,
+					}
+				}
+			}
+			if len(cooldowns) > 0 {
+				resp.Cooldowns = cooldowns
+			}
+		}
 	}
 
 	s.JSON(w, http.StatusOK, resp)
@@ -241,6 +286,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
+	userID := claims.Subject
 
 	c := s.Content.Get(courseSlug)
 	if c == nil {
@@ -270,6 +316,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	// Resolve questions: fetch from git repo first, then fallback to inline
 	var questions []content.Question
 	var passingScore int
+	var cooldownSpec content.CooldownSpec
 	if m.HasGitContent() {
 		quiz, err := content.FetchQuizContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 		if err != nil {
@@ -278,9 +325,11 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		}
 		questions = quiz.Questions
 		passingScore = quiz.PassingScore
+		cooldownSpec = content.CooldownSpec(quiz.Cooldown)
 	} else if m.HasQuestions() {
 		questions = m.Questions
 		passingScore = m.PassingScore
+		cooldownSpec = m.Cooldown
 	} else {
 		s.Error(w, http.StatusNotFound, "No questions found for this quiz")
 		return
@@ -292,6 +341,25 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check cooldowns for each question before scoring
+	cooldowns := make(map[string]cooldownState)
+	for _, qq := range questions {
+		remaining, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, qq.ID)
+		if remaining > 0 {
+			cooldowns[qq.ID] = cooldownState{
+				RemainingSeconds: int(remaining.Seconds()),
+				Attempts:         attempts,
+			}
+		}
+	}
+	if len(cooldowns) > 0 {
+		s.JSON(w, http.StatusTooEarly, map[string]any{
+			"error":     "Cooldown active for some questions",
+			"cooldowns": cooldowns,
+		})
+		return
+	}
+
 	// Build effective quiz for scoring
 	effectiveQuiz := &content.Quiz{
 		Questions:    questions,
@@ -299,6 +367,22 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := content.ScoreQuiz(effectiveQuiz, req.Answers)
+
+	// Record cooldowns for wrong answers
+	respCooldowns := make(map[string]cooldownState)
+	for _, qr := range result.QuestionResults {
+		if !qr.IsCorrect {
+			remaining, locked := s.CooldownTracker.RecordModule(userID, courseSlug, idx, qr.QuestionID, cooldownSpec, m.MaxAttemptsPerQuestion, m.LockOnMaxAttempts)
+			_, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, qr.QuestionID)
+			respCooldowns[qr.QuestionID] = cooldownState{
+				RemainingSeconds: int(remaining.Seconds()),
+				Attempts:         attempts,
+				Locked:           locked,
+			}
+		} else {
+			s.CooldownTracker.ClearModule(userID, courseSlug, idx, qr.QuestionID)
+		}
+	}
 
 	apiResults := make([]questionResultAPI, len(result.QuestionResults))
 	for i, qr := range result.QuestionResults {
@@ -319,5 +403,6 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		MaxScore:        result.MaxScore,
 		Passed:          result.Passed,
 		QuestionResults: apiResults,
+		Cooldowns:       respCooldowns,
 	})
 }

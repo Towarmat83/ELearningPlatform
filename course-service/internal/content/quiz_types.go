@@ -34,18 +34,28 @@ func FetchQuizContent(src, ref, path, token string) (*Quiz, error) {
 // ── Quiz YAML (deserialization) ──────────────────────────────────────────────────
 
 type QuizYAML struct {
-	ID           string           `yaml:"id"`
-	Title        string           `yaml:"title"`
-	Description  string           `yaml:"description"`
-	Version      string           `yaml:"version"`
-	Covers       []CoverEntryYAML `yaml:"covers"`
-	PassingScore int              `yaml:"passing_score"`
-	Questions    []QuestionYAML   `yaml:"questions"`
+	ID                     string           `yaml:"id"`
+	Title                  string           `yaml:"title"`
+	Description            string           `yaml:"description"`
+	Version                string           `yaml:"version"`
+	Covers                 []CoverEntryYAML `yaml:"covers"`
+	PassingScore           int              `yaml:"passing_score"`
+	Cooldown               CooldownSpecYAML `yaml:"cooldown"`
+	MaxAttemptsPerQuestion *int             `yaml:"max_attempts_per_question"`
+	LockOnMaxAttempts      bool             `yaml:"lock_on_max_attempts"`
+	Questions              []QuestionYAML   `yaml:"questions"`
 }
 
 type CoverEntryYAML struct {
 	Course  string   `yaml:"course"`
 	Modules []string `yaml:"modules"`
+}
+
+type CooldownSpecYAML struct {
+	Strategy    string  `yaml:"strategy"`
+	BaseSeconds int     `yaml:"base_seconds"`
+	Multiplier  float64 `yaml:"multiplier"`
+	MaxSeconds  int     `yaml:"max_seconds"`
 }
 
 type QuestionYAML struct {
@@ -94,18 +104,28 @@ type SourceRefYAML struct {
 // ── In-Memory Quiz ───────────────────────────────────────────────────────────────
 
 type Quiz struct {
-	ID           string       `json:"id"`
-	Title        string       `json:"title"`
-	Description  string       `json:"description"`
-	Version      string       `json:"version"`
-	Covers       []CoverEntry `json:"covers"`
-	PassingScore int          `json:"passing_score"`
-	Questions    []Question   `json:"questions"`
+	ID                     string       `json:"id"`
+	Title                  string       `json:"title"`
+	Description            string       `json:"description"`
+	Version                string       `json:"version"`
+	Covers                 []CoverEntry `json:"covers"`
+	PassingScore           int          `json:"passing_score"`
+	Cooldown               CooldownSpec `json:"cooldown"`
+	MaxAttemptsPerQuestion *int         `json:"max_attempts_per_question,omitempty"`
+	LockOnMaxAttempts      bool         `json:"lock_on_max_attempts"`
+	Questions              []Question   `json:"questions"`
 }
 
 type CoverEntry struct {
 	Course  string   `json:"course"`
 	Modules []string `json:"modules"`
+}
+
+type CooldownSpec struct {
+	Strategy    string  `json:"strategy"`
+	BaseSeconds int     `json:"base_seconds"`
+	Multiplier  float64 `json:"multiplier"`
+	MaxSeconds  int     `json:"max_seconds"`
 }
 
 type Question struct {
@@ -155,11 +175,14 @@ type SourceRef struct {
 
 func (qy QuizYAML) ToQuiz() *Quiz {
 	q := &Quiz{
-		ID:           qy.ID,
-		Title:        qy.Title,
-		Description:  qy.Description,
-		Version:      qy.Version,
-		PassingScore: qy.PassingScore,
+		ID:                     qy.ID,
+		Title:                  qy.Title,
+		Description:            qy.Description,
+		Version:                qy.Version,
+		PassingScore:           qy.PassingScore,
+		Cooldown:               CooldownSpec(qy.Cooldown),
+		MaxAttemptsPerQuestion: qy.MaxAttemptsPerQuestion,
+		LockOnMaxAttempts:      qy.LockOnMaxAttempts,
 	}
 	for _, c := range qy.Covers {
 		q.Covers = append(q.Covers, CoverEntry{

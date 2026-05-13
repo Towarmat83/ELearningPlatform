@@ -160,7 +160,7 @@
       {:else}
         <div class="space-y-2">
           {#each labs as lab}
-            <a href={lab.module_type === 'quiz' ? `/courses/${courseId}/quiz/${lab.order_index}` : `/courses/${courseId}/labs/${lab.id}`}
+            <a href={lab.module_type === 'quiz' ? `/courses/${courseId}/quiz/${lab.order_index - 1}` : `/courses/${courseId}/labs/${lab.id}`}
               class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4 {lab.hidden ? 'opacity-50' : ''}">
               <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg {lab.hidden ? 'bg-gray-200' : lab.module_type === 'quiz' ? 'bg-amber-100' : 'bg-gray-100'}">
                 {labTypeIcon(lab)}

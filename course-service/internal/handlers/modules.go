@@ -25,7 +25,6 @@ type publicQuestion struct {
 	Items          []content.OrderItem     `json:"items,omitempty"`
 	PartialScoring *content.PartialScoring `json:"partial_scoring,omitempty"`
 	SourceRefs     []content.SourceRef     `json:"source_refs,omitempty"`
-	Feedback       string                  `json:"feedback,omitempty"`
 }
 
 func sanitizeQuestions(qq []content.Question, admin bool) []any {
@@ -47,11 +46,6 @@ func sanitizeQuestions(qq []content.Question, admin bool) []any {
 				pa.Correct = a.Correct
 			}
 			pq.Answers = append(pq.Answers, pa)
-		}
-		if admin && q.Feedback.Wrong != "" {
-			pq.Feedback = q.Feedback.Wrong
-		} else if !admin && q.Feedback.Correct != "" {
-			pq.Feedback = q.Feedback.Correct
 		}
 		out[i] = pq
 	}

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { modulesApi, type ModuleDetail, type QuizQuestion, type QuizSubmitResponse, type QuizCooldown } from '$lib/api';
+  import { modulesApi, type ModuleDetail, type QuizQuestion, type QuizSubmitResponse } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
   import Markdown from '$lib/Markdown.svelte';
 
@@ -16,9 +16,6 @@
   let submitted = false;
   let submitting = false;
   let result: QuizSubmitResponse | null = null;
-
-  let cooldowns: Record<string, { remaining: number; attempts: number; locked: boolean }> = {};
-  let cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
   let dragSource: { qId: string; idx: number } | null = null;
   let dropTarget: { qId: string; idx: number } | null = null;
@@ -69,7 +66,6 @@
       const res = await modulesApi.get(courseId, moduleIndex, token);
       quiz = res;
       initAnswers(quiz);
-      if (res.cooldowns) startCooldownTimer(res.cooldowns);
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load quiz');
     } finally {
@@ -77,43 +73,8 @@
     }
   });
 
-  onDestroy(() => {
-    if (cooldownTimer) clearInterval(cooldownTimer);
-  });
-
-  function startCooldownTimer(cds: Record<string, QuizCooldown>) {
-    const next: Record<string, any> = {};
-    for (const [key, cd] of Object.entries(cds)) {
-      next[key] = { remaining: cd.remaining_seconds, attempts: cd.attempts, locked: cd.locked };
-    }
-    cooldowns = next;
-    if (cooldownTimer) clearInterval(cooldownTimer);
-    cooldownTimer = setInterval(() => {
-      let anyActive = false;
-      for (const key of Object.keys(cooldowns)) {
-        if (cooldowns[key].remaining > 0) {
-          cooldowns[key].remaining -= 1;
-          anyActive = true;
-        }
-      }
-      cooldowns = { ...cooldowns };
-      if (!anyActive && cooldownTimer) {
-        clearInterval(cooldownTimer);
-        cooldownTimer = null;
-      }
-    }, 1000);
-  }
-
-  function questionCooldown(qId: string): { remaining: number; attempts: number; locked: boolean } | null {
-    return cooldowns[qId] ?? null;
-  }
-
   function canRetry(): boolean {
-    if (!result || result.passed) return false;
-    for (const cd of Object.values(cooldowns)) {
-      if (cd.remaining > 0) return false;
-    }
-    return true;
+    return !!result && !result.passed;
   }
 
   async function submit() {
@@ -132,13 +93,8 @@
       const res = await modulesApi.submit(courseId, moduleIndex, payload, token);
       result = res;
       submitted = true;
-      if (res.cooldowns) startCooldownTimer(res.cooldowns);
     } catch (e: any) {
-      if (e.status === 425 && e.body?.cooldowns) {
-        startCooldownTimer(e.body.cooldowns as Record<string, QuizCooldown>);
-      } else {
-        toasts.error(e.message || 'Submission failed');
-      }
+      toasts.error(e.message || 'Submission failed');
     } finally {
       submitting = false;
     }
@@ -275,9 +231,6 @@
             <span>{quiz.questions?.length ?? 0} questions</span>
             {#if quiz.quiz_config}
               <span>Score requis : {quiz.quiz_config.passing_score}%</span>
-              {#if quiz.quiz_config.max_attempts_per_question}
-                <span>Max {quiz.quiz_config.max_attempts_per_question} tentatives/question</span>
-              {/if}
             {/if}
           </div>
         </div>
@@ -303,15 +256,6 @@
             <a href="/courses/{courseId}" class="btn-primary text-sm mt-3 inline-block">← Back to course</a>
           {:else if canRetry()}
             <button on:click={retry} class="btn-primary text-sm mt-3">Réessayer</button>
-          {:else}
-            {#each Object.entries(cooldowns) as [qId, cd]}
-              {#if cd.remaining > 0}
-                <p class="text-sm text-gray-500 mt-2">
-                  Question {qId} : réessayez dans {cd.remaining}s
-                  {#if cd.locked}(verrouillée){/if}
-                </p>
-              {/if}
-            {/each}
           {/if}
         </div>
       </div>
@@ -319,8 +263,7 @@
 
     <div class="space-y-6">
       {#each quiz.questions ?? [] as qq, i}
-        {@const cd = questionCooldown(qq.id)}
-        <div class="card p-6 {cd && cd.remaining > 0 ? 'opacity-50' : ''}" id="q-{qq.id}">
+        <div class="card p-6" id="q-{qq.id}">
           <div class="flex items-start gap-3 mb-4">
             <span class="text-lg font-mono shrink-0">{questionTypeIcon(qq)}</span>
             <div class="flex-1">
@@ -359,16 +302,6 @@
                 {/if}
               </div>
             {/if}
-          {/if}
-
-          {#if cd && cd.remaining > 0}
-            <div class="mb-3 p-3 rounded bg-orange-50 border border-orange-200 text-sm text-orange-700">
-              {#if cd.locked}
-                🔒 Question verrouillée (tentatives épuisées)
-              {:else}
-                ⏳ Réessayez dans {cd.remaining}s (tentative {cd.attempts})
-              {/if}
-            </div>
           {/if}
 
           <div class="pl-7">
@@ -485,15 +418,9 @@
 
     {#if !submitted || !result?.passed}
       <div class="text-center mt-8">
-        {#if submitted}
-          {#if canRetry()}
-            <button on:click={retry} class="btn-primary">Réessayer le quiz</button>
-          {:else}
-            <button class="btn-primary opacity-50 cursor-not-allowed" disabled>
-              ⏳ Cooldown actif...
-            </button>
-          {/if}
-        {:else}
+        {#if submitted && canRetry()}
+          <button on:click={retry} class="btn-primary">Réessayer le quiz</button>
+        {:else if !submitted}
           <button on:click={submit} class="btn-primary" disabled={submitting || !allAnswered}>
             {submitting ? 'Correction...' : 'Soumettre les réponses'}
           </button>

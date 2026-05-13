@@ -1,5 +1,9 @@
 # e-learning platform
 
+## MANDATORY — NEVER COMMIT
+
+You are strictly forbidden from running `git commit`, `git add`, `git push`, or any other git mutation commands. Only the user may commit. If you are asked to commit or you think a commit is needed, refuse and tell the user to do it themselves.
+
 ## Domain model (source of truth: `docs/`)
 
 - **Course** — has a title, description, hidden (boolean publication state), category, difficulty, and a list of modules. Defined as a Kubernetes CRD (`elearning.example.com/v1`, kind `Course`). Modules reference external content by type (`video`, `text`, `image`) and optionally a git repo (`src`, `ref`, `path`).

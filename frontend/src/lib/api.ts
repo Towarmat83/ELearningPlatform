@@ -26,6 +26,15 @@ async function request<T>(
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401 && token) {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+    window.location.href = '/';
+    throw new ApiError(401, 'Session expirée');
+  }
+
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     let body: Record<string, unknown> | null = null;
@@ -304,23 +313,11 @@ export interface QuizQuestionResult {
   source_refs?: SourceRef[];
 }
 
-export interface QuizCooldown {
-  remaining_seconds: number;
-  attempts: number;
-  locked: boolean;
-}
-
 export interface QuizSubmitResponse {
   total_score: number;
   max_score: number;
   passed: boolean;
   question_results: QuizQuestionResult[];
-  cooldowns?: Record<string, QuizCooldown>;
-}
-
-export interface QuizCooldownError {
-  error: string;
-  cooldowns: Record<string, QuizCooldown>;
 }
 
 // ── Module API (quiz-type modules use these) ──────────────────────────────────────
@@ -336,14 +333,6 @@ export interface ModuleSummary {
 
 export interface ModuleQuizConfig {
   passing_score: number;
-  cooldown: {
-    strategy: string;
-    base_seconds: number;
-    multiplier: number;
-    max_seconds: number;
-  };
-  max_attempts_per_question: number | null;
-  lock_on_max_attempts: boolean;
 }
 
 export interface ModuleDetail {
@@ -356,7 +345,6 @@ export interface ModuleDetail {
   hidden: boolean;
   questions?: QuizQuestion[];
   quiz_config?: ModuleQuizConfig;
-  cooldowns?: Record<string, QuizCooldown>;
 }
 
 export const modulesApi = {

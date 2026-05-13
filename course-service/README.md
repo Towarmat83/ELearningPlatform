@@ -6,7 +6,7 @@ Stateless micro-service that serves course/module content for the e-learning pla
 
 - **Stateless** — no database. All course data comes from Kubernetes CRDs (`elearning.example.com/v1`, kind `Course`) via an in-cluster watcher.
 - **Source of truth** — courses are defined as Kubernetes custom resources. The service watches the K8s API and populates an in-memory store.
-- **Module types** — `text` (markdown from git), `video` / `image` (server-hosted URLs with optional replication), `quiz` (inline questions or git-fetched YAML). Quiz modules support cooldown tracking, locking, and scoring.
+- **Module types** — `text` (markdown from git), `video` / `image` (server-hosted URLs with optional replication), `quiz` (inline questions or git-fetched YAML).
 - **User Service calls** — enrollment checks, lesson progress (viewed, complete) are delegated to the User Service via HTTP:
   - `GET /internal/enrollments/check` — enrollment check
   - `GET /internal/progress/viewed` — viewed lessons set
@@ -117,13 +117,6 @@ modules:
   - name: "K8s Basics Quiz"
     type: "quiz"
     passing_score: 80
-    max_attempts_per_question: 3
-    lock_on_max_attempts: true
-    cooldown:
-      strategy: "exponential"
-      base_seconds: 30
-      multiplier: 2.0
-      max_seconds: 600
     questions:
       - id: "q1"
         type: "single"
@@ -146,18 +139,6 @@ Use `src`, `ref`, and `path` to reference a YAML file in a git repo (same as `te
     ref: "main"
     path: "quizzes/kubernetes-basics.yaml"
 ```
-
-### Cooldown tracking
-
-When a user answers incorrectly, a cooldown is applied before they can retry that question. Strategies:
-
-| Strategy | Formula |
-|----------|---------|
-| `fixed` | `base_seconds` |
-| `linear` | `base_seconds * attempts` |
-| `exponential` (default) | `base_seconds * multiplier^(attempts-1)` capped at `max_seconds` |
-
-Cooldowns are in-memory only (lost on restart). If `max_attempts_per_question` + `lock_on_max_attempts` is set, the question locks permanently after exhausting attempts.
 
 ### Scoring
 

@@ -8,13 +8,6 @@ covers:
       - "What is Kubernetes"
       - "Pods and Containers"
 passing_score: 80
-cooldown:
-  strategy: exponential
-  base_seconds: 30
-  multiplier: 2.0
-  max_seconds: 600
-max_attempts_per_question: 5
-lock_on_max_attempts: false
 questions:
   - id: q1
     type: single

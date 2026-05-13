@@ -276,7 +276,14 @@ export interface QuizQuestion {
   question: string;
   answers?: { id: string; text: string }[];
   items?: { id: string; text: string }[];
-  source_refs?: { course: string; module: string; anchor: string; priority: number }[];
+  source_refs?: SourceRef[];
+}
+
+export interface SourceRef {
+  course: string;
+  module: string;
+  anchor: string;
+  priority: number;
 }
 
 export interface QuizUserAnswer {
@@ -294,7 +301,7 @@ export interface QuizQuestionResult {
   points_max: number;
   correct_answer?: unknown;
   feedback?: string;
-  source_refs?: { course: string; module: string; anchor: string; priority: number }[];
+  source_refs?: SourceRef[];
 }
 
 export interface QuizCooldown {

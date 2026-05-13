@@ -23,6 +23,7 @@ type publicQuestion struct {
 	Answers        []publicAnswer          `json:"answers,omitempty"`
 	Items          []content.OrderItem     `json:"items,omitempty"`
 	PartialScoring *content.PartialScoring `json:"partial_scoring,omitempty"`
+	SourceRefs     []content.SourceRef     `json:"source_refs,omitempty"`
 }
 
 func sanitizeQuestions(qq []content.Question, admin bool) []any {
@@ -43,6 +44,7 @@ func sanitizeQuestions(qq []content.Question, admin bool) []any {
 			Question:       q.Question,
 			Items:          q.Items,
 			PartialScoring: q.PartialScoring,
+			SourceRefs:     q.Feedback.SourceRefs,
 		}
 		for _, a := range q.Answers {
 			pq.Answers = append(pq.Answers, publicAnswer{ID: a.ID, Text: a.Text})
@@ -384,11 +386,25 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	apiResults := make([]questionResultAPI, len(result.QuestionResults))
+	for i, qr := range result.QuestionResults {
+		apiResults[i] = questionResultAPI{
+			QuestionID:    qr.QuestionID,
+			Type:          qr.Type,
+			IsCorrect:     qr.IsCorrect,
+			PointsEarned:  qr.PointsEarned,
+			PointsMax:     qr.PointsMax,
+			CorrectAnswer: qr.CorrectAnswer,
+			Feedback:      qr.Feedback,
+			SourceRefs:    qr.SourceRefs,
+		}
+	}
+
 	s.JSON(w, http.StatusOK, submitResponse{
 		TotalScore:      result.TotalScore,
 		MaxScore:        result.MaxScore,
 		Passed:          result.Passed,
-		QuestionResults: make([]questionResultAPI, len(result.QuestionResults)),
+		QuestionResults: apiResults,
 		Cooldowns:       respCooldowns,
 	})
 }

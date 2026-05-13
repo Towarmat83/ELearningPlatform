@@ -342,6 +342,16 @@
               <div class="prose prose-sm max-w-none text-gray-700">
                 <Markdown content={qq.question} />
               </div>
+              {#if qq.source_refs && qq.source_refs.length > 0}
+                <div id="help-{qq.id}" class="hidden mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                  <p class="text-xs font-medium text-blue-700 mb-1">📖 Pour en savoir plus :</p>
+                  {#each qq.source_refs as ref}
+                    <a href="/courses/{ref.course}/lessons/{ref.module}" class="block text-xs text-primary-600 hover:underline">
+                      → {ref.course} / {ref.module}{#if ref.anchor} #{ref.anchor}{/if}
+                    </a>
+                  {/each}
+                </div>
+              {/if}
             </div>
           </div>
 
@@ -372,11 +382,21 @@
           {/if}
 
           {#if cd && cd.remaining > 0}
-            <div class="mb-3 p-2 rounded bg-orange-50 border border-orange-200 text-sm text-orange-700">
+            <div class="mb-3 p-3 rounded bg-orange-50 border border-orange-200 text-sm text-orange-700">
               {#if cd.locked}
                 🔒 Question verrouillée (tentatives épuisées)
               {:else}
                 ⏳ Réessayez dans {cd.remaining}s (tentative {cd.attempts})
+              {/if}
+              {#if qq.source_refs && qq.source_refs.length > 0}
+                <div class="mt-2 pt-2 border-t border-orange-200">
+                  <p class="text-xs font-medium text-orange-600">📖 Révisions recommandées :</p>
+                  {#each qq.source_refs as ref}
+                    <a href="/courses/{ref.course}/lessons/{ref.module}" class="block text-xs text-primary-600 hover:underline mt-0.5">
+                      → {ref.course} / {ref.module}{#if ref.anchor} #{ref.anchor}{/if}
+                    </a>
+                  {/each}
+                </div>
               {/if}
             </div>
           {/if}

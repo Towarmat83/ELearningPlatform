@@ -164,7 +164,7 @@
         <div class="card text-center py-8 text-gray-400">No content available yet.</div>
       {:else}
         <div class="space-y-2">
-          {#each labs as lab}
+          {#each labs.filter(l => l.module_type !== 'quiz') as lab}
             <a href="/courses/{courseId}/labs/{lab.id}"
               class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4 {lab.hidden ? 'opacity-50' : ''}">
               <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg {lab.hidden ? 'bg-gray-200' : 'bg-gray-100'}">

@@ -331,27 +331,17 @@
                   <span class={difficultyColor(qq.difficulty)}>{qq.difficulty}</span>
                 {/if}
                 {#if qq.source_refs && qq.source_refs.length > 0}
-                  <button
-                    on:click|stopPropagation
-                    class="ml-auto text-xs text-primary-500 hover:text-primary-700 underline underline-offset-2"
-                    on:click={() => { const el = document.getElementById('help-' + qq.id); if (el) el.classList.toggle('hidden'); }}>
-                    📖 Aide
-                  </button>
+                  {#each qq.source_refs as ref}
+                    <a href="/courses/{ref.course}/lessons/{ref.module}"
+                      class="ml-auto text-xs text-primary-500 hover:text-primary-700 underline underline-offset-2 shrink-0">
+                      📖 Voir le module {ref.module}{#if ref.anchor} › {ref.anchor}{/if}
+                    </a>
+                  {/each}
                 {/if}
               </div>
               <div class="prose prose-sm max-w-none text-gray-700">
                 <Markdown content={qq.question} />
               </div>
-              {#if qq.source_refs && qq.source_refs.length > 0}
-                <div id="help-{qq.id}" class="hidden mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                  <p class="text-xs font-medium text-blue-700 mb-1">📖 Pour en savoir plus :</p>
-                  {#each qq.source_refs as ref}
-                    <a href="/courses/{ref.course}/lessons/{ref.module}" class="block text-xs text-primary-600 hover:underline">
-                      → {ref.course} / {ref.module}{#if ref.anchor} #{ref.anchor}{/if}
-                    </a>
-                  {/each}
-                </div>
-              {/if}
             </div>
           </div>
 
@@ -367,16 +357,6 @@
                 {#if qr.feedback}
                   <p class="text-sm text-gray-600 mt-1">{qr.feedback}</p>
                 {/if}
-                {#if qr.source_refs && qr.source_refs.length > 0}
-                  <div class="mt-2 text-xs text-gray-500">
-                    <p class="font-medium mb-1">Révisions recommandées :</p>
-                    {#each qr.source_refs as ref}
-                      <a href="/courses/{ref.course}/lessons/{ref.module}" class="block text-primary-600 hover:underline">
-                        → {ref.module} #{ref.anchor}
-                      </a>
-                    {/each}
-                  </div>
-                {/if}
               </div>
             {/if}
           {/if}
@@ -387,16 +367,6 @@
                 🔒 Question verrouillée (tentatives épuisées)
               {:else}
                 ⏳ Réessayez dans {cd.remaining}s (tentative {cd.attempts})
-              {/if}
-              {#if qq.source_refs && qq.source_refs.length > 0}
-                <div class="mt-2 pt-2 border-t border-orange-200">
-                  <p class="text-xs font-medium text-orange-600">📖 Révisions recommandées :</p>
-                  {#each qq.source_refs as ref}
-                    <a href="/courses/{ref.course}/lessons/{ref.module}" class="block text-xs text-primary-600 hover:underline mt-0.5">
-                      → {ref.course} / {ref.module}{#if ref.anchor} #{ref.anchor}{/if}
-                    </a>
-                  {/each}
-                </div>
               {/if}
             </div>
           {/if}

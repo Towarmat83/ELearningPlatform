@@ -2,24 +2,34 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { coursesApi, lessonsApi, type Course, type LessonSummary } from '$lib/api';
+  import { coursesApi, labsApi, type Course, type Lab } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   let course: Course | null = null;
-  let lessons: LessonSummary[] = [];
+  let labs: Lab[] = [];
   let loading = true;
   let enrolled = false;
+  let progress: { completed_labs: number; total_labs: number } | null = null;
 
-  const slug = $page.params.id;
+  const courseId = $page.params.id as string;
 
   function getToken(): string | null {
     return $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
   }
 
+  async function checkEnrollment(token: string): Promise<boolean> {
+    try {
+      const res: { courses: { slug: string }[] } = await coursesApi.myCourses(token) as any;
+      return res.courses?.some((c) => c.slug === courseId) ?? false;
+    } catch {
+      return false;
+    }
+  }
+
   onMount(async () => {
     auth.init();
     try {
-      course = await coursesApi.get(slug);
+      course = await coursesApi.get(courseId);
     } catch {
       toasts.error('Course not found');
       loading = false;
@@ -28,13 +38,18 @@
 
     const token = getToken();
     if (token) {
-      try {
-        const res = await lessonsApi.list(slug, token);
-        lessons = res.lessons;
-        enrolled = true;
-      } catch (e: any) {
-        if (e.status !== 403) toasts.error('Failed to load lessons: ' + e.message);
-        enrolled = false;
+      enrolled = await checkEnrollment(token);
+      if (enrolled) {
+        try {
+          const [labsRes, progRes] = await Promise.all([
+            labsApi.list(courseId, token),
+            labsApi.progress(courseId, token),
+          ]);
+          labs = labsRes.labs;
+          progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
+        } catch (e: any) {
+          if (e.status !== 403) toasts.error('Failed to load labs: ' + e.message);
+        }
       }
     }
     loading = false;
@@ -43,14 +58,18 @@
   async function enroll() {
     const token = getToken();
     if (!token) {
-      goto('/login?redirect=/courses/' + slug);
+      goto('/login?redirect=/courses/' + courseId);
       return;
     }
     try {
-      await coursesApi.enroll(slug, token);
+      await coursesApi.enroll(courseId, token);
       toasts.success('Enrolled successfully!');
-      const res = await lessonsApi.list(slug, token);
-      lessons = res.lessons;
+      const [labsRes, progRes] = await Promise.all([
+        labsApi.list(courseId, token),
+        labsApi.progress(courseId, token),
+      ]);
+      labs = labsRes.labs;
+      progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
       enrolled = true;
     } catch (e: any) {
       toasts.error(e.message || 'Failed to enroll');
@@ -63,8 +82,23 @@
     return 'badge-red';
   }
 
-  $: viewedCount = lessons.filter(l => l.viewed).length;
-  $: progress = lessons.length > 0 ? Math.round((viewedCount / lessons.length) * 100) : 0;
+  function labTypeIcon(lab: Lab) {
+    const mt = lab.module_type;
+    if (mt === 'video') return '🎬';
+    if (mt === 'image') return '🖼️';
+    if (mt === 'text') return '📝';
+    if (lab.lab_type === 'form') return '📝';
+    if (lab.lab_type === 'ctf') return '🏴';
+    return '💻';
+  }
+
+  function displayType(lab: Lab): string {
+    return lab.module_type ?? lab.lab_type;
+  }
+
+  $: completedCount = progress?.completed_labs ?? 0;
+  $: totalCount = progress?.total_labs ?? labs.length;
+  $: pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 </script>
 
 <svelte:head>
@@ -95,22 +129,23 @@
           </div>
           <p class="text-gray-600 mb-4">{course.description}</p>
           <div class="flex gap-6 text-sm text-gray-400 mb-4">
-            <span>📖 {course.lesson_count} lesson{course.lesson_count !== 1 ? 's' : ''}</span>
-            {#if course.source && course.source !== 'local'}
-              <span title={course.source} class="text-gray-300">⎇ synced from git</span>
+            <span>📝 {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''}</span>
+            <span>👥 {course.enrollment_count} enrolled</span>
+            {#if course.creator_username}
+              <span>👤 {course.creator_username}</span>
             {/if}
           </div>
 
           {#if !enrolled}
             <button on:click={enroll} class="btn-primary">Enroll Now</button>
-          {:else if lessons.length > 0}
+          {:else if totalCount > 0}
             <div>
               <div class="flex justify-between text-sm text-gray-500 mb-1">
-                <span>{viewedCount}/{lessons.length} lessons completed</span>
-                <span>{progress}%</span>
+                <span>{completedCount}/{totalCount} labs completed</span>
+                <span>{pct}%</span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-3">
-                <div class="bg-primary-500 h-3 rounded-full transition-all" style="width: {progress}%"></div>
+                <div class="bg-primary-500 h-3 rounded-full transition-all" style="width: {pct}%"></div>
               </div>
             </div>
           {/if}
@@ -118,27 +153,35 @@
       </div>
     </div>
 
-    <!-- Lesson list -->
+    <!-- Lab list -->
     {#if enrolled}
-      {#if lessons.length === 0}
-        <div class="card text-center py-8 text-gray-400">No lessons available yet.</div>
+      {#if labs.length === 0}
+        <div class="card text-center py-8 text-gray-400">No content available yet.</div>
       {:else}
         <div class="space-y-2">
-          {#each lessons as ls}
-            <a href="/courses/{slug}/lessons/{ls.slug}"
-              class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4">
-              <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0
-                {ls.viewed ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}">
-                {#if ls.viewed}✓{:else}{ls.order}{/if}
+          {#each labs as lab}
+            <a href={lab.module_type === 'quiz' ? `/courses/${courseId}/quiz/${lab.order_index - 1}` : `/courses/${courseId}/labs/${lab.id}`}
+              class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4 {lab.hidden ? 'opacity-50' : ''}">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg {lab.hidden ? 'bg-gray-200' : lab.module_type === 'quiz' ? 'bg-amber-100' : 'bg-gray-100'}">
+                {labTypeIcon(lab)}
               </div>
               <div class="flex-1 min-w-0">
-                <span class="font-medium text-gray-900 group-hover:text-primary-600 transition-colors">
-                  {ls.title}
-                </span>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium {lab.hidden ? 'text-gray-400' : 'text-gray-900'} group-hover:text-primary-600 transition-colors">
+                    {lab.title}
+                  </span>
+                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{displayType(lab)}</span>
+                  {#if lab.hidden}
+                    <span class="text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-full">hidden</span>
+                  {/if}
+                </div>
+                {#if lab.description}
+                  <p class="text-xs text-gray-500 mt-0.5">{lab.description}</p>
+                {/if}
               </div>
-              {#if ls.viewed}
-                <span class="text-xs text-green-600 font-medium shrink-0">Completed</span>
-              {/if}
+              <div class="text-right shrink-0">
+                <div class="text-sm font-medium text-gray-700">{lab.points} pts</div>
+              </div>
               <svg class="w-5 h-5 text-gray-300 group-hover:text-primary-400 transition-colors shrink-0"
                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -149,7 +192,7 @@
       {/if}
     {:else}
       <div class="card text-center py-8 text-gray-400">
-        Enroll in this course to access the lessons.
+        Enroll in this course to access the labs.
       </div>
     {/if}
   {/if}

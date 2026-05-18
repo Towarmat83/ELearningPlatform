@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "elearning.fullname" . }}-course-service-config
+  labels:
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    port: {{ .Values.courseService.service.port }}
+    jwt_expiry_hours: {{ .Values.courseService.env.JWT_EXPIRY_HOURS }}
+    cors_origins:
+      - "{{ include "elearning.publicUrl" . }}"
+    uploads_dir: {{ .Values.courseService.env.UPLOADS_DIR | quote }}
+    k8s_namespace: {{ .Values.courseService.env.K8S_NAMESPACE | quote }}
+    user_service_url: "http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}"
+    git_cache_ttl_minutes: {{ .Values.courseService.env.GIT_CACHE_TTL }}
+    git_credentials_path: {{ .Values.courseService.env.GIT_CREDENTIALS_PATH | quote }}
+    git_token: {{ .Values.courseService.env.GIT_TOKEN | quote }}

@@ -1,14 +1,12 @@
 apiVersion: v2
 name: elearning
-description: eLearning Platform — Rust API + SvelteKit Frontend + Prometheus + Grafana
+description: eLearning Platform — Course Service (Go) + User Service (Go) + PostgreSQL + Frontend
 type: application
-version: 0.2.0
-appVersion: "0.2.0"
+version: 0.3.0
+appVersion: "1.0.0"
 keywords:
   - elearning
   - education
-  - ctf
-  - labs
 
 dependencies:
   - name: postgresql

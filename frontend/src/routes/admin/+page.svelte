@@ -5,6 +5,7 @@
 
   let stats: AdminStats | null = null;
   let loading = true;
+  let clearing = false;
 
   onMount(async () => {
     if (!$auth.token) { loading = false; return; }
@@ -16,6 +17,18 @@
       loading = false;
     }
   });
+
+  async function clearCache() {
+    clearing = true;
+    try {
+      await adminApi.clearCache($auth.token!);
+      toasts.success('Git cache cleared');
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to clear cache');
+    } finally {
+      clearing = false;
+    }
+  }
 </script>
 
 <svelte:head><title>Admin Dashboard — LearnLab</title></svelte:head>
@@ -30,7 +43,10 @@
       {#each [
         { label: 'Total Users', value: stats.total_users, icon: '👥', color: 'text-blue-600' },
         { label: 'Total Courses', value: stats.total_courses, icon: '📚', color: 'text-purple-600' },
-        { label: 'Enrollments', value: stats.total_enrollments, icon: '🎓', color: 'text-cyan-600' },
+        { label: 'Total Labs', value: stats.total_labs, icon: '📝', color: 'text-cyan-600' },
+        { label: 'Submissions', value: stats.total_submissions, icon: '📤', color: 'text-orange-600' },
+        { label: 'Enrollments', value: stats.total_enrollments, icon: '🎓', color: 'text-emerald-600' },
+        { label: 'Success Rate', value: `${stats.success_rate}%`, icon: '🎯', color: 'text-rose-600' },
       ] as s}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div class="text-3xl mb-2">{s.icon}</div>
@@ -47,15 +63,16 @@
           <a href="/admin/courses" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
             📚 Manage Courses →
           </a>
-          <a href="/admin/repos" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
-            ⎇ Git Repositories →
-          </a>
           <a href="/admin/users" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
             👥 Manage Users →
           </a>
           <a href="/admin/monitoring" class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm">
             📈 View Monitoring →
           </a>
+          <button on:click={clearCache} disabled={clearing}
+            class="block w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-sm disabled:opacity-50">
+            {clearing ? '⏳ Clearing...' : '🗑️ Clear Git Cache'}
+          </button>
         </div>
       </div>
       <div class="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
@@ -63,7 +80,6 @@
         <div class="space-y-3 text-sm text-gray-600">
           <p>📊 Metrics: <a href="/metrics" target="_blank" class="text-primary-600 hover:underline">/metrics</a> (Prometheus)</p>
           <p>❤️ Health: <a href="/health" target="_blank" class="text-primary-600 hover:underline">/health</a></p>
-          <p>🔌 API: <a href="/api" target="_blank" class="text-primary-600 hover:underline">REST API</a></p>
         </div>
       </div>
     </div>

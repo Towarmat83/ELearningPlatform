@@ -1,0 +1,559 @@
+openapi: "3.1.0"
+info:
+  title: Course Service
+  description: Stateless micro-service for course/module content delivery.
+  version: "1.0.0"
+servers:
+  - url: http://localhost:8082
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      operationId: health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: course-service
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      operationId: metrics
+      responses:
+        "200":
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/courses:
+    get:
+      summary: List published courses
+      operationId: listCourses
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by category
+        - name: difficulty
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by difficulty
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search in title and description
+      responses:
+        "200":
+          description: List of published courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Course"
+                  total:
+                    type: integer
+
+  /api/courses/{slug}:
+    get:
+      summary: Get a single course
+      operationId: getCourse
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/modules:
+    get:
+      summary: List modules for a course
+      operationId: listModules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of modules with viewed status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  modules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Module"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/modules/{index}:
+    get:
+      summary: Get a single module with content
+      operationId: getModule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: index
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Module details including content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModuleDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/labs:
+    get:
+      summary: List course modules as labs
+      operationId: listLabs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of labs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Lab"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/labs/{lab_id}:
+    get:
+      summary: Get a single lab
+      operationId: getLab
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lab_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lab detail with progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lab:
+                    $ref: "#/components/schemas/Lab"
+                  progress:
+                    type: object
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/progress:
+    get:
+      summary: Get course progress
+      operationId: getCourseProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course progress stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseProgress"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/courses/{slug}/lessons:
+    get:
+      summary: List lessons for a course
+      operationId: listLessons
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of lessons with viewed status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lessons:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LessonSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/lessons/{lesson_slug}:
+    get:
+      summary: Get a lesson with full content
+      operationId: getLesson
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lesson_slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lesson details including content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lesson:
+                    $ref: "#/components/schemas/LessonDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/courses/{slug}/lessons/{lesson_slug}/complete:
+    post:
+      summary: Mark a lesson as complete
+      operationId: markLessonComplete
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lesson_slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lesson marked as complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Lesson marked as complete
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/courses:
+    get:
+      summary: List all courses including hidden (admin)
+      operationId: listAdminCourses
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of all courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Course"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /uploads/{filename}:
+    get:
+      summary: Serve an uploaded media file
+      operationId: serveUpload
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid filename
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Course:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: kubernetes-basics
+        id:
+          type: string
+          example: kubernetes-basics
+        title:
+          type: string
+          example: Kubernetes Basics
+        description:
+          type: string
+          example: Learn the fundamentals of Kubernetes
+        category:
+          type: string
+          example: kubernetes
+        difficulty:
+          type: string
+          example: beginner
+        is_published:
+          type: boolean
+        module_count:
+          type: integer
+        lab_count:
+          type: integer
+        enrollment_count:
+          type: integer
+        source:
+          type: string
+          example: k8s:kubernetes-basics
+
+    Module:
+      type: object
+      properties:
+        index:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        type:
+          type: string
+          enum: [video, text, image]
+        viewed:
+          type: boolean
+        replication:
+          type: boolean
+          description: When true, video/image resources are downloaded and served locally via /uploads/
+
+    ModuleDetail:
+      allOf:
+        - $ref: "#/components/schemas/Module"
+        - type: object
+          properties:
+            content:
+              type: string
+              description: URL for video/image, markdown body for text
+
+    Lab:
+      type: object
+      properties:
+        id:
+          type: string
+        course_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        lab_type:
+          type: string
+          enum: [form, interactive]
+        points:
+          type: integer
+        order_index:
+          type: integer
+        is_published:
+          type: boolean
+
+    LessonSummary:
+      type: object
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        order:
+          type: integer
+        viewed:
+          type: boolean
+
+    LessonDetail:
+      type: object
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        order:
+          type: integer
+        content:
+          type: string
+        viewed:
+          type: boolean
+
+    CourseProgress:
+      type: object
+      properties:
+        course_id:
+          type: string
+        user_id:
+          type: string
+        total_labs:
+          type: integer
+        completed_labs:
+          type: integer
+        total_points_possible:
+          type: integer
+        total_points_earned:
+          type: integer
+        completion_percentage:
+          type: integer
+        lab_progress:
+          type: array
+          items:
+            type: object
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Missing Authorization header
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Course not found

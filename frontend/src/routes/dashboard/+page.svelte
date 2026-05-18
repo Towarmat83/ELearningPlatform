@@ -28,8 +28,9 @@
     return 'badge-blue';
   }
 
-  $: totalViewed = myCourses.reduce((sum, c) => sum + c.viewed_lessons, 0);
-  $: totalLessons = myCourses.reduce((sum, c) => sum + c.lesson_count, 0);
+  $: totalCompleted = myCourses.reduce((sum, c) => sum + c.completed_labs, 0);
+  $: totalLabs = myCourses.reduce((sum, c) => sum + c.lab_count, 0);
+  $: totalScore = myCourses.reduce((sum, c) => sum + c.total_score, 0);
 </script>
 
 <svelte:head><title>My Dashboard — LearnLab</title></svelte:head>
@@ -43,17 +44,14 @@
       </h1>
       <p class="text-gray-500 mt-1">Track your learning progress</p>
     </div>
-    <a href="/dashboard/repos" class="btn-secondary text-sm flex items-center gap-2">
-      ⎇ Git Repositories
-    </a>
   </div>
 
   <!-- Stats -->
   <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
     {#each [
       { label: 'Enrolled Courses', value: myCourses.length, icon: '📚', color: 'text-blue-600' },
-      { label: 'Lessons Viewed', value: totalViewed, icon: '✅', color: 'text-green-600' },
-      { label: 'Total Lessons', value: totalLessons, icon: '📖', color: 'text-purple-600' },
+      { label: 'Labs Completed', value: totalCompleted, icon: '✅', color: 'text-green-600' },
+      { label: 'Total Score', value: totalScore, icon: '🏆', color: 'text-purple-600' },
     ] as stat}
       <div class="card text-center">
         <div class="text-2xl mb-1">{stat.icon}</div>
@@ -79,10 +77,10 @@
   {:else}
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       {#each myCourses as course}
-        {@const pct = course.lesson_count > 0
-          ? Math.round(course.viewed_lessons / course.lesson_count * 100)
+        {@const pct = course.lab_count > 0
+          ? Math.round(course.completed_labs / course.lab_count * 100)
           : 0}
-        <a href="/courses/{course.slug}" class="card hover:shadow-md transition-shadow cursor-pointer group">
+        <a href="/courses/{course.id}" class="card hover:shadow-md transition-shadow cursor-pointer group">
           <div class="w-full h-36 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mb-4 flex items-center justify-center">
             <span class="text-4xl">📚</span>
           </div>
@@ -98,19 +96,13 @@
 
           <div class="mt-3">
             <div class="flex justify-between text-xs text-gray-500 mb-1">
-              <span>{course.viewed_lessons}/{course.lesson_count} lessons</span>
+              <span>{course.completed_labs}/{course.lab_count} labs</span>
               <span>{pct}%</span>
             </div>
             <div class="w-full bg-gray-100 rounded-full h-2">
               <div class="bg-primary-500 h-2 rounded-full transition-all" style="width: {pct}%"></div>
             </div>
           </div>
-
-          {#if course.last_activity}
-            <p class="mt-3 text-xs text-gray-400">
-              Last activity: {new Date(course.last_activity).toLocaleDateString()}
-            </p>
-          {/if}
 
           {#if pct === 100}
             <div class="mt-2"><span class="badge-green">Completed!</span></div>

@@ -14,6 +14,8 @@
     "@sveltejs/kit": "^2.5.0",
     "@sveltejs/vite-plugin-svelte": "^3.1.0",
     "autoprefixer": "^10.4.19",
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.0",
     "postcss": "^8.4.38",
     "svelte": "^4.2.17",
     "svelte-check": "^3.7.0",
@@ -25,9 +27,7 @@
     "@xterm/addon-attach": "^0.12.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "highlight.js": "^11.11.1",
-    "lucide-svelte": "^0.379.0",
-    "marked": "^18.0.0"
+    "lucide-svelte": "^0.379.0"
   },
   "type": "module"
 }

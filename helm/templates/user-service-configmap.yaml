@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "elearning.fullname" . }}-user-service-config
+  labels:
+    {{- include "elearning.userService.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    port: {{ .Values.userService.service.port }}
+    jwt_expiry_hours: {{ .Values.userService.env.JWT_EXPIRY_HOURS }}
+    cors_origins:
+      - "{{ include "elearning.publicUrl" . }}"
+    gitlab_url: {{ .Values.userService.env.GITLAB_URL | quote }}
+    oauth_redirect_base: {{ .Values.userService.env.OAUTH_REDIRECT_BASE | default (include "elearning.publicUrl" .) | quote }}
+    course_service_url: "http://{{ include "elearning.fullname" . }}-course-service:{{ .Values.courseService.service.port }}"
+    gitlab_client_id: {{ .Values.userService.env.GITLAB_CLIENT_ID | quote }}
+    gitlab_client_secret: {{ .Values.userService.env.GITLAB_CLIENT_SECRET | quote }}
+    github_client_id: {{ .Values.userService.env.GITHUB_CLIENT_ID | quote }}
+    github_client_secret: {{ .Values.userService.env.GITHUB_CLIENT_SECRET | quote }}

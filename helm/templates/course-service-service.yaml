@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "elearning.fullname" . }}-course-service
+  labels:
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.courseService.service.type }}
+  ports:
+    - port: {{ .Values.courseService.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "elearning.courseService.selectorLabels" . | nindent 4 }}

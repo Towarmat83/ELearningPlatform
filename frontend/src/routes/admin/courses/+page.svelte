@@ -1,19 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { adminApi, type AdminCourse, type CourseEnrollment, type UserSearchResult } from '$lib/api';
+  import { adminApi, type Course, type CourseEnrollment } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
-  let courses: AdminCourse[] = [];
+  let courses: Course[] = [];
   let loading = true;
 
-  // Enrollment management state (one course expanded at a time)
-  let expandedSlug: string | null = null;
+  // Enrollment management state
+  let expandedId: string | null = null;
   let enrollments: CourseEnrollment[] = [];
   let enrollmentsLoading = false;
-  let searchQuery = '';
-  let searchResults: UserSearchResult[] = [];
-  let searching = false;
-  let searchTimeout: ReturnType<typeof setTimeout>;
+  let enrollUserId = '';
 
   onMount(async () => {
     auth.init();
@@ -23,7 +20,7 @@
   async function loadCourses() {
     loading = true;
     try {
-      const res = await adminApi.courses($auth.token!);
+      const res = await adminApi.adminCourses($auth.token!);
       courses = res.courses;
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load courses');
@@ -32,35 +29,16 @@
     }
   }
 
-  async function togglePublished(slug: string, value: boolean) {
-    try {
-      await adminApi.updateCourseSettings(slug, { is_published: value }, $auth.token!);
-      courses = courses.map(c => c.slug === slug ? { ...c, is_published: value } : c);
-    } catch (e: any) {
-      toasts.error(e.message || 'Update failed');
-    }
-  }
-
-  async function toggleAutoEnroll(slug: string, value: boolean) {
-    try {
-      await adminApi.updateCourseSettings(slug, { auto_enroll: value }, $auth.token!);
-      courses = courses.map(c => c.slug === slug ? { ...c, auto_enroll: value } : c);
-    } catch (e: any) {
-      toasts.error(e.message || 'Update failed');
-    }
-  }
-
-  async function openEnrollments(slug: string) {
-    if (expandedSlug === slug) {
-      expandedSlug = null;
+  async function openEnrollments(id: string) {
+    if (expandedId === id) {
+      expandedId = null;
       return;
     }
-    expandedSlug = slug;
-    searchQuery = '';
-    searchResults = [];
+    expandedId = id;
+    enrollUserId = '';
     enrollmentsLoading = true;
     try {
-      const res = await adminApi.listEnrollments(slug, $auth.token!);
+      const res = await adminApi.listEnrollments(id, $auth.token!);
       enrollments = res.enrollments;
     } catch {
       toasts.error('Failed to load enrollments');
@@ -69,42 +47,26 @@
     }
   }
 
-  function onSearchInput() {
-    clearTimeout(searchTimeout);
-    if (searchQuery.trim().length < 2) { searchResults = []; return; }
-    searchTimeout = setTimeout(async () => {
-      searching = true;
-      try {
-        const res = await adminApi.searchUsers(searchQuery, $auth.token!);
-        searchResults = res.users;
-      } catch {} finally {
-        searching = false;
-      }
-    }, 300);
-  }
-
-  async function enrollUser(userId: string) {
-    if (!expandedSlug) return;
+  async function enrollUser(courseId: string) {
+    if (!enrollUserId.trim()) return;
     try {
-      await adminApi.enrollUser(expandedSlug, userId, $auth.token!);
-      const res = await adminApi.listEnrollments(expandedSlug, $auth.token!);
+      await adminApi.enrollUser(courseId, enrollUserId.trim(), $auth.token!);
+      const res = await adminApi.listEnrollments(courseId, $auth.token!);
       enrollments = res.enrollments;
-      courses = courses.map(c => c.slug === expandedSlug
+      courses = courses.map(c => c.id === courseId
         ? { ...c, enrollment_count: c.enrollment_count + 1 } : c);
-      searchQuery = '';
-      searchResults = [];
+      enrollUserId = '';
       toasts.success('User enrolled');
     } catch (e: any) {
       toasts.error(e.message || 'Enroll failed');
     }
   }
 
-  async function unenrollUser(userId: string) {
-    if (!expandedSlug) return;
+  async function unenrollUser(courseId: string, userId: string) {
     try {
-      await adminApi.unenrollUser(expandedSlug, userId, $auth.token!);
+      await adminApi.unenrollUser(courseId, userId, $auth.token!);
       enrollments = enrollments.filter(e => e.user_id !== userId);
-      courses = courses.map(c => c.slug === expandedSlug
+      courses = courses.map(c => c.id === courseId
         ? { ...c, enrollment_count: Math.max(0, c.enrollment_count - 1) } : c);
     } catch (e: any) {
       toasts.error(e.message || 'Unenroll failed');
@@ -124,15 +86,14 @@
 <div class="space-y-4">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold text-gray-800">Courses</h2>
-    <a href="/admin/repos" class="btn-secondary text-sm">⎇ Manage Git Repos</a>
   </div>
 
   {#if loading}
     <div class="text-center py-10 text-gray-400">Loading…</div>
   {:else if courses.length === 0}
     <div class="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400">
-      <p class="text-lg mb-2">No courses loaded</p>
-      <p class="text-sm">Add files to <code>courses/</code> or sync a git repo.</p>
+      <p class="text-lg mb2">No courses loaded</p>
+      <p class="text-sm">Courses are managed through Kubernetes CRDs.</p>
     </div>
   {:else}
     <div class="space-y-2">
@@ -143,94 +104,55 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap mb-0.5">
                 <span class="font-semibold text-gray-900">{course.title}</span>
-                <code class="text-xs text-gray-400 bg-gray-100 px-1 rounded">{course.slug}</code>
+                <code class="text-xs text-gray-400 bg-gray-100 px-1 rounded">{course.id}</code>
                 {#if course.difficulty}
                   <span class={difficultyColor(course.difficulty)}>{course.difficulty}</span>
                 {/if}
                 {#if course.category}
                   <span class="badge-blue">{course.category}</span>
                 {/if}
-                {#if course.source && course.source !== 'local'}
-                  <span class="text-xs text-gray-400" title={course.source}>⎇ git</span>
-                {:else}
-                  <span class="text-xs text-gray-400">📁 local</span>
-                {/if}
               </div>
               <p class="text-xs text-gray-400">
-                {course.lesson_count} lesson{course.lesson_count !== 1 ? 's' : ''} ·
+                {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''} ·
                 {course.enrollment_count} enrolled
               </p>
             </div>
 
-            <!-- Toggles -->
+            <!-- Actions -->
             <div class="flex items-center gap-4 shrink-0">
-              <label class="flex items-center gap-2 cursor-pointer" title="Published">
-                <span class="text-xs text-gray-500">Published</span>
-                <button
-                  role="switch"
-                  aria-checked={course.is_published}
-                  on:click={() => togglePublished(course.slug, !course.is_published)}
-                  class="relative inline-flex h-5 w-9 rounded-full transition-colors
-                    {course.is_published ? 'bg-green-500' : 'bg-gray-200'}">
-                  <span class="inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5
-                    {course.is_published ? 'translate-x-4' : 'translate-x-0.5'}"></span>
-                </button>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer" title="Auto-enroll: anyone can self-enroll">
-                <span class="text-xs text-gray-500">Auto-enroll</span>
-                <button
-                  role="switch"
-                  aria-checked={course.auto_enroll}
-                  on:click={() => toggleAutoEnroll(course.slug, !course.auto_enroll)}
-                  class="relative inline-flex h-5 w-9 rounded-full transition-colors
-                    {course.auto_enroll ? 'bg-primary-500' : 'bg-gray-200'}">
-                  <span class="inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5
-                    {course.auto_enroll ? 'translate-x-4' : 'translate-x-0.5'}"></span>
-                </button>
-              </label>
+              {#if course.is_published}
+                <span class="badge-green">Published</span>
+              {:else}
+                <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Draft</span>
+              {/if}
               <button
                 class="btn-secondary text-xs"
-                on:click={() => openEnrollments(course.slug)}>
-                👥 {expandedSlug === course.slug ? 'Close' : 'Enrollments'}
+                on:click={() => openEnrollments(course.id)}>
+                👥 {expandedId === course.id ? 'Close' : 'Enrollments'}
               </button>
             </div>
           </div>
 
           <!-- Enrollment panel (expanded) -->
-          {#if expandedSlug === course.slug}
+          {#if expandedId === course.id}
             <div class="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
 
-              <!-- Add user -->
+              <!-- Add user by ID -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Enroll a user</label>
-                <div class="relative">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Enroll a user by ID</label>
+                <div class="flex gap-2">
                   <input
                     type="text"
-                    class="input w-full"
-                    placeholder="Search by username or email…"
-                    bind:value={searchQuery}
-                    on:input={onSearchInput} />
-                  {#if searching}
-                    <span class="absolute right-3 top-2.5 text-gray-400 text-xs">Searching…</span>
-                  {/if}
+                    class="input flex-1 font-mono text-sm"
+                    placeholder="User UUID…"
+                    bind:value={enrollUserId} />
+                  <button
+                    class="btn-primary text-sm"
+                    on:click={() => enrollUser(course.id)}
+                    disabled={!enrollUserId.trim()}>
+                    Enroll
+                  </button>
                 </div>
-                {#if searchResults.length > 0}
-                  <ul class="mt-1 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-                    {#each searchResults as u}
-                      <li>
-                        <button
-                          class="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-sm"
-                          on:click={() => enrollUser(u.id)}>
-                          <span>
-                            <span class="font-medium text-gray-800">{u.username}</span>
-                            <span class="text-gray-400 ml-2">{u.email}</span>
-                          </span>
-                          <span class="text-primary-600 text-xs">+ Enroll</span>
-                        </button>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
               </div>
 
               <!-- Enrolled users -->
@@ -256,7 +178,7 @@
                           </span>
                           <button
                             class="text-xs text-red-500 hover:text-red-700"
-                            on:click={() => unenrollUser(e.user_id)}>
+                            on:click={() => unenrollUser(course.id, e.user_id)}>
                             Remove
                           </button>
                         </div>

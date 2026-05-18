@@ -1,9 +1,11 @@
 const API_BASE = '/api';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  body: Record<string, unknown> | null;
+  constructor(public status: number, message: string, body?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
+    this.body = body ?? null;
   }
 }
 
@@ -24,13 +26,24 @@ async function request<T>(
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401 && token) {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+    window.location.href = '/';
+    throw new ApiError(401, 'Session expirée');
+  }
+
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let body: Record<string, unknown> | null = null;
     try {
       const err = await res.json();
+      body = err;
       message = err.error || message;
     } catch {}
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, body);
   }
   return res.json();
 }
@@ -39,7 +52,6 @@ export const api = {
   get:    <T>(path: string, token?: string) => request<T>('GET',    path, undefined, token),
   post:   <T>(path: string, body: unknown, token?: string) => request<T>('POST',   path, body, token),
   put:    <T>(path: string, body: unknown, token?: string) => request<T>('PUT',    path, body, token),
-  patch:  <T>(path: string, body: unknown, token?: string) => request<T>('PATCH',  path, body, token),
   delete: <T>(path: string, token?: string) => request<T>('DELETE', path, undefined, token),
 };
 
@@ -50,17 +62,15 @@ export interface OAuthProvider {
   name: string;
 }
 
-export interface User {
+export interface UserPublic {
   id: string;
   username: string;
   email: string;
   role: 'admin' | 'student';
-}
-
-export interface UserPublic extends User {
+  is_active: boolean;
   avatar_url: string | null;
   bio: string | null;
-  is_active: boolean;
+  auth_provider: string;
   created_at: string;
 }
 
@@ -70,63 +80,29 @@ export interface AuthResponse {
 }
 
 export interface Course {
-  slug: string;
+  id: string;
   title: string;
-  description: string;
-  category: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | '';
+  description: string | null;
+  thumbnail: string | null;
+  category: string | null;
+  difficulty: string | null;
   is_published: boolean;
-  auto_enroll: boolean;
-  lesson_count: number;
-  source?: string;
-}
-
-export interface AdminCourse extends Course {
+  created_by: string;
+  creator_username: string | null;
+  lab_count: number;
   enrollment_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MyCourse extends Course {
-  viewed_lessons: number;
-  last_activity: string | null;
-}
-
-export interface CourseFilter {
-  category?: string;
-  difficulty?: string;
-  search?: string;
-}
-
-export interface LessonSummary {
-  slug: string;
-  title: string;
-  order: number;
-  viewed: boolean;
-}
-
-export interface LessonDetail extends LessonSummary {
-  content: string;
-}
-
-export interface GitRepo {
-  id: string;
-  url: string;
-  branch: string;
-  has_token: boolean;
-  status: 'pending' | 'syncing' | 'synced' | 'error';
-  error_message: string | null;
-  last_synced_at: string | null;
-  created_at: string;
-}
-
-export interface AdminStats {
-  total_users: number;
-  total_courses: number;
-  total_enrollments: number;
+  completed_labs: number;
+  total_score: number;
 }
 
 export interface AdminUser extends UserPublic {
   enrolled_courses: number;
-  viewed_lessons: number;
+  completed_labs: number;
 }
 
 export interface UpdateUser {
@@ -151,17 +127,88 @@ export interface PlatformSetting {
   description: string | null;
 }
 
-export interface UserSearchResult {
-  id: string;
-  username: string;
-  email: string;
-}
-
 export interface CourseEnrollment {
   user_id: string;
   username: string;
   email: string;
   enrolled_at: string;
+}
+
+export interface AdminStats {
+  total_users: number;
+  total_courses: number;
+  total_labs: number;
+  total_submissions: number;
+  total_enrollments: number;
+  success_rate: string;
+}
+
+export interface Lab {
+  id: string;
+  course_id: string;
+  title: string;
+  description: string | null;
+  lab_type: 'form' | 'ctf' | 'interactive';
+  module_type?: 'video' | 'image' | 'text' | 'quiz';
+  content: Record<string, unknown>;
+  points: number;
+  order_index: number;
+  is_published: boolean;
+  hidden: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LabProgress {
+  completed: boolean;
+  best_score: number;
+  total_attempts: number;
+  completed_at: string | null;
+}
+
+export interface LabWithProgress {
+  lab: Lab;
+  progress: LabProgress | null;
+}
+
+export interface CourseProgress {
+  course_id: string;
+  user_id: string;
+  total_labs: number;
+  completed_labs: number;
+  total_points_possible: number;
+  total_points_earned: number;
+  completion_percentage: number;
+  lab_progress: {
+    lab_id: string;
+    lab_title: string;
+    lab_type: string;
+    points: number;
+    completed: boolean;
+    best_score: number;
+    total_attempts: number;
+    completed_at: string | null;
+  }[];
+}
+
+export interface SubmissionResult {
+  is_correct: boolean;
+  score: number;
+  max_score: number;
+  feedback: string | null;
+  question_results?: {
+    question_id: string;
+    is_correct: boolean;
+    points_earned: number;
+    correct_answer: string | null;
+    explanation: string | null;
+  }[] | null;
+  flag_results?: {
+    flag_id: string;
+    name: string;
+    is_correct: boolean;
+    points_earned: number;
+  }[] | null;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -200,37 +247,145 @@ export const adminSettingsApi = {
 // ── Courses ───────────────────────────────────────────────────────────────────
 
 export const coursesApi = {
-  list: (params?: CourseFilter) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return api.get<{ courses: Course[]; total: number }>(`/courses${qs}`);
+  list: (params?: { category?: string; difficulty?: string; search?: string; page?: number; per_page?: number }) => {
+    const qs = params ? '?' + new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)]))
+    ).toString() : '';
+    return api.get<{ courses: Course[]; total: number; page: number; per_page: number; total_pages: number }>(`/courses${qs}`);
   },
-  get: (slug: string) => api.get<Course>(`/courses/${slug}`),
-  enroll: (slug: string, token: string) =>
-    api.post(`/courses/${slug}/enroll`, {}, token),
-  unenroll: (slug: string, token: string) =>
-    api.delete(`/courses/${slug}/unenroll`, token),
+  get: (id: string) => api.get<Course>(`/courses/${id}`),
+  enroll: (id: string, token: string) =>
+    api.post(`/courses/${id}/enroll`, {}, token),
+  unenroll: (id: string, token: string) =>
+    api.delete(`/courses/${id}/unenroll`, token),
   myCourses: (token: string) =>
     api.get<{ courses: MyCourse[] }>('/my/courses', token),
 };
 
-// ── Lessons ───────────────────────────────────────────────────────────────────
+// ── Labs ──────────────────────────────────────────────────────────────────────
 
-export const lessonsApi = {
+export const labsApi = {
+  list: (courseId: string, token: string) =>
+    api.get<{ labs: Lab[] }>(`/courses/${courseId}/labs`, token),
+  get: (courseId: string, labId: string, token: string) =>
+    api.get<LabWithProgress>(`/courses/${courseId}/labs/${labId}`, token),
+  submit: (courseId: string, labId: string, answer: unknown, token: string) =>
+    api.post<SubmissionResult>(`/courses/${courseId}/labs/${labId}/submit`, { answer }, token),
+  progress: (courseId: string, token: string) =>
+    api.get<CourseProgress>(`/courses/${courseId}/progress`, token),
+};
+
+// ── Quiz Types ─────────────────────────────────────────────────────────────────
+
+export interface QuizQuestion {
+  id: string;
+  type: 'single' | 'multiple' | 'boolean' | 'order';
+  difficulty?: string;
+  points: number;
+  question: string;
+  answers?: { id: string; text: string }[];
+  items?: { id: string; text: string }[];
+  source_refs?: SourceRef[];
+}
+
+export interface SourceRef {
+  course: string;
+  module: string;
+  anchor: string;
+  priority: number;
+}
+
+export interface QuizUserAnswer {
+  single?: string;
+  multiple?: string[];
+  boolean?: boolean;
+  order?: string[];
+}
+
+export interface QuizQuestionResult {
+  question_id: string;
+  type: string;
+  is_correct: boolean;
+  points_earned: number;
+  points_max: number;
+  correct_answer?: unknown;
+  feedback?: string;
+  source_refs?: SourceRef[];
+}
+
+export interface QuizCooldown {
+  remaining_seconds: number;
+  attempts: number;
+  locked: boolean;
+}
+
+export interface QuizSubmitResponse {
+  total_score: number;
+  max_score: number;
+  passed: boolean;
+  question_results: QuizQuestionResult[];
+  cooldowns?: Record<string, QuizCooldown>;
+}
+
+export interface QuizCooldownError {
+  error: string;
+  cooldowns: Record<string, QuizCooldown>;
+}
+
+// ── Module API (quiz-type modules use these) ──────────────────────────────────────
+
+export interface ModuleSummary {
+  index: number;
+  name: string;
+  slug: string;
+  type: 'text' | 'video' | 'image' | 'quiz';
+  viewed: boolean;
+  hidden: boolean;
+}
+
+export interface ModuleQuizConfig {
+  passing_score: number;
+  cooldown?: {
+    strategy: string;
+    base_seconds: number;
+    multiplier: number;
+    max_seconds: number;
+  };
+  max_attempts_per_question: number | null;
+  lock_on_max_attempts: boolean;
+}
+
+export interface ModuleDetail {
+  index: number;
+  name: string;
+  slug: string;
+  type: 'text' | 'video' | 'image' | 'quiz';
+  content: string | null;
+  viewed: boolean;
+  hidden: boolean;
+  questions?: QuizQuestion[];
+  quiz_config?: ModuleQuizConfig;
+  cooldowns?: Record<string, QuizCooldown>;
+}
+
+export const modulesApi = {
   list: (courseSlug: string, token: string) =>
-    api.get<{ lessons: LessonSummary[] }>(`/courses/${courseSlug}/lessons`, token),
-  get: (courseSlug: string, lessonSlug: string, token: string) =>
-    api.get<{ lesson: LessonDetail }>(`/courses/${courseSlug}/lessons/${lessonSlug}`, token),
-  complete: (courseSlug: string, lessonSlug: string, token: string) =>
-    api.post(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
+    api.get<{ modules: ModuleSummary[] }>(`/courses/${courseSlug}/modules`, token),
+  get: (courseSlug: string, index: number, token: string) =>
+    api.get<ModuleDetail>(`/courses/${courseSlug}/modules/${index}`, token),
+  submit: (courseSlug: string, index: number, answers: Record<string, QuizUserAnswer>, token: string) =>
+    api.post<QuizSubmitResponse>(`/courses/${courseSlug}/modules/${index}/submit`, { answers }, token),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const adminApi = {
+  clearCache: (token: string) =>
+    api.post<{ status: string }>('/admin/cache/clear', {}, token),
+
   stats: (token: string) =>
     api.get<AdminStats>('/admin/stats', token),
 
-  // Users
   users: (token: string) =>
     api.get<{ users: AdminUser[]; total: number }>('/admin/users', token),
   getUser: (id: string, token: string) =>
@@ -239,30 +394,18 @@ export const adminApi = {
     api.put(`/admin/users/${id}`, data, token),
   deleteUser: (id: string, token: string) =>
     api.delete(`/admin/users/${id}`, token),
-  searchUsers: (q: string, token: string) =>
-    api.get<{ users: UserSearchResult[] }>(`/admin/users/search?q=${encodeURIComponent(q)}`, token),
 
-  // Courses
-  courses: (token: string) =>
-    api.get<{ courses: AdminCourse[]; total: number }>('/admin/courses', token),
-  updateCourseSettings: (slug: string, data: { is_published?: boolean; auto_enroll?: boolean }, token: string) =>
-    api.patch<Course>(`/admin/courses/${slug}/settings`, data, token),
-  listEnrollments: (slug: string, token: string) =>
-    api.get<{ enrollments: CourseEnrollment[] }>(`/admin/courses/${slug}/enrollments`, token),
-  enrollUser: (slug: string, userId: string, token: string) =>
-    api.post(`/admin/courses/${slug}/enrollments`, { user_id: userId }, token),
-  unenrollUser: (slug: string, userId: string, token: string) =>
-    api.delete(`/admin/courses/${slug}/enrollments/${userId}`, token),
-
-  // Git repos (admin-only)
-  repos: {
-    list: (token: string) =>
-      api.get<{ repos: GitRepo[] }>('/admin/repos', token),
-    add: (data: { url: string; branch: string; token?: string }, token: string) =>
-      api.post<GitRepo>('/admin/repos', data, token),
-    remove: (id: string, token: string) =>
-      api.delete(`/admin/repos/${id}`, token),
-    sync: (id: string, token: string) =>
-      api.post<{ message: string; last_synced_at: string }>(`/admin/repos/${id}/sync`, {}, token),
+  adminCourses: (token: string, params?: { page?: number; per_page?: number; search?: string }) => {
+    const qs = params ? '?' + new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)]))
+    ).toString() : '';
+    return api.get<{ courses: Course[]; total: number; page: number; per_page: number }>(`/admin/courses${qs}`, token);
   },
+
+  listEnrollments: (courseId: string, token: string) =>
+    api.get<{ enrollments: CourseEnrollment[] }>(`/admin/courses/${courseId}/enrollments`, token),
+  enrollUser: (courseId: string, userId: string, token: string) =>
+    api.post(`/admin/courses/${courseId}/enrollments`, { user_id: userId }, token),
+  unenrollUser: (courseId: string, userId: string, token: string) =>
+    api.delete(`/admin/courses/${courseId}/enrollments/${userId}`, token),
 };

@@ -19,10 +19,14 @@ COPY --from=builder /app/package.json .
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV FRONTEND_CONFIG=/etc/frontend/config.env
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD wget -qO- http://localhost:3000/ || exit 1
 
-CMD ["node", "build/index.js"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

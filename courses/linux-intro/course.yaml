@@ -1,5 +1,26 @@
-title: "Introduction to Linux"
-description: "Apprends les bases de Linux : navigation, gestion de fichiers et permissions. Un cours pratique pour démarrer sur la bonne voie."
-category: linux
-difficulty: beginner
-is_published: true
+apiVersion: elearning.example.com/v1
+kind: Course
+metadata:
+  name: linux-intro
+spec:
+  title: "Introduction to Linux"
+  description: "Apprends les bases de Linux : navigation, gestion de fichiers et permissions. Un cours pratique pour démarrer sur la bonne voie."
+  category: linux
+  difficulty: beginner
+  hidden: false
+  modules:
+    - name: "Qu'est-ce que Linux ?"
+      type: "text"
+      src: "https://github.com/Towarmat83/ELearningPlatform"
+      ref: "feat/microservices-architecture"
+      path: "courses/linux-intro/01-what-is-linux.md"
+    - name: "Naviguer dans le système de fichiers"
+      type: "text"
+      src: "https://github.com/Towarmat83/ELearningPlatform"
+      ref: "feat/microservices-architecture"
+      path: "courses/linux-intro/02-navigation.md"
+    - name: "Fichiers, permissions et utilisateurs"
+      type: "text"
+      src: "https://github.com/Towarmat83/ELearningPlatform"
+      ref: "feat/microservices-architecture"
+      path: "courses/linux-intro/03-files.md"

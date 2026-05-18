@@ -88,7 +88,16 @@ func scanUserPublic(row interface {
 	return u, err
 }
 
-// POST /api/auth/register
+// Register godoc
+// @Summary  Register a new user
+// @Tags     Auth
+// @Accept   json
+// @Produce  json
+// @Param    body  body  registerRequest  true  "Registration details"
+// @Success  200   {object}  authResponse
+// @Failure  400   {object}  map[string]string
+// @Failure  409   {object}  map[string]string
+// @Router   /api/auth/register [post]
 func (s *State) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if err := decode(r, &req); err != nil {
@@ -171,7 +180,15 @@ func (s *State) Register(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, authResponse{Token: token, User: u})
 }
 
-// POST /api/auth/login
+// Login godoc
+// @Summary  Authenticate and receive a JWT
+// @Tags     Auth
+// @Accept   json
+// @Produce  json
+// @Param    body  body  loginRequest  true  "Login credentials"
+// @Success  200   {object}  authResponse
+// @Failure  401   {object}  map[string]string
+// @Router   /api/auth/login [post]
 func (s *State) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := decode(r, &req); err != nil {
@@ -222,7 +239,14 @@ func (s *State) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/auth/me
+// Me godoc
+// @Summary   Get current user profile
+// @Tags      Auth
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  userPublicRow
+// @Failure   404  {object}  map[string]string
+// @Router    /api/auth/me [get]
 func (s *State) Me(w http.ResponseWriter, r *http.Request) {
 	c := s.claims(r)
 	u, err := scanUserPublic(s.Pool.QueryRow(r.Context(),
@@ -235,7 +259,16 @@ func (s *State) Me(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, u)
 }
 
-// PUT /api/auth/profile
+// UpdateProfile godoc
+// @Summary   Update current user profile
+// @Tags      Auth
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     body  body  object  true  "Fields: username, bio, avatar_url (all optional)"
+// @Success   200   {object}  userPublicRow
+// @Failure   400   {object}  map[string]string
+// @Router    /api/auth/profile [put]
 func (s *State) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username  *string `json:"username"`
@@ -287,7 +320,17 @@ func (s *State) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, u)
 }
 
-// PUT /api/auth/password
+// ChangePassword godoc
+// @Summary   Change the current user's password
+// @Tags      Auth
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     body  body  object  true  "old_password and new_password"
+// @Success   200   {object}  map[string]string
+// @Failure   400   {object}  map[string]string
+// @Failure   401   {object}  map[string]string
+// @Router    /api/auth/password [put]
 func (s *State) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		OldPassword string `json:"old_password"`

@@ -156,6 +156,26 @@ logs:
 	@echo "=== postgresql ==="
 	@kubectl logs deploy/elearning-postgresql --tail=5 2>&1 || true
 
+# ── OpenAPI ──────────────────────────────────────────────────────────────────
+#
+# Prerequisites:
+#   go install github.com/swaggo/swag/cmd/swag@latest
+
+.PHONY: openapi-gen openapi-gen-course-service openapi-gen-user-service
+
+openapi-gen: openapi-gen-course-service openapi-gen-user-service
+	@echo "OpenAPI JSON files regenerated from code."
+
+openapi-gen-course-service:
+	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
+	@echo "Generating course-service/openapi.json from code..."
+	@cd course-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
+
+openapi-gen-user-service:
+	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
+	@echo "Generating user-service/openapi.json from code..."
+	@cd user-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
+
 # ── Status ──────────────────────────────────────────────────────────────────
 
 .PHONY: status

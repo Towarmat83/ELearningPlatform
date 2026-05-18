@@ -15,6 +15,14 @@ import (
 	"github.com/elearning/course-service/internal/handlers"
 )
 
+// @title          Course Service API
+// @version        1.0.0
+// @description    Stateless micro-service for course/module content delivery.
+// @host           localhost:8082
+// @BasePath       /
+// @securityDefinitions.apikey BearerAuth
+// @in             header
+// @name           Authorization
 func main() {
 	cfg := config.Load()
 

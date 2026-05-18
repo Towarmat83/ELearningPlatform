@@ -111,8 +111,13 @@ func derefStr(s *string) string {
 	return *s
 }
 
-// POST /api/admin/cache/clear — clears the git cache to force re-clone on next access.
-// Requires admin role.
+// ClearCache godoc
+// @Summary   Clear the git content cache (admin)
+// @Tags      Admin
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]string
+// @Router    /api/admin/cache/clear [post]
 func (s *State) ClearCache(w http.ResponseWriter, r *http.Request) {
 	s.GitCache.Clear()
 	slog.Info("git cache cleared by admin")

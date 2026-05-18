@@ -53,7 +53,12 @@ func decodeOAuthState(stateToken, secret string) (string, bool) {
 	return "", false
 }
 
-// GET /api/auth/oauth/providers
+// ListProviders godoc
+// @Summary  List configured OAuth providers
+// @Tags     OAuth
+// @Produce  json
+// @Success  200  {object}  map[string]interface{}
+// @Router   /api/auth/oauth/providers [get]
 func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
 	var providers []map[string]string
 	if s.Config.GitLabClientID != "" {
@@ -68,7 +73,14 @@ func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"providers": providers})
 }
 
-// GET /api/auth/oauth/{provider}/authorize
+// OAuthAuthorize godoc
+// @Summary  Get OAuth authorization URL
+// @Tags     OAuth
+// @Produce  json
+// @Param    provider  path  string  true  "OAuth provider (gitlab, github)"
+// @Success  200  {object}  map[string]string
+// @Failure  400  {object}  map[string]string
+// @Router   /api/auth/oauth/{provider}/authorize [get]
 func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	provider := param(r, "provider")
 	stateToken, err := makeOAuthState(provider, s.Config.JWTSecret)
@@ -119,7 +131,15 @@ func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"url": authURL, "state": stateToken})
 }
 
-// POST /api/auth/oauth/callback
+// OAuthCallback godoc
+// @Summary  Complete OAuth login flow
+// @Tags     OAuth
+// @Accept   json
+// @Produce  json
+// @Param    body  body  object  true  "code and state from provider"
+// @Success  200   {object}  authResponse
+// @Failure  401   {object}  map[string]string
+// @Router   /api/auth/oauth/callback [post]
 func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code  string `json:"code"`

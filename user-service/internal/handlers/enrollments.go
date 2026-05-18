@@ -10,7 +10,15 @@ import (
 	"github.com/elearning/user-service/internal/metrics"
 )
 
-// POST /api/courses/{slug}/enroll
+// Enroll godoc
+// @Summary   Enroll in a course
+// @Tags      Enrollments
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]string
+// @Failure   401   {object}  map[string]string
+// @Router    /api/courses/{slug}/enroll [post]
 func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
@@ -30,7 +38,14 @@ func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Enrolled successfully"})
 }
 
-// DELETE /api/courses/{slug}/unenroll
+// Unenroll godoc
+// @Summary   Unenroll from a course
+// @Tags      Enrollments
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]string
+// @Router    /api/courses/{slug}/unenroll [delete]
 func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
@@ -75,7 +90,13 @@ func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
 	return &c, nil
 }
 
-// GET /api/my/courses
+// MyCourses godoc
+// @Summary   List courses the current user is enrolled in
+// @Tags      Enrollments
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/my/courses [get]
 func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
 	rows, err := s.Pool.Query(r.Context(), `

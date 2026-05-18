@@ -16,6 +16,12 @@ type State struct {
 	Config *config.Config
 }
 
+// Health godoc
+// @Summary  Liveness check
+// @Tags     Health
+// @Produce  json
+// @Success  200  {object}  map[string]string
+// @Router   /health [get]
 func (s *State) Health(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",

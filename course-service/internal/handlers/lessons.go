@@ -50,7 +50,16 @@ func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
 	return result.Enrolled
 }
 
-// GET /api/courses/{slug}/lessons
+// ListLessons godoc
+// @Summary   List lessons for a course
+// @Tags      Lessons
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   403   {object}  map[string]string
+// @Failure   404   {object}  map[string]string
+// @Router    /api/courses/{slug}/lessons [get]
 func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	claims := s.claims(r)
@@ -95,7 +104,17 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"lessons": out})
 }
 
-// GET /api/courses/{slug}/lessons/{lesson_slug}
+// GetLesson godoc
+// @Summary   Get a lesson by slug
+// @Tags      Lessons
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug         path  string  true  "Course slug"
+// @Param     lesson_slug  path  string  true  "Lesson slug"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   403   {object}  map[string]string
+// @Failure   404   {object}  map[string]string
+// @Router    /api/courses/{slug}/lessons/{lesson_slug} [get]
 func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	lessonSlug := param(r, "lesson_slug")
@@ -160,7 +179,17 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 	s.Error(w, http.StatusNotFound, "Lesson not found")
 }
 
-// POST /api/courses/{slug}/lessons/{lesson_slug}/complete
+// MarkLessonComplete godoc
+// @Summary   Mark a lesson as complete
+// @Tags      Lessons
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug         path  string  true  "Course slug"
+// @Param     lesson_slug  path  string  true  "Lesson slug"
+// @Success   200   {object}  map[string]string
+// @Failure   403   {object}  map[string]string
+// @Failure   404   {object}  map[string]string
+// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post]
 func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	lessonSlug := param(r, "lesson_slug")

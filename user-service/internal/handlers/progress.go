@@ -22,7 +22,15 @@ func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[str
 	return m
 }
 
-// POST /api/courses/{slug}/lessons/{lesson_slug}/complete
+// MarkLessonComplete godoc
+// @Summary   Mark a lesson as complete
+// @Tags      Progress
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug         path  string  true  "Course slug"
+// @Param     lesson_slug  path  string  true  "Lesson slug"
+// @Success   200   {object}  map[string]string
+// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post]
 func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	lessonSlug := param(r, "lesson_slug")

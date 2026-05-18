@@ -37,7 +37,15 @@ func toCourseResponse(c *content.Course) courseResponse {
 	}
 }
 
-// GET /api/courses — only published courses, public endpoint
+// ListCourses godoc
+// @Summary  List published courses
+// @Tags     Courses
+// @Produce  json
+// @Param    category   query  string  false  "Filter by category"
+// @Param    difficulty query  string  false  "Filter by difficulty"
+// @Param    search     query  string  false  "Search by title or description"
+// @Success  200  {object}  map[string]interface{}
+// @Router   /api/courses [get]
 func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	category := strings.ToLower(q.Get("category"))
@@ -64,7 +72,13 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"courses": out, "total": len(out)})
 }
 
-// GET /api/admin/courses — all courses (including hidden), admin only
+// ListAdminCourses godoc
+// @Summary   List all courses including hidden (admin)
+// @Tags      Admin
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/courses [get]
 func (s *State) ListAdminCourses(w http.ResponseWriter, r *http.Request) {
 	all := s.Content.List()
 	out := make([]courseResponse, 0, len(all))
@@ -98,7 +112,16 @@ func moduleTypeToLabType(t string) string {
 	}
 }
 
-// GET /api/courses/{slug}/labs/{lab_id} — returns a single module as a lab
+// GetLab godoc
+// @Summary   Get a single lab
+// @Tags      Labs
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug    path  string  true  "Course slug"
+// @Param     lab_id  path  string  true  "Lab ID"
+// @Success   200  {object}  map[string]interface{}
+// @Failure   404  {object}  map[string]string
+// @Router    /api/courses/{slug}/labs/{lab_id} [get]
 func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	labID := param(r, "lab_id")
@@ -130,7 +153,15 @@ func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 	s.Error(w, http.StatusNotFound, "Lab not found")
 }
 
-// GET /api/courses/{slug}/labs — returns course modules as labs
+// ListLabs godoc
+// @Summary   List labs for a course
+// @Tags      Labs
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200  {object}  map[string]interface{}
+// @Failure   404  {object}  map[string]string
+// @Router    /api/courses/{slug}/labs [get]
 func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	c := s.Content.Get(courseSlug)
@@ -158,7 +189,14 @@ func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"labs": labs})
 }
 
-// GET /api/courses/{slug}/progress — returns progress based on module count
+// GetCourseProgress godoc
+// @Summary   Get course progress summary
+// @Tags      Courses
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/courses/{slug}/progress [get]
 func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	c := s.Content.Get(courseSlug)
@@ -178,7 +216,14 @@ func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/courses/{slug}
+// GetCourse godoc
+// @Summary  Get a course by slug
+// @Tags     Courses
+// @Produce  json
+// @Param    slug  path  string  true  "Course slug"
+// @Success  200   {object}  courseResponse
+// @Failure  404   {object}  map[string]string
+// @Router   /api/courses/{slug} [get]
 func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	c := s.Content.Get(slug)

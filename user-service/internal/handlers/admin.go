@@ -5,7 +5,13 @@ import (
 	"strings"
 )
 
-// GET /api/admin/stats
+// AdminStats godoc
+// @Summary   Get platform statistics (admin)
+// @Tags      Admin - Stats
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/stats [get]
 func (s *State) AdminStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -24,7 +30,13 @@ func (s *State) AdminStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/admin/users
+// ListUsers godoc
+// @Summary   List all users (admin)
+// @Tags      Admin - Users
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/users [get]
 func (s *State) ListUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.Pool.Query(r.Context(), `
 		SELECT u.id::text, u.username, u.email, u.role, u.is_active, u.avatar_url, u.bio, u.created_at::text,
@@ -63,7 +75,15 @@ func (s *State) ListUsers(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"users": users, "total": len(users)})
 }
 
-// GET /api/admin/users/{user_id}
+// GetUser godoc
+// @Summary   Get a user by ID (admin)
+// @Tags      Admin - Users
+// @Security  BearerAuth
+// @Produce   json
+// @Param     user_id  path  string  true  "User UUID"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   404   {object}  map[string]string
+// @Router    /api/admin/users/{user_id} [get]
 func (s *State) GetUser(w http.ResponseWriter, r *http.Request) {
 	userID := param(r, "user_id")
 	type userDetailRow struct {
@@ -97,7 +117,17 @@ func (s *State) GetUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, u)
 }
 
-// PUT /api/admin/users/{user_id}
+// UpdateUser godoc
+// @Summary   Update a user (admin)
+// @Tags      Admin - Users
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     user_id  path  string  true  "User UUID"
+// @Param     body     body  object  true  "Fields: username, bio, avatar_url, is_active, role (all optional)"
+// @Success   200   {object}  userPublicRow
+// @Failure   404   {object}  map[string]string
+// @Router    /api/admin/users/{user_id} [put]
 func (s *State) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	userID := param(r, "user_id")
 	var req struct {
@@ -134,7 +164,14 @@ func (s *State) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, u)
 }
 
-// DELETE /api/admin/users/{user_id}
+// DeleteUser godoc
+// @Summary   Delete a user (admin)
+// @Tags      Admin - Users
+// @Security  BearerAuth
+// @Produce   json
+// @Param     user_id  path  string  true  "User UUID"
+// @Success   200   {object}  map[string]string
+// @Router    /api/admin/users/{user_id} [delete]
 func (s *State) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := param(r, "user_id")
 	if _, err := s.Pool.Exec(r.Context(), "DELETE FROM users WHERE id = $1::uuid", userID); err != nil {
@@ -144,7 +181,14 @@ func (s *State) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "User deleted"})
 }
 
-// GET /api/admin/users/search?q=...
+// SearchUsers godoc
+// @Summary   Search users by username or email (admin)
+// @Tags      Admin - Users
+// @Security  BearerAuth
+// @Produce   json
+// @Param     q  query  string  true  "Search query"
+// @Success   200   {object}  map[string]interface{}
+// @Router    /api/admin/users/search [get]
 func (s *State) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	q := "%" + strings.ToLower(r.URL.Query().Get("q")) + "%"
 	rows, err := s.Pool.Query(r.Context(), `
@@ -171,7 +215,14 @@ func (s *State) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"users": users})
 }
 
-// GET /api/admin/courses/{slug}/enrollments
+// ListCourseEnrollments godoc
+// @Summary   List enrollments for a course (admin)
+// @Tags      Admin - Courses
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]interface{}
+// @Router    /api/admin/courses/{slug}/enrollments [get]
 func (s *State) ListCourseEnrollments(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	rows, err := s.Pool.Query(r.Context(), `
@@ -201,7 +252,16 @@ func (s *State) ListCourseEnrollments(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"enrollments": list})
 }
 
-// POST /api/admin/courses/{slug}/enrollments  body: {"user_id": "uuid"}
+// AdminEnrollUser godoc
+// @Summary   Enroll a user in a course (admin)
+// @Tags      Admin - Courses
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Param     body  body  object  true  "user_id (UUID)"
+// @Success   200   {object}  map[string]string
+// @Router    /api/admin/courses/{slug}/enrollments [post]
 func (s *State) AdminEnrollUser(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	var req struct {
@@ -221,7 +281,15 @@ func (s *State) AdminEnrollUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "User enrolled"})
 }
 
-// DELETE /api/admin/courses/{slug}/enrollments/{user_id}
+// AdminUnenrollUser godoc
+// @Summary   Unenroll a user from a course (admin)
+// @Tags      Admin - Courses
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug     path  string  true  "Course slug"
+// @Param     user_id  path  string  true  "User UUID"
+// @Success   200   {object}  map[string]string
+// @Router    /api/admin/courses/{slug}/enrollments/{user_id} [delete]
 func (s *State) AdminUnenrollUser(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	userID := param(r, "user_id")
@@ -234,8 +302,16 @@ func (s *State) AdminUnenrollUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "User unenrolled"})
 }
 
-// POST /api/admin/sync-progress — admin syncs lesson progress from Course Service.
-// Body: {"user_id": "...", "course_slug": "...", "lesson_slug": "..."}
+// SyncProgress godoc
+// @Summary   Sync lesson progress from Course Service (admin)
+// @Tags      Admin - Users
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     body  body  object  true  "user_id, course_slug, lesson_slug"
+// @Success   200   {object}  map[string]bool
+// @Failure   400   {object}  map[string]string
+// @Router    /api/admin/sync-progress [post]
 func (s *State) SyncProgress(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID     string `json:"user_id"`

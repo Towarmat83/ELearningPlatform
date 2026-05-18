@@ -16,6 +16,14 @@ import (
 	"github.com/elearning/user-service/migrations"
 )
 
+// @title          User Service API
+// @version        1.0.0
+// @description    User Service — auth, profiles, enrollments, lesson progress, platform settings, and admin user management. Internal API endpoints for the Course Service are under `/internal/`.
+// @host           localhost:8081
+// @BasePath       /
+// @securityDefinitions.apikey BearerAuth
+// @in             header
+// @name           Authorization
 func main() {
 	cfg := config.Load()
 

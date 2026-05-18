@@ -134,7 +134,15 @@ func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[st
 	return m
 }
 
-// GET /api/courses/{slug}/modules
+// ListModules godoc
+// @Summary   List modules for a course
+// @Tags      Modules
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   404   {object}  map[string]string
+// @Router    /api/courses/{slug}/modules [get]
 func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	claims := s.claims(r)
@@ -173,7 +181,16 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"modules": out})
 }
 
-// GET /api/courses/{slug}/modules/{index}
+// GetModule godoc
+// @Summary   Get a module by index
+// @Tags      Modules
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug   path  string  true  "Course slug"
+// @Param     index  path  int     true  "Module index (0-based)"
+// @Success   200    {object}  moduleResponse
+// @Failure   404    {object}  map[string]string
+// @Router    /api/courses/{slug}/modules/{index} [get]
 func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	indexStr := param(r, "index")
@@ -278,7 +295,19 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, resp)
 }
 
-// POST /api/courses/{slug}/modules/{index}/submit
+// SubmitModule godoc
+// @Summary   Submit quiz answers for a module
+// @Tags      Modules
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     slug   path  string                true  "Course slug"
+// @Param     index  path  int                   true  "Module index (0-based)"
+// @Param     body   body  content.SubmitRequest true  "Quiz answers"
+// @Success   200    {object}  submitResponse
+// @Failure   400    {object}  map[string]string
+// @Failure   404    {object}  map[string]string
+// @Router    /api/courses/{slug}/modules/{index}/submit [post]
 func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	claims := s.claims(r)

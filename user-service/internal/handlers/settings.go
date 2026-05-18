@@ -27,7 +27,12 @@ func ReadSetting(ctx context.Context, pool *pgxpool.Pool, key, fallback string) 
 	return val
 }
 
-// GET /api/settings/public
+// PublicSettings godoc
+// @Summary  Get public platform settings
+// @Tags     Settings
+// @Produce  json
+// @Success  200  {object}  map[string]string
+// @Router   /api/settings/public [get]
 func (s *State) PublicSettings(w http.ResponseWriter, r *http.Request) {
 	keys := []string{
 		"registration_enabled", "sso_local_login_enabled",
@@ -40,7 +45,13 @@ func (s *State) PublicSettings(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, out)
 }
 
-// GET /api/admin/settings
+// GetSettings godoc
+// @Summary   Get all platform settings (admin)
+// @Tags      Admin - Settings
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/settings [get]
 func (s *State) GetSettings(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.Pool.Query(r.Context(),
 		"SELECT key, value, description FROM platform_settings ORDER BY key")
@@ -67,7 +78,16 @@ func (s *State) GetSettings(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"settings": settings})
 }
 
-// PUT /api/admin/settings — body: {"key": "value", ...}
+// UpdateSettings godoc
+// @Summary   Update platform settings (admin)
+// @Tags      Admin - Settings
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     body  body  map[string]string  true  "Key/value settings map"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   400   {object}  map[string]string
+// @Router    /api/admin/settings [put]
 func (s *State) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
 	if err := decode(r, &body); err != nil {

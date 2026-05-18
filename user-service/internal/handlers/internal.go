@@ -4,7 +4,14 @@ import (
 	"net/http"
 )
 
-// InternalCheckEnrollment — GET /internal/enrollments/check?user_id=&course_slug=
+// InternalCheckEnrollment godoc
+// @Summary  Check if a user is enrolled (internal)
+// @Tags     Internal
+// @Produce  json
+// @Param    user_id      query  string  true  "User UUID"
+// @Param    course_slug  query  string  true  "Course slug"
+// @Success  200  {object}  map[string]bool
+// @Router   /internal/enrollments/check [get]
 func (s *State) InternalCheckEnrollment(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	courseSlug := r.URL.Query().Get("course_slug")
@@ -19,7 +26,14 @@ func (s *State) InternalCheckEnrollment(w http.ResponseWriter, r *http.Request) 
 	s.JSON(w, http.StatusOK, map[string]bool{"enrolled": enrolled})
 }
 
-// InternalViewedLessons — GET /internal/progress/viewed?user_id=&course_slug=
+// InternalViewedLessons godoc
+// @Summary  Get viewed lessons for a user (internal)
+// @Tags     Internal
+// @Produce  json
+// @Param    user_id      query  string  true  "User UUID"
+// @Param    course_slug  query  string  true  "Course slug"
+// @Success  200  {object}  map[string]interface{}
+// @Router   /internal/progress/viewed [get]
 func (s *State) InternalViewedLessons(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	courseSlug := r.URL.Query().Get("course_slug")
@@ -44,7 +58,14 @@ func (s *State) InternalViewedLessons(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]any{"viewed": slugs})
 }
 
-// InternalMarkComplete — POST /internal/progress/complete
+// InternalMarkComplete godoc
+// @Summary  Mark a lesson complete (internal)
+// @Tags     Internal
+// @Accept   json
+// @Produce  json
+// @Param    body  body  object  true  "user_id, course_slug, lesson_slug"
+// @Success  200   {object}  map[string]bool
+// @Router   /internal/progress/complete [post]
 func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		UserID     string `json:"user_id"`

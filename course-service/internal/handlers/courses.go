@@ -8,17 +8,18 @@ import (
 )
 
 type courseResponse struct {
-	Slug            string `json:"slug"`
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	Difficulty      string `json:"difficulty"`
-	IsPublished     bool   `json:"is_published"`
-	ModuleCount     int    `json:"module_count"`
-	LabCount        int    `json:"lab_count"`
-	EnrollmentCount int    `json:"enrollment_count"`
-	Source          string `json:"source,omitempty"`
+	Slug            string   `json:"slug"`
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	Description     string   `json:"description"`
+	Category        string   `json:"category"`
+	Difficulty      string   `json:"difficulty"`
+	IsPublished     bool     `json:"is_published"`
+	Prerequisites   []string `json:"prerequisites,omitempty"`
+	ModuleCount     int      `json:"module_count"`
+	LabCount        int      `json:"lab_count"`
+	EnrollmentCount int      `json:"enrollment_count"`
+	Source          string   `json:"source,omitempty"`
 }
 
 func toCourseResponse(c *content.Course) courseResponse {
@@ -30,6 +31,7 @@ func toCourseResponse(c *content.Course) courseResponse {
 		Category:        c.Category,
 		Difficulty:      c.Difficulty,
 		IsPublished:     c.IsPublished,
+		Prerequisites:   c.Prerequisites,
 		ModuleCount:     len(c.Modules),
 		LabCount:        len(c.Modules),
 		EnrollmentCount: 0,

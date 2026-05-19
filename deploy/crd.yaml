@@ -30,6 +30,10 @@ spec:
                   type: string
                 difficulty:
                   type: string
+                prerequisites:
+                  type: array
+                  items:
+                    type: string
                 modules:
                   type: array
                   items:
@@ -52,3 +56,21 @@ spec:
                         type: boolean
                       quiz_ref:
                         type: string
+                      prerequisites:
+                        type: array
+                        items:
+                          type: string
+                      passing_score:
+                        type: integer
+                      lock_on_max_attempts:
+                        type: boolean
+                      max_attempts_per_question:
+                        type: integer
+                      cooldown:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      questions:
+                        type: array
+                        items:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true

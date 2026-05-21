@@ -2,24 +2,30 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { authApi, ssoApi, publicSettingsApi, type OAuthProvider } from '$lib/api';
+  import { authApi, ssoApi, oidcApi, ldapApi, type OAuthProvider } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
+
+  export let data: { settings: Record<string, string> };
 
   let email = '';
   let password = '';
   let loading = false;
   let ssoLoading = '';
   let providers: OAuthProvider[] = [];
-  let localLoginEnabled = true;
+
+  let localLoginEnabled = data.settings.sso_local_login_enabled !== 'false';
+  let oidcEnabled = data.settings.oidc_enabled === 'true';
+  let ldapEnabled = data.settings.ldap_enabled === 'true';
+
+  // True when at least one SSO method is available — form is collapsed by default.
+  $: ssoActive = oidcEnabled || providers.length > 0;
+  let showLocalForm = !oidcEnabled;
 
   onMount(async () => {
-    const [ssoRes, settingsRes] = await Promise.allSettled([
-      ssoApi.providers(),
-      publicSettingsApi.get(),
-    ]);
-    if (ssoRes.status === 'fulfilled') providers = ssoRes.value.providers;
-    if (settingsRes.status === 'fulfilled') {
-      localLoginEnabled = settingsRes.value.sso_local_login_enabled !== 'false';
+    const ssoRes = await Promise.allSettled([ssoApi.providers()]);
+    if (ssoRes[0].status === 'fulfilled') {
+      providers = ssoRes[0].value.providers;
+      if (providers.length > 0) showLocalForm = false;
     }
   });
 
@@ -29,14 +35,29 @@
       return;
     }
     loading = true;
+    const redirect = $page.url.searchParams.get('redirect');
     try {
       const res = await authApi.login(email, password);
       auth.login(res.token, res.user);
       toasts.success(`Welcome back, ${res.user.username}!`);
-      const redirect = $page.url.searchParams.get('redirect');
       goto(redirect ?? (res.user.role === 'admin' ? '/admin' : '/dashboard'));
+      return;
     } catch (e: any) {
-      toasts.error(e.message || 'Login failed');
+      // Fallback to LDAP only for "user not found / wrong password" errors.
+      // Don't fallback for SSO-only accounts or other errors.
+      if (ldapEnabled && e.message === 'Invalid email or password') {
+        try {
+          const res = await ldapApi.login(email, password);
+          auth.login(res.token, res.user);
+          toasts.success(`Welcome back, ${res.user.username}!`);
+          goto(redirect ?? (res.user.role === 'admin' ? '/admin' : '/dashboard'));
+          return;
+        } catch (ldapErr: any) {
+          toasts.error(ldapErr.message || 'Invalid email or password');
+        }
+      } else {
+        toasts.error(e.message || 'Login failed');
+      }
     } finally {
       loading = false;
     }
@@ -49,6 +70,17 @@
       window.location.href = url;
     } catch (e: any) {
       toasts.error(e.message || `Failed to start ${providerId} sign-in`);
+      ssoLoading = '';
+    }
+  }
+
+  async function loginWithOIDC() {
+    ssoLoading = 'oidc';
+    try {
+      const { url } = await oidcApi.authorize();
+      window.location.href = url;
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to start SSO sign-in');
       ssoLoading = '';
     }
   }
@@ -73,8 +105,8 @@
     </div>
 
     <div class="card">
-      <!-- SSO Buttons -->
-      {#if providers.length > 0}
+      <!-- SSO / OIDC / LDAP Buttons -->
+      {#if providers.length > 0 || oidcEnabled || ldapEnabled}
         <div class="space-y-2 mb-5">
           {#each providers as provider}
             <button
@@ -91,43 +123,67 @@
               Continue with {provider.name}
             </button>
           {/each}
+
+          {#if oidcEnabled}
+            <button
+              type="button"
+              class="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium text-sm transition-colors disabled:opacity-60"
+              on:click={loginWithOIDC}
+              disabled={!!ssoLoading}
+            >
+              {#if ssoLoading === 'oidc'}
+                <span class="animate-spin text-base">↻</span>
+              {:else}
+                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+                </svg>
+              {/if}
+              Continue with SSO (OIDC)
+            </button>
+          {/if}
+
         </div>
 
-        <div class="relative mb-5">
-          <div class="absolute inset-0 flex items-center">
-            <div class="w-full border-t border-gray-200"></div>
-          </div>
-          <div class="relative flex justify-center text-xs text-gray-400 bg-white px-3">
-            or sign in with email
-          </div>
-        </div>
-      {/if}
-
-      <!-- Local login form -->
-      {#if !localLoginEnabled}
-        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 text-center">
-          Local login is disabled. Please use an SSO provider above.
-        </div>
-      {/if}
-      <form on:submit|preventDefault={handleLogin} class="space-y-5" class:opacity-40={!localLoginEnabled} class:pointer-events-none={!localLoginEnabled}>
-        <div>
-          <label for="email" class="label">Email</label>
-          <input id="email" type="email" class="input" bind:value={email}
-            placeholder="your@email.com" required />
-        </div>
-        <div>
-          <label for="password" class="label">Password</label>
-          <input id="password" type="password" class="input" bind:value={password}
-            placeholder="••••••••" required />
-        </div>
-        <button type="submit" class="btn-primary w-full" disabled={loading || !!ssoLoading}>
-          {loading ? 'Signing in...' : 'Sign In'}
+        <!-- Toggle to show email/password form -->
+        <button
+          type="button"
+          class="w-full flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors mb-1"
+          on:click={() => showLocalForm = !showLocalForm}
+        >
+          <svg viewBox="0 0 24 24" class="w-4 h-4 transition-transform {showLocalForm ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 9l-7 7-7-7"/>
+          </svg>
+          Sign in with email{ldapEnabled ? ' / LDAP' : ''}
         </button>
-      </form>
+      {/if}
 
-      <div class="mt-6 text-center text-sm text-gray-500">
-        <p>Default admin: <code class="bg-gray-100 px-1 rounded">admin@elearning.local</code> / <code class="bg-gray-100 px-1 rounded">Admin@1234</code></p>
-      </div>
+      {#if !ssoActive || showLocalForm}
+        {#if !localLoginEnabled}
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 text-center mb-4">
+            Local login is disabled. Please use an SSO provider above.
+          </div>
+        {/if}
+        <form on:submit|preventDefault={handleLogin} class="space-y-4 {ssoActive ? 'mt-3' : ''}" class:opacity-40={!localLoginEnabled} class:pointer-events-none={!localLoginEnabled}>
+          <div>
+            <label for="email" class="label">Email</label>
+            <input id="email" type="email" class="input" bind:value={email}
+              placeholder="your@email.com" required />
+          </div>
+          <div>
+            <label for="password" class="label">Password</label>
+            <input id="password" type="password" class="input" bind:value={password}
+              placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn-primary w-full" disabled={loading || !!ssoLoading}>
+            {loading ? 'Signing in…' : 'Sign In'}
+          </button>
+          {#if ldapEnabled}
+            <p class="text-xs text-center text-gray-400">
+              Also works with LDAP / Active Directory accounts
+            </p>
+          {/if}
+        </form>
+      {/if}
 
       <div class="mt-4 text-center text-sm">
         Don't have an account?

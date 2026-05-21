@@ -16,6 +16,23 @@ var allowedSettingKeys = map[string]bool{
 	"password_require_number":       true,
 	"profile_allow_username_change": true,
 	"sso_local_login_enabled":       true,
+	// OIDC
+	"oidc_enabled":          true,
+	"oidc_provider_url":     true,
+	"oidc_browser_base_url": true,
+	"oidc_client_id":        true,
+	"oidc_client_secret":    true,
+	"oidc_scopes":           true,
+	"oidc_group_claim":      true,
+	// LDAP
+	"ldap_enabled":       true,
+	"ldap_server_url":    true,
+	"ldap_bind_dn":       true,
+	"ldap_bind_password": true,
+	"ldap_user_base_dn":  true,
+	"ldap_user_filter":   true,
+	"ldap_group_base_dn": true,
+	"ldap_group_filter":  true,
 }
 
 func ReadSetting(ctx context.Context, pool *pgxpool.Pool, key, fallback string) string {
@@ -37,6 +54,7 @@ func (s *State) PublicSettings(w http.ResponseWriter, r *http.Request) {
 	keys := []string{
 		"registration_enabled", "sso_local_login_enabled",
 		"password_min_length", "password_require_uppercase", "password_require_number",
+		"oidc_enabled", "ldap_enabled",
 	}
 	out := make(map[string]string, len(keys))
 	for _, k := range keys {

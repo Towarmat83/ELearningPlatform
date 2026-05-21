@@ -18,6 +18,17 @@ spec:
         prometheus.io/port: "{{ .Values.userService.service.port }}"
         prometheus.io/path: "/metrics"
     spec:
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 10.96.0.10
+        searches:
+          - default.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+        options:
+          - name: ndots
+            value: "5"
       containers:
       - name: user-service
         image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"

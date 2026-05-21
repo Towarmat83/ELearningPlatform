@@ -238,6 +238,156 @@
         </div>
       </div>
 
+      <!-- ── OIDC ─────────────────────────────────────────────────────── -->
+      <div class="card space-y-5">
+        <h2 class="font-semibold text-gray-800 flex items-center gap-2 text-base">
+          🌐 OIDC (OpenID Connect)
+        </h2>
+        <p class="text-xs text-gray-400 -mt-2">SSO with Authentik, Keycloak, Azure AD, Google Workspace…</p>
+
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-700">Enable OIDC authentication</p>
+            <p class="text-xs text-gray-400">Show OIDC button on login page and activate the flow.</p>
+          </div>
+          <button type="button"
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+              {bool('oidc_enabled', 'false') ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('oidc_enabled', !bool('oidc_enabled', 'false'))}>
+            <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
+              {bool('oidc_enabled', 'false') ? 'translate-x-6' : 'translate-x-1'}"></span>
+          </button>
+        </div>
+
+        {#if bool('oidc_enabled', 'false') && !edits['oidc_provider_url']?.trim()}
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+            ⚠️ OIDC is enabled but no Provider URL is set. Users won't be able to sign in until configured.
+          </div>
+        {/if}
+
+        <div>
+          <label class="label" for="oidc_provider_url">Provider Discovery URL</label>
+          <p class="text-xs text-gray-400 mb-1">
+            Authentik example: <code class="bg-gray-100 px-1 rounded">https://auth.example.com/application/o/&lt;slug&gt;</code>.
+            Use the cluster-internal URL (e.g. <code class="bg-gray-100 px-1 rounded">http://authentik-server.authentik.svc.cluster.local/application/o/elearning-oidc/</code>) when running in Kubernetes.
+          </p>
+          <input id="oidc_provider_url" type="text" class="input font-mono text-sm"
+            bind:value={edits['oidc_provider_url']}
+            placeholder="https://auth.example.com/application/o/elearning" />
+        </div>
+
+        <div>
+          <label class="label" for="oidc_browser_base_url">Browser base URL <span class="text-gray-400 font-normal">(optional)</span></label>
+          <p class="text-xs text-gray-400 mb-1">
+            Only needed when Provider URL is cluster-internal. The auth redirect will use this base instead (e.g. <code class="bg-gray-100 px-1 rounded">http://localhost:9000</code>).
+          </p>
+          <input id="oidc_browser_base_url" type="text" class="input font-mono text-sm"
+            bind:value={edits['oidc_browser_base_url']}
+            placeholder="http://localhost:9000" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="label" for="oidc_client_id">Client ID</label>
+            <input id="oidc_client_id" type="text" class="input font-mono text-sm"
+              bind:value={edits['oidc_client_id']} placeholder="client-id" />
+          </div>
+          <div>
+            <label class="label" for="oidc_client_secret">Client Secret</label>
+            <input id="oidc_client_secret" type="password" class="input font-mono text-sm"
+              bind:value={edits['oidc_client_secret']} placeholder="••••••••" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="label" for="oidc_scopes">Scopes</label>
+            <p class="text-xs text-gray-400 mb-1">Space-separated. Include <code class="bg-gray-100 px-1 rounded">groups</code> for group sync.</p>
+            <input id="oidc_scopes" type="text" class="input font-mono text-sm"
+              bind:value={edits['oidc_scopes']} placeholder="openid email profile groups" />
+          </div>
+          <div>
+            <label class="label" for="oidc_group_claim">Group claim name</label>
+            <p class="text-xs text-gray-400 mb-1">JWT claim containing group list.</p>
+            <input id="oidc_group_claim" type="text" class="input font-mono text-sm"
+              bind:value={edits['oidc_group_claim']} placeholder="groups" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ── LDAP ─────────────────────────────────────────────────────── -->
+      <div class="card space-y-5">
+        <h2 class="font-semibold text-gray-800 flex items-center gap-2 text-base">
+          🗂️ LDAP / Active Directory
+        </h2>
+        <p class="text-xs text-gray-400 -mt-2">Enterprise directory authentication via Authentik LDAP, OpenLDAP, Active Directory…</p>
+
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-700">Enable LDAP authentication</p>
+            <p class="text-xs text-gray-400">Show LDAP login option and route auth through ldap-service.</p>
+          </div>
+          <button type="button"
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+              {bool('ldap_enabled', 'false') ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('ldap_enabled', !bool('ldap_enabled', 'false'))}>
+            <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
+              {bool('ldap_enabled', 'false') ? 'translate-x-6' : 'translate-x-1'}"></span>
+          </button>
+        </div>
+
+        <div>
+          <label class="label" for="ldap_server_url">Server URL</label>
+          <input id="ldap_server_url" type="text" class="input font-mono text-sm"
+            bind:value={edits['ldap_server_url']}
+            placeholder="ldap://authentik.example.com:389" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="label" for="ldap_bind_dn">Service account DN</label>
+            <p class="text-xs text-gray-400 mb-1">Used to search the directory.</p>
+            <input id="ldap_bind_dn" type="text" class="input font-mono text-xs"
+              bind:value={edits['ldap_bind_dn']}
+              placeholder="cn=service,ou=accounts,dc=example,dc=com" />
+          </div>
+          <div>
+            <label class="label" for="ldap_bind_password">Service account password</label>
+            <input id="ldap_bind_password" type="password" class="input font-mono text-sm"
+              bind:value={edits['ldap_bind_password']} placeholder="••••••••" />
+          </div>
+        </div>
+
+        <div>
+          <label class="label" for="ldap_user_base_dn">User base DN</label>
+          <input id="ldap_user_base_dn" type="text" class="input font-mono text-xs"
+            bind:value={edits['ldap_user_base_dn']}
+            placeholder="ou=users,dc=ldap,dc=goauthentik,dc=io" />
+        </div>
+
+        <div>
+          <label class="label" for="ldap_user_filter">User search filter</label>
+          <p class="text-xs text-gray-400 mb-1"><code class="bg-gray-100 px-1 rounded">%s</code> is replaced with the user's email.</p>
+          <input id="ldap_user_filter" type="text" class="input font-mono text-sm"
+            bind:value={edits['ldap_user_filter']} placeholder="(mail=%s)" />
+        </div>
+
+        <div>
+          <label class="label" for="ldap_group_base_dn">Group base DN <span class="text-gray-400 font-normal">(optional)</span></label>
+          <input id="ldap_group_base_dn" type="text" class="input font-mono text-xs"
+            bind:value={edits['ldap_group_base_dn']}
+            placeholder="ou=groups,dc=ldap,dc=goauthentik,dc=io" />
+        </div>
+
+        <div>
+          <label class="label" for="ldap_group_filter">Group search filter</label>
+          <p class="text-xs text-gray-400 mb-1"><code class="bg-gray-100 px-1 rounded">%s</code> is replaced with the user's DN (up to 3 times).</p>
+          <input id="ldap_group_filter" type="text" class="input font-mono text-xs"
+            bind:value={edits['ldap_group_filter']}
+            placeholder="(|(member=%s)(uniqueMember=%s)(memberUid=%s))" />
+        </div>
+      </div>
+
       <!-- Save -->
       <div class="flex justify-end pt-2">
         <button type="submit" class="btn-primary px-8" disabled={saving}>

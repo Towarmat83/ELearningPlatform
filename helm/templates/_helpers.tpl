@@ -45,6 +45,16 @@ app.kubernetes.io/component: prometheus
 app.kubernetes.io/component: grafana
 {{- end }}
 
+{{- define "elearning.ldapService.labels" -}}
+{{ include "elearning.labels" . }}
+app.kubernetes.io/component: ldap-service
+{{- end }}
+
+{{- define "elearning.ldapService.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "elearning.name" . }}
+app.kubernetes.io/component: ldap-service
+{{- end }}
+
 {{/*
 Selector labels
 */}}

@@ -76,6 +76,10 @@ func Auth(_ *pgxpool.Pool, secret string) func(http.Handler) http.Handler {
 				httpErr(w, http.StatusUnauthorized, "Invalid token: "+err.Error())
 				return
 			}
+			if claims.Subject == "" {
+				httpErr(w, http.StatusUnauthorized, "Invalid token: missing user ID")
+				return
+			}
 			ctx := context.WithValue(r.Context(), ClaimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -93,6 +97,10 @@ func Admin(_ *pgxpool.Pool, secret string) func(http.Handler) http.Handler {
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
 				httpErr(w, http.StatusUnauthorized, "Invalid token: "+err.Error())
+				return
+			}
+			if claims.Subject == "" {
+				httpErr(w, http.StatusUnauthorized, "Invalid token: missing user ID")
 				return
 			}
 			if claims.Role != "admin" {

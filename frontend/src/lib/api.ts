@@ -37,7 +37,7 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
-    let body: Record<string, unknown> | null = null;
+    let body: Record<string, unknown> | undefined = undefined;
     try {
       const err = await res.json();
       body = err;
@@ -119,6 +119,22 @@ export interface PublicSettings {
   password_min_length: string;
   password_require_uppercase: string;
   password_require_number: string;
+  oidc_enabled: string;
+  ldap_enabled: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  source: string;
+  created_at: string;
+  member_count: number;
+  mapped_role: string;
+}
+
+export interface GroupMapping {
+  group_name: string;
+  platform_role: string;
 }
 
 export interface PlatformSetting {
@@ -231,6 +247,28 @@ export const ssoApi = {
     api.get<{ url: string; state: string }>(`/auth/oauth/${provider}/authorize`),
   callback: (code: string, state: string) =>
     api.post<AuthResponse>('/auth/oauth/callback', { code, state }),
+};
+
+export const oidcApi = {
+  authorize: () => api.get<{ url: string; state: string }>('/auth/oidc/authorize'),
+  callback: (code: string, state: string) =>
+    api.post<AuthResponse>('/auth/oidc/callback', { code, state }),
+};
+
+export const ldapApi = {
+  login: (email: string, password: string) =>
+    api.post<AuthResponse>('/auth/ldap/login', { email, password }),
+};
+
+export const groupsApi = {
+  list: (token: string) =>
+    api.get<{ groups: Group[] }>('/admin/groups', token),
+  getMappings: (token: string) =>
+    api.get<{ mappings: GroupMapping[] }>('/admin/groups/mappings', token),
+  upsertMapping: (data: GroupMapping, token: string) =>
+    api.post<{ message: string }>('/admin/groups/mappings', data, token),
+  deleteMapping: (groupName: string, token: string) =>
+    api.delete<{ message: string }>(`/admin/groups/mappings/${encodeURIComponent(groupName)}`, token),
 };
 
 export const publicSettingsApi = {

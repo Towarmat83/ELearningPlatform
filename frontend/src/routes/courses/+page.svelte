@@ -10,6 +10,7 @@
   let search = '';
   let difficulty = '';
   let category = '';
+  let enrolledIds = new Set<string>();
 
   async function loadCourses() {
     loading = true;
@@ -28,7 +29,20 @@
     }
   }
 
-  onMount(loadCourses);
+  async function loadEnrolled() {
+    const token = $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
+    if (!token) return;
+    try {
+      const res = await coursesApi.myCourses(token);
+      enrolledIds = new Set(res.courses.map(c => c.id));
+    } catch {
+      // non-critical
+    }
+  }
+
+  onMount(async () => {
+    await Promise.all([loadCourses(), loadEnrolled()]);
+  });
 
   async function enrollAndGo(id: string) {
     const token = $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
@@ -117,10 +131,13 @@
           </div>
 
           <div class="flex gap-2 mt-auto">
-            <a href="/courses/{course.id}" class="btn-secondary text-sm flex-1 text-center">View</a>
-            <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm">
-              Enroll
-            </button>
+            {#if enrolledIds.has(course.id)}
+              <a href="/courses/{course.id}" class="btn-primary text-sm flex-1 text-center">View</a>
+            {:else}
+              <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm flex-1">
+                Enroll
+              </button>
+            {/if}
           </div>
         </div>
       {/each}

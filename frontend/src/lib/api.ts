@@ -87,6 +87,7 @@ export interface Course {
   category: string | null;
   difficulty: string | null;
   is_published: boolean;
+  enrollment_restricted: boolean;
   created_by: string;
   creator_username: string | null;
   lab_count: number;
@@ -149,6 +150,7 @@ export interface CourseEnrollment {
   email: string;
   enrolled_at: string;
 }
+
 
 export interface AdminStats {
   total_users: number;
@@ -446,4 +448,10 @@ export const adminApi = {
     api.post(`/admin/courses/${courseId}/enrollments`, { user_id: userId }, token),
   unenrollUser: (courseId: string, userId: string, token: string) =>
     api.delete(`/admin/courses/${courseId}/enrollments/${userId}`, token),
+  listGroupEnrollments: (courseId: string, token: string) =>
+    api.get<{ groups: { id: string; name: string; source: string; member_count: number; enrolled_at: string }[] }>(`/admin/courses/${courseId}/enrollments/groups`, token),
+  enrollGroup: (courseId: string, groupId: string, token: string) =>
+    api.post<{ message: string; enrolled: number }>(`/admin/courses/${courseId}/enrollments/groups`, { group_id: groupId }, token),
+  unenrollGroup: (courseId: string, groupId: string, token: string) =>
+    api.delete(`/admin/courses/${courseId}/enrollments/groups/${groupId}`, token),
 };

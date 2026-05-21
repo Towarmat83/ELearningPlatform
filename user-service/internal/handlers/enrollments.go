@@ -17,11 +17,13 @@ import (
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200   {object}  map[string]string
+// @Failure   403   {object}  map[string]string
 // @Failure   401   {object}  map[string]string
 // @Router    /api/courses/{slug}/enroll [post]
 func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
+
 	_, err := s.Pool.Exec(r.Context(),
 		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		claims.Subject, slug)
@@ -61,16 +63,17 @@ func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
 }
 
 type courseServiceCourse struct {
-	Slug            string `json:"slug"`
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	Difficulty      string `json:"difficulty"`
-	IsPublished     bool   `json:"is_published"`
-	LabCount        int    `json:"lab_count"`
-	EnrollmentCount int    `json:"enrollment_count"`
-	Source          string `json:"source,omitempty"`
+	Slug                 string `json:"slug"`
+	ID                   string `json:"id"`
+	Title                string `json:"title"`
+	Description          string `json:"description"`
+	Category             string `json:"category"`
+	Difficulty           string `json:"difficulty"`
+	IsPublished          bool   `json:"is_published"`
+	EnrollmentRestricted bool   `json:"enrollment_restricted"`
+	LabCount             int    `json:"lab_count"`
+	EnrollmentCount      int    `json:"enrollment_count"`
+	Source               string `json:"source,omitempty"`
 }
 
 func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {

@@ -226,10 +226,11 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	role, err := syncGroupsAndDeriveRole(ctx, s.Pool, user.ID, groups, "oidc")
 	if err != nil {
-		// Non-fatal: log but continue with existing role
 		_ = err
 		role = user.Role
 	}
+	addToDefaultGroup(ctx, s.Pool, user.ID)
+	syncGroupEnrollments(ctx, s.Pool, user.ID)
 
 	jwtToken, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {

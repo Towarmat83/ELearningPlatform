@@ -186,6 +186,8 @@ func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	addToDefaultGroup(r.Context(), s.Pool, user.ID)
+	syncGroupEnrollments(r.Context(), s.Pool, user.ID)
 	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Token error")

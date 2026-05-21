@@ -302,6 +302,122 @@ func (s *State) AdminUnenrollUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "User unenrolled"})
 }
 
+// AdminEnrollGroup godoc
+// @Summary   Enroll all members of a group in a course (admin)
+// @Tags      Admin - Courses
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Param     body  body  object  true  "group_id (UUID)"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   400   {object}  map[string]string
+// @Router    /api/admin/courses/{slug}/enrollments/groups [post]
+func (s *State) AdminEnrollGroup(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	var req struct {
+		GroupID string `json:"group_id"`
+	}
+	if err := decode(r, &req); err != nil || req.GroupID == "" {
+		s.Error(w, http.StatusBadRequest, "group_id is required")
+		return
+	}
+
+	ctx := r.Context()
+
+	// Register the group → course link
+	_, err := s.Pool.Exec(ctx,
+		`INSERT INTO group_enrollments (group_id, course_slug)
+		 VALUES ($1::uuid, $2)
+		 ON CONFLICT DO NOTHING`,
+		req.GroupID, slug)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+
+	// Backfill current members
+	tag, err := s.Pool.Exec(ctx,
+		`INSERT INTO enrollments (user_id, course_slug)
+		 SELECT ug.user_id, $1
+		 FROM user_groups ug
+		 WHERE ug.group_id = $2::uuid
+		 ON CONFLICT DO NOTHING`,
+		slug, req.GroupID)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+
+	s.JSON(w, http.StatusOK, map[string]any{
+		"message":  "Group enrolled",
+		"enrolled": tag.RowsAffected(),
+	})
+}
+
+// AdminListGroupEnrollments godoc
+// @Summary   List groups enrolled in a course (admin)
+// @Tags      Admin - Courses
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]interface{}
+// @Router    /api/admin/courses/{slug}/enrollments/groups [get]
+func (s *State) AdminListGroupEnrollments(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	rows, err := s.Pool.Query(r.Context(),
+		`SELECT g.id::text, g.name, g.source, COUNT(ug.user_id) AS member_count, ge.created_at::text
+		 FROM group_enrollments ge
+		 JOIN groups g ON g.id = ge.group_id
+		 LEFT JOIN user_groups ug ON ug.group_id = ge.group_id
+		 WHERE ge.course_slug = $1
+		 GROUP BY g.id, g.name, g.source, ge.created_at
+		 ORDER BY g.name`, slug)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer rows.Close()
+
+	type row struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Source      string `json:"source"`
+		MemberCount int64  `json:"member_count"`
+		EnrolledAt  string `json:"enrolled_at"`
+	}
+	list := make([]row, 0)
+	for rows.Next() {
+		var e row
+		if rows.Scan(&e.ID, &e.Name, &e.Source, &e.MemberCount, &e.EnrolledAt) == nil {
+			list = append(list, e)
+		}
+	}
+	s.JSON(w, http.StatusOK, map[string]any{"groups": list})
+}
+
+// AdminUnenrollGroup godoc
+// @Summary   Remove a group enrollment from a course (admin)
+// @Tags      Admin - Courses
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug      path  string  true  "Course slug"
+// @Param     group_id  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]string
+// @Router    /api/admin/courses/{slug}/enrollments/groups/{group_id} [delete]
+func (s *State) AdminUnenrollGroup(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	groupID := param(r, "group_id")
+	_, err := s.Pool.Exec(r.Context(),
+		`DELETE FROM group_enrollments WHERE group_id = $1::uuid AND course_slug = $2`,
+		groupID, slug)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	s.JSON(w, http.StatusOK, map[string]string{"message": "Group enrollment removed"})
+}
+
 // SyncProgress godoc
 // @Summary   Sync lesson progress from Course Service (admin)
 // @Tags      Admin - Users

@@ -8,6 +8,39 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const defaultGroupName = "everyone"
+
+// syncGroupEnrollments ensures the user is enrolled in every course
+// that any of their groups are enrolled in. Called after every login.
+func syncGroupEnrollments(ctx context.Context, pool *pgxpool.Pool, userID string) {
+	pool.Exec(ctx,
+		`INSERT INTO enrollments (user_id, course_slug)
+		 SELECT $1::uuid, ge.course_slug
+		 FROM group_enrollments ge
+		 JOIN user_groups ug ON ug.group_id = ge.group_id
+		 WHERE ug.user_id = $1::uuid
+		 ON CONFLICT DO NOTHING`,
+		userID)
+}
+
+// addToDefaultGroup ensures the user belongs to the platform default group.
+// Called after every login regardless of auth method.
+func addToDefaultGroup(ctx context.Context, pool *pgxpool.Pool, userID string) {
+	var groupID string
+	pool.QueryRow(ctx,
+		`INSERT INTO groups (name, source, description)
+		 VALUES ($1, 'local', 'Default group — all users are members automatically')
+		 ON CONFLICT (name) DO UPDATE SET updated_at = NOW()
+		 RETURNING id::text`, defaultGroupName).Scan(&groupID)
+	if groupID == "" {
+		return
+	}
+	pool.Exec(ctx,
+		`INSERT INTO user_groups (user_id, group_id)
+		 VALUES ($1::uuid, $2::uuid)
+		 ON CONFLICT DO NOTHING`, userID, groupID)
+}
+
 // syncGroupsAndDeriveRole upserts groups from an IdP into the groups table,
 // updates the user's group memberships, and returns the highest platform role
 // found in group_role_mappings ('admin' beats 'student'). Defaults to 'student'.

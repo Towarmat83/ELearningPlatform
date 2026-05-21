@@ -302,6 +302,50 @@ func (s *State) AdminUnenrollUser(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "User unenrolled"})
 }
 
+// AdminLeaderboard godoc
+// @Summary   Get users ranked by total quiz score (admin)
+// @Tags      Admin - Stats
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/leaderboard [get]
+func (s *State) AdminLeaderboard(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.Pool.Query(r.Context(), `
+		SELECT u.id::text, u.username, u.email, u.avatar_url,
+		       COALESCE(SUM(mp.best_score), 0)::bigint AS total_score,
+		       COUNT(DISTINCT CASE WHEN mp.passed THEN mp.course_slug || ':' || mp.module_index::text END)::bigint AS passed_modules,
+		       COUNT(DISTINCT e.course_slug)::bigint AS enrolled_courses
+		FROM users u
+		LEFT JOIN module_progress mp ON mp.user_id = u.id
+		LEFT JOIN enrollments e ON e.user_id = u.id
+		WHERE u.role = 'student' AND u.is_active = TRUE
+		GROUP BY u.id, u.username, u.email, u.avatar_url
+		ORDER BY total_score DESC, passed_modules DESC`)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer rows.Close()
+	type leaderboardRow struct {
+		ID              string  `json:"id"`
+		Username        string  `json:"username"`
+		Email           string  `json:"email"`
+		AvatarURL       *string `json:"avatar_url"`
+		TotalScore      int64   `json:"total_score"`
+		PassedModules   int64   `json:"passed_modules"`
+		EnrolledCourses int64   `json:"enrolled_courses"`
+	}
+	leaderboard := make([]leaderboardRow, 0)
+	for rows.Next() {
+		var row leaderboardRow
+		if err := rows.Scan(&row.ID, &row.Username, &row.Email, &row.AvatarURL,
+			&row.TotalScore, &row.PassedModules, &row.EnrolledCourses); err == nil {
+			leaderboard = append(leaderboard, row)
+		}
+	}
+	s.JSON(w, http.StatusOK, map[string]any{"leaderboard": leaderboard})
+}
+
 // SyncProgress godoc
 // @Summary   Sync lesson progress from Course Service (admin)
 // @Tags      Admin - Users

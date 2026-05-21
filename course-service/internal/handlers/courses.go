@@ -8,17 +8,18 @@ import (
 )
 
 type courseResponse struct {
-	Slug            string `json:"slug"`
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	Difficulty      string `json:"difficulty"`
-	IsPublished     bool   `json:"is_published"`
-	ModuleCount     int    `json:"module_count"`
-	LabCount        int    `json:"lab_count"`
-	EnrollmentCount int    `json:"enrollment_count"`
-	Source          string `json:"source,omitempty"`
+	Slug            string                      `json:"slug"`
+	ID              string                      `json:"id"`
+	Title           string                      `json:"title"`
+	Description     string                      `json:"description"`
+	Category        string                      `json:"category"`
+	Difficulty      string                      `json:"difficulty"`
+	IsPublished     bool                        `json:"is_published"`
+	Prerequisites   []content.CoursePrerequisite `json:"prerequisites,omitempty"`
+	ModuleCount     int                         `json:"module_count"`
+	LabCount        int                         `json:"lab_count"`
+	EnrollmentCount int                         `json:"enrollment_count"`
+	Source          string                      `json:"source,omitempty"`
 }
 
 func toCourseResponse(c *content.Course) courseResponse {
@@ -30,6 +31,7 @@ func toCourseResponse(c *content.Course) courseResponse {
 		Category:        c.Category,
 		Difficulty:      c.Difficulty,
 		IsPublished:     c.IsPublished,
+		Prerequisites:   c.Prerequisites,
 		ModuleCount:     len(c.Modules),
 		LabCount:        len(c.Modules),
 		EnrollmentCount: 0,
@@ -199,20 +201,76 @@ func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 // @Router    /api/courses/{slug}/progress [get]
 func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
+	claims := s.claims(r)
+
 	c := s.Content.Get(courseSlug)
-	total := 0
-	if c != nil {
-		total = len(s.visibleModules(c, r))
+	if c == nil {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
 	}
+
+	modules := s.visibleModules(c, r)
+	total := len(modules)
+
+	viewedMap := s.viewedLessons(r, courseSlug, claims.Subject)
+	progressMap := s.fetchModuleProgress(r, courseSlug, claims.Subject)
+
+	type labProgressEntry struct {
+		LabID     string `json:"lab_id"`
+		LabTitle  string `json:"lab_title"`
+		Type      string `json:"type"`
+		Completed bool   `json:"completed"`
+		BestScore int    `json:"best_score"`
+		MaxScore  int    `json:"max_score"`
+		Attempts  int    `json:"attempts"`
+	}
+
+	completedCount := 0
+	totalPoints := 0
+	earnedPoints := 0
+	labProgress := make([]labProgressEntry, 0, len(modules))
+
+	for i, m := range modules {
+		entry := labProgressEntry{
+			LabID:    m.Slug(),
+			LabTitle: m.Name,
+			Type:     m.Type,
+		}
+		if m.Type == "quiz" {
+			if p, ok := progressMap[i]; ok {
+				entry.Completed = p.Passed
+				entry.BestScore = p.BestScore
+				entry.MaxScore = p.MaxScore
+				entry.Attempts = p.Attempts
+				totalPoints += p.MaxScore
+				earnedPoints += p.BestScore
+				if p.Passed {
+					completedCount++
+				}
+			}
+		} else {
+			if viewedMap[m.Slug()] {
+				entry.Completed = true
+				completedCount++
+			}
+		}
+		labProgress = append(labProgress, entry)
+	}
+
+	pct := 0
+	if total > 0 {
+		pct = completedCount * 100 / total
+	}
+
 	s.JSON(w, http.StatusOK, map[string]any{
 		"course_id":             courseSlug,
-		"user_id":               "",
+		"user_id":               claims.Subject,
 		"total_labs":            total,
-		"completed_labs":        0,
-		"total_points_possible": 0,
-		"total_points_earned":   0,
-		"completion_percentage": 0,
-		"lab_progress":          []any{},
+		"completed_labs":        completedCount,
+		"total_points_possible": totalPoints,
+		"total_points_earned":   earnedPoints,
+		"completion_percentage": pct,
+		"lab_progress":          labProgress,
 	})
 }
 

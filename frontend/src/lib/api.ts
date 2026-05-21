@@ -79,6 +79,12 @@ export interface AuthResponse {
   user: UserPublic;
 }
 
+export interface CoursePrerequisite {
+  course: string;
+  min_score?: number;
+  modules?: string[];
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -91,6 +97,7 @@ export interface Course {
   creator_username: string | null;
   lab_count: number;
   enrollment_count: number;
+  prerequisites?: CoursePrerequisite[];
   created_at: string;
   updated_at: string;
 }
@@ -341,6 +348,22 @@ export interface ModuleSummary {
   type: 'text' | 'video' | 'image' | 'quiz';
   viewed: boolean;
   hidden: boolean;
+  locked: boolean;
+  prerequisites?: string[];
+  best_score: number;
+  max_score: number;
+  passed: boolean;
+  attempts: number;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  username: string;
+  email: string;
+  avatar_url: string | null;
+  total_score: number;
+  passed_modules: number;
+  enrolled_courses: number;
 }
 
 export interface ModuleQuizConfig {
@@ -363,6 +386,12 @@ export interface ModuleDetail {
   content: string | null;
   viewed: boolean;
   hidden: boolean;
+  locked: boolean;
+  prerequisites?: string[];
+  best_score: number;
+  max_score: number;
+  passed: boolean;
+  attempts: number;
   questions?: QuizQuestion[];
   quiz_config?: ModuleQuizConfig;
   cooldowns?: Record<string, QuizCooldown>;
@@ -375,6 +404,11 @@ export const modulesApi = {
     api.get<ModuleDetail>(`/courses/${courseSlug}/modules/${index}`, token),
   submit: (courseSlug: string, index: number, answers: Record<string, QuizUserAnswer>, token: string) =>
     api.post<QuizSubmitResponse>(`/courses/${courseSlug}/modules/${index}/submit`, { answers }, token),
+};
+
+export const lessonsApi = {
+  markComplete: (courseSlug: string, lessonSlug: string, token: string) =>
+    api.post<{ message: string }>(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -394,6 +428,9 @@ export const adminApi = {
     api.put(`/admin/users/${id}`, data, token),
   deleteUser: (id: string, token: string) =>
     api.delete(`/admin/users/${id}`, token),
+
+  leaderboard: (token: string) =>
+    api.get<{ leaderboard: LeaderboardEntry[] }>('/admin/leaderboard', token),
 
   adminCourses: (token: string, params?: { page?: number; per_page?: number; search?: string }) => {
     const qs = params ? '?' + new URLSearchParams(

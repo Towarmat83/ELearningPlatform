@@ -10,6 +10,7 @@
   let search = '';
   let difficulty = '';
   let category = '';
+  let enrolledSlugs = new Set<string>();
 
   async function loadCourses() {
     loading = true;
@@ -28,7 +29,19 @@
     }
   }
 
-  onMount(loadCourses);
+  async function loadEnrolled() {
+    const token = $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
+    if (!token) return;
+    try {
+      const res = await coursesApi.myCourses(token);
+      enrolledSlugs = new Set(res.courses.map((c: any) => c.slug ?? c.id));
+    } catch {}
+  }
+
+  onMount(async () => {
+    auth.init();
+    await Promise.all([loadCourses(), loadEnrolled()]);
+  });
 
   async function enrollAndGo(id: string) {
     const token = $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
@@ -38,6 +51,7 @@
     }
     try {
       await coursesApi.enroll(id, token);
+      enrolledSlugs = new Set([...enrolledSlugs, id]);
       toasts.success('Enrolled successfully!');
     } catch (e: any) {
       if (e.status !== 409) toasts.error(e.message || 'Failed to enroll');
@@ -102,25 +116,41 @@
           <div class="flex-1">
             <div class="flex items-start gap-2 mb-2">
               <h3 class="font-semibold text-gray-900 flex-1 leading-snug">{course.title}</h3>
-              {#if course.difficulty}
-                <span class={difficultyColor(course.difficulty)}>{course.difficulty}</span>
-              {/if}
+              <div class="flex flex-col items-end gap-1 shrink-0">
+                {#if course.difficulty}
+                  <span class={difficultyColor(course.difficulty)}>{course.difficulty}</span>
+                {/if}
+                {#if enrolledSlugs.has(course.id)}
+                  <span class="badge-green text-xs">✓ Enrolled</span>
+                {/if}
+              </div>
             </div>
             <p class="text-sm text-gray-500 line-clamp-2 mb-3">{course.description}</p>
 
-            <div class="flex items-center gap-3 text-xs text-gray-400 mb-4">
+            <div class="flex items-center gap-3 text-xs text-gray-400 mb-3">
               <span>📝 {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''}</span>
               {#if course.category}
                 <span class="badge-blue">{course.category}</span>
               {/if}
             </div>
+            {#if course.prerequisites && course.prerequisites.length > 0 && !enrolledSlugs.has(course.id)}
+              <div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-3 space-y-0.5">
+                {#each course.prerequisites as p}
+                  <div>🔒 {p.course}{p.min_score ? ` — ${p.min_score}+ pts` : ''}{p.modules?.length ? ` — modules: ${p.modules.join(', ')}` : ''}</div>
+                {/each}
+              </div>
+            {/if}
           </div>
 
           <div class="flex gap-2 mt-auto">
-            <a href="/courses/{course.id}" class="btn-secondary text-sm flex-1 text-center">View</a>
-            <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm">
-              Enroll
-            </button>
+            <a href="/courses/{course.id}" class="btn-secondary text-sm flex-1 text-center">
+              {enrolledSlugs.has(course.id) ? 'Continue' : 'View'}
+            </a>
+            {#if !enrolledSlugs.has(course.id)}
+              <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm">
+                Enroll
+              </button>
+            {/if}
           </div>
         </div>
       {/each}

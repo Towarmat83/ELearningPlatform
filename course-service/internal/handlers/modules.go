@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -60,6 +61,12 @@ type moduleResponse struct {
 	Content       string                   `json:"content,omitempty"`
 	Viewed        bool                     `json:"viewed"`
 	Hidden        bool                     `json:"hidden"`
+	Locked        bool                     `json:"locked"`
+	Prerequisites []string                 `json:"prerequisites,omitempty"`
+	BestScore     int                      `json:"best_score,omitempty"`
+	MaxScore      int                      `json:"max_score,omitempty"`
+	Passed        bool                     `json:"passed,omitempty"`
+	Attempts      int                      `json:"attempts,omitempty"`
 	QuestionCount int                      `json:"question_count,omitempty"`
 	Questions     []any                    `json:"questions,omitempty"`
 	QuizConfig    *quizConfig              `json:"quiz_config,omitempty"`
@@ -105,6 +112,15 @@ type questionResultAPI struct {
 	SourceRefs    []content.SourceRef `json:"source_refs,omitempty"`
 }
 
+// moduleProgressData holds cached progress for a single module.
+type moduleProgressData struct {
+	BestScore int
+	MaxScore  int
+	Passed    bool
+	Attempts  int
+}
+
+// viewedLessons fetches the set of lesson/module slugs viewed by the user.
 func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[string]bool {
 	u, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/viewed")
 	if err != nil {
@@ -134,6 +150,92 @@ func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[st
 	return m
 }
 
+// fetchModuleProgress fetches quiz progress for all modules in a course.
+func (s *State) fetchModuleProgress(r *http.Request, courseSlug, userID string) map[int]moduleProgressData {
+	u, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/modules")
+	if err != nil {
+		return nil
+	}
+	q := u.Query()
+	q.Set("user_id", userID)
+	q.Set("course_slug", courseSlug)
+	u.RawQuery = q.Encode()
+
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Progress []struct {
+			ModuleIndex int  `json:"module_index"`
+			BestScore   int  `json:"best_score"`
+			MaxScore    int  `json:"max_score"`
+			Passed      bool `json:"passed"`
+			Attempts    int  `json:"attempts"`
+		} `json:"progress"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil
+	}
+	m := make(map[int]moduleProgressData, len(result.Progress))
+	for _, p := range result.Progress {
+		m[p.ModuleIndex] = moduleProgressData{
+			BestScore: p.BestScore,
+			MaxScore:  p.MaxScore,
+			Passed:    p.Passed,
+			Attempts:  p.Attempts,
+		}
+	}
+	return m
+}
+
+// recordModuleProgress sends quiz results to user-service asynchronously.
+func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug string, idx, score, maxScore int, passed bool) {
+	body, _ := json.Marshal(map[string]any{
+		"user_id":      userID,
+		"course_slug":  courseSlug,
+		"module_index": idx,
+		"module_slug":  moduleSlug,
+		"score":        score,
+		"max_score":    maxScore,
+		"passed":       passed,
+	})
+	go func() {
+		resp, err := http.Post(s.Config.UserServiceURL+"/internal/progress/module",
+			"application/json", bytes.NewReader(body))
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
+}
+
+// completedSlugs builds a set of module slugs the user has completed (viewed or passed).
+// modules is the visible module list; viewedMap from viewedLessons; progressMap from fetchModuleProgress.
+func completedSlugs(modules []content.Module, viewedMap map[string]bool, progressMap map[int]moduleProgressData) map[string]bool {
+	out := make(map[string]bool)
+	for slug := range viewedMap {
+		out[slug] = true
+	}
+	for idx, p := range progressMap {
+		if p.Passed && idx >= 0 && idx < len(modules) {
+			out[modules[idx].Slug()] = true
+		}
+	}
+	return out
+}
+
+// isLocked returns true if any prerequisite module slug has not been completed.
+func isLocked(prereqs []string, done map[string]bool) bool {
+	for _, slug := range prereqs {
+		if !done[slug] {
+			return true
+		}
+	}
+	return false
+}
+
 // ListModules godoc
 // @Summary   List modules for a course
 // @Tags      Modules
@@ -158,16 +260,29 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	}
 
 	modules := s.visibleModules(c, r)
-	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
+	userID := claims.Subject
+
+	viewed := s.viewedLessons(r, courseSlug, userID)
+	progress := s.fetchModuleProgress(r, courseSlug, userID)
+	done := completedSlugs(modules, viewed, progress)
+
 	out := make([]moduleResponse, 0, len(modules))
 	for i, m := range modules {
+		locked := claims.Role != "admin" && isLocked(m.Prerequisites, done)
+		p := progress[i]
 		resp := moduleResponse{
-			Index:  i,
-			Name:   m.Name,
-			Slug:   m.Slug(),
-			Type:   m.Type,
-			Viewed: viewed[m.Slug()],
-			Hidden: m.Hidden,
+			Index:         i,
+			Name:          m.Name,
+			Slug:          m.Slug(),
+			Type:          m.Type,
+			Viewed:        viewed[m.Slug()],
+			Hidden:        m.Hidden,
+			Locked:        locked,
+			Prerequisites: m.Prerequisites,
+			BestScore:     p.BestScore,
+			MaxScore:      p.MaxScore,
+			Passed:        p.Passed,
+			Attempts:      p.Attempts,
 		}
 		if m.Type == "quiz" {
 			if m.HasQuestions() {
@@ -215,19 +330,37 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := modules[idx]
+
+	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
+	progress := s.fetchModuleProgress(r, courseSlug, claims.Subject)
+
+	// Check prerequisites for non-admins
+	if claims.Role != "admin" && len(m.Prerequisites) > 0 {
+		done := completedSlugs(modules, viewed, progress)
+		if isLocked(m.Prerequisites, done) {
+			s.Error(w, http.StatusForbidden, "Complete prerequisites first")
+			return
+		}
+	}
+
+	p := progress[idx]
+
 	resp := moduleResponse{
-		Index:  idx,
-		Name:   m.Name,
-		Slug:   m.Slug(),
-		Type:   m.Type,
-		Hidden: m.Hidden,
+		Index:         idx,
+		Name:          m.Name,
+		Slug:          m.Slug(),
+		Type:          m.Type,
+		Hidden:        m.Hidden,
+		Prerequisites: m.Prerequisites,
+		BestScore:     p.BestScore,
+		MaxScore:      p.MaxScore,
+		Passed:        p.Passed,
+		Attempts:      p.Attempts,
+		Viewed:        viewed[m.Slug()],
 	}
 	if m.Type == "quiz" && m.HasQuestions() {
 		resp.QuestionCount = len(m.Questions)
 	}
-
-	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
-	resp.Viewed = viewed[m.Slug()]
 
 	switch m.Type {
 	case "video", "image":
@@ -342,6 +475,17 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check prerequisites for non-admins
+	if claims.Role != "admin" && len(m.Prerequisites) > 0 {
+		viewed := s.viewedLessons(r, courseSlug, userID)
+		progress := s.fetchModuleProgress(r, courseSlug, userID)
+		done := completedSlugs(modules, viewed, progress)
+		if isLocked(m.Prerequisites, done) {
+			s.Error(w, http.StatusForbidden, "Complete prerequisites first")
+			return
+		}
+	}
+
 	// Resolve questions: fetch from git repo first, then fallback to inline
 	var questions []content.Question
 	var passingScore int
@@ -396,6 +540,9 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := content.ScoreQuiz(effectiveQuiz, req.Answers)
+
+	// Record progress in user-service asynchronously
+	s.recordModuleProgress(courseSlug, userID, m.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
 
 	// Record cooldowns for wrong answers
 	respCooldowns := make(map[string]cooldownState)

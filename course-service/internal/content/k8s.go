@@ -158,6 +158,32 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		title = slug
 	}
 
+	var coursePrereqs []CoursePrerequisite
+	if rawPrereqs, ok := spec["prerequisites"].([]interface{}); ok {
+		for _, rp := range rawPrereqs {
+			switch v := rp.(type) {
+			case string:
+				// Backward compat: bare string slug → enrollment-only prereq
+				coursePrereqs = append(coursePrereqs, CoursePrerequisite{Course: v})
+			case map[string]interface{}:
+				p := CoursePrerequisite{
+					Course:   getStr(v, "course"),
+					MinScore: getInt(v, "min_score"),
+				}
+				if rawMods, ok := v["modules"].([]interface{}); ok {
+					for _, rm := range rawMods {
+						if s, ok := rm.(string); ok {
+							p.Modules = append(p.Modules, s)
+						}
+					}
+				}
+				if p.Course != "" {
+					coursePrereqs = append(coursePrereqs, p)
+				}
+			}
+		}
+	}
+
 	var modules []Module
 	if rawModules, ok := spec["modules"].([]interface{}); ok {
 		for i, raw := range rawModules {
@@ -165,15 +191,25 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 			if !ok {
 				continue
 			}
+			var modPrereqs []string
+			if rawPrereqs, ok := m["prerequisites"].([]interface{}); ok {
+				for _, rp := range rawPrereqs {
+					if s, ok := rp.(string); ok {
+						modPrereqs = append(modPrereqs, s)
+					}
+				}
+			}
+
 			mod := Module{
-				Name:         getStr(m, "name"),
-				Type:         getStr(m, "type"),
-				Src:          getStr(m, "src"),
-				Ref:          getStr(m, "ref"),
-				Path:         getStr(m, "path"),
-				Replication:  getBool(m, "replication"),
-				Hidden:       getBool(m, "hidden"),
-				PassingScore: getInt(m, "passing_score"),
+				Name:          getStr(m, "name"),
+				Type:          getStr(m, "type"),
+				Src:           getStr(m, "src"),
+				Ref:           getStr(m, "ref"),
+				Path:          getStr(m, "path"),
+				Replication:   getBool(m, "replication"),
+				Hidden:        getBool(m, "hidden"),
+				Prerequisites: modPrereqs,
+				PassingScore:  getInt(m, "passing_score"),
 				MaxAttemptsPerQuestion: func() *int {
 					if v, ok := m["max_attempts_per_question"]; ok {
 						switch n := v.(type) {
@@ -326,14 +362,15 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 	}
 
 	return &Course{
-		Slug:        slug,
-		Title:       title,
-		Description: description,
-		Category:    category,
-		Difficulty:  difficulty,
-		IsPublished: !hidden,
-		Modules:     modules,
-		Source:      sourceK8s(slug),
+		Slug:          slug,
+		Title:         title,
+		Description:   description,
+		Category:      category,
+		Difficulty:    difficulty,
+		IsPublished:   !hidden,
+		Prerequisites: coursePrereqs,
+		Modules:       modules,
+		Source:        sourceK8s(slug),
 	}, nil
 }
 

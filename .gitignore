@@ -30,3 +30,5 @@ Thumbs.db
 *.log
 
 api/.sqlx
+
+CLAUDE.md

@@ -79,6 +79,12 @@ export interface AuthResponse {
   user: UserPublic;
 }
 
+export interface CoursePrerequisite {
+  course: string;
+  min_score?: number;
+  modules?: string[];
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -91,6 +97,7 @@ export interface Course {
   creator_username: string | null;
   lab_count: number;
   enrollment_count: number;
+  prerequisites?: CoursePrerequisite[];
   created_at: string;
   updated_at: string;
 }

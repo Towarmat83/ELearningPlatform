@@ -192,11 +192,12 @@ func (s *State) fetchModuleProgress(r *http.Request, courseSlug, userID string) 
 }
 
 // recordModuleProgress sends quiz results to user-service asynchronously.
-func (s *State) recordModuleProgress(courseSlug, userID string, idx, score, maxScore int, passed bool) {
+func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug string, idx, score, maxScore int, passed bool) {
 	body, _ := json.Marshal(map[string]any{
 		"user_id":      userID,
 		"course_slug":  courseSlug,
 		"module_index": idx,
+		"module_slug":  moduleSlug,
 		"score":        score,
 		"max_score":    maxScore,
 		"passed":       passed,
@@ -541,7 +542,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	result := content.ScoreQuiz(effectiveQuiz, req.Answers)
 
 	// Record progress in user-service asynchronously
-	s.recordModuleProgress(courseSlug, userID, idx, result.TotalScore, result.MaxScore, result.Passed)
+	s.recordModuleProgress(courseSlug, userID, m.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
 
 	// Record cooldowns for wrong answers
 	respCooldowns := make(map[string]cooldownState)

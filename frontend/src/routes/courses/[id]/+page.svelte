@@ -138,6 +138,21 @@
             {/if}
           </div>
 
+          {#if course.prerequisites && course.prerequisites.length > 0 && !enrolled}
+            <div class="mb-3 flex flex-col gap-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              {#each course.prerequisites as p}
+                <div class="flex items-start gap-1.5">
+                  <span>🔒</span>
+                  <span>
+                    <span class="font-medium">{p.course}</span>
+                    {#if p.min_score} — {p.min_score}+ points required{/if}
+                    {#if p.modules && p.modules.length > 0} — must pass: {p.modules.join(', ')}{/if}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
           {#if !enrolled}
             <button on:click={enroll} class="btn-primary">Enroll Now</button>
           {:else if totalCount > 0}

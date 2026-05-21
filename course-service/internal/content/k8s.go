@@ -158,11 +158,28 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		title = slug
 	}
 
-	var coursePrereqs []string
+	var coursePrereqs []CoursePrerequisite
 	if rawPrereqs, ok := spec["prerequisites"].([]interface{}); ok {
 		for _, rp := range rawPrereqs {
-			if s, ok := rp.(string); ok {
-				coursePrereqs = append(coursePrereqs, s)
+			switch v := rp.(type) {
+			case string:
+				// Backward compat: bare string slug → enrollment-only prereq
+				coursePrereqs = append(coursePrereqs, CoursePrerequisite{Course: v})
+			case map[string]interface{}:
+				p := CoursePrerequisite{
+					Course:   getStr(v, "course"),
+					MinScore: getInt(v, "min_score"),
+				}
+				if rawMods, ok := v["modules"].([]interface{}); ok {
+					for _, rm := range rawMods {
+						if s, ok := rm.(string); ok {
+							p.Modules = append(p.Modules, s)
+						}
+					}
+				}
+				if p.Course != "" {
+					coursePrereqs = append(coursePrereqs, p)
+				}
 			}
 		}
 	}

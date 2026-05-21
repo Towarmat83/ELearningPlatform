@@ -8,6 +8,11 @@ spec:
   hidden: false
   category: "kubernetes"
   difficulty: "beginner"
+  prerequisites:
+    - course: linux-intro
+      min_score: 30
+      modules:
+        - quiz-bases-linux
   modules:
     - name: "What is Kubernetes"
       type: "text"

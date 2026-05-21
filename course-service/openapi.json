@@ -623,6 +623,23 @@
         }
     },
     "definitions": {
+        "content.CoursePrerequisite": {
+            "type": "object",
+            "properties": {
+                "course": {
+                    "type": "string"
+                },
+                "min_score": {
+                    "type": "integer"
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "content.SourceRef": {
             "type": "object",
             "properties": {
@@ -736,6 +753,12 @@
                 "module_count": {
                     "type": "integer"
                 },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.CoursePrerequisite"
+                    }
+                },
                 "slug": {
                     "type": "string"
                 },
@@ -750,6 +773,12 @@
         "handlers.moduleResponse": {
             "type": "object",
             "properties": {
+                "attempts": {
+                    "type": "integer"
+                },
+                "best_score": {
+                    "type": "integer"
+                },
                 "content": {
                     "type": "string"
                 },
@@ -765,8 +794,23 @@
                 "index": {
                     "type": "integer"
                 },
+                "locked": {
+                    "type": "boolean"
+                },
+                "max_score": {
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
+                },
+                "passed": {
+                    "type": "boolean"
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "question_count": {
                     "type": "integer"

@@ -101,6 +101,7 @@ func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Requ
 		UserID      string `json:"user_id"`
 		CourseSlug  string `json:"course_slug"`
 		ModuleIndex int    `json:"module_index"`
+		ModuleSlug  string `json:"module_slug"`
 		Score       int    `json:"score"`
 		MaxScore    int    `json:"max_score"`
 		Passed      bool   `json:"passed"`
@@ -110,16 +111,17 @@ func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	_, err := s.Pool.Exec(r.Context(), `
-		INSERT INTO module_progress (user_id, course_slug, module_index, best_score, max_score, passed, attempts, completed_at)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, 1, CASE WHEN $6 THEN NOW() ELSE NULL END)
+		INSERT INTO module_progress (user_id, course_slug, module_index, module_slug, best_score, max_score, passed, attempts, completed_at)
+		VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, 1, CASE WHEN $7 THEN NOW() ELSE NULL END)
 		ON CONFLICT (user_id, course_slug, module_index) DO UPDATE SET
 			attempts     = module_progress.attempts + 1,
-			best_score   = GREATEST(module_progress.best_score, $4),
-			max_score    = $5,
-			passed       = module_progress.passed OR $6,
-			completed_at = CASE WHEN ($6 AND module_progress.completed_at IS NULL) THEN NOW() ELSE module_progress.completed_at END,
+			best_score   = GREATEST(module_progress.best_score, $5),
+			max_score    = $6,
+			passed       = module_progress.passed OR $7,
+			module_slug  = COALESCE(module_progress.module_slug, NULLIF($4, '')),
+			completed_at = CASE WHEN ($7 AND module_progress.completed_at IS NULL) THEN NOW() ELSE module_progress.completed_at END,
 			updated_at   = NOW()`,
-		body.UserID, body.CourseSlug, body.ModuleIndex, body.Score, body.MaxScore, body.Passed)
+		body.UserID, body.CourseSlug, body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return

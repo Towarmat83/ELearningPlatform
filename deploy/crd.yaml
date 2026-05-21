@@ -33,7 +33,17 @@ spec:
                 prerequisites:
                   type: array
                   items:
-                    type: string
+                    type: object
+                    required: [course]
+                    properties:
+                      course:
+                        type: string
+                      min_score:
+                        type: integer
+                      modules:
+                        type: array
+                        items:
+                          type: string
                 modules:
                   type: array
                   items:

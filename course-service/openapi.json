@@ -724,6 +724,9 @@
                 "enrollment_count": {
                     "type": "integer"
                 },
+                "enrollment_restricted": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "string"
                 },

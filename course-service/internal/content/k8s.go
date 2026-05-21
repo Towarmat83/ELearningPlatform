@@ -325,15 +325,18 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		}
 	}
 
+	enrollmentRestricted := getBool(spec, "enrollment_restricted")
+
 	return &Course{
-		Slug:        slug,
-		Title:       title,
-		Description: description,
-		Category:    category,
-		Difficulty:  difficulty,
-		IsPublished: !hidden,
-		Modules:     modules,
-		Source:      sourceK8s(slug),
+		Slug:                 slug,
+		Title:                title,
+		Description:          description,
+		Category:             category,
+		Difficulty:           difficulty,
+		IsPublished:          !hidden,
+		EnrollmentRestricted: enrollmentRestricted,
+		Modules:              modules,
+		Source:               sourceK8s(slug),
 	}, nil
 }
 

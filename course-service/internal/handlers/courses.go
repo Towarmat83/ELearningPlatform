@@ -8,32 +8,34 @@ import (
 )
 
 type courseResponse struct {
-	Slug            string `json:"slug"`
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	Difficulty      string `json:"difficulty"`
-	IsPublished     bool   `json:"is_published"`
-	ModuleCount     int    `json:"module_count"`
-	LabCount        int    `json:"lab_count"`
-	EnrollmentCount int    `json:"enrollment_count"`
-	Source          string `json:"source,omitempty"`
+	Slug                 string `json:"slug"`
+	ID                   string `json:"id"`
+	Title                string `json:"title"`
+	Description          string `json:"description"`
+	Category             string `json:"category"`
+	Difficulty           string `json:"difficulty"`
+	IsPublished          bool   `json:"is_published"`
+	EnrollmentRestricted bool   `json:"enrollment_restricted"`
+	ModuleCount          int    `json:"module_count"`
+	LabCount             int    `json:"lab_count"`
+	EnrollmentCount      int    `json:"enrollment_count"`
+	Source               string `json:"source,omitempty"`
 }
 
 func toCourseResponse(c *content.Course) courseResponse {
 	return courseResponse{
-		Slug:            c.Slug,
-		ID:              c.Slug,
-		Title:           c.Title,
-		Description:     c.Description,
-		Category:        c.Category,
-		Difficulty:      c.Difficulty,
-		IsPublished:     c.IsPublished,
-		ModuleCount:     len(c.Modules),
-		LabCount:        len(c.Modules),
-		EnrollmentCount: 0,
-		Source:          c.Source,
+		Slug:                 c.Slug,
+		ID:                   c.Slug,
+		Title:                c.Title,
+		Description:          c.Description,
+		Category:             c.Category,
+		Difficulty:           c.Difficulty,
+		IsPublished:          c.IsPublished,
+		EnrollmentRestricted: c.EnrollmentRestricted,
+		ModuleCount:          len(c.Modules),
+		LabCount:             len(c.Modules),
+		EnrollmentCount:      0,
+		Source:               c.Source,
 	}
 }
 
@@ -55,6 +57,9 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	all := s.Content.List()
 	out := make([]courseResponse, 0, len(all))
 	for _, c := range all {
+		if c.EnrollmentRestricted {
+			continue
+		}
 		if category != "" && strings.ToLower(c.Category) != category {
 			continue
 		}

@@ -7,16 +7,17 @@ import (
 
 // Course is the in-memory representation of a course loaded from disk.
 type Course struct {
-	Slug        string   `json:"slug"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Category    string   `json:"category"`
-	Difficulty  string   `json:"difficulty"`
-	IsPublished bool     `json:"is_published"`
-	AutoEnroll  bool     `json:"auto_enroll"`
-	Lessons     []Lesson `json:"lessons"`
-	Modules     []Module `json:"modules,omitempty"`
-	Source      string   `json:"source,omitempty"`
+	Slug                string   `json:"slug"`
+	Title               string   `json:"title"`
+	Description         string   `json:"description"`
+	Category            string   `json:"category"`
+	Difficulty          string   `json:"difficulty"`
+	IsPublished         bool     `json:"is_published"`
+	AutoEnroll          bool     `json:"auto_enroll"`
+	EnrollmentRestricted bool    `json:"enrollment_restricted"`
+	Lessons             []Lesson `json:"lessons"`
+	Modules             []Module `json:"modules,omitempty"`
+	Source              string   `json:"source,omitempty"`
 }
 
 // Lesson is a single lesson inside a Course (loaded from NN-slug.md files).
@@ -86,24 +87,26 @@ type CourseYAML struct {
 	Kind       string      `yaml:"kind,omitempty"`
 	Spec       *CourseSpec `yaml:"spec,omitempty"`
 
-	Title       string       `yaml:"title,omitempty"`
-	Description string       `yaml:"description,omitempty"`
-	Category    string       `yaml:"category,omitempty"`
-	Difficulty  string       `yaml:"difficulty,omitempty"`
-	IsPublished bool         `yaml:"is_published,omitempty"`
-	AutoEnroll  bool         `yaml:"auto_enroll,omitempty"`
-	Hidden      bool         `yaml:"hidden,omitempty"`
-	Modules     []ModuleYAML `yaml:"modules,omitempty"`
+	Title                string       `yaml:"title,omitempty"`
+	Description          string       `yaml:"description,omitempty"`
+	Category             string       `yaml:"category,omitempty"`
+	Difficulty           string       `yaml:"difficulty,omitempty"`
+	IsPublished          bool         `yaml:"is_published,omitempty"`
+	AutoEnroll           bool         `yaml:"auto_enroll,omitempty"`
+	EnrollmentRestricted bool         `yaml:"enrollment_restricted,omitempty"`
+	Hidden               bool         `yaml:"hidden,omitempty"`
+	Modules              []ModuleYAML `yaml:"modules,omitempty"`
 }
 
 // CourseSpec holds the nested spec content in the CRD format.
 type CourseSpec struct {
-	Title       string       `yaml:"title"`
-	Description string       `yaml:"description"`
-	Hidden      bool         `yaml:"hidden"`
-	Category    string       `yaml:"category,omitempty"`
-	Difficulty  string       `yaml:"difficulty,omitempty"`
-	Modules     []ModuleYAML `yaml:"modules"`
+	Title                string       `yaml:"title"`
+	Description          string       `yaml:"description"`
+	Hidden               bool         `yaml:"hidden"`
+	Category             string       `yaml:"category,omitempty"`
+	Difficulty           string       `yaml:"difficulty,omitempty"`
+	EnrollmentRestricted bool         `yaml:"enrollment_restricted,omitempty"`
+	Modules              []ModuleYAML `yaml:"modules"`
 }
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
@@ -150,5 +153,8 @@ func (c *CourseYAML) MergeSpec() {
 	}
 	if len(c.Modules) == 0 && len(c.Spec.Modules) > 0 {
 		c.Modules = c.Spec.Modules
+	}
+	if !c.EnrollmentRestricted {
+		c.EnrollmentRestricted = c.Spec.EnrollmentRestricted
 	}
 }

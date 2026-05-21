@@ -59,12 +59,6 @@ userService:
   env:
     JWT_EXPIRY_HOURS: "24"
     CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
-    GITLAB_URL: "https://gitlab.com"
-    OAUTH_REDIRECT_BASE: ""
-    GITLAB_CLIENT_ID: ""
-    GITLAB_CLIENT_SECRET: ""
-    GITHUB_CLIENT_ID: ""
-    GITHUB_CLIENT_SECRET: ""
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -96,6 +90,58 @@ frontend:
     minReplicas: 1
     maxReplicas: 3
     targetCPUUtilizationPercentage: 70
+
+# ── SSO / OAuth providers (optionnel) ────────────────────────────────────────
+# Chaque provider est un objet générique.
+# Providers OIDC (GitLab, Google, Authentik, Keycloak, …) : fournir issuer_url.
+# GitHub (OAuth2 pur, pas OIDC) : id: github, pas de issuer_url.
+# Exemples :
+#   providers:
+#     - id: gitlab
+#       name: GitLab
+#       client_id: "xxx"
+#       client_secret: "yyy"
+#       issuer_url: "https://gitlab.com"        # optionnel, self-hosted
+#     - id: github
+#       name: GitHub
+#       client_id: "aaa"
+#       client_secret: "bbb"
+#     - id: google
+#       name: Google
+#       client_id: "..."
+#       client_secret: "..."
+#       issuer_url: "https://accounts.google.com"
+#     - id: company-sso
+#       name: "Company SSO"
+#       client_id: "..."
+#       client_secret: "..."
+#       issuer_url: "https://sso.company.com"
+sso:
+  enabled: false
+  redirectBase: ""        # defaults to ingress public URL when empty
+  providers: []
+
+# ── LDAP Service (optionnel — nécessite un annuaire LDAP/Authentik) ───────────
+ldapService:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: localhost/elearning-ldap-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8083
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  env:
+    CORS_ORIGINS: ""
+  nodeSelector: {}
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:

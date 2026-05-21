@@ -10,10 +10,9 @@ data:
     jwt_expiry_hours: {{ .Values.userService.env.JWT_EXPIRY_HOURS }}
     cors_origins:
       - "{{ include "elearning.publicUrl" . }}"
-    gitlab_url: {{ .Values.userService.env.GITLAB_URL | quote }}
-    oauth_redirect_base: {{ .Values.userService.env.OAUTH_REDIRECT_BASE | default (include "elearning.publicUrl" .) | quote }}
     course_service_url: "http://{{ include "elearning.fullname" . }}-course-service:{{ .Values.courseService.service.port }}"
-    gitlab_client_id: {{ .Values.userService.env.GITLAB_CLIENT_ID | quote }}
-    gitlab_client_secret: {{ .Values.userService.env.GITLAB_CLIENT_SECRET | quote }}
-    github_client_id: {{ .Values.userService.env.GITHUB_CLIENT_ID | quote }}
-    github_client_secret: {{ .Values.userService.env.GITHUB_CLIENT_SECRET | quote }}
+    oauth_redirect_base: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
+    {{- if and .Values.sso.enabled .Values.sso.providers }}
+    providers:
+{{ toYaml .Values.sso.providers | indent 6 }}
+    {{- end }}

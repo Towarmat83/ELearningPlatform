@@ -2,8 +2,17 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { ssoApi } from '$lib/api';
+  import { ssoApi, oidcApi } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
+
+  function decodeStateProvider(state: string): string {
+    try {
+      const payload = JSON.parse(atob(state.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.provider || '';
+    } catch {
+      return '';
+    }
+  }
 
   let status: 'loading' | 'error' = 'loading';
   let errorMessage = '';
@@ -28,7 +37,10 @@
     }
 
     try {
-      const res = await ssoApi.callback(code, state);
+      const provider = decodeStateProvider(state);
+      const res = provider === 'oidc'
+        ? await oidcApi.callback(code, state)
+        : await ssoApi.callback(code, state);
       auth.login(res.token, res.user);
       toasts.success(`Welcome, ${res.user.username}!`);
       goto(res.user.role === 'admin' ? '/admin' : '/dashboard');

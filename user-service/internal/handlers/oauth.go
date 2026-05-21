@@ -5,16 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 	"unicode"
 
+	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/oauth2"
 
+	"github.com/elearning/user-service/internal/config"
 	"github.com/elearning/user-service/internal/metrics"
 	"github.com/elearning/user-service/internal/middleware"
 )
@@ -61,11 +65,10 @@ func decodeOAuthState(stateToken, secret string) (string, bool) {
 // @Router   /api/auth/oauth/providers [get]
 func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
 	var providers []map[string]string
-	if s.Config.GitLabClientID != "" {
-		providers = append(providers, map[string]string{"id": "gitlab", "name": "GitLab"})
-	}
-	if s.Config.GitHubClientID != "" {
-		providers = append(providers, map[string]string{"id": "github", "name": "GitHub"})
+	for _, p := range s.Config.Providers {
+		if p.ClientID != "" {
+			providers = append(providers, map[string]string{"id": p.ID, "name": p.Name})
+		}
 	}
 	if providers == nil {
 		providers = []map[string]string{}
@@ -77,13 +80,19 @@ func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
 // @Summary  Get OAuth authorization URL
 // @Tags     OAuth
 // @Produce  json
-// @Param    provider  path  string  true  "OAuth provider (gitlab, github)"
+// @Param    provider  path  string  true  "OAuth provider id"
 // @Success  200  {object}  map[string]string
 // @Failure  400  {object}  map[string]string
 // @Router   /api/auth/oauth/{provider}/authorize [get]
 func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
-	provider := param(r, "provider")
-	stateToken, err := makeOAuthState(provider, s.Config.JWTSecret)
+	providerID := param(r, "provider")
+	p := s.Config.FindProvider(providerID)
+	if p == nil || p.ClientID == "" {
+		s.Error(w, http.StatusBadRequest, "Unknown or unconfigured provider: "+providerID)
+		return
+	}
+
+	stateToken, err := makeOAuthState(providerID, s.Config.JWTSecret)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "State token error")
 		return
@@ -92,40 +101,34 @@ func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	redirectURI := s.Config.OAuthRedirectBase + "/auth/callback"
 	var authURL string
 
-	switch provider {
-	case "gitlab":
-		if s.Config.GitLabClientID == "" {
-			s.Error(w, http.StatusBadRequest, "GitLab OAuth not configured")
-			return
-		}
-		gitlabBase := strings.TrimRight(ReadSetting(r.Context(), s.Pool, "gitlab_url", s.Config.GitLabURL), "/")
-		u, _ := url.Parse(gitlabBase + "/oauth/authorize")
-		q := url.Values{}
-		q.Set("client_id", s.Config.GitLabClientID)
-		q.Set("redirect_uri", redirectURI)
-		q.Set("response_type", "code")
-		q.Set("scope", "read_user")
-		q.Set("state", stateToken)
-		u.RawQuery = q.Encode()
-		authURL = u.String()
-
-	case "github":
-		if s.Config.GitHubClientID == "" {
-			s.Error(w, http.StatusBadRequest, "GitHub OAuth not configured")
-			return
-		}
+	if providerID == "github" {
 		u, _ := url.Parse("https://github.com/login/oauth/authorize")
 		q := url.Values{}
-		q.Set("client_id", s.Config.GitHubClientID)
+		q.Set("client_id", p.ClientID)
 		q.Set("redirect_uri", redirectURI)
 		q.Set("scope", "user:email read:user")
 		q.Set("state", stateToken)
 		u.RawQuery = q.Encode()
 		authURL = u.String()
-
-	default:
-		s.Error(w, http.StatusBadRequest, "Unknown provider: "+provider)
-		return
+	} else {
+		issuerURL := p.IssuerURL
+		if issuerURL == "" {
+			s.Error(w, http.StatusBadRequest, "Provider "+providerID+" requires issuer_url")
+			return
+		}
+		oidcProvider, err := gooidc.NewProvider(r.Context(), issuerURL)
+		if err != nil {
+			s.Error(w, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
+			return
+		}
+		oauth2Cfg := oauth2.Config{
+			ClientID:     p.ClientID,
+			ClientSecret: p.ClientSecret,
+			RedirectURL:  redirectURI,
+			Endpoint:     oidcProvider.Endpoint(),
+			Scopes:       []string{gooidc.ScopeOpenID, "email", "profile"},
+		}
+		authURL = oauth2Cfg.AuthCodeURL(stateToken, oauth2.AccessTypeOnline)
 	}
 
 	s.JSON(w, http.StatusOK, map[string]string{"url": authURL, "state": stateToken})
@@ -150,9 +153,15 @@ func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, ok := decodeOAuthState(req.State, s.Config.JWTSecret)
+	providerID, ok := decodeOAuthState(req.State, s.Config.JWTSecret)
 	if !ok {
 		s.Error(w, http.StatusUnauthorized, "Invalid or expired OAuth state")
+		return
+	}
+
+	p := s.Config.FindProvider(providerID)
+	if p == nil || p.ClientID == "" {
+		s.Error(w, http.StatusBadRequest, "Unknown or unconfigured provider: "+providerID)
 		return
 	}
 
@@ -161,21 +170,17 @@ func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	var avatarURL *string
 	var err error
 
-	switch provider {
-	case "gitlab":
-		email, displayName, avatarURL, providerUserID, err = s.fetchGitLab(r.Context(), req.Code, redirectURI)
-	case "github":
-		email, displayName, avatarURL, providerUserID, err = s.fetchGitHub(req.Code, redirectURI)
-	default:
-		s.Error(w, http.StatusBadRequest, "Unknown provider: "+provider)
-		return
+	if providerID == "github" {
+		email, displayName, avatarURL, providerUserID, err = fetchGitHub(p, req.Code, redirectURI)
+	} else {
+		email, displayName, avatarURL, providerUserID, err = fetchOIDCProvider(r.Context(), p, req.Code, redirectURI)
 	}
 	if err != nil {
 		s.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	user, err := upsertSSOUser(r.Context(), s.Pool, email, displayName, avatarURL, provider, providerUserID)
+	user, err := upsertSSOUser(r.Context(), s.Pool, email, displayName, avatarURL, providerID, providerUserID)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 		return
@@ -189,87 +194,69 @@ func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, authResponse{Token: token, User: *user})
 }
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
+// ── Generic OIDC fetch (GitLab, Google, Authentik, Keycloak, …) ──────────────
 
-func doGet(client *http.Client, rawURL, bearer string, out any) error {
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar *string, sub string, err error) {
+	oidcProvider, err := gooidc.NewProvider(ctx, p.IssuerURL)
 	if err != nil {
-		return err
+		return "", "", nil, "", fmt.Errorf("cannot reach OIDC provider: %w", err)
 	}
-	if bearer != "" {
-		req.Header.Set("Authorization", "Bearer "+bearer)
+
+	oauth2Cfg := oauth2.Config{
+		ClientID:     p.ClientID,
+		ClientSecret: p.ClientSecret,
+		RedirectURL:  redirectURI,
+		Endpoint:     oidcProvider.Endpoint(),
+		Scopes:       []string{gooidc.ScopeOpenID, "email", "profile"},
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "LearnLab-SSO/1.0")
-	resp, err := client.Do(req)
+
+	token, err := oauth2Cfg.Exchange(ctx, code)
 	if err != nil {
-		return err
+		return "", "", nil, "", fmt.Errorf("token exchange failed: %w", err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	return json.Unmarshal(body, out)
+
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok {
+		return "", "", nil, "", fmt.Errorf("no id_token in response")
+	}
+
+	verifier := oidcProvider.Verifier(&gooidc.Config{ClientID: p.ClientID})
+	idToken, err := verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		return "", "", nil, "", fmt.Errorf("ID token verification failed: %w", err)
+	}
+
+	var claims map[string]any
+	if err := idToken.Claims(&claims); err != nil {
+		return "", "", nil, "", fmt.Errorf("claims extraction failed: %w", err)
+	}
+
+	email, _ = claims["email"].(string)
+	if email == "" {
+		return "", "", nil, "", fmt.Errorf("no email in OIDC token")
+	}
+	name, _ = claims["name"].(string)
+	if name == "" {
+		name, _ = claims["preferred_username"].(string)
+	}
+	if name == "" {
+		name = email
+	}
+	if pic, ok := claims["picture"].(string); ok && pic != "" {
+		avatar = &pic
+	}
+	return email, name, avatar, idToken.Subject, nil
 }
 
-// ── Provider fetch helpers ────────────────────────────────────────────────────
+// ── GitHub fetch (OAuth2 only, no OIDC discovery) ─────────────────────────────
 
-func (s *State) fetchGitLab(ctx context.Context, code, redirectURI string) (email, name string, avatar *string, id string, err error) {
-	if s.Config.GitLabClientID == "" || s.Config.GitLabClientSecret == "" {
-		return "", "", nil, "", fmt.Errorf("GitLab OAuth not configured")
-	}
-	gitlabBase := strings.TrimRight(ReadSetting(ctx, s.Pool, "gitlab_url", s.Config.GitLabURL), "/")
-	client := &http.Client{}
-
-	resp, err := client.PostForm(gitlabBase+"/oauth/token", url.Values{
-		"client_id":     {s.Config.GitLabClientID},
-		"client_secret": {s.Config.GitLabClientSecret},
-		"code":          {code},
-		"grant_type":    {"authorization_code"},
-		"redirect_uri":  {redirectURI},
-	})
-	if err != nil {
-		return "", "", nil, "", fmt.Errorf("GitLab token request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	var tokenRes map[string]any
-	body, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(body, &tokenRes)
-
-	accessToken, _ := tokenRes["access_token"].(string)
-	if accessToken == "" {
-		return "", "", nil, "", fmt.Errorf("GitLab did not return an access token")
-	}
-
-	var info map[string]any
-	if err = doGet(client, gitlabBase+"/api/v4/user", accessToken, &info); err != nil {
-		return "", "", nil, "", fmt.Errorf("GitLab user request failed: %w", err)
-	}
-
-	idStr := fmt.Sprintf("%v", info["id"])
-	emailStr, _ := info["email"].(string)
-	nameStr, _ := info["name"].(string)
-	if nameStr == "" {
-		nameStr, _ = info["username"].(string)
-	}
-	if nameStr == "" {
-		nameStr = emailStr
-	}
-	var avPtr *string
-	if av, ok := info["avatar_url"].(string); ok && av != "" {
-		avPtr = &av
-	}
-	return emailStr, nameStr, avPtr, idStr, nil
-}
-
-func (s *State) fetchGitHub(code, redirectURI string) (email, name string, avatar *string, id string, err error) {
-	if s.Config.GitHubClientID == "" || s.Config.GitHubClientSecret == "" {
-		return "", "", nil, "", fmt.Errorf("GitHub OAuth not configured")
-	}
+func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar *string, id string, err error) {
 	client := &http.Client{}
 
 	tokenReq, _ := http.NewRequest(http.MethodPost, "https://github.com/login/oauth/access_token",
 		strings.NewReader(url.Values{
-			"client_id":     {s.Config.GitHubClientID},
-			"client_secret": {s.Config.GitHubClientSecret},
+			"client_id":     {p.ClientID},
+			"client_secret": {p.ClientSecret},
 			"code":          {code},
 			"redirect_uri":  {redirectURI},
 		}.Encode()))
@@ -330,6 +317,27 @@ func (s *State) fetchGitHub(code, redirectURI string) (email, name string, avata
 	return emailStr, nameStr, avPtr, ghID, nil
 }
 
+// ── HTTP helper ───────────────────────────────────────────────────────────────
+
+func doGet(client *http.Client, rawURL, bearer string, out any) error {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return err
+	}
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "LearnLab-SSO/1.0")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return json.Unmarshal(body, out)
+}
+
 // ── User upsert ───────────────────────────────────────────────────────────────
 
 func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName string, avatarURL *string, provider, providerUserID string) (*userPublicRow, error) {
@@ -338,22 +346,30 @@ func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName s
 	u, err := scanUserPublic(pool.QueryRow(ctx,
 		sel+` WHERE auth_provider = $1 AND provider_user_id = $2`, provider, providerUserID))
 	if err == nil {
-		u2, _ := scanUserPublic(pool.QueryRow(ctx,
+		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
 			`UPDATE users SET avatar_url = COALESCE($1, avatar_url), updated_at = NOW()
 			 WHERE id = $2::uuid
 			 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
 			avatarURL, u.ID))
+		if err2 != nil {
+			slog.Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", "err", err2, "user_id", u.ID)
+			return &u, nil
+		}
 		return &u2, nil
 	}
 
 	u, err = scanUserPublic(pool.QueryRow(ctx, sel+` WHERE email = $1`, email))
 	if err == nil {
-		u2, _ := scanUserPublic(pool.QueryRow(ctx,
+		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
 			`UPDATE users SET auth_provider = $1, provider_user_id = $2,
 			  avatar_url = COALESCE($3, avatar_url), updated_at = NOW()
 			 WHERE id = $4::uuid
 			 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
 			provider, providerUserID, avatarURL, u.ID))
+		if err2 != nil {
+			slog.Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", "err", err2, "user_id", u.ID)
+			return &u, nil
+		}
 		return &u2, nil
 	}
 

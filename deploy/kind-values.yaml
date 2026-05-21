@@ -15,6 +15,8 @@ userService:
     repository: localhost/elearning-user-service
     tag: latest
     pullPolicy: IfNotPresent
+  env:
+    CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
   service:
     type: NodePort
     port: 8081
@@ -25,10 +27,23 @@ frontend:
     repository: localhost/elearning-frontend
     tag: latest
     pullPolicy: IfNotPresent
+  origin: "http://localhost:3000"
   service:
     type: NodePort
     port: 3000
     nodePort: 30080
+
+sso:
+  enabled: true
+  redirectBase: "http://localhost:3000"
+  providers:
+    - id: github
+      name: GitHub
+      client_id: "Iv23lio9LgGJ8blbGG7e"
+      client_secret: "c8465a66ca28b389a2810ff116f44c97a35b6ae9"
+
+ldapService:
+  enabled: false
 
 ingress:
   enabled: false

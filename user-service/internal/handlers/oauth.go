@@ -111,7 +111,7 @@ func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		u.RawQuery = q.Encode()
 		authURL = u.String()
 	} else {
-		issuerURL := p.IssuerURL
+		issuerURL := resolveIssuerURL(p)
 		if issuerURL == "" {
 			s.Error(w, http.StatusBadRequest, "Provider "+providerID+" requires issuer_url")
 			return
@@ -194,10 +194,25 @@ func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, authResponse{Token: token, User: *user})
 }
 
+// resolveIssuerURL returns the OIDC issuer URL for a provider, falling back to
+// well-known defaults when issuer_url is not explicitly configured.
+func resolveIssuerURL(p *config.ProviderConfig) string {
+	if p.IssuerURL != "" {
+		return p.IssuerURL
+	}
+	switch p.ID {
+	case "gitlab":
+		return "https://gitlab.com"
+	case "google":
+		return "https://accounts.google.com"
+	}
+	return ""
+}
+
 // ── Generic OIDC fetch (GitLab, Google, Authentik, Keycloak, …) ──────────────
 
 func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar *string, sub string, err error) {
-	oidcProvider, err := gooidc.NewProvider(ctx, p.IssuerURL)
+	oidcProvider, err := gooidc.NewProvider(ctx, resolveIssuerURL(p))
 	if err != nil {
 		return "", "", nil, "", fmt.Errorf("cannot reach OIDC provider: %w", err)
 	}

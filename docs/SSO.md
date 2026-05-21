@@ -1,11 +1,12 @@
 # SSO / OAuth — Configuration Guide
 
-The platform supports two SSO mechanisms:
+The platform supports three authentication mechanisms in addition to local email/password:
 
 - **`sso.providers`** (Helm) — OAuth2/OIDC providers configured at deploy time (GitHub, GitLab, Google, etc.)
 - **OIDC via admin UI** — a single OIDC provider configured at runtime in `/admin/settings`, no Helm change required
+- **LDAP / Active Directory** — authenticate against any LDAP directory, configured at runtime in `/admin/settings`
 
-Both can be active at the same time.
+All three can be active simultaneously.
 
 ---
 
@@ -316,3 +317,82 @@ One additional OIDC provider can be configured at runtime in `/admin/settings`:
 When enabled, a **"Continue with SSO (OIDC)"** button appears on the login page.  
 This is useful for an enterprise IdP (Authentik, Keycloak, Azure AD) managed by an admin
 without needing a Helm upgrade.
+
+---
+
+## LDAP / Active Directory (runtime, no Helm)
+
+LDAP authentication is built into user-service — no separate microservice required.
+Configure it at runtime in `/admin/settings`:
+
+| Setting key | Description | Example |
+|---|---|---|
+| `ldap_enabled` | Enable LDAP login | `true` |
+| `ldap_server_url` | LDAP server URL | `ldap://openldap:389` or `ldaps://ad.company.com:636` |
+| `ldap_bind_dn` | Service account DN (leave empty for anonymous bind) | `cn=svc-elearning,ou=service,dc=company,dc=com` |
+| `ldap_bind_password` | Service account password | `secret` |
+| `ldap_user_base_dn` | Base DN for user search | `ou=users,dc=company,dc=com` |
+| `ldap_user_filter` | Search filter — `%s` is replaced by the user's email | `(mail=%s)` |
+| `ldap_group_base_dn` | Base DN for group search (leave empty to skip group sync) | `ou=groups,dc=company,dc=com` |
+| `ldap_group_filter` | Group membership filter — `%s` is the user's DN | `(&#124;(member=%s)(uniqueMember=%s)(memberUid=%s))` |
+
+When enabled, a **LDAP** login option is shown on the login page alongside the email/password form.
+
+### How it works
+
+1. User enters their email and password
+2. The service binds with the service account (if configured), then searches for the user by email using `ldap_user_filter`
+3. The service re-binds with the found user's DN and the provided password to authenticate
+4. If `ldap_group_base_dn` is set, the user's groups are fetched using `ldap_group_filter` and synced to the platform (group → role mappings apply)
+5. A JWT is issued and the user is redirected
+
+### OpenLDAP example
+
+```
+ldap_server_url       = ldap://openldap.infra.svc.cluster.local:389
+ldap_bind_dn          = cn=admin,dc=company,dc=com
+ldap_bind_password    = adminpassword
+ldap_user_base_dn     = ou=users,dc=company,dc=com
+ldap_user_filter      = (mail=%s)
+ldap_group_base_dn    = ou=groups,dc=company,dc=com
+ldap_group_filter     = (|(member=%s)(uniqueMember=%s)(memberUid=%s))
+```
+
+### Active Directory example
+
+```
+ldap_server_url       = ldaps://ad.company.com:636
+ldap_bind_dn          = CN=svc-elearning,OU=Service Accounts,DC=company,DC=com
+ldap_bind_password    = secret
+ldap_user_base_dn     = OU=Users,DC=company,DC=com
+ldap_user_filter      = (userPrincipalName=%s)
+ldap_group_base_dn    = OU=Groups,DC=company,DC=com
+ldap_group_filter     = (member=%s)
+```
+
+### Authentik LDAP outpost
+
+Authentik can expose an LDAP outpost that proxies your Authentik users and groups:
+
+```
+ldap_server_url       = ldap://authentik-ldap.authentik.svc.cluster.local:389
+ldap_bind_dn          = cn=ldapservice,ou=serviceaccounts,dc=ldap,dc=goauthentik,dc=io
+ldap_bind_password    = <token from Authentik outpost>
+ldap_user_base_dn     = dc=ldap,dc=goauthentik,dc=io
+ldap_user_filter      = (mail=%s)
+ldap_group_base_dn    = ou=groups,dc=ldap,dc=goauthentik,dc=io
+ldap_group_filter     = (|(member=%s)(uniqueMember=%s))
+```
+
+Create the outpost in Authentik: **Directory → Federation & Social login → LDAP outpost** (or via the Outposts menu). The bind DN and password come from the outpost's service account token.
+
+### Group → role mapping
+
+LDAP groups are synced as platform groups on every login. Use `/admin/groups` to assign a role to a group:
+
+| LDAP group CN | Platform role |
+|---|---|
+| `elearning-admins` | `admin` |
+| `elearning-students` | `student` |
+
+If a user belongs to multiple groups, the highest role wins (`admin` > `student`).

@@ -78,16 +78,23 @@ After creation: copy **Client ID** and generate a **Client Secret**.
 
 ### GitLab (SaaS or self-hosted)
 
-Uses OIDC discovery. Self-hosted instances just need a different `issuer_url`.
+Uses OIDC discovery. `issuer_url` defaults to `https://gitlab.com` when omitted —
+only set it for self-hosted instances.
 
 ```yaml
 providers:
+  # GitLab SaaS — issuer_url optional
   - id: gitlab
     name: GitLab
     client_id: "xxx"
     client_secret: "yyy"
-    issuer_url: "https://gitlab.com"          # SaaS
-    # issuer_url: "https://gitlab.company.com"  # self-hosted
+
+  # GitLab self-hosted — set issuer_url to your instance
+  - id: gitlab
+    name: GitLab
+    client_id: "xxx"
+    client_secret: "yyy"
+    issuer_url: "https://gitlab.company.com"
 ```
 
 **GitLab setup** (User Settings → Applications):
@@ -103,11 +110,11 @@ providers:
 
 ```yaml
 providers:
+  # issuer_url optional for Google, defaults to https://accounts.google.com
   - id: google
     name: Google
     client_id: "xxx.apps.googleusercontent.com"
     client_secret: "yyy"
-    issuer_url: "https://accounts.google.com"
 ```
 
 **Google Cloud Console** (APIs & Services → Credentials → OAuth 2.0 Client ID):

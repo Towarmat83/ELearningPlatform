@@ -49,6 +49,8 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 	r.Get("/api/auth/oidc/authorize", s.OIDCAuthorize)
 	r.Post("/api/auth/oidc/callback", s.OIDCCallback)
 
+	r.Post("/api/auth/ldap/login", s.LDAPLogin)
+
 	// ── Authenticated ────────────────────────────────────────────────────────────
 
 	r.Group(func(r chi.Router) {
@@ -84,6 +86,9 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 
 		r.Get("/api/admin/courses/{slug}/enrollments", s.ListCourseEnrollments)
 		r.Post("/api/admin/courses/{slug}/enrollments", s.AdminEnrollUser)
+		r.Get("/api/admin/courses/{slug}/enrollments/groups", s.AdminListGroupEnrollments)
+		r.Post("/api/admin/courses/{slug}/enrollments/groups", s.AdminEnrollGroup)
+		r.Delete("/api/admin/courses/{slug}/enrollments/groups/{group_id}", s.AdminUnenrollGroup)
 		r.Delete("/api/admin/courses/{slug}/enrollments/{user_id}", s.AdminUnenrollUser)
 
 		r.Post("/api/admin/sync-progress", s.SyncProgress)
@@ -99,7 +104,6 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 	r.Get("/internal/enrollments/check", s.InternalCheckEnrollment)
 	r.Get("/internal/progress/viewed", s.InternalViewedLessons)
 	r.Post("/internal/progress/complete", s.InternalMarkComplete)
-	r.Post("/internal/sso-login", s.InternalSSOLogin)
 
 	return r
 }

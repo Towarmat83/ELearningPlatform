@@ -2,7 +2,7 @@ Un cours est un objet constitué d'une liste de modules, d'une description, d'un
 
 ### Définition
 
-Un cours est défini dans une CRD sous le format suivant :
+Un cours est défini dans une CRD Kubernetes (`elearning.example.com/v1`, kind `Course`) :
 
 ```yaml
 apiVersion: elearning.example.com/v1
@@ -11,20 +11,44 @@ metadata:
   name: kubernetes-basics
 spec:
   title: "Kubernetes Basics"
-  description: "Learn the fundamentals"
+  description: "Learn the fundamentals of Kubernetes"
   hidden: false
   category: "kubernetes"
   difficulty: "beginner"
   modules:
-    - name: "Introduction"
+    - name: "What is Kubernetes"
       type: "text"
       src: "https://github.com/user/repo"
       ref: "main"
       path: "lessons/intro.md"
-    - name: "Architecture"
+    - name: "Architecture Overview"
       type: "video"
       src: "/uploads/architecture.mp4"
+    - name: "Kubernetes Basics Quiz"
+      type: "quiz"
+      passing_score: 80
+      max_attempts_per_question: 3
+      lock_on_max_attempts: true
+      cooldown:
+        strategy: "exponential"
+        base_seconds: 30
+        multiplier: 2.0
+        max_seconds: 600
+      questions:
+        - id: "q1"
+          type: "single"
+          points: 1
+          question: "What is a Pod?"
+          answers:
+            - id: "a"
+              text: "Smallest deployable unit"
+              correct: true
+            - id: "b"
+              text: "A physical node"
+              correct: false
 ```
+
+Module types: `text` (markdown depuis git), `video` / `image` (URL hébergée sur le serveur), `quiz` (questions inline ou YAML depuis git).
 
 - `metadata.name` : slug du cours (utilisé dans les URLs)
 - `spec.title` : titre du cours

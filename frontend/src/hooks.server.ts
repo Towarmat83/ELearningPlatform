@@ -2,7 +2,6 @@ import type { Handle } from '@sveltejs/kit';
 
 const COURSE_API = process.env.COURSE_API || 'http://elearning-course-service:8082';
 const USER_API = process.env.USER_API || 'http://elearning-user-service:8081';
-const LDAP_API = process.env.LDAP_API || 'http://elearning-ldap-service:8083';
 
 export const handle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname === '/api/admin/courses' || event.url.pathname === '/api/admin/cache/clear') {
@@ -24,21 +23,6 @@ export const handle: Handle = async ({ event, resolve }) => {
       status: response.status,
       headers: response.headers,
     });
-  }
-
-  if (event.url.pathname.startsWith('/api/auth/ldap')) {
-    const targetUrl = `${LDAP_API}${event.url.pathname}${event.url.search}`;
-    const headers = new Headers(event.request.headers);
-    headers.delete('host');
-    headers.set('connection', 'close');
-    const response = await fetch(targetUrl, {
-      method: event.request.method,
-      headers,
-      body: ['GET', 'HEAD'].includes(event.request.method) ? undefined : event.request.body,
-      // @ts-ignore
-      duplex: 'half',
-    });
-    return new Response(response.body, { status: response.status, headers: response.headers });
   }
 
   if (event.url.pathname.startsWith('/api/auth') ||

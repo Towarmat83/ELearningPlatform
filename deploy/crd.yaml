@@ -26,6 +26,9 @@ spec:
                   type: string
                 hidden:
                   type: boolean
+                enrollment_restricted:
+                  type: boolean
+                  description: "When true, users cannot self-enroll — admin must enroll them"
                 category:
                   type: string
                 difficulty:

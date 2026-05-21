@@ -2,13 +2,13 @@
 # eLearning Platform — KinD Dev Environment
 # ─────────────────────────────────────────────────────────────────────────────
 
-KIND_CLUSTER   := elearning
-HELM_DIR       := helm
-HELM_RELEASE   := elearning
-HELM_VALUES    := deploy/kind-values.yaml
-PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
-CRD_FILE       := deploy/crd.yaml
-COURSE_DIR     := courses
+KIND_CLUSTER       := elearning
+HELM_DIR           := helm
+HELM_RELEASE       := elearning
+HELM_VALUES        := deploy/kind-values.yaml
+PORT_FWDS_LOG      := /tmp/elearning-port-forwards.log
+CRD_FILE           := deploy/crd.yaml
+COURSE_DIR         := courses
 
 # ── KinD ────────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ kind-delete:
 
 .PHONY: docker-build docker-build-course docker-build-user docker-build-frontend
 
-docker-build: docker-build-course docker-build-user docker-build-frontend
+docker-build: docker-build-course docker-build-user docker-build-frontend docker-build-ldap
 
 docker-build-course:
 	docker build -t localhost/elearning-course-service:latest course-service
@@ -35,11 +35,14 @@ docker-build-user:
 docker-build-frontend:
 	docker build -t localhost/elearning-frontend:latest     frontend
 
+docker-build-ldap:
+	docker build -t localhost/elearning-ldap-service:latest  ldap-service
+
 # ── Kind load ───────────────────────────────────────────────────────────────
 
 .PHONY: kind-load kind-load-course kind-load-user kind-load-frontend
 
-kind-load: kind-load-course kind-load-user kind-load-frontend
+kind-load: kind-load-course kind-load-user kind-load-frontend kind-load-ldap
 
 kind-load-course:
 	kind load docker-image localhost/elearning-course-service:latest --name $(KIND_CLUSTER)
@@ -49,6 +52,9 @@ kind-load-user:
 
 kind-load-frontend:
 	kind load docker-image localhost/elearning-frontend:latest     --name $(KIND_CLUSTER)
+
+kind-load-ldap:
+	kind load docker-image localhost/elearning-ldap-service:latest  --name $(KIND_CLUSTER)
 
 # ── Quick rebuild + reload (single service) ────────────────────────────────
 
@@ -62,6 +68,9 @@ rebuild-user: docker-build-user kind-load-user
 
 rebuild-frontend: docker-build-frontend kind-load-frontend
 	kubectl rollout restart deploy/$(HELM_RELEASE)-frontend
+
+rebuild-ldap: docker-build-ldap kind-load-ldap
+	kubectl rollout restart deploy/$(HELM_RELEASE)-ldap-service
 
 # ── Helm ─────────────────────────────────────────────────────────────────────
 
@@ -98,6 +107,7 @@ create-git-secret:
 	@echo "    --from-file=git-credentials.yaml=./git-credentials.yaml"
 	@echo ""
 	@echo "See course-service/examples/course-secret.yaml for the format."
+
 
 # ── Port-forwards ───────────────────────────────────────────────────────────
 

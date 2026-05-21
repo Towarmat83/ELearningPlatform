@@ -142,7 +142,7 @@ kubectl create secret generic course-repo-secret \
 
 La variable d'environnement `GIT_CREDENTIALS_PATH` (ConfigMap ou valeur par défaut) indique l'emplacement. Si le secret n'existe pas, le pod démarre mais le clone de repos privés échouera avec une erreur 403.
 
-Voir `course-service/examples/course-secret.yaml` pour un exemple complet.
+Voir `examples/k8s/course-secret.yaml` pour un exemple complet.
 
 ## CRD
 

@@ -5,7 +5,8 @@ global:
 scrape_configs:
   - job_name: 'elearning-api'
     static_configs:
-      - targets: ['api:8080']
+      - targets: ['course-service:8082']
+      - targets: ['user-service:8081']
     metrics_path: '/metrics'
     scrape_interval: 15s
 

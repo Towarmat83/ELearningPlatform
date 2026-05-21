@@ -13,9 +13,9 @@ l'ancienne interface Rust. Ce système n'existe plus.
 ## Nouveau système
 
 Les cours sont désormais définis comme **CRD Kubernetes** (`elearning.example.com/v1`).
-Voir `courses/` pour des exemples de définitions de cours.
+Voir `examples/courses/` pour des exemples de définitions de cours.
 
 ```bash
 # Appliquer un cours CRD
-kubectl apply -f courses/kubernetes-basics/course.yaml
+kubectl apply -f examples/courses/kubernetes-basics/course.yaml
 ```

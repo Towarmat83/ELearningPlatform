@@ -325,7 +325,7 @@
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-medium text-gray-700">Enable LDAP authentication</p>
-            <p class="text-xs text-gray-400">Show LDAP login option and route auth through ldap-service.</p>
+            <p class="text-xs text-gray-400">Show LDAP login option on the login page.</p>
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors

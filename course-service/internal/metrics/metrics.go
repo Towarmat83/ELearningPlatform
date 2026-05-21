@@ -30,11 +30,6 @@ var (
 		Help: "Total number of published courses",
 	})
 
-	LabSubmissionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "elearning_lab_submissions_total",
-		Help: "Total lab submissions",
-	}, []string{"lab_type", "result"})
-
 	EnrollmentsTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "elearning_enrollments_total",
 		Help: "Total course enrollments",

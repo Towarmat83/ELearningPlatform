@@ -91,7 +91,7 @@ You should see 4 pods running:
 The CRD is already applied by `make helm-install`. Now add a course:
 
 ```bash
-kubectl apply -f courses/kubernetes-basics/course.yaml
+kubectl apply -f examples/courses/kubernetes-basics/course.yaml
 ```
 
 ### 7. Set up git credentials (for private course repos)
@@ -103,7 +103,7 @@ kubectl create secret generic course-repo-secret \
   --from-file=git-credentials.yaml=./git-credentials.yaml
 ```
 
-See `course-service/examples/course-secret.yaml` for the format.
+See `examples/k8s/course-secret.yaml` for the format.
 
 ### 8. Expose services locally
 

@@ -1,5 +1,4 @@
 services:
-  # PostgreSQL database
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -19,71 +18,81 @@ services:
       timeout: 5s
       retries: 5
 
-  # Go API
-  api:
+  user-service:
     build:
-      context: ./api-go
+      context: ./user-service
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://elearning:${DB_PASSWORD:-elearning_secret}@postgres:5432/elearning
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-32-chars}
-      JWT_EXPIRY_HOURS: 24
-      PORT: 8080
       CORS_ORIGINS: http://localhost:3000,${FRONTEND_URL:-http://localhost:3000}
-      GITLAB_CLIENT_ID: ${GITLAB_CLIENT_ID:-}
-      GITLAB_CLIENT_SECRET: ${GITLAB_CLIENT_SECRET:-}
-      GITLAB_URL: ${GITLAB_URL:-https://gitlab.com}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-http://localhost:3000}
-      UPLOADS_DIR: /app/uploads
-      COURSES_DIR: /app/courses
-      REPOS_DIR: /app/data/repos
-      REPO_TOKEN_SECRET: ${REPO_TOKEN_SECRET:-change-me-use-a-long-random-secret-32chars}
-    volumes:
-      - ./courses:/app/courses:ro
-      - repos_data:/app/data/repos
-      - /var/run/docker.sock:/var/run/docker.sock
-      - uploads_data:/app/uploads
+      PORT: 8081
     ports:
-      - "8080:8080"
+      - "8081:8081"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
-  # SvelteKit Frontend
+  # Note: course-service needs a Kubernetes cluster for the CRD watcher.
+  # In docker-compose, the watcher will fail but HTTP endpoints remain functional
+  # if KUBECONFIG is provided or the service is patched to skip K8s init.
+  course-service:
+    build:
+      context: ./course-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-32-chars}
+      USER_SERVICE_URL: http://user-service:8081
+      CORS_ORIGINS: http://localhost:3000,${FRONTEND_URL:-http://localhost:3000}
+      PORT: 8082
+      UPLOADS_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "8082:8082"
+    depends_on:
+      - user-service
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      API_URL: http://api:8080
+      COURSE_API: http://course-service:8082
+      USER_API: http://user-service:8081
       PORT: 3000
       ORIGIN: ${FRONTEND_URL:-http://localhost:3000}
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      - course-service
+      - user-service
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Prometheus
   prometheus:
     image: prom/prometheus:v3.1.0
     restart: unless-stopped
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -92,7 +101,6 @@ services:
     ports:
       - "9090:9090"
 
-  # Grafana
   grafana:
     image: grafana/grafana:11.4.0
     restart: unless-stopped
@@ -111,7 +119,6 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
   prometheus_data:
   grafana_data:
-  uploads_data:
-  repos_data:

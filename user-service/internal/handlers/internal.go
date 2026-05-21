@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"net/http"
-
-	"github.com/elearning/user-service/internal/middleware"
 )
 
 // InternalCheckEnrollment godoc
@@ -88,59 +86,4 @@ func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// InternalSSOLogin godoc
-// @Summary  Upsert SSO user and issue JWT (internal — no auth, network-policy protected)
-// @Tags     Internal
-// @Accept   json
-// @Produce  json
-// @Param    body  body  object  true  "email, name, avatar_url, provider, provider_user_id, groups, group_source"
-// @Success  200   {object}  authResponse
-// @Failure  400   {object}  map[string]string
-// @Router   /internal/sso-login [post]
-func (s *State) InternalSSOLogin(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email          string   `json:"email"`
-		Name           string   `json:"name"`
-		AvatarURL      *string  `json:"avatar_url"`
-		Provider       string   `json:"provider"`
-		ProviderUserID string   `json:"provider_user_id"`
-		Groups         []string `json:"groups"`
-		GroupSource    string   `json:"group_source"`
-	}
-	if err := decode(r, &req); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-	if req.Email == "" || req.Provider == "" || req.ProviderUserID == "" {
-		s.Error(w, http.StatusBadRequest, "email, provider, and provider_user_id are required")
-		return
-	}
-
-	ctx := r.Context()
-
-	user, err := upsertSSOUser(ctx, s.Pool, req.Email, req.Name, req.AvatarURL, req.Provider, req.ProviderUserID)
-	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Failed to upsert user: "+err.Error())
-		return
-	}
-
-	groupSource := req.GroupSource
-	if groupSource == "" {
-		groupSource = req.Provider
-	}
-
-	role, err := syncGroupsAndDeriveRole(ctx, s.Pool, user.ID, req.Groups, groupSource)
-	if err != nil {
-		role = user.Role
-	}
-
-	token, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
-	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Token error")
-		return
-	}
-	user.Role = role
-	s.JSON(w, http.StatusOK, authResponse{Token: token, User: *user})
 }

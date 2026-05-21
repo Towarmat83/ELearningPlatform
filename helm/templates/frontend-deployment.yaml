@@ -37,10 +37,6 @@ spec:
               value: "http://{{ include "elearning.fullname" . }}-course-service:{{ .Values.courseService.service.port }}"
             - name: USER_API
               value: "http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}"
-            {{- if .Values.ldapService.enabled }}
-            - name: LDAP_API
-              value: "http://{{ include "elearning.fullname" . }}-ldap-service.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.ldapService.service.port }}"
-            {{- end }}
             - name: FRONTEND_CONFIG
               value: /etc/frontend/config.env
           volumeMounts:

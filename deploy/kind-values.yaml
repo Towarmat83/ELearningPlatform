@@ -42,9 +42,6 @@ sso:
       client_id: "Iv23lio9LgGJ8blbGG7e"
       client_secret: "c8465a66ca28b389a2810ff116f44c97a35b6ae9"
 
-ldapService:
-  enabled: false
-
 ingress:
   enabled: false
 

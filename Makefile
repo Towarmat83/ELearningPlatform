@@ -24,7 +24,7 @@ kind-delete:
 
 .PHONY: docker-build docker-build-course docker-build-user docker-build-frontend
 
-docker-build: docker-build-course docker-build-user docker-build-frontend docker-build-ldap
+docker-build: docker-build-course docker-build-user docker-build-frontend
 
 docker-build-course:
 	docker build -t localhost/elearning-course-service:latest course-service
@@ -35,14 +35,11 @@ docker-build-user:
 docker-build-frontend:
 	docker build -t localhost/elearning-frontend:latest     frontend
 
-docker-build-ldap:
-	docker build -t localhost/elearning-ldap-service:latest  ldap-service
-
 # ── Kind load ───────────────────────────────────────────────────────────────
 
 .PHONY: kind-load kind-load-course kind-load-user kind-load-frontend
 
-kind-load: kind-load-course kind-load-user kind-load-frontend kind-load-ldap
+kind-load: kind-load-course kind-load-user kind-load-frontend
 
 kind-load-course:
 	kind load docker-image localhost/elearning-course-service:latest --name $(KIND_CLUSTER)
@@ -52,9 +49,6 @@ kind-load-user:
 
 kind-load-frontend:
 	kind load docker-image localhost/elearning-frontend:latest     --name $(KIND_CLUSTER)
-
-kind-load-ldap:
-	kind load docker-image localhost/elearning-ldap-service:latest  --name $(KIND_CLUSTER)
 
 # ── Quick rebuild + reload (single service) ────────────────────────────────
 
@@ -68,9 +62,6 @@ rebuild-user: docker-build-user kind-load-user
 
 rebuild-frontend: docker-build-frontend kind-load-frontend
 	kubectl rollout restart deploy/$(HELM_RELEASE)-frontend
-
-rebuild-ldap: docker-build-ldap kind-load-ldap
-	kubectl rollout restart deploy/$(HELM_RELEASE)-ldap-service
 
 # ── Helm ─────────────────────────────────────────────────────────────────────
 

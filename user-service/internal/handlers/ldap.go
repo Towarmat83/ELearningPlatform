@@ -8,33 +8,33 @@ import (
 	"time"
 
 	ldap "github.com/go-ldap/ldap/v3"
+
+	"github.com/elearning/user-service/internal/middleware"
 )
 
-// ldapTimeout is the max duration for a complete LDAP authentication (including
-// Authentik auth-flow evaluation which can be slow on a dev cluster).
 const ldapTimeout = 5 * time.Minute
 
 type ldapSettings struct {
-	Enabled       bool
-	ServerURL     string
-	BindDN        string
-	BindPassword  string
-	UserBaseDN    string
-	UserFilter    string // %s → email
-	GroupBaseDN   string
-	GroupFilter   string // %s → user DN
+	Enabled      bool
+	ServerURL    string
+	BindDN       string
+	BindPassword string
+	UserBaseDN   string
+	UserFilter   string
+	GroupBaseDN  string
+	GroupFilter  string
 }
 
 func (s *State) loadLDAPSettings(ctx context.Context) (ldapSettings, error) {
 	cfg := ldapSettings{
-		Enabled:      s.readSetting(ctx, "ldap_enabled", "false") == "true",
-		ServerURL:    s.readSetting(ctx, "ldap_server_url", ""),
-		BindDN:       s.readSetting(ctx, "ldap_bind_dn", ""),
-		BindPassword: s.readSetting(ctx, "ldap_bind_password", ""),
-		UserBaseDN:   s.readSetting(ctx, "ldap_user_base_dn", ""),
-		UserFilter:   s.readSetting(ctx, "ldap_user_filter", "(mail=%s)"),
-		GroupBaseDN:  s.readSetting(ctx, "ldap_group_base_dn", ""),
-		GroupFilter:  s.readSetting(ctx, "ldap_group_filter", "(|(member=%s)(uniqueMember=%s)(memberUid=%s))"),
+		Enabled:      ReadSetting(ctx, s.Pool, "ldap_enabled", "false") == "true",
+		ServerURL:    ReadSetting(ctx, s.Pool, "ldap_server_url", ""),
+		BindDN:       ReadSetting(ctx, s.Pool, "ldap_bind_dn", ""),
+		BindPassword: ReadSetting(ctx, s.Pool, "ldap_bind_password", ""),
+		UserBaseDN:   ReadSetting(ctx, s.Pool, "ldap_user_base_dn", ""),
+		UserFilter:   ReadSetting(ctx, s.Pool, "ldap_user_filter", "(mail=%s)"),
+		GroupBaseDN:  ReadSetting(ctx, s.Pool, "ldap_group_base_dn", ""),
+		GroupFilter:  ReadSetting(ctx, s.Pool, "ldap_group_filter", "(|(member=%s)(uniqueMember=%s)(memberUid=%s))"),
 	}
 	if !cfg.Enabled {
 		return cfg, fmt.Errorf("LDAP authentication is not enabled")
@@ -51,7 +51,7 @@ func (s *State) loadLDAPSettings(ctx context.Context) (ldapSettings, error) {
 // @Accept   json
 // @Produce  json
 // @Param    body  body  object  true  "email and password"
-// @Success  200   {object}  map[string]interface{}
+// @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/ldap/login [post]
 func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,6 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Service bind (to search for the user)
 	if cfg.BindDN != "" {
 		if err := conn.Bind(cfg.BindDN, cfg.BindPassword); err != nil {
 			s.Error(w, http.StatusBadGateway, "LDAP service bind failed: "+err.Error())
@@ -92,7 +91,6 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Search for user by email
 	filter := fmt.Sprintf(cfg.UserFilter, ldap.EscapeFilter(req.Email))
 	searchReq := ldap.NewSearchRequest(
 		cfg.UserBaseDN,
@@ -110,18 +108,15 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 	entry := result.Entries[0]
 	userDN := entry.DN
 
-	// Verify password by binding as the user
 	if err := conn.Bind(userDN, req.Password); err != nil {
 		s.Error(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
 
-	// Re-bind as service account to search groups
 	if cfg.BindDN != "" {
 		_ = conn.Bind(cfg.BindDN, cfg.BindPassword)
 	}
 
-	// Resolve display name
 	name := entry.GetAttributeValue("displayName")
 	if name == "" {
 		name = entry.GetAttributeValue("cn")
@@ -135,22 +130,19 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 		name = req.Email
 	}
 
-	// Search LDAP groups
 	var groups []string
 	if cfg.GroupBaseDN != "" {
 		escapedDN := ldap.EscapeFilter(userDN)
-		// The filter may have multiple %s placeholders (e.g. member=%s OR uniqueMember=%s OR memberUid=%s)
-		groupFilterFormatted := fmt.Sprintf(cfg.GroupFilter, escapedDN, escapedDN, escapedDN)
+		groupFilter := fmt.Sprintf(cfg.GroupFilter, escapedDN, escapedDN, escapedDN)
 		groupReq := ldap.NewSearchRequest(
 			cfg.GroupBaseDN,
 			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
 			0, 0, false,
-			groupFilterFormatted,
+			groupFilter,
 			[]string{"cn"},
 			nil,
 		)
-		groupResult, err := conn.Search(groupReq)
-		if err == nil {
+		if groupResult, err := conn.Search(groupReq); err == nil {
 			for _, g := range groupResult.Entries {
 				if cn := g.GetAttributeValue("cn"); cn != "" {
 					groups = append(groups, cn)
@@ -159,21 +151,24 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Delegate user creation + JWT issuance to user-service
-	payload := map[string]any{
-		"email":            req.Email,
-		"name":             name,
-		"provider":         "ldap",
-		"provider_user_id": userDN,
-		"groups":           groups,
-		"group_source":     "ldap",
-	}
-	rawResp, err := s.callUserServiceSSOLogin(ctx, payload)
+	user, err := upsertSSOUser(ctx, s.Pool, req.Email, name, nil, "ldap", userDN)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "User service error: "+err.Error())
+		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(rawResp)
+
+	role, err := syncGroupsAndDeriveRole(ctx, s.Pool, user.ID, groups, "ldap")
+	if err != nil {
+		role = user.Role
+	}
+	addToDefaultGroup(ctx, s.Pool, user.ID)
+	syncGroupEnrollments(ctx, s.Pool, user.ID)
+
+	token, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Token error")
+		return
+	}
+	user.Role = role
+	s.JSON(w, http.StatusOK, authResponse{Token: token, User: *user})
 }

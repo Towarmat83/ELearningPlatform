@@ -121,28 +121,6 @@ sso:
   redirectBase: ""        # defaults to ingress public URL when empty
   providers: []
 
-# ── LDAP Service (optionnel — nécessite un annuaire LDAP/Authentik) ───────────
-ldapService:
-  enabled: false
-  replicaCount: 1
-  image:
-    repository: localhost/elearning-ldap-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 8083
-  resources:
-    requests:
-      memory: "64Mi"
-      cpu: "50m"
-    limits:
-      memory: "256Mi"
-      cpu: "200m"
-  env:
-    CORS_ORIGINS: ""
-  nodeSelector: {}
-
 # ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:
   enabled: true

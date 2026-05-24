@@ -18,7 +18,7 @@ metadata:
 spec:
   title: "Kubernetes Basics"
   description: "Apprenez les bases de Kubernetes"
-  hidden: false
+  public: true
   category: "kubernetes"
   difficulty: "beginner"
   modules:
@@ -58,16 +58,18 @@ spec:
                    │
                    │  API REST interne
                    │
-                    ├─ GET /internal/enrollments/check?user_id=&course_slug=  → bool
-                    ├─ GET /internal/progress/viewed?user_id=&course_slug=     → [lesson_slug]
-                    └─ POST /internal/progress/complete                           → mark complete
+                    ├─ GET  /internal/enrollments/check?user_id=&course_slug=  → bool
+                    ├─ POST /internal/enrollments/auto  {user_id, course_slug}  → auto-enroll (public courses)
+                    ├─ GET  /internal/progress/viewed?user_id=&course_slug=     → [lesson_slug]
+                    └─ POST /internal/progress/complete                          → mark complete
 ```
 
 ## Contrat API interne (Course → User)
 
 | Méthode | Path | Usage |
-|---|---|---|---|
+|---|---|---|
 | `GET` | `/internal/enrollments/check?user_id=X&course_slug=Y` | Vérifier si enrolled |
+| `POST` | `/internal/enrollments/auto` body: `{user_id, course_slug}` | Auto-enrôler (cours publics) — idempotent |
 | `GET` | `/internal/progress/viewed?user_id=X&course_slug=Y` | Récupérer les slugs vus |
 | `POST` | `/internal/progress/complete` body: `{user_id, course_slug, lesson_slug}` | Marquer complet |
 

@@ -10,6 +10,22 @@ All three can be active simultaneously.
 
 ---
 
+## Profile sync
+
+On every SSO login the platform automatically syncs the user's profile from the identity provider:
+
+| Field | Behaviour |
+|---|---|
+| **Avatar** | Always updated from the provider (`picture` claim / GitHub `avatar_url`). Displayed on the profile page with a graceful fallback to initials if the URL is unreachable. |
+| **Bio** | Populated from the provider on first login only (`bio` / `description` / `about` claims). Once a user writes their own bio it is **never overwritten** by a subsequent login. |
+| **Display name** | Used only when creating a new account (`name` → `preferred_username` → email). Not updated on subsequent logins to preserve user edits. |
+
+For OIDC providers, the platform fetches claims from **both** the ID token and the [UserInfo endpoint](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo) — the UserInfo endpoint takes priority, which gives access to richer or more up-to-date attributes.
+
+**Profile page** shows an SSO provider badge (GitHub, GitLab, Google, etc.) and hides the password-change section for SSO-managed accounts.
+
+---
+
 ## How it works
 
 ```

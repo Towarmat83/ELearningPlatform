@@ -174,7 +174,7 @@
             {/if}
           </div>
 
-          {#if myCoursesMap.has(course.id) || !course.prerequisites?.length || prereqsMet(course)}
+          {#if !course.prerequisites?.length || prereqsMet(course)}
             <div class="flex gap-2 mt-auto">
               {#if myCoursesMap.has(course.id)}
                 <a href="/courses/{course.id}" class="btn-primary text-sm flex-1 text-center">Continue</a>

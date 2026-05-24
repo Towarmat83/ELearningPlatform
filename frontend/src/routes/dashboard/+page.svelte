@@ -9,6 +9,8 @@
   // slug → prerequisites / slug → title (from full catalog)
   let prereqMap   = new Map<string, CoursePrerequisite[]>();
   let courseTitles = new Map<string, string>();
+  // Maps course id → MyCourse (includes completed_labs and total_score)
+  let myCoursesMap = new Map<string, MyCourse>();
   let loading = true;
 
   onMount(async () => {
@@ -20,6 +22,7 @@
         coursesApi.list(),
       ]);
       myCourses = myRes.courses;
+      myCoursesMap = new Map(myRes.courses.map(c => [c.id, c]));
       prereqMap = new Map(
         allRes.courses
           .filter(c => c.prerequisites?.length)
@@ -33,14 +36,21 @@
     }
   });
 
-  // Set of enrolled course slugs (for prerequisite status check)
-  $: enrolledIds = new Set(myCourses.map(c => c.id));
-
   function prereqsFor(courseId: string) {
     return prereqMap.get(courseId) ?? [];
   }
+
+  // A prerequisite is satisfied when the user has actual progress
+  // (completed_labs > 0 or total_score > 0). Enrollment alone does NOT satisfy.
+  function prereqSatisfied(prereqCourseId: string, minScore = 0): boolean {
+    const mc = myCoursesMap.get(prereqCourseId);
+    if (!mc) return false;
+    if (minScore > 0) return (mc.total_score ?? 0) >= minScore;
+    return (mc.completed_labs ?? 0) > 0 || (mc.total_score ?? 0) > 0;
+  }
+
   function allPrereqsMet(courseId: string) {
-    return prereqsFor(courseId).every(p => enrolledIds.has(p.course));
+    return prereqsFor(courseId).every(p => prereqSatisfied(p.course, p.min_score));
   }
 
   function difficultyColor(d: string) {
@@ -132,7 +142,7 @@
               </p>
               {#each prereqsFor(course.id) as p}
                 <div class="flex items-center gap-1.5">
-                  <span>{enrolledIds.has(p.course) ? '✓' : '•'}</span>
+                  <span>{prereqSatisfied(p.course, p.min_score) ? '✓' : '•'}</span>
                   <span class="font-medium">{courseTitles.get(p.course) ?? p.course}</span>
                   {#if p.min_score}
                     <span class="opacity-75">— {p.min_score} pts min</span>

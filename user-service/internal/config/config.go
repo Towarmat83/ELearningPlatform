@@ -26,6 +26,15 @@ type Config struct {
 	OAuthRedirectBase string           `yaml:"oauth_redirect_base"`
 	Providers         []ProviderConfig `yaml:"providers"`
 	CourseServiceURL  string           `yaml:"course_service_url"`
+	// AdminPassword is the password (or pre-computed bcrypt hash) for the
+	// bootstrapped admin account.
+	// Resolution order:
+	//  1. ADMIN_PASSWORD_FILE — path to a mounted secret file (K8s volume).
+	//     The file is watched for changes so no pod restart is needed.
+	//  2. ADMIN_PASSWORD — direct env var (set once at startup).
+	//  3. Neither set — hardcoded default "Admin@1234" with a loud warning.
+	AdminPassword     string `yaml:"-"`
+	AdminPasswordFile string `yaml:"-"` // path to the mounted secret file, if any
 }
 
 func (c *Config) FindProvider(id string) *ProviderConfig {
@@ -80,6 +89,22 @@ func Load() *Config {
 	}
 	if v := os.Getenv("COURSE_SERVICE_URL"); v != "" {
 		c.CourseServiceURL = v
+	}
+	// ADMIN_PASSWORD_FILE takes priority: read initial value from the mounted
+	// secret file so the watcher goroutine can detect future changes.
+	if f := os.Getenv("ADMIN_PASSWORD_FILE"); f != "" {
+		c.AdminPasswordFile = f
+		if data, err := os.ReadFile(f); err == nil {
+			c.AdminPassword = strings.TrimSpace(string(data))
+		} else {
+			// File not readable yet (e.g. volume not mounted) — fall through
+			// to ADMIN_PASSWORD env var below.
+			c.AdminPasswordFile = f // keep path so watcher retries
+		}
+	}
+	// ADMIN_PASSWORD env var as fallback (or when no file path is configured).
+	if c.AdminPassword == "" {
+		c.AdminPassword = os.Getenv("ADMIN_PASSWORD")
 	}
 
 	return c

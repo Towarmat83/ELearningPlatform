@@ -154,20 +154,30 @@
                 {#if course.category}
                   <span class="badge-blue">{course.category}</span>
                 {/if}
-                {#if course.enrollment_restricted}
-                  <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">🔒 Restricted</span>
+                {#if !course.is_public}
+                  <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">🔒 Private</span>
                 {/if}
               </div>
               <p class="text-xs text-gray-400">
                 {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''} ·
                 {course.enrollment_count} enrolled
               </p>
+              {#if course.prerequisites && course.prerequisites.length > 0}
+                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span class="text-xs text-amber-600 font-medium">🔗 Requires:</span>
+                  {#each course.prerequisites as p}
+                    <span class="text-xs bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded-full font-mono">
+                      {p.course}{p.min_score ? ` ≥${p.min_score}%` : ''}
+                    </span>
+                  {/each}
+                </div>
+              {/if}
             </div>
             <div class="flex items-center gap-3 shrink-0">
-              {#if course.is_published}
-                <span class="badge-green">Published</span>
+              {#if course.is_public}
+                <span class="badge-green">Public</span>
               {:else}
-                <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Draft</span>
+                <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Private</span>
               {/if}
               <button class="btn-secondary text-xs" on:click={() => openEnrollments(course.id)}>
                 👥 {expandedId === course.id ? 'Close' : 'Enrollments'}

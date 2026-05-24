@@ -79,6 +79,12 @@ export interface AuthResponse {
   user: UserPublic;
 }
 
+export interface CoursePrerequisite {
+  course: string;
+  min_score?: number;
+  modules?: string[];
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -86,14 +92,14 @@ export interface Course {
   thumbnail: string | null;
   category: string | null;
   difficulty: string | null;
-  is_published: boolean;
-  enrollment_restricted: boolean;
+  is_public: boolean;
   created_by: string;
   creator_username: string | null;
   lab_count: number;
   enrollment_count: number;
   created_at: string;
   updated_at: string;
+  prerequisites?: CoursePrerequisite[];
 }
 
 export interface MyCourse extends Course {
@@ -151,6 +157,16 @@ export interface CourseEnrollment {
   enrolled_at: string;
 }
 
+
+export interface LeaderboardEntry {
+  id: string;
+  username: string;
+  email: string;
+  avatar_url: string | null;
+  total_score: number;
+  passed_modules: number;
+  enrolled_courses: number;
+}
 
 export interface AdminStats {
   total_users: number;
@@ -265,6 +281,10 @@ export const ldapApi = {
 export const groupsApi = {
   list: (token: string) =>
     api.get<{ groups: Group[] }>('/admin/groups', token),
+  create: (name: string, token: string) =>
+    api.post<{ id: string; message: string }>('/admin/groups', { name }, token),
+  delete: (id: string, token: string) =>
+    api.delete<{ message: string }>(`/admin/groups/${id}`, token),
   getMappings: (token: string) =>
     api.get<{ mappings: GroupMapping[] }>('/admin/groups/mappings', token),
   upsertMapping: (data: GroupMapping, token: string) =>
@@ -381,6 +401,12 @@ export interface ModuleSummary {
   type: 'text' | 'video' | 'image' | 'quiz';
   viewed: boolean;
   hidden: boolean;
+  locked: boolean;
+  prerequisites?: string[];
+  best_score: number;
+  max_score: number;
+  passed: boolean;
+  attempts: number;
 }
 
 export interface ModuleQuizConfig {
@@ -408,6 +434,11 @@ export interface ModuleDetail {
   cooldowns?: Record<string, QuizCooldown>;
 }
 
+export const lessonsApi = {
+  markComplete: (courseSlug: string, lessonSlug: string, token: string) =>
+    api.post<{ message: string }>(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
+};
+
 export const modulesApi = {
   list: (courseSlug: string, token: string) =>
     api.get<{ modules: ModuleSummary[] }>(`/courses/${courseSlug}/modules`, token),
@@ -425,9 +456,16 @@ export const adminApi = {
 
   stats: (token: string) =>
     api.get<AdminStats>('/admin/stats', token),
+  leaderboard: (token: string) =>
+    api.get<{ leaderboard: LeaderboardEntry[] }>('/admin/leaderboard', token),
 
-  users: (token: string) =>
-    api.get<{ users: AdminUser[]; total: number }>('/admin/users', token),
+  authProviders: (token: string) =>
+    api.get<{ providers: { provider: string; count: number }[] }>('/admin/users/providers', token),
+  users: (token: string, provider?: string) =>
+    api.get<{ users: AdminUser[]; total: number }>(
+      provider ? `/admin/users?provider=${encodeURIComponent(provider)}` : '/admin/users',
+      token,
+    ),
   getUser: (id: string, token: string) =>
     api.get<AdminUser>(`/admin/users/${id}`, token),
   updateUser: (id: string, data: UpdateUser, token: string) =>

@@ -52,9 +52,16 @@ spec:
             secretKeyRef:
               name: {{ include "elearning.fullname" . }}-secrets
               key: DATABASE_URL
+        # ADMIN_PASSWORD is exposed as a file (not an env var) so the kubelet
+        # refreshes it automatically when the Secret changes — no pod restart needed.
+        - name: ADMIN_PASSWORD_FILE
+          value: /etc/admin-password/ADMIN_PASSWORD
         volumeMounts:
         - name: config
           mountPath: /etc/user-service
+          readOnly: true
+        - name: admin-password
+          mountPath: /etc/admin-password
           readOnly: true
         livenessProbe:
           httpGet:
@@ -74,6 +81,21 @@ spec:
       - name: config
         configMap:
           name: {{ include "elearning.fullname" . }}-user-service-config
+      # Admin password secret — mounted as a file so the kubelet can refresh it
+      # live when the Secret is updated (no pod restart required).
+      - name: admin-password
+        secret:
+          {{- if .Values.admin.existingSecret }}
+          secretName: {{ .Values.admin.existingSecret | quote }}
+          items:
+            - key: {{ .Values.admin.existingSecretKey | quote }}
+              path: ADMIN_PASSWORD
+          {{- else }}
+          secretName: {{ include "elearning.fullname" . }}-secrets
+          items:
+            - key: ADMIN_PASSWORD
+              path: ADMIN_PASSWORD
+          {{- end }}
       {{- with .Values.userService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

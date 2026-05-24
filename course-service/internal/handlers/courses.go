@@ -7,35 +7,49 @@ import (
 	"github.com/elearning/course-service/internal/content"
 )
 
+type prerequisiteResponse struct {
+	Course   string   `json:"course"`
+	MinScore int      `json:"min_score,omitempty"`
+	Modules  []string `json:"modules,omitempty"`
+}
+
 type courseResponse struct {
-	Slug                 string `json:"slug"`
-	ID                   string `json:"id"`
-	Title                string `json:"title"`
-	Description          string `json:"description"`
-	Category             string `json:"category"`
-	Difficulty           string `json:"difficulty"`
-	IsPublished          bool   `json:"is_published"`
-	EnrollmentRestricted bool   `json:"enrollment_restricted"`
-	ModuleCount          int    `json:"module_count"`
-	LabCount             int    `json:"lab_count"`
-	EnrollmentCount      int    `json:"enrollment_count"`
-	Source               string `json:"source,omitempty"`
+	Slug          string                 `json:"slug"`
+	ID            string                 `json:"id"`
+	Title         string                 `json:"title"`
+	Description   string                 `json:"description"`
+	Category      string                 `json:"category"`
+	Difficulty    string                 `json:"difficulty"`
+	IsPublic      bool                   `json:"is_public"`
+	ModuleCount   int                    `json:"module_count"`
+	LabCount      int                    `json:"lab_count"`
+	EnrollmentCount int                  `json:"enrollment_count"`
+	Source        string                 `json:"source,omitempty"`
+	Prerequisites []prerequisiteResponse `json:"prerequisites,omitempty"`
 }
 
 func toCourseResponse(c *content.Course) courseResponse {
+	var prereqs []prerequisiteResponse
+	for _, p := range c.Prerequisites {
+		prereqs = append(prereqs, prerequisiteResponse{
+			Course:   p.Course,
+			MinScore: p.MinScore,
+			Modules:  p.Modules,
+		})
+	}
 	return courseResponse{
-		Slug:                 c.Slug,
-		ID:                   c.Slug,
-		Title:                c.Title,
-		Description:          c.Description,
-		Category:             c.Category,
-		Difficulty:           c.Difficulty,
-		IsPublished:          c.IsPublished,
-		EnrollmentRestricted: c.EnrollmentRestricted,
-		ModuleCount:          len(c.Modules),
-		LabCount:             len(c.Modules),
-		EnrollmentCount:      0,
-		Source:               c.Source,
+		Slug:            c.Slug,
+		ID:              c.Slug,
+		Title:           c.Title,
+		Description:     c.Description,
+		Category:        c.Category,
+		Difficulty:      c.Difficulty,
+		IsPublic:        c.IsPublic,
+		ModuleCount:     len(c.Modules),
+		LabCount:        len(c.Modules),
+		EnrollmentCount: 0,
+		Source:          c.Source,
+		Prerequisites:   prereqs,
 	}
 }
 
@@ -57,9 +71,6 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	all := s.Content.List()
 	out := make([]courseResponse, 0, len(all))
 	for _, c := range all {
-		if c.EnrollmentRestricted {
-			continue
-		}
 		if category != "" && strings.ToLower(c.Category) != category {
 			continue
 		}
@@ -78,14 +89,14 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListAdminCourses godoc
-// @Summary   List all courses including hidden (admin)
+// @Summary   List all courses including private (admin)
 // @Tags      Admin
 // @Security  BearerAuth
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/courses [get]
 func (s *State) ListAdminCourses(w http.ResponseWriter, r *http.Request) {
-	all := s.Content.List()
+	all := s.Content.All()
 	out := make([]courseResponse, 0, len(all))
 	for _, c := range all {
 		out = append(out, toCourseResponse(c))
@@ -232,9 +243,16 @@ func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	c := s.Content.Get(slug)
-	if c == nil || !c.IsPublished {
+	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
+	}
+	if !c.IsPublic {
+		claims := s.claims(r)
+		if claims == nil || !s.isEnrolled(r, slug, claims.Subject) {
+			s.Error(w, http.StatusNotFound, "Course not found")
+			return
+		}
 	}
 	s.JSON(w, http.StatusOK, toCourseResponse(c))
 }

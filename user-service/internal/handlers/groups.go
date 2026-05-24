@@ -103,6 +103,64 @@ func syncGroupsAndDeriveRole(ctx context.Context, pool *pgxpool.Pool, userID str
 
 // ── Admin group handlers ───────────────────────────────────────────────────────
 
+// CreateGroup godoc
+// @Summary   Create a local group manually
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     body  body  object  true  "name"
+// @Success   201  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
+// @Router    /api/admin/groups [post]
+func (s *State) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := decode(r, &body); err != nil || body.Name == "" {
+		s.Error(w, http.StatusBadRequest, "name required")
+		return
+	}
+
+	var groupID string
+	err := s.Pool.QueryRow(r.Context(),
+		`INSERT INTO groups (name, source)
+		 VALUES ($1, 'local')
+		 ON CONFLICT (name) DO NOTHING
+		 RETURNING id::text`,
+		body.Name).Scan(&groupID)
+	if err != nil || groupID == "" {
+		s.Error(w, http.StatusConflict, "A group with this name already exists")
+		return
+	}
+	s.JSON(w, http.StatusCreated, map[string]string{"id": groupID, "message": "Group created"})
+}
+
+// DeleteGroup godoc
+// @Summary   Delete a local group
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Produce   json
+// @Param     group_id  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]string
+// @Failure   404  {object}  map[string]string
+// @Router    /api/admin/groups/{group_id} [delete]
+func (s *State) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "group_id")
+	tag, err := s.Pool.Exec(r.Context(),
+		`DELETE FROM groups WHERE id = $1::uuid AND source = 'local'`, id)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		s.Error(w, http.StatusNotFound, "Group not found or not a local group")
+		return
+	}
+	s.JSON(w, http.StatusOK, map[string]string{"message": "Group deleted"})
+}
+
 // ListGroups godoc
 // @Summary   List all known groups synced from IdP
 // @Tags      Admin - Groups

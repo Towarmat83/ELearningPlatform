@@ -35,8 +35,8 @@
       </div>
       <div class="card text-center">
         <div class="text-2xl mb-1">✅</div>
-        <div class="text-2xl font-bold text-green-600">{courses.filter(c => c.is_published).length}</div>
-        <div class="text-xs text-gray-500 mt-1">Published</div>
+        <div class="text-2xl font-bold text-green-600">{courses.filter(c => c.is_public).length}</div>
+        <div class="text-xs text-gray-500 mt-1">Public</div>
       </div>
       <div class="card text-center">
         <div class="text-2xl mb-1">📝</div>
@@ -66,10 +66,10 @@
                 <td class="px-3 py-2 text-gray-600">{course.lab_count}</td>
                 <td class="px-3 py-2 text-gray-600">{course.enrollment_count}</td>
                 <td class="px-3 py-2">
-                  {#if course.is_published}
-                    <span class="badge-green">published</span>
+                  {#if course.is_public}
+                    <span class="badge-green">public</span>
                   {:else}
-                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">draft</span>
+                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">private</span>
                   {/if}
                 </td>
               </tr>

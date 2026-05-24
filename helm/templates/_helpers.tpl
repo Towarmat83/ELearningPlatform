@@ -74,6 +74,30 @@ app.kubernetes.io/component: grafana
 {{- end }}
 
 {{/*
+Admin password resolution — priority order:
+  1. admin.existingSecret → caller manages the Secret entirely, we do nothing.
+  2. admin.password non-empty → use the explicit value from values.yaml.
+  3. Secret already exists (upgrade) → reuse ADMIN_PASSWORD from the live Secret
+     so we never rotate a previously auto-generated password unintentionally.
+  4. First install with no value → generate a cryptographically random 32-char
+     alphanumeric password and store it in our platform Secret.
+*/}}
+{{- define "elearning.adminPassword" -}}
+{{- if not .Values.admin.existingSecret -}}
+  {{- if .Values.admin.password -}}
+    {{- .Values.admin.password -}}
+  {{- else -}}
+    {{- $secret := lookup "v1" "Secret" .Release.Namespace (printf "%s-secrets" (include "elearning.fullname" .)) -}}
+    {{- if and $secret $secret.data (index $secret.data "ADMIN_PASSWORD") -}}
+      {{- index $secret.data "ADMIN_PASSWORD" | b64dec -}}
+    {{- else -}}
+      {{- randAlphaNum 32 -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Database URL — bitnami chart or external
 */}}
 {{- define "elearning.databaseUrl" -}}

@@ -77,8 +77,10 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Put("/api/admin/settings", s.UpdateSettings)
 
 		r.Get("/api/admin/stats", s.AdminStats)
+		r.Get("/api/admin/leaderboard", s.AdminLeaderboard)
 
 		r.Get("/api/admin/users", s.ListUsers)
+		r.Get("/api/admin/users/providers", s.ListAuthProviders)
 		r.Get("/api/admin/users/search", s.SearchUsers)
 		r.Get("/api/admin/users/{user_id}", s.GetUser)
 		r.Put("/api/admin/users/{user_id}", s.UpdateUser)
@@ -94,6 +96,8 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Post("/api/admin/sync-progress", s.SyncProgress)
 
 		r.Get("/api/admin/groups", s.ListGroups)
+		r.Post("/api/admin/groups", s.CreateGroup)
+		r.Delete("/api/admin/groups/{group_id}", s.DeleteGroup)
 		r.Get("/api/admin/groups/mappings", s.ListGroupMappings)
 		r.Post("/api/admin/groups/mappings", s.UpsertGroupMapping)
 		r.Delete("/api/admin/groups/mappings/{group_name}", s.DeleteGroupMapping)
@@ -101,9 +105,13 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 
 	// ── Internal API (for Course Service, no auth — rely on network policy) ──────
 
+	r.Post("/internal/enrollments/auto", s.InternalAutoEnroll)
 	r.Get("/internal/enrollments/check", s.InternalCheckEnrollment)
 	r.Get("/internal/progress/viewed", s.InternalViewedLessons)
 	r.Post("/internal/progress/complete", s.InternalMarkComplete)
+	r.Post("/internal/progress/module", s.InternalRecordModuleProgress)
+	r.Get("/internal/progress/modules", s.InternalGetModuleProgress)
+	r.Get("/internal/progress/course-summary", s.InternalCourseSummary)
 
 	return r
 }

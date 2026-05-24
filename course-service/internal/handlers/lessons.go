@@ -25,6 +25,20 @@ type lessonDetail struct {
 	Viewed  bool   `json:"viewed"`
 }
 
+// autoEnroll silently enrolls the user in a public course via the user-service
+// internal API. Errors are ignored — the course is accessible regardless.
+func (s *State) autoEnroll(userID, courseSlug string) {
+	body, _ := json.Marshal(map[string]string{
+		"user_id":     userID,
+		"course_slug": courseSlug,
+	})
+	resp, err := http.Post(s.Config.UserServiceURL+"/internal/enrollments/auto",
+		"application/json", bytes.NewReader(body))
+	if err == nil {
+		resp.Body.Close()
+	}
+}
+
 func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
 	u, err := url.Parse(s.Config.UserServiceURL + "/internal/enrollments/check")
 	if err != nil {
@@ -69,9 +83,13 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	if claims.Role != "admin" && (!c.IsPublished || !s.isEnrolled(r, courseSlug, claims.Subject)) {
-		s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
-		return
+	if claims.Role != "admin" {
+		if c.IsPublic {
+			s.autoEnroll(claims.Subject, courseSlug)
+		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
+			return
+		}
 	}
 
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
@@ -125,9 +143,13 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	if claims.Role != "admin" && (!c.IsPublished || !s.isEnrolled(r, courseSlug, claims.Subject)) {
-		s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
-		return
+	if claims.Role != "admin" {
+		if c.IsPublic {
+			s.autoEnroll(claims.Subject, courseSlug)
+		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
+			return
+		}
 	}
 
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
@@ -196,13 +218,17 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
 
 	c := s.Content.Get(courseSlug)
-	if c == nil || !c.IsPublished {
+	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	if !s.isEnrolled(r, courseSlug, claims.Subject) {
-		s.Error(w, http.StatusForbidden, "Not enrolled")
-		return
+	if claims.Role != "admin" {
+		if c.IsPublic {
+			s.autoEnroll(claims.Subject, courseSlug)
+		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Not enrolled")
+			return
+		}
 	}
 
 	found := false

@@ -34,20 +34,27 @@
     }
   }
 
-  function bool(key: string, def = 'true') {
-    return (edits[key] ?? def) === 'true';
-  }
   function setbool(key: string, v: boolean) {
     edits[key] = v ? 'true' : 'false';
     edits = { ...edits };
   }
 
+  // Reactive booleans — $: declarations let Svelte track the edits dependency
+  // directly, so the DOM updates when setbool() reassigns edits.
+  $: regEnabled    = (edits['registration_enabled']          ?? 'true')  === 'true';
+  $: localLogin    = (edits['sso_local_login_enabled']        ?? 'true')  === 'true';
+  $: oidcEnabled   = (edits['oidc_enabled']                  ?? 'false') === 'true';
+  $: ldapEnabled   = (edits['ldap_enabled']                  ?? 'false') === 'true';
+  $: pwdUppercase  = (edits['password_require_uppercase']     ?? 'false') === 'true';
+  $: pwdNumber     = (edits['password_require_number']        ?? 'false') === 'true';
+  $: profileUname  = (edits['profile_allow_username_change']  ?? 'true')  === 'true';
+
   // Password strength preview
   $: passwordMinLen = parseInt(edits['password_min_length'] ?? '8', 10) || 8;
   $: passwordPreview = [
     `At least ${passwordMinLen} characters`,
-    bool('password_require_uppercase') ? 'At least one uppercase letter (A–Z)' : '',
-    bool('password_require_number')    ? 'At least one number (0–9)' : '',
+    pwdUppercase ? 'At least one uppercase letter (A–Z)' : '',
+    pwdNumber    ? 'At least one number (0–9)' : '',
   ].filter(Boolean);
 </script>
 
@@ -76,10 +83,10 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('registration_enabled') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('registration_enabled', !bool('registration_enabled'))}>
+              {regEnabled ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('registration_enabled', !regEnabled)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('registration_enabled') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {regEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
 
@@ -136,10 +143,10 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('password_require_uppercase', 'false') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('password_require_uppercase', !bool('password_require_uppercase', 'false'))}>
+              {pwdUppercase ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('password_require_uppercase', !pwdUppercase)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('password_require_uppercase', 'false') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {pwdUppercase ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
 
@@ -151,10 +158,10 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('password_require_number', 'false') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('password_require_number', !bool('password_require_number', 'false'))}>
+              {pwdNumber ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('password_require_number', !pwdNumber)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('password_require_number', 'false') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {pwdNumber ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
 
@@ -185,10 +192,10 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('profile_allow_username_change') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('profile_allow_username_change', !bool('profile_allow_username_change'))}>
+              {profileUname ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('profile_allow_username_change', !profileUname)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('profile_allow_username_change') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {profileUname ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
       </div>
@@ -209,14 +216,14 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('sso_local_login_enabled') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('sso_local_login_enabled', !bool('sso_local_login_enabled'))}>
+              {localLogin ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('sso_local_login_enabled', !localLogin)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('sso_local_login_enabled') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {localLogin ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
 
-        {#if !bool('sso_local_login_enabled')}
+        {#if !localLogin}
           <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
             ⚠️ Local login is disabled. Make sure at least one SSO provider is configured before saving, otherwise no one will be able to sign in.
           </div>
@@ -252,14 +259,14 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('oidc_enabled', 'false') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('oidc_enabled', !bool('oidc_enabled', 'false'))}>
+              {oidcEnabled ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('oidc_enabled', !oidcEnabled)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('oidc_enabled', 'false') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {oidcEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
 
-        {#if bool('oidc_enabled', 'false') && !edits['oidc_provider_url']?.trim()}
+        {#if oidcEnabled && !edits['oidc_provider_url']?.trim()}
           <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
             ⚠️ OIDC is enabled but no Provider URL is set. Users won't be able to sign in until configured.
           </div>
@@ -329,10 +336,10 @@
           </div>
           <button type="button"
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              {bool('ldap_enabled', 'false') ? 'bg-emerald-500' : 'bg-gray-300'}"
-            on:click={() => setbool('ldap_enabled', !bool('ldap_enabled', 'false'))}>
+              {ldapEnabled ? 'bg-emerald-500' : 'bg-gray-300'}"
+            on:click={() => setbool('ldap_enabled', !ldapEnabled)}>
             <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform
-              {bool('ldap_enabled', 'false') ? 'translate-x-6' : 'translate-x-1'}"></span>
+              {ldapEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
         </div>
 

@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { coursesApi, labsApi, type Course, type Lab } from '$lib/api';
+  import { coursesApi, modulesApi, type Course, type ModuleSummary } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   let course: Course | null = null;
-  let labs: Lab[] = [];
+  let modules: ModuleSummary[] = [];
   let loading = true;
   let enrolled = false;
-  let progress: { completed_labs: number; total_labs: number } | null = null;
+  let prerequisiteBlocked = false;
 
   const courseId = $page.params.id as string;
 
@@ -41,38 +41,34 @@
       enrolled = await checkEnrollment(token);
       if (enrolled) {
         try {
-          const [labsRes, progRes] = await Promise.all([
-            labsApi.list(courseId, token),
-            labsApi.progress(courseId, token),
-          ]);
-          labs = labsRes.labs;
-          progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
+          const res = await modulesApi.list(courseId, token);
+          modules = res.modules;
         } catch (e: any) {
-          if (e.status !== 403) toasts.error('Failed to load labs: ' + e.message);
+          if (e.status === 403) {
+            prerequisiteBlocked = true;
+          } else {
+            toasts.error('Failed to load modules: ' + e.message);
+          }
         }
       }
     }
     loading = false;
   });
 
-  async function enroll() {
+  // For public courses — just load modules; backend auto-enrolls.
+  async function startLearning() {
     const token = getToken();
     if (!token) {
       goto('/login?redirect=/courses/' + courseId);
       return;
     }
     try {
-      await coursesApi.enroll(courseId, token);
-      toasts.success('Enrolled successfully!');
-      const [labsRes, progRes] = await Promise.all([
-        labsApi.list(courseId, token),
-        labsApi.progress(courseId, token),
-      ]);
-      labs = labsRes.labs;
-      progress = { completed_labs: progRes.completed_labs, total_labs: progRes.total_labs };
+      const res = await modulesApi.list(courseId, token);
+      modules = res.modules;
       enrolled = true;
     } catch (e: any) {
-      toasts.error(e.message || 'Failed to enroll');
+      if (e.status === 403) prerequisiteBlocked = true;
+      else toasts.error(e.message || 'Failed to load modules');
     }
   }
 
@@ -82,22 +78,33 @@
     return 'badge-red';
   }
 
-  function labTypeIcon(lab: Lab) {
-    const mt = lab.module_type;
-    if (mt === 'video') return '🎬';
-    if (mt === 'image') return '🖼️';
-    if (mt === 'text') return '📝';
-    if (lab.lab_type === 'form') return '📝';
-    if (lab.lab_type === 'ctf') return '🏴';
-    return '💻';
+  function moduleIcon(m: ModuleSummary): string {
+    if (m.locked) return '🔒';
+    if (m.type === 'video') return '🎬';
+    if (m.type === 'image') return '🖼️';
+    if (m.type === 'quiz') return '🧩';
+    return '📝';
   }
 
-  function displayType(lab: Lab): string {
-    return lab.module_type ?? lab.lab_type;
+  function moduleHref(m: ModuleSummary): string {
+    if (m.locked) return '#';
+    if (m.type === 'quiz') return `/courses/${courseId}/quiz/${m.index}`;
+    return `/courses/${courseId}/labs/${m.index}`;
   }
 
-  $: completedCount = progress?.completed_labs ?? 0;
-  $: totalCount = progress?.total_labs ?? labs.length;
+  function moduleStatus(m: ModuleSummary): { label: string; cls: string } | null {
+    if (m.locked) return { label: 'Locked', cls: 'text-gray-400 bg-gray-100' };
+    if (m.type === 'quiz') {
+      if (m.passed) return { label: `✓ ${m.best_score}/${m.max_score} pts`, cls: 'text-green-700 bg-green-50' };
+      if (m.attempts > 0) return { label: `${m.attempts} attempt${m.attempts > 1 ? 's' : ''}`, cls: 'text-yellow-700 bg-yellow-50' };
+    } else {
+      if (m.viewed) return { label: 'Viewed', cls: 'text-blue-700 bg-blue-50' };
+    }
+    return null;
+  }
+
+  $: completedCount = modules.filter(m => m.type === 'quiz' ? m.passed : m.viewed).length;
+  $: totalCount = modules.length;
   $: pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 </script>
 
@@ -129,19 +136,41 @@
           </div>
           <p class="text-gray-600 mb-4">{course.description}</p>
           <div class="flex gap-6 text-sm text-gray-400 mb-4">
-            <span>📝 {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''}</span>
+            <span>📦 {modules.length || course.lab_count} module{(modules.length || course.lab_count) !== 1 ? 's' : ''}</span>
             <span>👥 {course.enrollment_count} enrolled</span>
             {#if course.creator_username}
               <span>👤 {course.creator_username}</span>
             {/if}
           </div>
 
+          {#if course.prerequisites && course.prerequisites.length > 0 && (!enrolled || prerequisiteBlocked)}
+            <div class="mb-3 flex flex-col gap-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p class="font-semibold mb-0.5">🔒 Prerequisites required</p>
+              {#each course.prerequisites as p}
+                <div class="flex items-start gap-1.5">
+                  <span>•</span>
+                  <span>
+                    Complete <span class="font-medium">{p.course}</span>
+                    {#if p.min_score} with at least {p.min_score} points{/if}
+                    {#if p.modules && p.modules.length > 0} — must pass: {p.modules.join(', ')}{/if}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
           {#if !enrolled}
-            <button on:click={enroll} class="btn-primary">Enroll Now</button>
+            {#if course.is_public}
+              <button on:click={startLearning} class="btn-primary">Start Learning</button>
+            {:else}
+              <div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 inline-block">
+                🔒 Access restricted — contact an administrator to enroll
+              </div>
+            {/if}
           {:else if totalCount > 0}
             <div>
               <div class="flex justify-between text-sm text-gray-500 mb-1">
-                <span>{completedCount}/{totalCount} labs completed</span>
+                <span>{completedCount}/{totalCount} modules completed</span>
                 <span>{pct}%</span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-3">
@@ -153,46 +182,61 @@
       </div>
     </div>
 
-    <!-- Lab list -->
+    <!-- Module list -->
     {#if enrolled}
-      {#if labs.length === 0}
+      {#if prerequisiteBlocked}
+        <div class="card text-center py-8 text-amber-600">
+          <p class="text-3xl mb-3">🔒</p>
+          <p class="font-semibold mb-1">Prerequisites not met</p>
+          <p class="text-sm text-gray-500">Complete the required courses above before accessing this content.</p>
+        </div>
+      {:else if modules.length === 0}
         <div class="card text-center py-8 text-gray-400">No content available yet.</div>
       {:else}
         <div class="space-y-2">
-          {#each labs as lab}
-            <a href={lab.module_type === 'quiz' ? `/courses/${courseId}/quiz/${lab.order_index - 1}` : `/courses/${courseId}/labs/${lab.id}`}
-              class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group p-4 {lab.hidden ? 'opacity-50' : ''}">
-              <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg {lab.hidden ? 'bg-gray-200' : lab.module_type === 'quiz' ? 'bg-amber-100' : 'bg-gray-100'}">
-                {labTypeIcon(lab)}
+          {#each modules as m}
+            {@const status = moduleStatus(m)}
+            <a
+              href={moduleHref(m)}
+              class="card flex items-center gap-4 p-4 transition-shadow group
+                {m.locked ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}
+                {m.hidden ? 'opacity-50' : ''}"
+              on:click|preventDefault={m.locked ? undefined : () => goto(moduleHref(m))}
+            >
+              <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg
+                {m.locked ? 'bg-gray-200' : m.type === 'quiz' ? 'bg-amber-100' : 'bg-gray-100'}">
+                {moduleIcon(m)}
               </div>
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="font-medium {lab.hidden ? 'text-gray-400' : 'text-gray-900'} group-hover:text-primary-600 transition-colors">
-                    {lab.title}
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium {m.locked ? 'text-gray-400' : 'text-gray-900'} {m.locked ? '' : 'group-hover:text-primary-600'} transition-colors">
+                    {m.name}
                   </span>
-                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{displayType(lab)}</span>
-                  {#if lab.hidden}
+                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{m.type}</span>
+                  {#if m.hidden}
                     <span class="text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-full">hidden</span>
                   {/if}
+                  {#if status}
+                    <span class="text-xs px-2 py-0.5 rounded-full {status.cls}">{status.label}</span>
+                  {/if}
                 </div>
-                {#if lab.description}
-                  <p class="text-xs text-gray-500 mt-0.5">{lab.description}</p>
+                {#if m.locked && m.prerequisites && m.prerequisites.length > 0}
+                  <p class="text-xs text-gray-400 mt-0.5">Requires: {m.prerequisites.join(', ')}</p>
                 {/if}
               </div>
-              <div class="text-right shrink-0">
-                <div class="text-sm font-medium text-gray-700">{lab.points} pts</div>
-              </div>
-              <svg class="w-5 h-5 text-gray-300 group-hover:text-primary-400 transition-colors shrink-0"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
+              {#if !m.locked}
+                <svg class="w-5 h-5 text-gray-300 group-hover:text-primary-400 transition-colors shrink-0"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              {/if}
             </a>
           {/each}
         </div>
       {/if}
     {:else}
       <div class="card text-center py-8 text-gray-400">
-        Enroll in this course to access the labs.
+        Enroll in this course to access the modules.
       </div>
     {/if}
   {/if}

@@ -216,8 +216,7 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Encode provider URL as part of the unique key so multiple OIDC providers don't collide
-	providerKey := "oidc:" + url.QueryEscape(cfg.ProviderURL)
+	providerKey := "oidc"
 	user, err := upsertSSOUser(ctx, s.Pool, email, name, avatarURL, providerKey, sub)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())

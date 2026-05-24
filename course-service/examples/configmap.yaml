@@ -1,0 +1,23 @@
+---
+# ConfigMap for course-service
+# Mount as file: /etc/course-service/config.yaml (+ envFrom for env-style keys)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: course-service-config
+  labels:
+    app: course-service
+data:
+  config.yaml: |
+    port: 8082
+    jwt_secret: "change-me-in-production-use-a-long-random-string"
+    jwt_expiry_hours: 24
+    cors_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+    uploads_dir: "/data/uploads"
+    k8s_namespace: "default"
+    user_service_url: "http://user-service:8081"
+    git_cache_ttl_minutes: 10
+    git_credentials_path: "/etc/git-credentials/git-credentials.yaml"
+    git_token: ""

@@ -5,19 +5,14 @@ import (
 	"unicode"
 )
 
-// CoursePrerequisite declares that the user must have completed another course
-// before accessing modules in this one.
+// CoursePrerequisite describes one condition that must be met before enrolling.
+// If only Course is set, enrollment in that course is required.
+// If MinScore > 0, the user must have earned at least that many total points.
+// If Modules is non-empty, every listed module slug must be passed.
 type CoursePrerequisite struct {
-	// Course is the slug of the course that must be completed first.
-	Course string `json:"course" yaml:"course"`
-	// MinScore is the minimum total score (sum of best_score across modules) the
-	// user must have accumulated in the prerequisite course. 0 means no score
-	// requirement (any progress suffices when combined with Modules or alone).
-	MinScore int `json:"min_score,omitempty" yaml:"min_score,omitempty"`
-	// Modules lists specific module slugs in the prerequisite course that must
-	// have been passed (quiz passed = true). Empty means no specific modules are
-	// required.
-	Modules []string `json:"modules,omitempty" yaml:"modules,omitempty"`
+	Course   string   `json:"course" yaml:"course"`
+	MinScore int      `json:"min_score,omitempty" yaml:"min_score,omitempty"`
+	Modules  []string `json:"modules,omitempty" yaml:"modules,omitempty"`
 }
 
 // Course is the in-memory representation of a course loaded from disk.
@@ -131,6 +126,7 @@ type ModuleYAML struct {
 	Path                   string           `yaml:"path,omitempty"`
 	Replication            bool             `yaml:"replication,omitempty"`
 	Hidden                 bool             `yaml:"hidden,omitempty"`
+	Prerequisites          []string         `yaml:"prerequisites,omitempty"`
 	Questions              []QuestionYAML   `yaml:"questions,omitempty"`
 	PassingScore           int              `yaml:"passing_score"`
 	Cooldown               CooldownSpecYAML `yaml:"cooldown"`
@@ -164,10 +160,10 @@ func (c *CourseYAML) MergeSpec() {
 	if c.Difficulty == "" {
 		c.Difficulty = c.Spec.Difficulty
 	}
-	if len(c.Modules) == 0 && len(c.Spec.Modules) > 0 {
-		c.Modules = c.Spec.Modules
-	}
 	if len(c.Prerequisites) == 0 && len(c.Spec.Prerequisites) > 0 {
 		c.Prerequisites = c.Spec.Prerequisites
+	}
+	if len(c.Modules) == 0 && len(c.Spec.Modules) > 0 {
+		c.Modules = c.Spec.Modules
 	}
 }

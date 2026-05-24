@@ -167,20 +167,20 @@ func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	redirectURI := s.Config.OAuthRedirectBase + "/auth/callback"
 	var email, displayName, providerUserID string
-	var avatarURL *string
+	var avatarURL, bioStr *string
 	var err error
 
 	if providerID == "github" {
-		email, displayName, avatarURL, providerUserID, err = fetchGitHub(p, req.Code, redirectURI)
+		email, displayName, avatarURL, bioStr, providerUserID, err = fetchGitHub(p, req.Code, redirectURI)
 	} else {
-		email, displayName, avatarURL, providerUserID, err = fetchOIDCProvider(r.Context(), p, req.Code, redirectURI)
+		email, displayName, avatarURL, bioStr, providerUserID, err = fetchOIDCProvider(r.Context(), p, req.Code, redirectURI)
 	}
 	if err != nil {
 		s.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	user, err := upsertSSOUser(r.Context(), s.Pool, email, displayName, avatarURL, providerID, providerUserID)
+	user, err := upsertSSOUser(r.Context(), s.Pool, email, displayName, avatarURL, bioStr, providerID, providerUserID)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 		return
@@ -213,10 +213,10 @@ func resolveIssuerURL(p *config.ProviderConfig) string {
 
 // ── Generic OIDC fetch (GitLab, Google, Authentik, Keycloak, …) ──────────────
 
-func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar *string, sub string, err error) {
+func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar, bio *string, sub string, err error) {
 	oidcProvider, err := gooidc.NewProvider(ctx, resolveIssuerURL(p))
 	if err != nil {
-		return "", "", nil, "", fmt.Errorf("cannot reach OIDC provider: %w", err)
+		return "", "", nil, nil, "", fmt.Errorf("cannot reach OIDC provider: %w", err)
 	}
 
 	oauth2Cfg := oauth2.Config{
@@ -229,45 +229,63 @@ func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redi
 
 	token, err := oauth2Cfg.Exchange(ctx, code)
 	if err != nil {
-		return "", "", nil, "", fmt.Errorf("token exchange failed: %w", err)
+		return "", "", nil, nil, "", fmt.Errorf("token exchange failed: %w", err)
 	}
 
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		return "", "", nil, "", fmt.Errorf("no id_token in response")
+		return "", "", nil, nil, "", fmt.Errorf("no id_token in response")
 	}
 
 	verifier := oidcProvider.Verifier(&gooidc.Config{ClientID: p.ClientID})
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return "", "", nil, "", fmt.Errorf("ID token verification failed: %w", err)
+		return "", "", nil, nil, "", fmt.Errorf("ID token verification failed: %w", err)
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
-		return "", "", nil, "", fmt.Errorf("claims extraction failed: %w", err)
+		return "", "", nil, nil, "", fmt.Errorf("claims extraction failed: %w", err)
+	}
+
+	// Enrich claims from the UserInfo endpoint (takes priority over ID token).
+	userInfo, uiErr := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+	if uiErr == nil {
+		var uiClaims map[string]any
+		if uiErr2 := userInfo.Claims(&uiClaims); uiErr2 == nil {
+			for k, v := range uiClaims {
+				claims[k] = v
+			}
+		}
 	}
 
 	email, _ = claims["email"].(string)
 	if email == "" {
-		return "", "", nil, "", fmt.Errorf("no email in OIDC token")
+		return "", "", nil, nil, "", fmt.Errorf("no email in OIDC token")
 	}
-	name, _ = claims["name"].(string)
-	if name == "" {
-		name, _ = claims["preferred_username"].(string)
+	nameStr, _ := claims["name"].(string)
+	if nameStr == "" {
+		nameStr, _ = claims["preferred_username"].(string)
 	}
-	if name == "" {
-		name = email
+	if nameStr == "" {
+		nameStr = email
 	}
 	if pic, ok := claims["picture"].(string); ok && pic != "" {
 		avatar = &pic
 	}
-	return email, name, avatar, idToken.Subject, nil
+	// Extract bio from common non-standard OIDC attributes.
+	for _, key := range []string{"bio", "description", "about", "profile"} {
+		if v, ok := claims[key].(string); ok && v != "" {
+			bio = &v
+			break
+		}
+	}
+	return email, nameStr, avatar, bio, idToken.Subject, nil
 }
 
 // ── GitHub fetch (OAuth2 only, no OIDC discovery) ─────────────────────────────
 
-func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar *string, id string, err error) {
+func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar, bio *string, id string, err error) {
 	client := &http.Client{}
 
 	tokenReq, _ := http.NewRequest(http.MethodPost, "https://github.com/login/oauth/access_token",
@@ -283,7 +301,7 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 
 	resp, err := client.Do(tokenReq)
 	if err != nil {
-		return "", "", nil, "", fmt.Errorf("GitHub token request failed: %w", err)
+		return "", "", nil, nil, "", fmt.Errorf("GitHub token request failed: %w", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
@@ -292,12 +310,12 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 
 	accessToken, _ := tokenRes["access_token"].(string)
 	if accessToken == "" {
-		return "", "", nil, "", fmt.Errorf("GitHub did not return an access token")
+		return "", "", nil, nil, "", fmt.Errorf("GitHub did not return an access token")
 	}
 
 	var profile map[string]any
 	if err = doGet(client, "https://api.github.com/user", accessToken, &profile); err != nil {
-		return "", "", nil, "", fmt.Errorf("GitHub user request failed: %w", err)
+		return "", "", nil, nil, "", fmt.Errorf("GitHub user request failed: %w", err)
 	}
 
 	ghID := fmt.Sprintf("%v", profile["id"])
@@ -309,6 +327,11 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 	var avPtr *string
 	if av, ok := profile["avatar_url"].(string); ok && av != "" {
 		avPtr = &av
+	}
+	// GitHub exposes bio directly in the user profile.
+	var bioPtr *string
+	if b, ok := profile["bio"].(string); ok && b != "" {
+		bioPtr = &b
 	}
 
 	emailStr, _ := profile["email"].(string)
@@ -329,9 +352,9 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 		}
 	}
 	if emailStr == "" {
-		return "", "", nil, "", fmt.Errorf("could not retrieve a verified GitHub email address")
+		return "", "", nil, nil, "", fmt.Errorf("could not retrieve a verified GitHub email address")
 	}
-	return emailStr, nameStr, avPtr, ghID, nil
+	return emailStr, nameStr, avPtr, bioPtr, ghID, nil
 }
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
@@ -357,17 +380,21 @@ func doGet(client *http.Client, rawURL, bearer string, out any) error {
 
 // ── User upsert ───────────────────────────────────────────────────────────────
 
-func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName string, avatarURL *string, provider, providerUserID string) (*userPublicRow, error) {
+func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName string, avatarURL, bio *string, provider, providerUserID string) (*userPublicRow, error) {
 	const sel = `SELECT id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text FROM users`
 
 	u, err := scanUserPublic(pool.QueryRow(ctx,
 		sel+` WHERE auth_provider = $1 AND provider_user_id = $2`, provider, providerUserID))
 	if err == nil {
+		// Sync avatar always; bio only when the user has not set their own yet.
 		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
-			`UPDATE users SET avatar_url = COALESCE($1, avatar_url), updated_at = NOW()
-			 WHERE id = $2::uuid
+			`UPDATE users SET
+			   avatar_url = COALESCE($1, avatar_url),
+			   bio        = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($2, bio) ELSE bio END,
+			   updated_at = NOW()
+			 WHERE id = $3::uuid
 			 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
-			avatarURL, u.ID))
+			avatarURL, bio, u.ID))
 		if err2 != nil {
 			slog.Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", "err", err2, "user_id", u.ID)
 			return &u, nil
@@ -378,11 +405,15 @@ func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName s
 	u, err = scanUserPublic(pool.QueryRow(ctx, sel+` WHERE email = $1`, email))
 	if err == nil {
 		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
-			`UPDATE users SET auth_provider = $1, provider_user_id = $2,
-			  avatar_url = COALESCE($3, avatar_url), updated_at = NOW()
-			 WHERE id = $4::uuid
+			`UPDATE users SET
+			   auth_provider    = $1,
+			   provider_user_id = $2,
+			   avatar_url       = COALESCE($3, avatar_url),
+			   bio              = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($4, bio) ELSE bio END,
+			   updated_at       = NOW()
+			 WHERE id = $5::uuid
 			 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
-			provider, providerUserID, avatarURL, u.ID))
+			provider, providerUserID, avatarURL, bio, u.ID))
 		if err2 != nil {
 			slog.Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", "err", err2, "user_id", u.ID)
 			return &u, nil
@@ -398,10 +429,10 @@ func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName s
 	}
 
 	u, err = scanUserPublic(pool.QueryRow(ctx,
-		`INSERT INTO users (username, email, auth_provider, provider_user_id, role, avatar_url)
-		 VALUES ($1, $2, $3, $4, 'student', $5)
+		`INSERT INTO users (username, email, auth_provider, provider_user_id, role, avatar_url, bio)
+		 VALUES ($1, $2, $3, $4, 'student', $5, $6)
 		 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
-		username, email, provider, providerUserID, avatarURL))
+		username, email, provider, providerUserID, avatarURL, bio))
 	if err != nil {
 		return nil, err
 	}

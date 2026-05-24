@@ -179,6 +179,17 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enrich claims from the UserInfo endpoint (takes priority over ID token).
+	userInfo, uiErr := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+	if uiErr == nil {
+		var uiClaims map[string]any
+		if uiErr2 := userInfo.Claims(&uiClaims); uiErr2 == nil {
+			for k, v := range uiClaims {
+				claims[k] = v
+			}
+		}
+	}
+
 	email, _ := claims["email"].(string)
 	if email == "" {
 		s.Error(w, http.StatusUnauthorized, "No email in OIDC token")
@@ -195,6 +206,14 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	var avatarURL *string
 	if pic, ok := claims["picture"].(string); ok && pic != "" {
 		avatarURL = &pic
+	}
+	// Extract bio from common non-standard OIDC attributes.
+	var bio *string
+	for _, key := range []string{"bio", "description", "about", "profile"} {
+		if v, ok := claims[key].(string); ok && v != "" {
+			bio = &v
+			break
+		}
 	}
 
 	// Extract group names from configurable claim
@@ -217,7 +236,7 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	providerKey := "oidc"
-	user, err := upsertSSOUser(ctx, s.Pool, email, name, avatarURL, providerKey, sub)
+	user, err := upsertSSOUser(ctx, s.Pool, email, name, avatarURL, bio, providerKey, sub)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 		return

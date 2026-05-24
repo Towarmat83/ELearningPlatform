@@ -30,7 +30,7 @@ Stateless micro-service that serves course/module content for the e-learning pla
 | GET | `/api/courses/{slug}/lessons/{lesson_slug}` | JWT | Get lesson content |
 | POST | `/api/courses/{slug}/lessons/{lesson_slug}/complete` | JWT | Mark lesson complete |
 | POST | `/api/admin/cache/clear` | JWT+Admin | Clear git cache (force re-clone on next access) |
-| GET | `/api/admin/courses` | JWT+Admin | List all courses including hidden |
+| GET | `/api/admin/courses` | JWT+Admin | List all courses including private ones |
 | GET | `/uploads/{filename}` | No | Serve uploaded media |
 
 ## Configuration

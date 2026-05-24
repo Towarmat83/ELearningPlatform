@@ -12,7 +12,7 @@ metadata:
 spec:
   title: "Kubernetes Basics"
   description: "Learn the fundamentals of Kubernetes"
-  hidden: false
+  public: true
   category: "kubernetes"
   difficulty: "beginner"
   modules:
@@ -53,7 +53,7 @@ Module types: `text` (markdown depuis git), `video` / `image` (URL hébergée su
 - `metadata.name` : slug du cours (utilisé dans les URLs)
 - `spec.title` : titre du cours
 - `spec.description` : description du cours
-- `spec.hidden` : boolean — `true` = caché (non publié), `false` = publié
+- `spec.public` : boolean — `true` = visible dans le catalogue et auto-enrôlement à la première visite d'un module ; `false` = cours privé, accessible uniquement aux utilisateurs déjà enrôlés (non visible dans le catalogue public)
 - `spec.category` : catégorie du cours (ex: kubernetes, linux)
 - `spec.difficulty` : niveau de difficulté (beginner, intermediate, advanced)
 - `spec.modules[].name` : nom du module

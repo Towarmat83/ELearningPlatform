@@ -21,6 +21,39 @@
   let newPassword2 = '';
   let savingPassword = false;
 
+  // SSO provider helpers
+  const providerLabels: Record<string, string> = {
+    github: 'GitHub',
+    gitlab: 'GitLab',
+    google: 'Google',
+    oidc:   'SSO',
+    ldap:   'LDAP / Active Directory',
+  };
+
+  function providerLabel(p: string): string {
+    return providerLabels[p] ?? p;
+  }
+
+  function providerIcon(p: string): string {
+    switch (p) {
+      case 'github': return '🐙';
+      case 'gitlab': return '🦊';
+      case 'google': return '🔵';
+      case 'oidc':   return '🔑';
+      case 'ldap':   return '🏢';
+      default:       return '🔐';
+    }
+  }
+
+  $: isSSOUser = !!user && user.auth_provider !== 'local' && user.auth_provider !== '';
+
+  function onAvatarError(e: Event) {
+    const img = e.currentTarget as HTMLImageElement;
+    img.style.display = 'none';
+    const fallback = img.nextElementSibling as HTMLElement | null;
+    if (fallback) fallback.style.display = 'flex';
+  }
+
   onMount(async () => {
     auth.init();
     if (!$isLoggedIn) { goto('/login'); return; }
@@ -90,21 +123,40 @@
       <div class="space-y-4">
         <!-- Avatar card -->
         <div class="card text-center">
-          {#if user.avatar_url}
-            <img src={user.avatar_url} alt={user.username}
-              class="w-24 h-24 rounded-full object-cover mx-auto mb-3 border-2 border-primary-100" />
-          {:else}
-            <div class="w-24 h-24 rounded-full bg-gradient-to-br from-primary-100 to-primary-300 mx-auto mb-3 flex items-center justify-center text-3xl font-bold text-primary-600">
+          <!-- Avatar with initials fallback -->
+          <div class="relative w-24 h-24 mx-auto mb-3">
+            {#if user.avatar_url}
+              <img src={user.avatar_url} alt={user.username}
+                class="w-24 h-24 rounded-full object-cover border-2 border-primary-100"
+                on:error={onAvatarError} />
+            {/if}
+            <div class="w-24 h-24 rounded-full bg-gradient-to-br from-primary-100 to-primary-300 flex items-center justify-center text-3xl font-bold text-primary-600 absolute inset-0"
+              style={user.avatar_url ? 'display:none' : 'display:flex'}>
               {user.username[0].toUpperCase()}
             </div>
-          {/if}
+          </div>
+
           <h2 class="text-lg font-bold text-gray-900">{user.username}</h2>
           <p class="text-sm text-gray-400">{user.email}</p>
-          {#if user.role === 'admin'}
-            <span class="badge-red mt-1">Admin</span>
-          {/if}
+
+          <div class="flex flex-wrap gap-1 justify-center mt-1">
+            {#if user.role === 'admin'}
+              <span class="badge-red">Admin</span>
+            {/if}
+            {#if isSSOUser}
+              <span class="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
+                {providerIcon(user.auth_provider)} {providerLabel(user.auth_provider)}
+              </span>
+            {/if}
+          </div>
+
           <p class="text-sm text-gray-500 mt-2 italic">{user.bio || 'No bio yet.'}</p>
-          <p class="text-xs text-gray-300 mt-2">Member since {new Date(user.created_at).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' })}</p>
+
+          {#if isSSOUser && user.avatar_url}
+            <p class="text-xs text-gray-300 mt-1">Avatar synced from {providerLabel(user.auth_provider)}</p>
+          {/if}
+
+          <p class="text-xs text-gray-300 mt-2">Member since {new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</p>
         </div>
 
         <!-- Stats card -->
@@ -140,7 +192,13 @@
             <div class="space-y-2 text-sm">
               <div class="flex gap-3">
                 <span class="text-gray-400 w-24">Avatar URL</span>
-                <span class="text-gray-700 truncate">{user.avatar_url || '—'}</span>
+                {#if isSSOUser}
+                  <span class="text-gray-400 italic text-xs flex items-center gap-1">
+                    Synced from {providerLabel(user.auth_provider)} — updated on next login
+                  </span>
+                {:else}
+                  <span class="text-gray-700 truncate">{user.avatar_url || '—'}</span>
+                {/if}
               </div>
               <div class="flex gap-3">
                 <span class="text-gray-400 w-24">Bio</span>
@@ -149,14 +207,22 @@
             </div>
           {:else}
             <div class="space-y-3">
-              <div>
-                <label class="label">Avatar URL</label>
-                <input class="input" bind:value={editAvatar} placeholder="https://example.com/avatar.png" />
-              </div>
+              {#if !isSSOUser}
+                <div>
+                  <label class="label">Avatar URL</label>
+                  <input class="input" bind:value={editAvatar} placeholder="https://example.com/avatar.png" />
+                </div>
+              {/if}
               <div>
                 <label class="label">Bio</label>
                 <textarea class="input" rows="3" bind:value={editBio} placeholder="Tell us about yourself..."></textarea>
               </div>
+              {#if isSSOUser}
+                <p class="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                  Your avatar is automatically synced from {providerLabel(user.auth_provider)} each time you log in.
+                  A bio set here will be preserved (it won't be overwritten by the provider).
+                </p>
+              {/if}
               <div class="flex gap-2">
                 <button class="btn-primary text-sm" on:click={saveProfile} disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
@@ -169,7 +235,8 @@
           {/if}
         </div>
 
-        <!-- Password change card -->
+        <!-- Password change card (local accounts only) -->
+        {#if !isSSOUser}
         <div class="card">
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-semibold text-gray-800">Security</h3>
@@ -205,6 +272,16 @@
             <p class="text-sm text-gray-400">Use a strong password with at least 8 characters.</p>
           {/if}
         </div>
+        {:else}
+        <div class="card">
+          <h3 class="font-semibold text-gray-800 mb-2">Security</h3>
+          <p class="text-sm text-gray-400 flex items-center gap-2">
+            <span>{providerIcon(user.auth_provider)}</span>
+            Your account is managed by <strong>{providerLabel(user.auth_provider)}</strong>.
+            Password management is handled by your identity provider.
+          </p>
+        </div>
+        {/if}
 
         <!-- Enrolled courses card -->
         <div class="card">

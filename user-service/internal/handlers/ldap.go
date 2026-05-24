@@ -151,7 +151,7 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	user, err := upsertSSOUser(ctx, s.Pool, req.Email, name, nil, "ldap", userDN)
+	user, err := upsertSSOUser(ctx, s.Pool, req.Email, name, nil, nil, "ldap", userDN)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 		return

@@ -24,11 +24,9 @@ spec:
                   type: string
                 description:
                   type: string
-                hidden:
+                public:
                   type: boolean
-                enrollment_restricted:
-                  type: boolean
-                  description: "When true, users cannot self-enroll — admin must enroll them"
+                  description: "When true, the course is publicly visible and users are auto-enrolled on first access"
                 category:
                   type: string
                 difficulty:
@@ -55,3 +53,19 @@ spec:
                         type: boolean
                       quiz_ref:
                         type: string
+                    x-kubernetes-preserve-unknown-fields: true
+                prerequisites:
+                  type: array
+                  description: "Courses that must be completed before this one is accessible"
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      course:
+                        type: string
+                      min_score:
+                        type: integer
+                      modules:
+                        type: array
+                        items:
+                          type: string

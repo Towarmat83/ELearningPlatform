@@ -28,6 +28,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-32-chars}
       CORS_ORIGINS: http://localhost:3000,${FRONTEND_URL:-http://localhost:3000}
       PORT: 8081
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@1234}
     ports:
       - "8081:8081"
     depends_on:

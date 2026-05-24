@@ -5,9 +5,11 @@ metadata:
 spec:
   title: "Kubernetes Basics"
   description: "Learn the fundamentals of Kubernetes: pods, deployments, services, and more. A hands-on course for beginners."
-  hidden: false
+  public: true
   category: "kubernetes"
   difficulty: "beginner"
+  prerequisites:
+    - course: "linux-intro"
   modules:
     - name: "What is Kubernetes"
       type: "text"
@@ -19,6 +21,8 @@ spec:
       src: "https://github.com/paulmascarilla/course-example"
       ref: "main"
       path: "lessons/02-images.md"
+      prerequisites:
+        - "what-is-kubernetes"
     - name: "Kubernetes Architecture Overview"
       type: "video"
       src: "https://video-previews.elements.envatousercontent.com/files/bb160b9d-c332-4865-9a90-1123440f86d0/video_preview_h264.mp4"
@@ -29,13 +33,22 @@ spec:
       src: "https://github.com/paulmascarilla/course-example"
       ref: "main"
       path: "lessons/03-networking.md"
+      prerequisites:
+        - "pods-and-containers"
     - name: "Services"
       type: "text"
       src: "https://github.com/paulmascarilla/course-example"
       ref: "main"
       path: "lessons/04-compose.md"
+      prerequisites:
+        - "deployments"
     - name: "Kubernetes Basics Quiz"
       type: "quiz"
       src: "https://github.com/paulmascarilla/course-example"
       ref: "main"
       path: "quizzes/kubernetes-basics.yaml"
+      prerequisites:
+        - "what-is-kubernetes"
+        - "pods-and-containers"
+        - "deployments"
+        - "services"

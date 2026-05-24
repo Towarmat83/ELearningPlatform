@@ -5,19 +5,33 @@ import (
 	"unicode"
 )
 
+// CoursePrerequisite declares that the user must have completed another course
+// before accessing modules in this one.
+type CoursePrerequisite struct {
+	// Course is the slug of the course that must be completed first.
+	Course string `json:"course" yaml:"course"`
+	// MinScore is the minimum total score (sum of best_score across modules) the
+	// user must have accumulated in the prerequisite course. 0 means no score
+	// requirement (any progress suffices when combined with Modules or alone).
+	MinScore int `json:"min_score,omitempty" yaml:"min_score,omitempty"`
+	// Modules lists specific module slugs in the prerequisite course that must
+	// have been passed (quiz passed = true). Empty means no specific modules are
+	// required.
+	Modules []string `json:"modules,omitempty" yaml:"modules,omitempty"`
+}
+
 // Course is the in-memory representation of a course loaded from disk.
 type Course struct {
-	Slug                string   `json:"slug"`
-	Title               string   `json:"title"`
-	Description         string   `json:"description"`
-	Category            string   `json:"category"`
-	Difficulty          string   `json:"difficulty"`
-	IsPublished         bool     `json:"is_published"`
-	AutoEnroll          bool     `json:"auto_enroll"`
-	EnrollmentRestricted bool    `json:"enrollment_restricted"`
-	Lessons             []Lesson `json:"lessons"`
-	Modules             []Module `json:"modules,omitempty"`
-	Source              string   `json:"source,omitempty"`
+	Slug          string               `json:"slug"`
+	Title         string               `json:"title"`
+	Description   string               `json:"description"`
+	Category      string               `json:"category"`
+	Difficulty    string               `json:"difficulty"`
+	IsPublic      bool                 `json:"is_public"`
+	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
+	Lessons       []Lesson             `json:"lessons"`
+	Modules       []Module             `json:"modules,omitempty"`
+	Source        string               `json:"source,omitempty"`
 }
 
 // Lesson is a single lesson inside a Course (loaded from NN-slug.md files).
@@ -37,6 +51,7 @@ type Module struct {
 	Path                   string       `json:"path,omitempty"`
 	Replication            bool         `json:"replication,omitempty"`
 	Hidden                 bool         `json:"hidden,omitempty"`
+	Prerequisites          []string     `json:"prerequisites,omitempty"` // module slugs that must be completed first
 	Questions              []Question   `json:"questions,omitempty"`
 	PassingScore           int          `json:"passing_score,omitempty"`
 	Cooldown               CooldownSpec `json:"cooldown,omitempty"`
@@ -87,26 +102,24 @@ type CourseYAML struct {
 	Kind       string      `yaml:"kind,omitempty"`
 	Spec       *CourseSpec `yaml:"spec,omitempty"`
 
-	Title                string       `yaml:"title,omitempty"`
-	Description          string       `yaml:"description,omitempty"`
-	Category             string       `yaml:"category,omitempty"`
-	Difficulty           string       `yaml:"difficulty,omitempty"`
-	IsPublished          bool         `yaml:"is_published,omitempty"`
-	AutoEnroll           bool         `yaml:"auto_enroll,omitempty"`
-	EnrollmentRestricted bool         `yaml:"enrollment_restricted,omitempty"`
-	Hidden               bool         `yaml:"hidden,omitempty"`
-	Modules              []ModuleYAML `yaml:"modules,omitempty"`
+	Title         string               `yaml:"title,omitempty"`
+	Description   string               `yaml:"description,omitempty"`
+	Category      string               `yaml:"category,omitempty"`
+	Difficulty    string               `yaml:"difficulty,omitempty"`
+	Public        bool                 `yaml:"public,omitempty"`
+	Prerequisites []CoursePrerequisite `yaml:"prerequisites,omitempty"`
+	Modules       []ModuleYAML         `yaml:"modules,omitempty"`
 }
 
 // CourseSpec holds the nested spec content in the CRD format.
 type CourseSpec struct {
-	Title                string       `yaml:"title"`
-	Description          string       `yaml:"description"`
-	Hidden               bool         `yaml:"hidden"`
-	Category             string       `yaml:"category,omitempty"`
-	Difficulty           string       `yaml:"difficulty,omitempty"`
-	EnrollmentRestricted bool         `yaml:"enrollment_restricted,omitempty"`
-	Modules              []ModuleYAML `yaml:"modules"`
+	Title         string               `yaml:"title"`
+	Description   string               `yaml:"description"`
+	Public        bool                 `yaml:"public"`
+	Category      string               `yaml:"category,omitempty"`
+	Difficulty    string               `yaml:"difficulty,omitempty"`
+	Prerequisites []CoursePrerequisite `yaml:"prerequisites,omitempty"`
+	Modules       []ModuleYAML         `yaml:"modules"`
 }
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
@@ -142,8 +155,8 @@ func (c *CourseYAML) MergeSpec() {
 	if c.Description == "" {
 		c.Description = c.Spec.Description
 	}
-	if !c.Hidden {
-		c.Hidden = c.Spec.Hidden
+	if !c.Public {
+		c.Public = c.Spec.Public
 	}
 	if c.Category == "" {
 		c.Category = c.Spec.Category
@@ -154,7 +167,7 @@ func (c *CourseYAML) MergeSpec() {
 	if len(c.Modules) == 0 && len(c.Spec.Modules) > 0 {
 		c.Modules = c.Spec.Modules
 	}
-	if !c.EnrollmentRestricted {
-		c.EnrollmentRestricted = c.Spec.EnrollmentRestricted
+	if len(c.Prerequisites) == 0 && len(c.Spec.Prerequisites) > 0 {
+		c.Prerequisites = c.Spec.Prerequisites
 	}
 }

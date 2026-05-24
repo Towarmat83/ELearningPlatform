@@ -21,7 +21,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		Description: "Intro to Kubernetes",
 		Category:    "kubernetes",
 		Difficulty:  "beginner",
-		IsPublished: true,
+		IsPublic: true,
 		Modules: []content.Module{
 			{Name: "What is K8s", Type: "text"},
 			{Name: "Architecture", Type: "video", Src: "/uploads/arch.mp4"},
@@ -35,7 +35,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		Description: "Learn Docker from scratch",
 		Category:    "docker",
 		Difficulty:  "beginner",
-		IsPublished: false,
+		IsPublic: false,
 	})
 
 	store.Put(&content.Course{
@@ -44,7 +44,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		Description: "Deep dive into K8s networking and scheduling",
 		Category:    "kubernetes",
 		Difficulty:  "advanced",
-		IsPublished: true,
+		IsPublic: true,
 	})
 
 	cfg := &config.Config{
@@ -59,15 +59,37 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 	return NewState(cfg, store)
 }
 
+// newUserServiceMock returns a test server with sensible defaults for all
+// internal user-service endpoints used by the course-service.
 func newUserServiceMock() *httptest.Server {
+	return newUserServiceMockWith(nil)
+}
+
+// newUserServiceMockWith returns a test server where the caller can override
+// individual path handlers via the overrides map.  Any path not overridden
+// falls back to the standard default response.
+func newUserServiceMockWith(overrides map[string]http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fn, ok := overrides[r.URL.Path]; ok {
+			fn(w, r)
+			return
+		}
 		switch r.URL.Path {
+		case "/internal/enrollments/auto":
+			json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 		case "/internal/enrollments/check":
 			json.NewEncoder(w).Encode(map[string]bool{"enrolled": true})
 		case "/internal/progress/viewed":
 			json.NewEncoder(w).Encode(map[string]any{"viewed": []string{}})
 		case "/internal/progress/complete":
 			json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		case "/internal/progress/modules":
+			json.NewEncoder(w).Encode(map[string]any{"progress": []any{}})
+		case "/internal/progress/course-summary":
+			json.NewEncoder(w).Encode(map[string]any{
+				"total_score":    0,
+				"passed_modules": []string{},
+			})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -501,5 +523,287 @@ func TestMetrics(t *testing.T) {
 	}
 	if !strings.Contains(body, "go_goroutines") {
 		t.Error("expected go_goroutines metric")
+	}
+}
+
+// ── Helpers for cross-course lock tests ─────────────────────────────────────
+
+// courseSummaryHandler returns an HTTP handler that serves a fixed
+// /internal/progress/course-summary response.
+func courseSummaryHandler(totalScore int, passedModules []string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"total_score":    totalScore,
+			"passed_modules": passedModules,
+		})
+	}
+}
+
+// newCrossCourseLockState returns a State seeded with:
+//   - "linux-intro"      — no prerequisites (the prerequisite course)
+//   - "kubernetes-adv"   — requires linux-intro with min_score=30 AND module "quiz-bases-linux"
+//   - "network-basics"   — requires linux-intro with min_score=50 only (no specific module)
+//   - "free-course"      — requires linux-intro with no conditions (any progress)
+func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
+	t.Helper()
+	store := content.NewStore()
+
+	store.Put(&content.Course{
+		Slug:        "linux-intro",
+		Title:       "Intro Linux",
+		IsPublic: true,
+		Modules: []content.Module{
+			{Name: "What is Linux", Type: "text"},
+			{
+				Name: "Quiz Bases Linux",
+				Type: "quiz",
+				Questions: []content.Question{
+					{ID: "q1", Type: "single", Points: 1,
+						Question: "Q?",
+						Answers:  []content.Answer{{ID: "a", Text: "A", Correct: true}}},
+				},
+				PassingScore: 1,
+			},
+		},
+	})
+
+	store.Put(&content.Course{
+		Slug:        "kubernetes-adv",
+		Title:       "Advanced Kubernetes",
+		IsPublic: true,
+		Prerequisites: []content.CoursePrerequisite{
+			{Course: "linux-intro", MinScore: 30, Modules: []string{"quiz-bases-linux"}},
+		},
+		Modules: []content.Module{
+			{Name: "K8s Networking", Type: "text"},
+		},
+	})
+
+	store.Put(&content.Course{
+		Slug:        "network-basics",
+		Title:       "Network Basics",
+		IsPublic: true,
+		Prerequisites: []content.CoursePrerequisite{
+			{Course: "linux-intro", MinScore: 50},
+		},
+		Modules: []content.Module{
+			{Name: "OSI Model", Type: "text"},
+		},
+	})
+
+	store.Put(&content.Course{
+		Slug:        "free-course",
+		Title:       "Free Course (any linux-intro progress)",
+		IsPublic: true,
+		Prerequisites: []content.CoursePrerequisite{
+			{Course: "linux-intro"},
+		},
+		Modules: []content.Module{
+			{Name: "Intro", Type: "text"},
+		},
+	})
+
+	cfg := &config.Config{
+		JWTSecret:      "test-secret",
+		JWTExpiryH:     24,
+		UserServiceURL: userSrv.URL,
+	}
+	return NewState(cfg, store)
+}
+
+// ── Cross-course lock: ListModules ────────────────────────────────────────────
+
+// TestCrossCourseLock_ListModules_Blocked verifies that a student who has NOT
+// completed the prerequisite course receives 403 on ListModules.
+func TestCrossCourseLock_ListModules_Blocked(t *testing.T) {
+	mock := newUserServiceMockWith(nil) // course-summary returns 0 score by default
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when prereq not met, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCrossCourseLock_ListModules_AdminBypass verifies that an admin can always
+// list modules regardless of cross-course prerequisites.
+func TestCrossCourseLock_ListModules_AdminBypass(t *testing.T) {
+	mock := newUserServiceMockWith(nil)
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req.Header.Set("Authorization", adminAuthHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin should bypass prereq check, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCrossCourseLock_ListModules_MetScoreAndModule verifies that a student who
+// has both the required score AND the required module passed is allowed through.
+func TestCrossCourseLock_ListModules_MetScoreAndModule(t *testing.T) {
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-summary": courseSummaryHandler(35, []string{"quiz-bases-linux"}),
+	})
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when prereq met, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCrossCourseLock_ScoreMetButModuleMissing verifies that meeting the score
+// threshold alone is not enough when specific modules are also required.
+func TestCrossCourseLock_ScoreMetButModuleMissing(t *testing.T) {
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		// Score is enough but the required module slug is absent.
+		"/internal/progress/course-summary": courseSummaryHandler(40, []string{}),
+	})
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when required module not passed, got %d", rec.Code)
+	}
+}
+
+// TestCrossCourseLock_MinScoreOnly_Met verifies a course that only requires a
+// minimum score (no specific modules) unlocks when the threshold is reached.
+func TestCrossCourseLock_MinScoreOnly_Met(t *testing.T) {
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-summary": courseSummaryHandler(50, []string{}),
+	})
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/network-basics/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when min_score met, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCrossCourseLock_MinScoreOnly_NotMet verifies that a score below the
+// threshold is rejected.
+func TestCrossCourseLock_MinScoreOnly_NotMet(t *testing.T) {
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-summary": courseSummaryHandler(20, []string{}),
+	})
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/network-basics/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when score below threshold, got %d", rec.Code)
+	}
+}
+
+// TestCrossCourseLock_AnyProgress_Met verifies that a course that only requires
+// "any progress" in the prereq is unlocked when total_score > 0.
+func TestCrossCourseLock_AnyProgress_Met(t *testing.T) {
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-summary": courseSummaryHandler(1, []string{}),
+	})
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/free-course/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when any progress exists, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCrossCourseLock_AnyProgress_NotMet verifies that zero progress on the
+// prereq course blocks access even when no specific score/module is required.
+func TestCrossCourseLock_AnyProgress_NotMet(t *testing.T) {
+	mock := newUserServiceMockWith(nil) // returns total_score=0 by default
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/free-course/modules", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when no progress in prereq, got %d", rec.Code)
+	}
+}
+
+// ── Cross-course lock: GetModule ──────────────────────────────────────────────
+
+// TestCrossCourseLock_GetModule_Blocked verifies that GetModule also enforces
+// cross-course prerequisites (not just ListModules).
+func TestCrossCourseLock_GetModule_Blocked(t *testing.T) {
+	mock := newUserServiceMockWith(nil)
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules/0", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on GetModule when prereq not met, got %d", rec.Code)
+	}
+}
+
+// TestCrossCourseLock_GetModule_Met verifies that GetModule succeeds once the
+// cross-course prerequisite is satisfied.
+func TestCrossCourseLock_GetModule_Met(t *testing.T) {
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-summary": courseSummaryHandler(35, []string{"quiz-bases-linux"}),
+	})
+	defer mock.Close()
+	s := newCrossCourseLockState(t, mock)
+
+	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
+	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules/0", nil)
+	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on GetModule when prereq met, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

@@ -41,8 +41,17 @@
   }
 
   onMount(async () => {
+    auth.init();
     await Promise.all([loadCourses(), loadEnrolled()]);
   });
+
+  // Build a slug→title lookup from loaded courses
+  $: courseMap = new Map(courses.map(c => [c.id, c.title]));
+
+  function prereqsMet(course: Course): boolean {
+    if (!course.prerequisites?.length) return true;
+    return course.prerequisites.every(p => enrolledIds.has(p.course));
+  }
 
   async function enrollAndGo(id: string) {
     const token = $auth.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
@@ -122,23 +131,48 @@
             </div>
             <p class="text-sm text-gray-500 line-clamp-2 mb-3">{course.description}</p>
 
-            <div class="flex items-center gap-3 text-xs text-gray-400 mb-4">
+            <div class="flex items-center gap-3 text-xs text-gray-400 mb-3">
               <span>📝 {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''}</span>
               {#if course.category}
                 <span class="badge-blue">{course.category}</span>
               {/if}
             </div>
-          </div>
 
-          <div class="flex gap-2 mt-auto">
-            {#if enrolledIds.has(course.id)}
-              <a href="/courses/{course.id}" class="btn-primary text-sm flex-1 text-center">View</a>
-            {:else}
-              <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm flex-1">
-                Enroll
-              </button>
+            {#if course.prerequisites && course.prerequisites.length > 0}
+              <div class="mb-3 text-xs rounded-lg px-3 py-2 border
+                {prereqsMet(course)
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-700'}">
+                <p class="font-semibold mb-1">
+                  {prereqsMet(course) ? '✅ Prerequisites met' : '🔒 Prerequisites required'}
+                </p>
+                {#each course.prerequisites as p}
+                  {@const title = courseMap.get(p.course) ?? p.course}
+                  <div class="flex items-center gap-1.5">
+                    <span>{enrolledIds.has(p.course) ? '✓' : '•'}</span>
+                    <a href="/courses/{p.course}"
+                       class="underline underline-offset-2 hover:opacity-75"
+                       on:click|stopPropagation>{title}</a>
+                    {#if p.min_score}
+                      <span class="opacity-75">— {p.min_score} pts min</span>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
             {/if}
           </div>
+
+          {#if enrolledIds.has(course.id) || !course.prerequisites?.length || prereqsMet(course)}
+            <div class="flex gap-2 mt-auto">
+              {#if enrolledIds.has(course.id)}
+                <a href="/courses/{course.id}" class="btn-primary text-sm flex-1 text-center">Continue</a>
+              {:else}
+                <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm flex-1">
+                  Enroll
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>

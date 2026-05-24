@@ -152,7 +152,7 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 	description, _ := spec["description"].(string)
 	category, _ := spec["category"].(string)
 	difficulty, _ := spec["difficulty"].(string)
-	hidden, _ := spec["hidden"].(bool)
+	public, _ := spec["public"].(bool)
 
 	if title == "" {
 		title = slug
@@ -165,15 +165,24 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 			if !ok {
 				continue
 			}
+			var modPrereqs []string
+			if rawPrereqs, ok := m["prerequisites"].([]interface{}); ok {
+				for _, rp := range rawPrereqs {
+					if s, ok := rp.(string); ok {
+						modPrereqs = append(modPrereqs, s)
+					}
+				}
+			}
 			mod := Module{
-				Name:         getStr(m, "name"),
-				Type:         getStr(m, "type"),
-				Src:          getStr(m, "src"),
-				Ref:          getStr(m, "ref"),
-				Path:         getStr(m, "path"),
-				Replication:  getBool(m, "replication"),
-				Hidden:       getBool(m, "hidden"),
-				PassingScore: getInt(m, "passing_score"),
+				Name:          getStr(m, "name"),
+				Type:          getStr(m, "type"),
+				Src:           getStr(m, "src"),
+				Ref:           getStr(m, "ref"),
+				Path:          getStr(m, "path"),
+				Replication:   getBool(m, "replication"),
+				Hidden:        getBool(m, "hidden"),
+				Prerequisites: modPrereqs,
+				PassingScore:  getInt(m, "passing_score"),
 				MaxAttemptsPerQuestion: func() *int {
 					if v, ok := m["max_attempts_per_question"]; ok {
 						switch n := v.(type) {
@@ -325,18 +334,40 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		}
 	}
 
-	enrollmentRestricted := getBool(spec, "enrollment_restricted")
+	var prerequisites []CoursePrerequisite
+	if rawPrereqs, ok := spec["prerequisites"].([]interface{}); ok {
+		for _, raw := range rawPrereqs {
+			p, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			prereq := CoursePrerequisite{
+				Course:   getStr(p, "course"),
+				MinScore: getInt(p, "min_score"),
+			}
+			if rawMods, ok := p["modules"].([]interface{}); ok {
+				for _, rm := range rawMods {
+					if s, ok := rm.(string); ok {
+						prereq.Modules = append(prereq.Modules, s)
+					}
+				}
+			}
+			if prereq.Course != "" {
+				prerequisites = append(prerequisites, prereq)
+			}
+		}
+	}
 
 	return &Course{
-		Slug:                 slug,
-		Title:                title,
-		Description:          description,
-		Category:             category,
-		Difficulty:           difficulty,
-		IsPublished:          !hidden,
-		EnrollmentRestricted: enrollmentRestricted,
-		Modules:              modules,
-		Source:               sourceK8s(slug),
+		Slug:          slug,
+		Title:         title,
+		Description:   description,
+		Category:      category,
+		Difficulty:    difficulty,
+		IsPublic:      public,
+		Prerequisites: prerequisites,
+		Modules:       modules,
+		Source:        sourceK8s(slug),
 	}, nil
 }
 
@@ -349,6 +380,10 @@ func getInt(m map[string]interface{}, key string) int {
 	switch v := m[key].(type) {
 	case int:
 		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
 	case float64:
 		return int(v)
 	default:

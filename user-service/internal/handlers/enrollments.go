@@ -63,17 +63,16 @@ func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
 }
 
 type courseServiceCourse struct {
-	Slug                 string `json:"slug"`
-	ID                   string `json:"id"`
-	Title                string `json:"title"`
-	Description          string `json:"description"`
-	Category             string `json:"category"`
-	Difficulty           string `json:"difficulty"`
-	IsPublished          bool   `json:"is_published"`
-	EnrollmentRestricted bool   `json:"enrollment_restricted"`
-	LabCount             int    `json:"lab_count"`
-	EnrollmentCount      int    `json:"enrollment_count"`
-	Source               string `json:"source,omitempty"`
+	Slug            string `json:"slug"`
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Description     string `json:"description"`
+	Category        string `json:"category"`
+	Difficulty      string `json:"difficulty"`
+	IsPublic        bool   `json:"is_public"`
+	LabCount        int    `json:"lab_count"`
+	EnrollmentCount int    `json:"enrollment_count"`
+	Source          string `json:"source,omitempty"`
 }
 
 func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
@@ -104,13 +103,23 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
 	rows, err := s.Pool.Query(r.Context(), `
 		SELECT e.course_slug,
-		       COUNT(lp.lesson_slug) AS viewed_lessons,
-		       MAX(lp.viewed_at)::text AS last_activity
+		       COUNT(DISTINCT lp.lesson_slug) + COALESCE(mp.passed_modules, 0) AS completed_labs,
+		       COALESCE(mp.total_score, 0) AS total_score,
+		       GREATEST(MAX(lp.viewed_at), mp.last_activity)::text AS last_activity
 		FROM enrollments e
 		LEFT JOIN lesson_progress lp ON lp.user_id = e.user_id AND lp.course_slug = e.course_slug
+		LEFT JOIN (
+			SELECT course_slug,
+			       SUM(best_score)                         AS total_score,
+			       COUNT(*) FILTER (WHERE passed)          AS passed_modules,
+			       MAX(updated_at)                         AS last_activity
+			FROM module_progress
+			WHERE user_id = $1::uuid
+			GROUP BY course_slug
+		) mp ON mp.course_slug = e.course_slug
 		WHERE e.user_id = $1::uuid
-		GROUP BY e.course_slug
-		ORDER BY MAX(e.enrolled_at) DESC`, claims.Subject)
+		GROUP BY e.course_slug, mp.total_score, mp.passed_modules, mp.last_activity, e.enrolled_at
+		ORDER BY e.enrolled_at DESC`, claims.Subject)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Database error")
 		return
@@ -119,14 +128,15 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 
 	type enrollmentRow struct {
 		Slug          string
-		ViewedLessons int64
+		CompletedLabs int64
+		TotalScore    int64
 		LastActivity  *string
 	}
 
 	var rowsData []enrollmentRow
 	for rows.Next() {
 		var r enrollmentRow
-		if err := rows.Scan(&r.Slug, &r.ViewedLessons, &r.LastActivity); err != nil {
+		if err := rows.Scan(&r.Slug, &r.CompletedLabs, &r.TotalScore, &r.LastActivity); err != nil {
 			continue
 		}
 		rowsData = append(rowsData, r)
@@ -139,7 +149,7 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		Description     string  `json:"description"`
 		Category        string  `json:"category"`
 		Difficulty      string  `json:"difficulty"`
-		IsPublished     bool    `json:"is_published"`
+		IsPublic        bool    `json:"is_public"`
 		LabCount        int     `json:"lab_count"`
 		EnrollmentCount int     `json:"enrollment_count"`
 		CompletedLabs   int64   `json:"completed_labs"`
@@ -156,8 +166,8 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 				Slug:          row.Slug,
 				ID:            row.Slug,
 				Title:         row.Slug,
-				CompletedLabs: row.ViewedLessons,
-				TotalScore:    0,
+				CompletedLabs: row.CompletedLabs,
+				TotalScore:    row.TotalScore,
 				LastActivity:  row.LastActivity,
 			})
 			continue
@@ -169,11 +179,11 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 			Description:     details.Description,
 			Category:        details.Category,
 			Difficulty:      details.Difficulty,
-			IsPublished:     details.IsPublished,
+			IsPublic:        details.IsPublic,
 			LabCount:        details.LabCount,
 			EnrollmentCount: details.EnrollmentCount,
-			CompletedLabs:   row.ViewedLessons,
-			TotalScore:      0,
+			CompletedLabs:   row.CompletedLabs,
+			TotalScore:      row.TotalScore,
 			LastActivity:    row.LastActivity,
 		})
 	}

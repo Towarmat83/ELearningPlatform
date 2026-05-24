@@ -86,11 +86,5 @@ CREATE INDEX IF NOT EXISTS idx_lesson_progress_key  ON lesson_progress(course_sl
 CREATE INDEX IF NOT EXISTS idx_git_repos_user       ON git_repos(user_id);
 
 -- ── Default admin ─────────────────────────────────────────────────────────────
--- Password: Admin@1234  (bcrypt cost 12)
-
-INSERT INTO users (username, email, password_hash, role) VALUES (
-    'admin',
-    'admin@elearning.local',
-    '$2y$12$U6BVYjCKzHaIu2VrJNHDhuBUNTiOrcP0xoovwKbGSvOMd29qwZz.y',
-    'admin'
-) ON CONFLICT DO NOTHING;
+-- Seeded at startup by the application using the ADMIN_PASSWORD env var.
+-- See db/seed.go — SeedAdmin().

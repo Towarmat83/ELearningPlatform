@@ -16,6 +16,7 @@
   let localLoginEnabled = data.settings.sso_local_login_enabled !== 'false';
   let oidcEnabled = data.settings.oidc_enabled === 'true';
   let ldapEnabled = data.settings.ldap_enabled === 'true';
+  let registrationEnabled = data.settings.registration_enabled !== 'false';
 
   // True when at least one SSO method is available — form is collapsed by default.
   $: ssoActive = oidcEnabled || providers.length > 0;
@@ -185,10 +186,12 @@
         </form>
       {/if}
 
-      <div class="mt-4 text-center text-sm">
-        Don't have an account?
-        <a href="/register" class="text-primary-600 font-medium hover:underline">Sign up</a>
-      </div>
+      {#if registrationEnabled}
+        <div class="mt-4 text-center text-sm">
+          Don't have an account?
+          <a href="/register" class="text-primary-600 font-medium hover:underline">Sign up</a>
+        </div>
+      {/if}
     </div>
   </div>
 </div>

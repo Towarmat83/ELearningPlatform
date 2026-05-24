@@ -1,0 +1,31 @@
+apiVersion: elearning.example.com/v1
+kind: Course
+metadata:
+  name: quiz-blockage-git-test
+spec:
+  title: "Test — Blocage via Quiz Git"
+  description: |
+    Variante du cours de test utilisant un quiz référencé par fichier Git
+    (path: examples/quizzes/blockage-test.yaml) plutôt que des questions inline.
+    Permet de tester le chemin code FetchQuizContent + lock_on_max_attempts.
+  category: "internal-testing"
+  difficulty: "beginner"
+  hidden: false
+
+  modules:
+    - name: "Bases de Git"
+      type: text
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/01-intro.md"
+
+    # Quiz chargé depuis Git — le blocage est défini DANS le fichier YAML du quiz.
+    # Le course-service lira max_attempts_per_question et lock_on_max_attempts
+    # directement depuis blockage-test.yaml via FetchQuizContent.
+    - name: "Quiz Git Blockage"
+      type: quiz
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "examples/quizzes/blockage-test.yaml"
+      prerequisites:
+        - "bases-de-git"

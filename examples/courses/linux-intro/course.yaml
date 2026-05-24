@@ -7,7 +7,7 @@ spec:
   description: "Apprends les bases de Linux : navigation, gestion de fichiers et permissions. Un cours pratique pour démarrer sur la bonne voie."
   category: linux
   difficulty: beginner
-  hidden: false
+  public: true
   modules:
     - name: "Qu'est-ce que Linux ?"
       type: "text"

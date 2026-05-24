@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { coursesApi, type Course } from '$lib/api';
+  import { coursesApi, type Course, type MyCourse } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   let courses: Course[] = [];
@@ -10,7 +10,8 @@
   let search = '';
   let difficulty = '';
   let category = '';
-  let enrolledIds = new Set<string>();
+  // Maps course id → MyCourse (includes completed_labs and total_score)
+  let myCoursesMap = new Map<string, MyCourse>();
 
   async function loadCourses() {
     loading = true;
@@ -34,7 +35,7 @@
     if (!token) return;
     try {
       const res = await coursesApi.myCourses(token);
-      enrolledIds = new Set(res.courses.map(c => c.id));
+      myCoursesMap = new Map(res.courses.map(c => [c.id, c]));
     } catch {
       // non-critical
     }
@@ -48,9 +49,20 @@
   // Build a slug→title lookup from loaded courses
   $: courseMap = new Map(courses.map(c => [c.id, c.title]));
 
+  // A prerequisite course is considered satisfied when the user has actual
+  // progress in it (completed_labs > 0 or total_score > 0). Just being
+  // enrolled without any progress does NOT satisfy a prerequisite, which
+  // matches the backend enforcement in checkCoursePrerequisites.
+  function prereqSatisfied(prereqCourseId: string, minScore = 0): boolean {
+    const mc = myCoursesMap.get(prereqCourseId);
+    if (!mc) return false;
+    if (minScore > 0) return (mc.total_score ?? 0) >= minScore;
+    return (mc.completed_labs ?? 0) > 0 || (mc.total_score ?? 0) > 0;
+  }
+
   function prereqsMet(course: Course): boolean {
     if (!course.prerequisites?.length) return true;
-    return course.prerequisites.every(p => enrolledIds.has(p.course));
+    return course.prerequisites.every(p => prereqSatisfied(p.course, p.min_score));
   }
 
   async function enrollAndGo(id: string) {
@@ -149,7 +161,7 @@
                 {#each course.prerequisites as p}
                   {@const title = courseMap.get(p.course) ?? p.course}
                   <div class="flex items-center gap-1.5">
-                    <span>{enrolledIds.has(p.course) ? '✓' : '•'}</span>
+                    <span>{prereqSatisfied(p.course, p.min_score) ? '✓' : '•'}</span>
                     <a href="/courses/{p.course}"
                        class="underline underline-offset-2 hover:opacity-75"
                        on:click|stopPropagation>{title}</a>
@@ -162,9 +174,9 @@
             {/if}
           </div>
 
-          {#if enrolledIds.has(course.id) || !course.prerequisites?.length || prereqsMet(course)}
+          {#if myCoursesMap.has(course.id) || !course.prerequisites?.length || prereqsMet(course)}
             <div class="flex gap-2 mt-auto">
-              {#if enrolledIds.has(course.id)}
+              {#if myCoursesMap.has(course.id)}
                 <a href="/courses/{course.id}" class="btn-primary text-sm flex-1 text-center">Continue</a>
               {:else}
                 <button on:click={() => enrollAndGo(course.id)} class="btn-primary text-sm flex-1">

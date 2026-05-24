@@ -49,7 +49,7 @@
                 "tags": [
                     "Admin"
                 ],
-                "summary": "List all courses including hidden (admin)",
+                "summary": "List all courses including private (admin)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -724,13 +724,10 @@
                 "enrollment_count": {
                     "type": "integer"
                 },
-                "enrollment_restricted": {
-                    "type": "boolean"
-                },
                 "id": {
                     "type": "string"
                 },
-                "is_published": {
+                "is_public": {
                     "type": "boolean"
                 },
                 "lab_count": {
@@ -738,6 +735,12 @@
                 },
                 "module_count": {
                     "type": "integer"
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.prerequisiteResponse"
+                    }
                 },
                 "slug": {
                     "type": "string"
@@ -753,6 +756,12 @@
         "handlers.moduleResponse": {
             "type": "object",
             "properties": {
+                "attempts": {
+                    "type": "integer"
+                },
+                "best_score": {
+                    "type": "integer"
+                },
                 "content": {
                     "type": "string"
                 },
@@ -768,8 +777,23 @@
                 "index": {
                     "type": "integer"
                 },
+                "locked": {
+                    "type": "boolean"
+                },
+                "max_score": {
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
+                },
+                "passed": {
+                    "type": "boolean"
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "question_count": {
                     "type": "integer"
@@ -789,6 +813,23 @@
                 },
                 "viewed": {
                     "type": "boolean"
+                }
+            }
+        },
+        "handlers.prerequisiteResponse": {
+            "type": "object",
+            "properties": {
+                "course": {
+                    "type": "string"
+                },
+                "min_score": {
+                    "type": "integer"
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

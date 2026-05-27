@@ -1,9 +1,6 @@
 # Secrets — ne jamais commiter
 .env
 
-# Garder les exemples
-!.env.example
-
 # Node / SvelteKit
 frontend/node_modules/
 frontend/.svelte-kit/
@@ -12,6 +9,7 @@ frontend/dist/
 
 # Claude Code
 .claude/
+.kilo/
 
 # OS
 .DS_Store

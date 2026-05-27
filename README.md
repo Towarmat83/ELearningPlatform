@@ -49,6 +49,10 @@ make dev
 
 See `CONTRIB.md` for the full step-by-step guide, troubleshooting, and deployment details.
 
+## Known issue: Bitnami PostgreSQL
+
+The Helm chart uses Bitnami PostgreSQL by default (`postgresql.enabled: true`), which may get stuck `Pending` on KinD due to `Insufficient ephemeral-storage`. If that happens, set `postgresql.enabled: false` in `infra/kind/kind-values.yaml` and run `make helm-install` — the Makefile auto-deploys a standalone PostgreSQL (`infra/manifests/postgresql.yaml`) instead.
+
 ## Project structure
 
 ```
@@ -63,16 +67,44 @@ See `CONTRIB.md` for the full step-by-step guide, troubleshooting, and deploymen
 │   └── examples/         # Sample k8s manifests
 ├── user-service/         # Go service (port 8081)
 │   ├── internal/
-│   │   ├── db/           # PG + migrations
-│   │   ├── handlers/     # Auth, OAuth, LDAP, admin, progress
-│   │   ├── middleware/   # JWT
-│   │   └── config/       # Env config
-│   └── migrations/       # SQL migrations (embed)
-├── frontend/             # SvelteKit
-├── helm/                 # Helm chart
-├── docs/                 # Architecture, Course spec, SSO, Module reference
-└── examples/
-    ├── courses/          # Course CRD manifests (applied by make apply-courses)
-    ├── k8s/              # Standalone K8s manifests (ConfigMaps, Deployments, Secrets)
-    └── quizzes/          # Example quiz YAML files
+│   │   ├── db/          # PG + migrations
+│   │   ├── handlers/    # Auth, OAuth, admin, progress
+│   │   ├── middleware/  # JWT
+│   │   └── config/      # Env config
+│   └── migrations/      # SQL migrations (embed)
+├── frontend/            # SvelteKit
+├── infra/               # Helm chart + kind config + manifests
+├── docs/                # Architecture, Course spec, Module reference
+└── examples/            # Course CRD manifests (examples)
 ```
+
+## Configuration
+
+Chaque service est configuré via une **ConfigMap montée en fichier** dans le conteneur. Les variables d'environnement coexistent et surchargent les valeurs du fichier.
+
+| Service | Fichier monté |
+|---|---|
+| **course-service** | `/etc/course-service/config.yaml` |
+| **user-service** | `/etc/user-service/config.yaml` |
+| **frontend** | `/etc/frontend/config.env` (sourcé par l'entrypoint) |
+
+Voir `docs/ARCHITECTURE.md` (section "Configuration des services") pour les détails.
+
+## Git credentials — course-repo-secret
+
+Les cours avec modules git privés nécessitent un secret K8s :
+
+```bash
+kubectl create secret generic course-repo-secret \
+  --from-file=git-credentials.yaml=./git-credentials.yaml
+```
+
+Voir `infra/examples/course-service/course-secret.yaml` pour le format.
+
+## Internal API
+
+| Course Service → User Service | Description |
+|---|---|
+| `GET /internal/enrollments/check?user_id=&course_slug=` | Check enrollment |
+| `GET /internal/progress/viewed?user_id=&course_slug=` | Get viewed lessons |
+| `POST /internal/progress/complete` | Mark lesson complete |

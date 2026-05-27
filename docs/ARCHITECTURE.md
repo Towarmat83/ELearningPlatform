@@ -115,7 +115,7 @@ Le frontend utilise un script d'entrée (`docker-entrypoint.sh`) qui source le f
 
 ```bash
 # Surcharger une valeur via Helm
-helm upgrade elearning helm/ --set courseService.env.GIT_CACHE_TTL=30
+helm upgrade elearning infra/helm/ --set courseService.env.GIT_CACHE_TTL=30
 
 # Ou modifier les valeurs.yaml puis helm upgrade
 ```
@@ -144,7 +144,7 @@ kubectl create secret generic course-repo-secret \
 
 La variable d'environnement `GIT_CREDENTIALS_PATH` (ConfigMap ou valeur par défaut) indique l'emplacement. Si le secret n'existe pas, le pod démarre mais le clone de repos privés échouera avec une erreur 403.
 
-Voir `examples/k8s/course-secret.yaml` pour un exemple complet.
+Voir `infra/examples/course-service/course-secret.yaml` pour un exemple complet.
 
 ## CRD
 

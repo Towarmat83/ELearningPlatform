@@ -13,13 +13,13 @@ spec:
       type: text
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/01-what-is-linux.md"
+      path: "examples/linux-intro/01-what-is-linux.md"
 
     - name: "Quiz Bases Linux"
       type: quiz
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/quizzes/quiz-bases-linux.yaml"
+      path: "examples/linux-intro/quizzes/quiz-bases-linux.yaml"
       prerequisites:
         - "qu-est-ce-que-linux"
 
@@ -27,7 +27,7 @@ spec:
       type: text
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/02-navigation.md"
+      path: "examples/linux-intro/02-navigation.md"
       prerequisites:
         - "quiz-bases-linux"
 
@@ -35,7 +35,7 @@ spec:
       type: quiz
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/quizzes/quiz-navigation.yaml"
+      path: "examples/linux-intro/quizzes/quiz-navigation.yaml"
       prerequisites:
         - "naviguer-dans-le-système-de-fichiers"
 
@@ -43,7 +43,7 @@ spec:
       type: text
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/03-files.md"
+      path: "examples/linux-intro/03-files.md"
       prerequisites:
         - "quiz-navigation"
 
@@ -51,7 +51,7 @@ spec:
       type: quiz
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/quizzes/quiz-fichiers-permissions.yaml"
+      path: "examples/linux-intro/quizzes/quiz-fichiers-permissions.yaml"
       prerequisites:
         - "fichiers--permissions-et-utilisateurs"
 
@@ -59,7 +59,7 @@ spec:
       type: quiz
       src: "https://github.com/Towarmat83/ELearningPlatform"
       ref: "feature(#19)/suivi-progression"
-      path: "courses/linux-intro/quizzes/quiz-final-linux.yaml"
+      path: "examples/linux-intro/quizzes/quiz-final-linux.yaml"
       prerequisites:
         - "quiz-bases-linux"
         - "quiz-navigation"

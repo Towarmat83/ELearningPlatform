@@ -2,19 +2,19 @@
 # eLearning Platform — KinD Dev Environment
 # ─────────────────────────────────────────────────────────────────────────────
 
-KIND_CLUSTER       := elearning
-HELM_DIR           := helm
-HELM_RELEASE       := elearning
-HELM_VALUES        := deploy/kind-values.yaml
-PORT_FWDS_LOG      := /tmp/elearning-port-forwards.log
-CRD_FILE           := deploy/crd.yaml
-COURSE_DIR         := examples/courses
+KIND_CLUSTER   := elearning
+HELM_DIR       := infra/helm
+HELM_RELEASE   := elearning
+HELM_VALUES    := infra/kind/kind-values.yaml
+PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
+CRD_FILE       := infra/manifests/crd.yaml
+COURSE_DIR     := examples
 
 # ── KinD ────────────────────────────────────────────────────────────────────
 
 .PHONY: kind-create
 kind-create:
-	kind create cluster --name $(KIND_CLUSTER) --config deploy/kind-config.yaml
+	kind create cluster --name $(KIND_CLUSTER) --config infra/kind/kind-config.yaml
 
 .PHONY: kind-delete
 kind-delete:
@@ -73,7 +73,7 @@ helm-deps:
 helm-install:
 	helm upgrade --install $(HELM_RELEASE) $(HELM_DIR) --values $(HELM_VALUES)
 	kubectl apply -f $(CRD_FILE)
-	-kubectl apply -f deploy/postgresql.yaml
+	-kubectl apply -f infra/manifests/postgresql.yaml
 
 .PHONY: helm-delete
 helm-delete:
@@ -97,8 +97,7 @@ create-git-secret:
 	@echo "  kubectl create secret generic course-repo-secret \\"
 	@echo "    --from-file=git-credentials.yaml=./git-credentials.yaml"
 	@echo ""
-	@echo "See examples/k8s/course-secret.yaml for the format."
-
+	@echo "See infra/examples/course-service/course-secret.yaml for the format."
 
 # ── Port-forwards ───────────────────────────────────────────────────────────
 

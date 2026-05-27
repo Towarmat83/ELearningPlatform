@@ -6,6 +6,34 @@
 # Shared JWT secret (must match between services)
 jwtSecret: "change-me-in-production-use-a-long-random-string"
 
+# ── Admin account bootstrap ──────────────────────────────────────────────────
+# The user-service seeds the admin account on startup (idempotent).
+# Three modes (evaluated in this order):
+#
+# Mode 1 — auto-generated (default, recommended):
+#   admin:
+#     password: ""   ← leave empty; a random 32-char password is generated
+#                       on first install and persisted in the platform Secret.
+#                       Retrieve it after install with:
+#                         kubectl get secret <release>-secrets -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d
+#
+# Mode 2 — explicit inline password:
+#   admin:
+#     password: "MyStr0ngPassw0rd!"
+#
+# Mode 3 — existing K8s Secret (Vault / External Secrets / SOPS):
+#   admin:
+#     existingSecret: "my-admin-secret"
+#     existingSecretKey: "ADMIN_PASSWORD"
+#
+# The value may be cleartext or a pre-computed bcrypt hash
+# (auto-detected: values starting with "$2" are treated as already hashed).
+# On password change the hash is refreshed on the next pod restart (no SQL needed).
+admin:
+  password: ""               # leave empty to auto-generate on first install
+  existingSecret: ""         # if set, modes 1 & 2 are ignored
+  existingSecretKey: "ADMIN_PASSWORD"
+
 # ── Course Service (Go, stateless) ──────────────────────────────────────────
 courseService:
   replicaCount: 1
@@ -59,12 +87,6 @@ userService:
   env:
     JWT_EXPIRY_HOURS: "24"
     CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
-    GITLAB_URL: "https://gitlab.com"
-    OAUTH_REDIRECT_BASE: ""
-    GITLAB_CLIENT_ID: ""
-    GITLAB_CLIENT_SECRET: ""
-    GITHUB_CLIENT_ID: ""
-    GITHUB_CLIENT_SECRET: ""
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -96,6 +118,36 @@ frontend:
     minReplicas: 1
     maxReplicas: 3
     targetCPUUtilizationPercentage: 70
+
+# ── SSO / OAuth providers (optionnel) ────────────────────────────────────────
+# Chaque provider est un objet générique.
+# Providers OIDC (GitLab, Google, Authentik, Keycloak, …) : fournir issuer_url.
+# GitHub (OAuth2 pur, pas OIDC) : id: github, pas de issuer_url.
+# Exemples :
+#   providers:
+#     - id: gitlab
+#       name: GitLab
+#       client_id: "xxx"
+#       client_secret: "yyy"
+#       issuer_url: "https://gitlab.com"        # optionnel, self-hosted
+#     - id: github
+#       name: GitHub
+#       client_id: "aaa"
+#       client_secret: "bbb"
+#     - id: google
+#       name: Google
+#       client_id: "..."
+#       client_secret: "..."
+#       issuer_url: "https://accounts.google.com"
+#     - id: company-sso
+#       name: "Company SSO"
+#       client_id: "..."
+#       client_secret: "..."
+#       issuer_url: "https://sso.company.com"
+sso:
+  enabled: false
+  redirectBase: ""        # defaults to ingress public URL when empty
+  providers: []
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -18,23 +17,12 @@ import (
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200   {object}  map[string]string
+// @Failure   403   {object}  map[string]string
 // @Failure   401   {object}  map[string]string
 // @Router    /api/courses/{slug}/enroll [post]
 func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
-
-	// Check course prerequisites (skip for admins)
-	if claims.Role != "admin" {
-		if details, err := s.fetchCourseDetails(slug); err == nil && len(details.Prerequisites) > 0 {
-			for _, prereq := range details.Prerequisites {
-				if err := s.checkPrerequisite(r.Context(), claims.Subject, prereq); err != nil {
-					s.Error(w, http.StatusForbidden, err.Error())
-					return
-				}
-			}
-		}
-	}
 
 	_, err := s.Pool.Exec(r.Context(),
 		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
@@ -74,26 +62,17 @@ func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Unenrolled successfully"})
 }
 
-// coursePrerequisiteJSON mirrors content.CoursePrerequisite for JSON decoding.
-// Defined locally to avoid importing course-service packages.
-type coursePrerequisiteJSON struct {
-	Course   string   `json:"course"`
-	MinScore int      `json:"min_score,omitempty"`
-	Modules  []string `json:"modules,omitempty"`
-}
-
 type courseServiceCourse struct {
-	Slug            string                   `json:"slug"`
-	ID              string                   `json:"id"`
-	Title           string                   `json:"title"`
-	Description     string                   `json:"description"`
-	Category        string                   `json:"category"`
-	Difficulty      string                   `json:"difficulty"`
-	IsPublished     bool                     `json:"is_published"`
-	LabCount        int                      `json:"lab_count"`
-	EnrollmentCount int                      `json:"enrollment_count"`
-	Prerequisites   []coursePrerequisiteJSON `json:"prerequisites,omitempty"`
-	Source          string                   `json:"source,omitempty"`
+	Slug            string `json:"slug"`
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Description     string `json:"description"`
+	Category        string `json:"category"`
+	Difficulty      string `json:"difficulty"`
+	IsPublic        bool   `json:"is_public"`
+	LabCount        int    `json:"lab_count"`
+	EnrollmentCount int    `json:"enrollment_count"`
+	Source          string `json:"source,omitempty"`
 }
 
 func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
@@ -170,7 +149,7 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		Description     string  `json:"description"`
 		Category        string  `json:"category"`
 		Difficulty      string  `json:"difficulty"`
-		IsPublished     bool    `json:"is_published"`
+		IsPublic        bool    `json:"is_public"`
 		LabCount        int     `json:"lab_count"`
 		EnrollmentCount int     `json:"enrollment_count"`
 		CompletedLabs   int64   `json:"completed_labs"`
@@ -200,7 +179,7 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 			Description:     details.Description,
 			Category:        details.Category,
 			Difficulty:      details.Difficulty,
-			IsPublished:     details.IsPublished,
+			IsPublic:        details.IsPublic,
 			LabCount:        details.LabCount,
 			EnrollmentCount: details.EnrollmentCount,
 			CompletedLabs:   row.CompletedLabs,
@@ -212,60 +191,4 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		courses = make([]myCourse, 0)
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"courses": courses})
-}
-
-// checkPrerequisite validates one prerequisite condition for the given user.
-// Returns a descriptive error if the condition is not met, nil otherwise.
-func (s *State) checkPrerequisite(ctx context.Context, userID string, p coursePrerequisiteJSON) error {
-	// 1. Enrollment check (required for all modes)
-	var enrolled bool
-	if err := s.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) > 0 FROM enrollments WHERE user_id = $1::uuid AND course_slug = $2`,
-		userID, p.Course).Scan(&enrolled); err != nil {
-		return fmt.Errorf("prerequisite check failed for '%s'", p.Course)
-	}
-	if !enrolled {
-		return fmt.Errorf("you must be enrolled in '%s' before enrolling in this course", p.Course)
-	}
-
-	// 2. Minimum score check
-	if p.MinScore > 0 {
-		var totalScore int
-		if err := s.Pool.QueryRow(ctx,
-			`SELECT COALESCE(SUM(best_score), 0) FROM module_progress
-			 WHERE user_id = $1::uuid AND course_slug = $2`,
-			userID, p.Course).Scan(&totalScore); err != nil {
-			return fmt.Errorf("prerequisite score check failed for '%s'", p.Course)
-		}
-		if totalScore < p.MinScore {
-			return fmt.Errorf("you need at least %d points in '%s' (you currently have %d)", p.MinScore, p.Course, totalScore)
-		}
-	}
-
-	// 3. Required modules check
-	if len(p.Modules) > 0 {
-		rows, err := s.Pool.Query(ctx,
-			`SELECT module_slug FROM module_progress
-			 WHERE user_id = $1::uuid AND course_slug = $2
-			   AND passed = true AND module_slug IS NOT NULL`,
-			userID, p.Course)
-		if err != nil {
-			return fmt.Errorf("prerequisite module check failed for '%s'", p.Course)
-		}
-		defer rows.Close()
-		passed := make(map[string]bool)
-		for rows.Next() {
-			var slug string
-			if rows.Scan(&slug) == nil {
-				passed[slug] = true
-			}
-		}
-		for _, required := range p.Modules {
-			if !passed[required] {
-				return fmt.Errorf("you must pass module '%s' in course '%s' before enrolling", required, p.Course)
-			}
-		}
-	}
-
-	return nil
 }

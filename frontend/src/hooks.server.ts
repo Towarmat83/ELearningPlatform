@@ -9,6 +9,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     const headers = new Headers(event.request.headers);
     headers.delete('host');
+    headers.set('connection', 'close');
 
     const response = await fetch(targetUrl, {
       method: event.request.method,
@@ -33,6 +34,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     const headers = new Headers(event.request.headers);
     headers.delete('host');
+    headers.set('connection', 'close');
 
     const response = await fetch(targetUrl, {
       method: event.request.method,
@@ -53,6 +55,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     const headers = new Headers(event.request.headers);
     headers.delete('host');
+    headers.set('connection', 'close');
 
     const response = await fetch(targetUrl, {
       method: event.request.method,

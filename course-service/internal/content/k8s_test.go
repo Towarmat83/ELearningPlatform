@@ -46,7 +46,7 @@ func TestK8sWatcher_CRDToCourse(t *testing.T) {
 			if c.Difficulty != "beginner" {
 				t.Errorf("expected difficulty 'beginner', got '%s'", c.Difficulty)
 			}
-			if !c.IsPublished {
+			if !c.IsPublic {
 				t.Error("expected course to be published (hidden=false)")
 			}
 			if len(c.Modules) == 0 {
@@ -92,7 +92,7 @@ func TestK8sWatcher_UpsertDelete(t *testing.T) {
 	if c.Title != "Kubernetes Basics" {
 		t.Errorf("expected title 'Kubernetes Basics', got '%s'", c.Title)
 	}
-	if !c.IsPublished {
+	if !c.IsPublic {
 		t.Error("expected course to be published")
 	}
 	if len(c.Modules) == 0 {
@@ -109,7 +109,7 @@ func TestStore_Operations(t *testing.T) {
 		Description: "A test course",
 		Category:    "testing",
 		Difficulty:  "beginner",
-		IsPublished: true,
+		IsPublic: true,
 		Source:      "local",
 		Modules: []Module{
 			{Name: "Module 1", Type: "text", Path: "intro.md"},
@@ -153,7 +153,7 @@ func TestCRDToCourse(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	c := store.Get("docker-fundamentals")
-	if c != nil && c.IsPublished {
+	if c != nil && c.IsPublic {
 		t.Error("expected hidden=true (docker-fundamentals) to result in IsPublished=false")
 	}
 }

@@ -20,6 +20,17 @@ spec:
     spec:
       serviceAccountName: {{ include "elearning.fullname" . }}-course-service
       automountServiceAccountToken: true
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 10.96.0.10
+        searches:
+          - default.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+        options:
+          - name: ndots
+            value: "5"
       containers:
       - name: course-service
         image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag }}"

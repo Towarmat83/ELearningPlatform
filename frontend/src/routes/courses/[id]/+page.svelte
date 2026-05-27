@@ -9,6 +9,7 @@
   let modules: ModuleSummary[] = [];
   let loading = true;
   let enrolled = false;
+  let prerequisiteBlocked = false;
 
   const courseId = $page.params.id as string;
 
@@ -43,27 +44,31 @@
           const res = await modulesApi.list(courseId, token);
           modules = res.modules;
         } catch (e: any) {
-          if (e.status !== 403) toasts.error('Failed to load modules: ' + e.message);
+          if (e.status === 403) {
+            prerequisiteBlocked = true;
+          } else {
+            toasts.error('Failed to load modules: ' + e.message);
+          }
         }
       }
     }
     loading = false;
   });
 
-  async function enroll() {
+  // For public courses — just load modules; backend auto-enrolls.
+  async function startLearning() {
     const token = getToken();
     if (!token) {
       goto('/login?redirect=/courses/' + courseId);
       return;
     }
     try {
-      await coursesApi.enroll(courseId, token);
-      toasts.success('Enrolled successfully!');
       const res = await modulesApi.list(courseId, token);
       modules = res.modules;
       enrolled = true;
     } catch (e: any) {
-      toasts.error(e.message || 'Failed to enroll');
+      if (e.status === 403) prerequisiteBlocked = true;
+      else toasts.error(e.message || 'Failed to load modules');
     }
   }
 
@@ -138,14 +143,15 @@
             {/if}
           </div>
 
-          {#if course.prerequisites && course.prerequisites.length > 0 && !enrolled}
+          {#if course.prerequisites && course.prerequisites.length > 0 && (!enrolled || prerequisiteBlocked)}
             <div class="mb-3 flex flex-col gap-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p class="font-semibold mb-0.5">🔒 Prerequisites required</p>
               {#each course.prerequisites as p}
                 <div class="flex items-start gap-1.5">
-                  <span>🔒</span>
+                  <span>•</span>
                   <span>
-                    <span class="font-medium">{p.course}</span>
-                    {#if p.min_score} — {p.min_score}+ points required{/if}
+                    Complete <span class="font-medium">{p.course}</span>
+                    {#if p.min_score} with at least {p.min_score} points{/if}
                     {#if p.modules && p.modules.length > 0} — must pass: {p.modules.join(', ')}{/if}
                   </span>
                 </div>
@@ -154,7 +160,13 @@
           {/if}
 
           {#if !enrolled}
-            <button on:click={enroll} class="btn-primary">Enroll Now</button>
+            {#if course.is_public}
+              <button on:click={startLearning} class="btn-primary">Start Learning</button>
+            {:else}
+              <div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 inline-block">
+                🔒 Access restricted — contact an administrator to enroll
+              </div>
+            {/if}
           {:else if totalCount > 0}
             <div>
               <div class="flex justify-between text-sm text-gray-500 mb-1">
@@ -172,7 +184,13 @@
 
     <!-- Module list -->
     {#if enrolled}
-      {#if modules.length === 0}
+      {#if prerequisiteBlocked}
+        <div class="card text-center py-8 text-amber-600">
+          <p class="text-3xl mb-3">🔒</p>
+          <p class="font-semibold mb-1">Prerequisites not met</p>
+          <p class="text-sm text-gray-500">Complete the required courses above before accessing this content.</p>
+        </div>
+      {:else if modules.length === 0}
         <div class="card text-center py-8 text-gray-400">No content available yet.</div>
       {:else}
         <div class="space-y-2">

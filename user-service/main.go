@@ -49,6 +49,20 @@ func main() {
 	}
 	slog.Info("migrations applied")
 
+	// Seed default admin (idempotent — safe to run on every startup).
+	if err := db.SeedAdmin(ctx, pool, cfg.AdminPassword); err != nil {
+		slog.Error("failed to seed admin user", "err", err)
+		os.Exit(1)
+	}
+
+	// Watch the admin password file for live rotation (no pod restart needed).
+	// Active only when ADMIN_PASSWORD_FILE is set (i.e. K8s Secret volume mount).
+	watchCtx, watchCancel := context.WithCancel(ctx)
+	defer watchCancel()
+	if cfg.AdminPasswordFile != "" {
+		go db.WatchAdminPassword(watchCtx, pool, cfg.AdminPasswordFile)
+	}
+
 	s := &handlers.State{
 		Pool:   pool,
 		Config: cfg,

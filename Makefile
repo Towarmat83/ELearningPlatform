@@ -2,13 +2,13 @@
 # eLearning Platform — KinD Dev Environment
 # ─────────────────────────────────────────────────────────────────────────────
 
-KIND_CLUSTER   := elearning
-HELM_DIR       := helm
-HELM_RELEASE   := elearning
-HELM_VALUES    := deploy/kind-values.yaml
-PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
-CRD_FILE       := deploy/crd.yaml
-COURSE_DIR     := courses
+KIND_CLUSTER       := elearning
+HELM_DIR           := helm
+HELM_RELEASE       := elearning
+HELM_VALUES        := deploy/kind-values.yaml
+PORT_FWDS_LOG      := /tmp/elearning-port-forwards.log
+CRD_FILE           := deploy/crd.yaml
+COURSE_DIR         := examples/courses
 
 # ── KinD ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +97,8 @@ create-git-secret:
 	@echo "  kubectl create secret generic course-repo-secret \\"
 	@echo "    --from-file=git-credentials.yaml=./git-credentials.yaml"
 	@echo ""
-	@echo "See course-service/examples/course-secret.yaml for the format."
+	@echo "See examples/k8s/course-secret.yaml for the format."
+
 
 # ── Port-forwards ───────────────────────────────────────────────────────────
 

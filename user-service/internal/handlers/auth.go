@@ -176,6 +176,8 @@ func (s *State) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	addToDefaultGroup(ctx, s.Pool, u.ID)
+	syncGroupEnrollments(ctx, s.Pool, u.ID)
 	metrics.ActiveUsers.Inc()
 	s.JSON(w, http.StatusOK, authResponse{Token: token, User: u})
 }
@@ -229,6 +231,8 @@ func (s *State) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	addToDefaultGroup(ctx, s.Pool, id)
+	syncGroupEnrollments(ctx, s.Pool, id)
 	s.JSON(w, http.StatusOK, authResponse{
 		Token: token,
 		User: userPublicRow{

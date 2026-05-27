@@ -33,7 +33,7 @@ func (s *Store) List() []*Course {
 	defer s.mu.RUnlock()
 	out := make([]*Course, 0, len(s.courses))
 	for _, c := range s.courses {
-		if c.IsPublished {
+		if c.IsPublic {
 			out = append(out, c)
 		}
 	}

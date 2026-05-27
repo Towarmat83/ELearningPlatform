@@ -22,8 +22,7 @@ type Course struct {
 	Description   string               `json:"description"`
 	Category      string               `json:"category"`
 	Difficulty    string               `json:"difficulty"`
-	IsPublished   bool                 `json:"is_published"`
-	AutoEnroll    bool                 `json:"auto_enroll"`
+	IsPublic      bool                 `json:"is_public"`
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
 	Lessons       []Lesson             `json:"lessons"`
 	Modules       []Module             `json:"modules,omitempty"`
@@ -102,9 +101,7 @@ type CourseYAML struct {
 	Description   string               `yaml:"description,omitempty"`
 	Category      string               `yaml:"category,omitempty"`
 	Difficulty    string               `yaml:"difficulty,omitempty"`
-	IsPublished   bool                 `yaml:"is_published,omitempty"`
-	AutoEnroll    bool                 `yaml:"auto_enroll,omitempty"`
-	Hidden        bool                 `yaml:"hidden,omitempty"`
+	Public        bool                 `yaml:"public,omitempty"`
 	Prerequisites []CoursePrerequisite `yaml:"prerequisites,omitempty"`
 	Modules       []ModuleYAML         `yaml:"modules,omitempty"`
 }
@@ -113,7 +110,7 @@ type CourseYAML struct {
 type CourseSpec struct {
 	Title         string               `yaml:"title"`
 	Description   string               `yaml:"description"`
-	Hidden        bool                 `yaml:"hidden"`
+	Public        bool                 `yaml:"public"`
 	Category      string               `yaml:"category,omitempty"`
 	Difficulty    string               `yaml:"difficulty,omitempty"`
 	Prerequisites []CoursePrerequisite `yaml:"prerequisites,omitempty"`
@@ -154,8 +151,8 @@ func (c *CourseYAML) MergeSpec() {
 	if c.Description == "" {
 		c.Description = c.Spec.Description
 	}
-	if !c.Hidden {
-		c.Hidden = c.Spec.Hidden
+	if !c.Public {
+		c.Public = c.Spec.Public
 	}
 	if c.Category == "" {
 		c.Category = c.Spec.Category

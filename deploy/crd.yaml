@@ -24,26 +24,13 @@ spec:
                   type: string
                 description:
                   type: string
-                hidden:
+                public:
                   type: boolean
+                  description: "When true, the course is publicly visible and users are auto-enrolled on first access"
                 category:
                   type: string
                 difficulty:
                   type: string
-                prerequisites:
-                  type: array
-                  items:
-                    type: object
-                    required: [course]
-                    properties:
-                      course:
-                        type: string
-                      min_score:
-                        type: integer
-                      modules:
-                        type: array
-                        items:
-                          type: string
                 modules:
                   type: array
                   items:
@@ -66,21 +53,19 @@ spec:
                         type: boolean
                       quiz_ref:
                         type: string
-                      prerequisites:
+                    x-kubernetes-preserve-unknown-fields: true
+                prerequisites:
+                  type: array
+                  description: "Courses that must be completed before this one is accessible"
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      course:
+                        type: string
+                      min_score:
+                        type: integer
+                      modules:
                         type: array
                         items:
                           type: string
-                      passing_score:
-                        type: integer
-                      lock_on_max_attempts:
-                        type: boolean
-                      max_attempts_per_question:
-                        type: integer
-                      cooldown:
-                        type: object
-                        x-kubernetes-preserve-unknown-fields: true
-                      questions:
-                        type: array
-                        items:
-                          type: object
-                          x-kubernetes-preserve-unknown-fields: true

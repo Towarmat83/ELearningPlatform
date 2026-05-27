@@ -1,17 +1,8 @@
 # Secrets — ne jamais commiter
 .env
-api/.env
 
 # Garder les exemples
 !.env.example
-!api/.env.example
-
-# Rust build
-api/target/
-
-# SQLx cache (généré, peut être régénéré avec `cargo sqlx prepare`)
-# Commenter cette ligne si vous voulez le build offline sans connexion DB
-# api/.sqlx/
 
 # Node / SvelteKit
 frontend/node_modules/
@@ -28,7 +19,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-api/.sqlx
-
-CLAUDE.md

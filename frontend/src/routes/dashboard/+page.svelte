@@ -3,23 +3,55 @@
   import { goto } from '$app/navigation';
   import { coursesApi } from '$lib/api';
   import { auth, currentUser, isLoggedIn, toasts } from '$lib/stores';
-  import type { MyCourse } from '$lib/api';
+  import type { MyCourse, CoursePrerequisite } from '$lib/api';
 
   let myCourses: MyCourse[] = [];
+  // slug → prerequisites / slug → title (from full catalog)
+  let prereqMap   = new Map<string, CoursePrerequisite[]>();
+  let courseTitles = new Map<string, string>();
+  // Maps course id → MyCourse (includes completed_labs and total_score)
+  let myCoursesMap = new Map<string, MyCourse>();
   let loading = true;
 
   onMount(async () => {
     auth.init();
     if (!$isLoggedIn) { goto('/login'); return; }
     try {
-      const res = await coursesApi.myCourses($auth.token!);
-      myCourses = res.courses;
+      const [myRes, allRes] = await Promise.all([
+        coursesApi.myCourses($auth.token!),
+        coursesApi.list(),
+      ]);
+      myCourses = myRes.courses;
+      myCoursesMap = new Map(myRes.courses.map(c => [c.id, c]));
+      prereqMap = new Map(
+        allRes.courses
+          .filter(c => c.prerequisites?.length)
+          .map(c => [c.id, c.prerequisites!])
+      );
+      courseTitles = new Map(allRes.courses.map(c => [c.id, c.title]));
     } catch (e: any) {
       toasts.error(e.message || 'Failed to load courses');
     } finally {
       loading = false;
     }
   });
+
+  function prereqsFor(courseId: string) {
+    return prereqMap.get(courseId) ?? [];
+  }
+
+  // A prerequisite is satisfied when the user has actual progress
+  // (completed_labs > 0 or total_score > 0). Enrollment alone does NOT satisfy.
+  function prereqSatisfied(prereqCourseId: string, minScore = 0): boolean {
+    const mc = myCoursesMap.get(prereqCourseId);
+    if (!mc) return false;
+    if (minScore > 0) return (mc.total_score ?? 0) >= minScore;
+    return (mc.completed_labs ?? 0) > 0 || (mc.total_score ?? 0) > 0;
+  }
+
+  function allPrereqsMet(courseId: string) {
+    return prereqsFor(courseId).every(p => prereqSatisfied(p.course, p.min_score));
+  }
 
   function difficultyColor(d: string) {
     if (d === 'beginner') return 'badge-green';
@@ -80,13 +112,19 @@
         {@const pct = course.lab_count > 0
           ? Math.round(course.completed_labs / course.lab_count * 100)
           : 0}
-        <a href="/courses/{course.id}" class="card hover:shadow-md transition-shadow cursor-pointer group">
+        {@const blocked = !allPrereqsMet(course.id)}
+        <svelte:element
+          this={blocked ? 'div' : 'a'}
+          href={blocked ? undefined : `/courses/${course.id}`}
+          class="card flex flex-col {blocked ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-md transition-shadow cursor-pointer group'}"
+        >
           <div class="w-full h-36 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mb-4 flex items-center justify-center">
             <span class="text-4xl">📚</span>
           </div>
 
           <div class="flex items-start justify-between gap-2 mb-2">
-            <h3 class="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors line-clamp-2">
+            <h3 class="font-semibold line-clamp-2
+              {blocked ? 'text-gray-400' : 'text-gray-900 group-hover:text-primary-600 transition-colors'}">
               {course.title}
             </h3>
             {#if course.difficulty}
@@ -94,7 +132,27 @@
             {/if}
           </div>
 
-          <div class="mt-3">
+          {#if prereqsFor(course.id).length > 0}
+            <div class="mb-3 text-xs rounded-lg px-3 py-2 border
+              {allPrereqsMet(course.id)
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-amber-50 border-amber-200 text-amber-700'}">
+              <p class="font-semibold mb-1">
+                {allPrereqsMet(course.id) ? '✅ Prerequisites met' : '🔒 Prerequisites required'}
+              </p>
+              {#each prereqsFor(course.id) as p}
+                <div class="flex items-center gap-1.5">
+                  <span>{prereqSatisfied(p.course, p.min_score) ? '✓' : '•'}</span>
+                  <span class="font-medium">{courseTitles.get(p.course) ?? p.course}</span>
+                  {#if p.min_score}
+                    <span class="opacity-75">— {p.min_score} pts min</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <div class="mt-auto">
             <div class="flex justify-between text-xs text-gray-500 mb-1">
               <span>{course.completed_labs}/{course.lab_count} labs</span>
               <span>{pct}%</span>
@@ -107,7 +165,7 @@
           {#if pct === 100}
             <div class="mt-2"><span class="badge-green">Completed!</span></div>
           {/if}
-        </a>
+        </svelte:element>
       {/each}
     </div>
   {/if}

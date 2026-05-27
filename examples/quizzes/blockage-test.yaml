@@ -1,0 +1,77 @@
+id: blockage-test
+title: "Quiz Blockage Test (fichier Git)"
+description: |
+  Quiz référencé depuis un fichier Git pour tester le blocage via quiz_ref.
+  max_attempts_per_question: 2 — après 2 réponses fausses, le module est verrouillé.
+version: "1.0.0"
+
+passing_score: 80
+max_attempts_per_question: 2
+lock_on_max_attempts: true
+
+cooldown:
+  strategy: exponential
+  base_seconds: 30
+  multiplier: 2.0
+  max_seconds: 300
+
+questions:
+  - id: q1
+    type: single
+    difficulty: easy
+    points: 1
+    question: "Quelle commande Git crée une nouvelle branche et bascule dessus ?"
+    answers:
+      - id: a
+        text: "git branch ma-branche"
+        correct: false
+      - id: b
+        text: "git checkout -b ma-branche"
+        correct: true
+      - id: c
+        text: "git switch ma-branche"
+        correct: false
+      - id: d
+        text: "git clone ma-branche"
+        correct: false
+    feedback:
+      wrong: |
+        `git branch` crée la branche sans basculer.
+        `git switch` bascule mais ne crée pas.
+        La bonne réponse est `git checkout -b`.
+      correct: "Exact ! `git checkout -b` crée et bascule en une seule commande."
+
+  - id: q2
+    type: boolean
+    difficulty: easy
+    points: 1
+    question: "`git rebase -i HEAD~3` permet de modifier les 3 derniers commits."
+    correct_answer: true
+    feedback:
+      wrong: "Si, `git rebase -i HEAD~3` ouvre bien un éditeur interactif sur les 3 derniers commits."
+      correct: "Correct ! Le rebase interactif est très puissant pour réécrire l'historique."
+
+  - id: q3
+    type: multiple
+    difficulty: medium
+    points: 2
+    question: "Quelles commandes permettent d'annuler des modifications non commitées ?"
+    answers:
+      - id: a
+        text: "git restore ."
+        correct: true
+      - id: b
+        text: "git checkout -- ."
+        correct: true
+      - id: c
+        text: "git reset --hard HEAD"
+        correct: true
+      - id: d
+        text: "git diff"
+        correct: false
+    partial_scoring:
+      enabled: true
+      allow_negative: false
+    feedback:
+      wrong: "`git diff` ne restaure rien, il affiche seulement les différences."
+      correct: "Exact ! Les trois premières options permettent de jeter les modifications locales."

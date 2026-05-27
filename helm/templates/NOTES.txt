@@ -21,3 +21,14 @@
 {{- end }}
 
 🔑 JWT secret: {{ .Values.jwtSecret | trunc 8 }}...
+
+🔐 Admin credentials  (login: admin)
+{{- if .Values.admin.existingSecret }}
+   Password → stored in existing Secret "{{ .Values.admin.existingSecret }}" (key: {{ .Values.admin.existingSecretKey }})
+{{- else if .Values.admin.password }}
+   Password → set via admin.password in values
+{{- else }}
+   Password → auto-generated, retrieve it with:
+     kubectl get secret {{ include "elearning.fullname" . }}-secrets \
+       -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d && echo
+{{- end }}

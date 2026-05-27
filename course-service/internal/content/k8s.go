@@ -152,19 +152,20 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 	description, _ := spec["description"].(string)
 	category, _ := spec["category"].(string)
 	difficulty, _ := spec["difficulty"].(string)
-	hidden, _ := spec["hidden"].(bool)
+	public, _ := spec["public"].(bool)
 
 	if title == "" {
 		title = slug
 	}
 
-	var coursePrereqs []CoursePrerequisite
+
+	var prerequisites []CoursePrerequisite
 	if rawPrereqs, ok := spec["prerequisites"].([]interface{}); ok {
 		for _, rp := range rawPrereqs {
 			switch v := rp.(type) {
 			case string:
 				// Backward compat: bare string slug → enrollment-only prereq
-				coursePrereqs = append(coursePrereqs, CoursePrerequisite{Course: v})
+				prerequisites = append(prerequisites, CoursePrerequisite{Course: v})
 			case map[string]interface{}:
 				p := CoursePrerequisite{
 					Course:   getStr(v, "course"),
@@ -178,7 +179,7 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 					}
 				}
 				if p.Course != "" {
-					coursePrereqs = append(coursePrereqs, p)
+					prerequisites = append(prerequisites, p)
 				}
 			}
 		}
@@ -199,7 +200,6 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 					}
 				}
 			}
-
 			mod := Module{
 				Name:          getStr(m, "name"),
 				Type:          getStr(m, "type"),
@@ -367,8 +367,8 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		Description:   description,
 		Category:      category,
 		Difficulty:    difficulty,
-		IsPublished:   !hidden,
-		Prerequisites: coursePrereqs,
+		IsPublic:      public,
+		Prerequisites: prerequisites,
 		Modules:       modules,
 		Source:        sourceK8s(slug),
 	}, nil
@@ -383,6 +383,10 @@ func getInt(m map[string]interface{}, key string) int {
 	switch v := m[key].(type) {
 	case int:
 		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
 	case float64:
 		return int(v)
 	default:

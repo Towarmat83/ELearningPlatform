@@ -37,7 +37,7 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
-    let body: Record<string, unknown> | null = null;
+    let body: Record<string, unknown> | undefined = undefined;
     try {
       const err = await res.json();
       body = err;
@@ -92,14 +92,14 @@ export interface Course {
   thumbnail: string | null;
   category: string | null;
   difficulty: string | null;
-  is_published: boolean;
+  is_public: boolean;
   created_by: string;
   creator_username: string | null;
   lab_count: number;
   enrollment_count: number;
-  prerequisites?: CoursePrerequisite[];
   created_at: string;
   updated_at: string;
+  prerequisites?: CoursePrerequisite[];
 }
 
 export interface MyCourse extends Course {
@@ -126,6 +126,22 @@ export interface PublicSettings {
   password_min_length: string;
   password_require_uppercase: string;
   password_require_number: string;
+  oidc_enabled: string;
+  ldap_enabled: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  source: string;
+  created_at: string;
+  member_count: number;
+  mapped_role: string;
+}
+
+export interface GroupMapping {
+  group_name: string;
+  platform_role: string;
 }
 
 export interface PlatformSetting {
@@ -139,6 +155,17 @@ export interface CourseEnrollment {
   username: string;
   email: string;
   enrolled_at: string;
+}
+
+
+export interface LeaderboardEntry {
+  id: string;
+  username: string;
+  email: string;
+  avatar_url: string | null;
+  total_score: number;
+  passed_modules: number;
+  enrolled_courses: number;
 }
 
 export interface AdminStats {
@@ -238,6 +265,32 @@ export const ssoApi = {
     api.get<{ url: string; state: string }>(`/auth/oauth/${provider}/authorize`),
   callback: (code: string, state: string) =>
     api.post<AuthResponse>('/auth/oauth/callback', { code, state }),
+};
+
+export const oidcApi = {
+  authorize: () => api.get<{ url: string; state: string }>('/auth/oidc/authorize'),
+  callback: (code: string, state: string) =>
+    api.post<AuthResponse>('/auth/oidc/callback', { code, state }),
+};
+
+export const ldapApi = {
+  login: (email: string, password: string) =>
+    api.post<AuthResponse>('/auth/ldap/login', { email, password }),
+};
+
+export const groupsApi = {
+  list: (token: string) =>
+    api.get<{ groups: Group[] }>('/admin/groups', token),
+  create: (name: string, token: string) =>
+    api.post<{ id: string; message: string }>('/admin/groups', { name }, token),
+  delete: (id: string, token: string) =>
+    api.delete<{ message: string }>(`/admin/groups/${id}`, token),
+  getMappings: (token: string) =>
+    api.get<{ mappings: GroupMapping[] }>('/admin/groups/mappings', token),
+  upsertMapping: (data: GroupMapping, token: string) =>
+    api.post<{ message: string }>('/admin/groups/mappings', data, token),
+  deleteMapping: (groupName: string, token: string) =>
+    api.delete<{ message: string }>(`/admin/groups/mappings/${encodeURIComponent(groupName)}`, token),
 };
 
 export const publicSettingsApi = {
@@ -356,16 +409,6 @@ export interface ModuleSummary {
   attempts: number;
 }
 
-export interface LeaderboardEntry {
-  id: string;
-  username: string;
-  email: string;
-  avatar_url: string | null;
-  total_score: number;
-  passed_modules: number;
-  enrolled_courses: number;
-}
-
 export interface ModuleQuizConfig {
   passing_score: number;
   cooldown?: {
@@ -386,16 +429,15 @@ export interface ModuleDetail {
   content: string | null;
   viewed: boolean;
   hidden: boolean;
-  locked: boolean;
-  prerequisites?: string[];
-  best_score: number;
-  max_score: number;
-  passed: boolean;
-  attempts: number;
   questions?: QuizQuestion[];
   quiz_config?: ModuleQuizConfig;
   cooldowns?: Record<string, QuizCooldown>;
 }
+
+export const lessonsApi = {
+  markComplete: (courseSlug: string, lessonSlug: string, token: string) =>
+    api.post<{ message: string }>(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
+};
 
 export const modulesApi = {
   list: (courseSlug: string, token: string) =>
@@ -406,11 +448,6 @@ export const modulesApi = {
     api.post<QuizSubmitResponse>(`/courses/${courseSlug}/modules/${index}/submit`, { answers }, token),
 };
 
-export const lessonsApi = {
-  markComplete: (courseSlug: string, lessonSlug: string, token: string) =>
-    api.post<{ message: string }>(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
-};
-
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -419,18 +456,22 @@ export const adminApi = {
 
   stats: (token: string) =>
     api.get<AdminStats>('/admin/stats', token),
+  leaderboard: (token: string) =>
+    api.get<{ leaderboard: LeaderboardEntry[] }>('/admin/leaderboard', token),
 
-  users: (token: string) =>
-    api.get<{ users: AdminUser[]; total: number }>('/admin/users', token),
+  authProviders: (token: string) =>
+    api.get<{ providers: { provider: string; count: number }[] }>('/admin/users/providers', token),
+  users: (token: string, provider?: string) =>
+    api.get<{ users: AdminUser[]; total: number }>(
+      provider ? `/admin/users?provider=${encodeURIComponent(provider)}` : '/admin/users',
+      token,
+    ),
   getUser: (id: string, token: string) =>
     api.get<AdminUser>(`/admin/users/${id}`, token),
   updateUser: (id: string, data: UpdateUser, token: string) =>
     api.put(`/admin/users/${id}`, data, token),
   deleteUser: (id: string, token: string) =>
     api.delete(`/admin/users/${id}`, token),
-
-  leaderboard: (token: string) =>
-    api.get<{ leaderboard: LeaderboardEntry[] }>('/admin/leaderboard', token),
 
   adminCourses: (token: string, params?: { page?: number; per_page?: number; search?: string }) => {
     const qs = params ? '?' + new URLSearchParams(
@@ -445,4 +486,10 @@ export const adminApi = {
     api.post(`/admin/courses/${courseId}/enrollments`, { user_id: userId }, token),
   unenrollUser: (courseId: string, userId: string, token: string) =>
     api.delete(`/admin/courses/${courseId}/enrollments/${userId}`, token),
+  listGroupEnrollments: (courseId: string, token: string) =>
+    api.get<{ groups: { id: string; name: string; source: string; member_count: number; enrolled_at: string }[] }>(`/admin/courses/${courseId}/enrollments/groups`, token),
+  enrollGroup: (courseId: string, groupId: string, token: string) =>
+    api.post<{ message: string; enrolled: number }>(`/admin/courses/${courseId}/enrollments/groups`, { group_id: groupId }, token),
+  unenrollGroup: (courseId: string, groupId: string, token: string) =>
+    api.delete(`/admin/courses/${courseId}/enrollments/groups/${groupId}`, token),
 };

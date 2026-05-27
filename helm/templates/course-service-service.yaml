@@ -11,5 +11,8 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+      {{- if .Values.courseService.service.nodePort }}
+      nodePort: {{ .Values.courseService.service.nodePort }}
+      {{- end }}
   selector:
     {{- include "elearning.courseService.selectorLabels" . | nindent 4 }}

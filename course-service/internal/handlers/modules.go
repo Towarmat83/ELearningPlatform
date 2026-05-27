@@ -112,15 +112,6 @@ type questionResultAPI struct {
 	SourceRefs    []content.SourceRef `json:"source_refs,omitempty"`
 }
 
-// moduleProgressData holds cached progress for a single module.
-type moduleProgressData struct {
-	BestScore int
-	MaxScore  int
-	Passed    bool
-	Attempts  int
-}
-
-// viewedLessons fetches the set of lesson/module slugs viewed by the user.
 func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[string]bool {
 	u, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/viewed")
 	if err != nil {
@@ -148,6 +139,14 @@ func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[st
 		m[slug] = true
 	}
 	return m
+}
+
+// moduleProgressData holds per-module quiz progress fetched from user-service.
+type moduleProgressData struct {
+	BestScore int
+	MaxScore  int
+	Passed    bool
+	Attempts  int
 }
 
 // fetchModuleProgress fetches quiz progress for all modules in a course.
@@ -236,6 +235,81 @@ func isLocked(prereqs []string, done map[string]bool) bool {
 	return false
 }
 
+// coursePrereqSummary holds the total score, passed module slugs, and viewed
+// lesson count for a user in a specific course — used to evaluate cross-course
+// prerequisites.
+type coursePrereqSummary struct {
+	TotalScore    int
+	PassedModules map[string]bool
+	ViewedCount   int // number of lessons marked complete (text/video/image)
+}
+
+// fetchCoursePrereqSummary calls the user-service internal API to retrieve the
+// total accumulated score and the set of passed module slugs for the given user
+// in the given prerequisite course.
+func (s *State) fetchCoursePrereqSummary(userID, courseSlug string) coursePrereqSummary {
+	u, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/course-summary")
+	if err != nil {
+		return coursePrereqSummary{PassedModules: map[string]bool{}}
+	}
+	q := u.Query()
+	q.Set("user_id", userID)
+	q.Set("course_slug", courseSlug)
+	u.RawQuery = q.Encode()
+
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return coursePrereqSummary{PassedModules: map[string]bool{}}
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		TotalScore    int      `json:"total_score"`
+		PassedModules []string `json:"passed_modules"`
+		ViewedCount   int      `json:"viewed_count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return coursePrereqSummary{PassedModules: map[string]bool{}}
+	}
+
+	summary := coursePrereqSummary{
+		TotalScore:    result.TotalScore,
+		ViewedCount:   result.ViewedCount,
+		PassedModules: make(map[string]bool, len(result.PassedModules)),
+	}
+	for _, slug := range result.PassedModules {
+		summary.PassedModules[slug] = true
+	}
+	return summary
+}
+
+// checkCoursePrerequisites returns false if any course-level prerequisite declared
+// on the course is not yet satisfied by the user:
+//   - If MinScore > 0: the sum of the user's best scores in the prereq course must
+//     be >= MinScore.
+//   - If Modules is non-empty: every listed module slug must be passed in the prereq
+//     course.
+//   - If neither is set: only the existence of any score is required (any attempt).
+func (s *State) checkCoursePrerequisites(prereqs []content.CoursePrerequisite, userID string) bool {
+	for _, p := range prereqs {
+		summary := s.fetchCoursePrereqSummary(userID, p.Course)
+		if p.MinScore > 0 && summary.TotalScore < p.MinScore {
+			return false
+		}
+		for _, modSlug := range p.Modules {
+			if !summary.PassedModules[modSlug] {
+				return false
+			}
+		}
+		// If neither MinScore nor Modules are set, require at least some progress
+		// (either quiz score or viewed lessons — covers text-only courses).
+		if p.MinScore == 0 && len(p.Modules) == 0 && summary.TotalScore == 0 && summary.ViewedCount == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // ListModules godoc
 // @Summary   List modules for a course
 // @Tags      Modules
@@ -254,9 +328,21 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	if claims.Role != "admin" && !c.IsPublished {
-		s.Error(w, http.StatusForbidden, "Course not available")
-		return
+	if claims.Role != "admin" {
+		if c.IsPublic {
+			s.autoEnroll(claims.Subject, courseSlug)
+		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Enroll in this course to access it")
+			return
+		}
+	}
+
+	// Enforce cross-course prerequisites for non-admins.
+	if claims.Role != "admin" && len(c.Prerequisites) > 0 {
+		if !s.checkCoursePrerequisites(c.Prerequisites, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Complete prerequisite courses first")
+			return
+		}
 	}
 
 	modules := s.visibleModules(c, r)
@@ -316,9 +402,21 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	if claims.Role != "admin" && !c.IsPublished {
-		s.Error(w, http.StatusForbidden, "Course not available")
-		return
+	if claims.Role != "admin" {
+		if c.IsPublic {
+			s.autoEnroll(claims.Subject, courseSlug)
+		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Enroll in this course to access it")
+			return
+		}
+	}
+
+	// Enforce cross-course prerequisites for non-admins.
+	if claims.Role != "admin" && len(c.Prerequisites) > 0 {
+		if !s.checkCoursePrerequisites(c.Prerequisites, claims.Subject) {
+			s.Error(w, http.StatusForbidden, "Complete prerequisite courses first")
+			return
+		}
 	}
 
 	modules := s.visibleModules(c, r)
@@ -330,37 +428,19 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := modules[idx]
-
-	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
-	progress := s.fetchModuleProgress(r, courseSlug, claims.Subject)
-
-	// Check prerequisites for non-admins
-	if claims.Role != "admin" && len(m.Prerequisites) > 0 {
-		done := completedSlugs(modules, viewed, progress)
-		if isLocked(m.Prerequisites, done) {
-			s.Error(w, http.StatusForbidden, "Complete prerequisites first")
-			return
-		}
-	}
-
-	p := progress[idx]
-
 	resp := moduleResponse{
-		Index:         idx,
-		Name:          m.Name,
-		Slug:          m.Slug(),
-		Type:          m.Type,
-		Hidden:        m.Hidden,
-		Prerequisites: m.Prerequisites,
-		BestScore:     p.BestScore,
-		MaxScore:      p.MaxScore,
-		Passed:        p.Passed,
-		Attempts:      p.Attempts,
-		Viewed:        viewed[m.Slug()],
+		Index:  idx,
+		Name:   m.Name,
+		Slug:   m.Slug(),
+		Type:   m.Type,
+		Hidden: m.Hidden,
 	}
 	if m.Type == "quiz" && m.HasQuestions() {
 		resp.QuestionCount = len(m.Questions)
 	}
+
+	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
+	resp.Viewed = viewed[m.Slug()]
 
 	switch m.Type {
 	case "video", "image":
@@ -455,9 +535,21 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	if claims.Role != "admin" && !c.IsPublished {
-		s.Error(w, http.StatusForbidden, "Course not available")
-		return
+	if claims.Role != "admin" {
+		if c.IsPublic {
+			s.autoEnroll(userID, courseSlug)
+		} else if !s.isEnrolled(r, courseSlug, userID) {
+			s.Error(w, http.StatusForbidden, "Enroll in this course to access it")
+			return
+		}
+	}
+
+	// Enforce cross-course prerequisites for non-admins.
+	if claims.Role != "admin" && len(c.Prerequisites) > 0 {
+		if !s.checkCoursePrerequisites(c.Prerequisites, userID) {
+			s.Error(w, http.StatusForbidden, "Complete prerequisite courses first")
+			return
+		}
 	}
 
 	modules := s.visibleModules(c, r)
@@ -473,17 +565,6 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	if m.Type != "quiz" {
 		s.Error(w, http.StatusBadRequest, "Module is not a quiz")
 		return
-	}
-
-	// Check prerequisites for non-admins
-	if claims.Role != "admin" && len(m.Prerequisites) > 0 {
-		viewed := s.viewedLessons(r, courseSlug, userID)
-		progress := s.fetchModuleProgress(r, courseSlug, userID)
-		done := completedSlugs(modules, viewed, progress)
-		if isLocked(m.Prerequisites, done) {
-			s.Error(w, http.StatusForbidden, "Complete prerequisites first")
-			return
-		}
 	}
 
 	// Resolve questions: fetch from git repo first, then fallback to inline
@@ -540,9 +621,6 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := content.ScoreQuiz(effectiveQuiz, req.Answers)
-
-	// Record progress in user-service asynchronously
-	s.recordModuleProgress(courseSlug, userID, m.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
 
 	// Record cooldowns for wrong answers
 	respCooldowns := make(map[string]cooldownState)

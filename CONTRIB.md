@@ -83,7 +83,7 @@ You should see 4 pods running:
 > # Edit kind-values.yaml and set: postgresql.enabled: false
 > # Then:
 > make helm-install
-> kubectl apply -f deploy/postgresql.yaml
+> kubectl apply -f infra/manifests/postgresql.yaml
 > ```
 
 ### 6. Apply a course
@@ -91,7 +91,7 @@ You should see 4 pods running:
 The CRD is already applied by `make helm-install`. Now add a course:
 
 ```bash
-kubectl apply -f examples/courses/kubernetes-basics/course.yaml
+kubectl apply -f examples/kubernetes-basics/course.yaml
 ```
 
 ### 7. Set up git credentials (for private course repos)
@@ -103,7 +103,7 @@ kubectl create secret generic course-repo-secret \
   --from-file=git-credentials.yaml=./git-credentials.yaml
 ```
 
-See `examples/k8s/course-secret.yaml` for the format.
+See `infra/examples/course-service/course-secret.yaml` for the format.
 
 ### 8. Expose services locally
 

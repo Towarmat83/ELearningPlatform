@@ -1,20 +1,29 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { adminApi, groupsApi, type Course, type CourseEnrollment, type Group } from '$lib/api';
+  import { adminApi, modulesApi, groupsApi, type Course, type CourseEnrollment, type Group, type ModuleSummary } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
 
   let courses: Course[] = [];
   let groups: Group[] = [];
   let loading = true;
 
+  // Which panel is open per course: 'enrollments' | 'modules' | null
+  type PanelType = 'enrollments' | 'modules';
+  let openPanel: { id: string; type: PanelType } | null = null;
+
   // Enrollment panel state
-  let expandedId: string | null = null;
   let enrollments: CourseEnrollment[] = [];
   let groupEnrollments: { id: string; name: string; source: string; member_count: number; enrolled_at: string }[] = [];
   let enrollmentsLoading = false;
   let enrollUserId = '';
   let enrollGroupId = '';
   let enrollingGroup = false;
+
+  // Modules panel state
+  let courseModules: ModuleSummary[] = [];
+  let modulesLoading = false;
+  let clearingCourseCache = false;
+  let clearingModuleIdx: number | null = null;
 
   onMount(async () => {
     auth.init();
@@ -40,12 +49,17 @@
     } catch {}
   }
 
-  async function openEnrollments(id: string) {
-    if (expandedId === id) {
-      expandedId = null;
+  function togglePanel(id: string, type: PanelType) {
+    if (openPanel?.id === id && openPanel.type === type) {
+      openPanel = null;
       return;
     }
-    expandedId = id;
+    openPanel = { id, type };
+    if (type === 'enrollments') openEnrollments(id);
+    else openModules(id);
+  }
+
+  async function openEnrollments(id: string) {
     enrollUserId = '';
     enrollGroupId = '';
     enrollmentsLoading = true;
@@ -60,6 +74,45 @@
       toasts.error('Failed to load enrollments');
     } finally {
       enrollmentsLoading = false;
+    }
+  }
+
+  async function openModules(id: string) {
+    modulesLoading = true;
+    courseModules = [];
+    try {
+      const res = await modulesApi.list(id, $auth.token!);
+      courseModules = res.modules;
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to load modules');
+    } finally {
+      modulesLoading = false;
+    }
+  }
+
+  async function clearCourseCache(courseId: string) {
+    clearingCourseCache = true;
+    try {
+      const res = await adminApi.clearCourseCache(courseId, $auth.token!);
+      toasts.success(`Cache cleared — ${res.repos_cleared} repo(s) invalidated`);
+      // Reload modules to reflect fresh state
+      await openModules(courseId);
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to clear cache');
+    } finally {
+      clearingCourseCache = false;
+    }
+  }
+
+  async function clearModuleCache(courseId: string, index: number) {
+    clearingModuleIdx = index;
+    try {
+      await adminApi.clearModuleCache(courseId, index, $auth.token!);
+      toasts.success('Module cache cleared');
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to clear module cache');
+    } finally {
+      clearingModuleIdx = null;
     }
   }
 
@@ -122,8 +175,19 @@
     return 'badge-blue';
   }
 
-  // Groups not yet enrolled in this course
+  function moduleTypeBadge(type: string) {
+    switch (type) {
+      case 'text':    return 'bg-blue-100 text-blue-700';
+      case 'quiz':    return 'bg-purple-100 text-purple-700';
+      case 'video':   return 'bg-green-100 text-green-700';
+      case 'image':   return 'bg-orange-100 text-orange-700';
+      default:        return 'bg-gray-100 text-gray-600';
+    }
+  }
+
   $: availableGroups = groups.filter(g => !groupEnrollments.some(ge => ge.id === g.id));
+  $: isEnrollmentsOpen = (id: string) => openPanel?.id === id && openPanel.type === 'enrollments';
+  $: isModulesOpen = (id: string) => openPanel?.id === id && openPanel.type === 'modules';
 </script>
 
 <svelte:head><title>Courses — Admin</title></svelte:head>
@@ -159,7 +223,7 @@
                 {/if}
               </div>
               <p class="text-xs text-gray-400">
-                {course.lab_count} lab{course.lab_count !== 1 ? 's' : ''} ·
+                {course.lab_count} module{course.lab_count !== 1 ? 's' : ''} ·
                 {course.enrollment_count} enrolled
               </p>
               {#if course.prerequisites && course.prerequisites.length > 0}
@@ -173,20 +237,99 @@
                 </div>
               {/if}
             </div>
-            <div class="flex items-center gap-3 shrink-0">
+            <div class="flex items-center gap-2 shrink-0">
               {#if course.is_public}
                 <span class="badge-green">Public</span>
               {:else}
                 <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Private</span>
               {/if}
-              <button class="btn-secondary text-xs" on:click={() => openEnrollments(course.id)}>
-                👥 {expandedId === course.id ? 'Close' : 'Enrollments'}
+              <button class="btn-secondary text-xs" on:click={() => togglePanel(course.id, 'modules')}>
+                📦 {isModulesOpen(course.id) ? 'Close' : 'Modules'}
+              </button>
+              <button class="btn-secondary text-xs" on:click={() => togglePanel(course.id, 'enrollments')}>
+                👥 {isEnrollmentsOpen(course.id) ? 'Close' : 'Enrollments'}
               </button>
             </div>
           </div>
 
+          <!-- Modules panel -->
+          {#if isModulesOpen(course.id)}
+            <div class="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-gray-700">
+                  Modules
+                  {#if !modulesLoading}
+                    <span class="text-gray-400 font-normal">({courseModules.length})</span>
+                  {/if}
+                </p>
+                <button
+                  class="btn-secondary text-xs"
+                  on:click={() => clearCourseCache(course.id)}
+                  disabled={clearingCourseCache}>
+                  {clearingCourseCache ? 'Clearing…' : '🗑 Clear course cache'}
+                </button>
+              </div>
+
+              {#if modulesLoading}
+                <p class="text-sm text-gray-400">Loading modules…</p>
+              {:else if courseModules.length === 0}
+                <p class="text-sm text-gray-400">No modules found.</p>
+              {:else}
+                <div class="space-y-1.5">
+                  {#each courseModules as mod}
+                    <div class="bg-white rounded-lg border border-gray-100 px-3 py-2.5">
+                      <div class="flex items-start gap-3">
+                        <!-- Index -->
+                        <span class="text-xs text-gray-400 font-mono mt-0.5 w-5 shrink-0">{mod.index}</span>
+
+                        <!-- Info -->
+                        <div class="flex-1 min-w-0 space-y-1">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-sm font-medium text-gray-800">{mod.name}</span>
+                            <span class="text-xs px-1.5 py-0.5 rounded font-medium {moduleTypeBadge(mod.type)}">{mod.type}</span>
+                            {#if mod.hidden}
+                              <span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">hidden</span>
+                            {/if}
+                          </div>
+                          <code class="text-xs text-gray-400">{mod.slug}</code>
+                          {#if mod.prerequisites && mod.prerequisites.length > 0}
+                            <div class="flex items-center gap-1 flex-wrap">
+                              <span class="text-xs text-gray-400">requires:</span>
+                              {#each mod.prerequisites as prereq}
+                                <code class="text-xs bg-amber-50 text-amber-700 px-1 rounded">{prereq}</code>
+                              {/each}
+                            </div>
+                          {/if}
+                          {#if mod.src}
+                            <div class="text-xs text-gray-400 space-y-0.5">
+                              <div><span class="font-mono">src</span> <span class="text-gray-500">{mod.src}</span></div>
+                              <div><span class="font-mono">ref</span> <span class="text-gray-500">{mod.ref}</span> · <span class="font-mono">path</span> <span class="text-gray-500">{mod.path}</span></div>
+                            </div>
+                          {/if}
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="shrink-0 flex items-center gap-2">
+                          {#if mod.src}
+                            <button
+                              class="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                              title="Clear cache for this module"
+                              on:click={() => clearModuleCache(course.id, mod.index)}
+                              disabled={clearingModuleIdx === mod.index}>
+                              {clearingModuleIdx === mod.index ? '…' : '🗑'}
+                            </button>
+                          {/if}
+                        </div>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
           <!-- Enrollment panel -->
-          {#if expandedId === course.id}
+          {#if isEnrollmentsOpen(course.id)}
             <div class="border-t border-gray-100 bg-gray-50 p-4 space-y-5">
 
               <!-- Group enrollments -->
@@ -214,7 +357,6 @@
                     </div>
                   {/if}
 
-                  <!-- Add group -->
                   {#if availableGroups.length > 0}
                     <div class="flex gap-2">
                       <select class="input flex-1 text-sm" bind:value={enrollGroupId}>

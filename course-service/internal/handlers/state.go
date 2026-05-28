@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -126,7 +127,7 @@ func derefStr(s *string) string {
 }
 
 // ClearCache godoc
-// @Summary   Clear the git content cache (admin)
+// @Summary   Clear the entire git content cache (admin)
 // @Tags      Admin
 // @Security  BearerAuth
 // @Produce   json
@@ -136,6 +137,72 @@ func (s *State) ClearCache(w http.ResponseWriter, r *http.Request) {
 	s.GitCache.Clear()
 	slog.Info("git cache cleared by admin")
 	s.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// ClearCourseCache godoc
+// @Summary   Clear the git cache for all repos used by a course (admin)
+// @Tags      Admin
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Course slug"
+// @Success   200   {object}  map[string]interface{}
+// @Failure   404   {object}  map[string]string
+// @Router    /api/admin/courses/{slug}/cache/clear [post]
+func (s *State) ClearCourseCache(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	c := s.Content.Get(slug)
+	if c == nil {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+	cleared := 0
+	seen := make(map[string]bool)
+	for _, m := range c.Modules {
+		if m.Src == "" || m.Ref == "" {
+			continue
+		}
+		key := m.Src + ":" + m.Ref
+		if !seen[key] {
+			seen[key] = true
+			s.GitCache.ClearRepo(m.Src, m.Ref)
+			cleared++
+		}
+	}
+	slog.Info("course cache cleared", "slug", slug, "repos", cleared)
+	s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "repos_cleared": cleared})
+}
+
+// ClearModuleCache godoc
+// @Summary   Clear the git cache for a specific module (admin)
+// @Tags      Admin
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug   path  string  true  "Course slug"
+// @Param     index  path  int     true  "Module index (0-based)"
+// @Success   200    {object}  map[string]interface{}
+// @Failure   404    {object}  map[string]string
+// @Router    /api/admin/courses/{slug}/modules/{index}/cache/clear [post]
+func (s *State) ClearModuleCache(w http.ResponseWriter, r *http.Request) {
+	slug := param(r, "slug")
+	c := s.Content.Get(slug)
+	if c == nil {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+	modules := s.visibleModules(c, r)
+	idx, err := strconv.Atoi(param(r, "index"))
+	if err != nil || idx < 0 || idx >= len(modules) {
+		s.Error(w, http.StatusNotFound, "Module not found")
+		return
+	}
+	m := modules[idx]
+	if m.Src == "" || m.Ref == "" {
+		s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "repos_cleared": 0})
+		return
+	}
+	s.GitCache.ClearRepo(m.Src, m.Ref)
+	slog.Info("module cache cleared", "slug", slug, "index", idx, "module", m.Name)
+	s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "repos_cleared": 1})
 }
 
 // GET /uploads/{filename}

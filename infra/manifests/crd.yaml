@@ -40,7 +40,7 @@ spec:
                         type: string
                       type:
                         type: string
-                        enum: [video, text, image, quiz]
+                        enum: [video, text, image, quiz, modules]
                       src:
                         type: string
                       ref:

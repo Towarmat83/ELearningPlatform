@@ -44,14 +44,28 @@ func NewState(cfg *config.Config, store *content.Store) *State {
 	return s
 }
 
-// visibleModules returns all modules for admins, or only non-hidden for regular users.
+// visibleModules expands type:modules index entries, then returns all modules
+// for admins or only non-hidden modules for regular users.
 func (s *State) visibleModules(c *content.Course, r *http.Request) []content.Module {
+	expanded := make([]content.Module, 0, len(c.Modules))
+	for _, m := range c.Modules {
+		if m.Type == "modules" {
+			subs, err := content.FetchModuleIndex(s.GitCache, m, s.tokenForRepo(m.Src))
+			if err != nil {
+				slog.Warn("failed to expand module index, skipping", "module", m.Name, "err", err)
+				continue
+			}
+			expanded = append(expanded, subs...)
+		} else {
+			expanded = append(expanded, m)
+		}
+	}
 	claims := s.claims(r)
 	if claims != nil && claims.Role == "admin" {
-		return c.Modules
+		return expanded
 	}
 	var out []content.Module
-	for _, m := range c.Modules {
+	for _, m := range expanded {
 		if !m.Hidden {
 			out = append(out, m)
 		}

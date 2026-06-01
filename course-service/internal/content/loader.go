@@ -2,6 +2,7 @@ package content
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,6 +94,42 @@ func ParseMarkdownLesson(path string, order int) (Lesson, error) {
 		Order:   order,
 		Content: body,
 	}, nil
+}
+
+// FetchModuleIndex fetches and parses a module index YAML file from git.
+// Index entries that omit src or ref inherit them from the parent module.
+func FetchModuleIndex(gc *GitCache, parent Module, token string) ([]Module, error) {
+	data, err := gc.FetchModuleContent(parent.Src, parent.Ref, parent.Path, token)
+	if err != nil {
+		return nil, err
+	}
+	var entries []ModuleIndexEntry
+	if err := yaml.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("parse module index: %w", err)
+	}
+	modules := make([]Module, 0, len(entries))
+	for _, e := range entries {
+		src, ref, typ := e.Src, e.Ref, e.Type
+		if src == "" {
+			src = parent.Src
+		}
+		if ref == "" {
+			ref = parent.Ref
+		}
+		if typ == "" {
+			typ = "text"
+		}
+		modules = append(modules, Module{
+			Name:          e.Name,
+			Type:          typ,
+			Src:           src,
+			Ref:           ref,
+			Path:          e.Path,
+			Hidden:        e.Hidden,
+			Prerequisites: e.Prerequisites,
+		})
+	}
+	return modules, nil
 }
 
 func extractFrontmatter(data []byte) (title, body string) {

@@ -86,6 +86,7 @@ Tout ce qui est DB + auth + relations user↔course.
   - `type: video/image` → sert l'URL
   - `type: text` avec `src` git → clone et lit le fichier
   - `type: quiz` → questions inline ou YAML depuis git, avec score
+  - `type: modules` → fetche un fichier YAML d'index depuis git et expand les entrées en place (héritage `src`/`ref` depuis le parent CRD)
 - Upload et serve de médias (vidéo, image)
 - Appels HTTP vers User Service pour enrollments et progress
 

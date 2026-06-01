@@ -134,6 +134,17 @@ type ModuleYAML struct {
 	LockOnMaxAttempts      bool             `yaml:"lock_on_max_attempts"`
 }
 
+// ModuleIndexEntry is one entry in a module index YAML file (type: modules).
+type ModuleIndexEntry struct {
+	Name          string   `yaml:"name"`
+	Type          string   `yaml:"type,omitempty"`
+	Src           string   `yaml:"src,omitempty"`
+	Ref           string   `yaml:"ref,omitempty"`
+	Path          string   `yaml:"path"`
+	Hidden        bool     `yaml:"hidden,omitempty"`
+	Prerequisites []string `yaml:"prerequisites,omitempty"`
+}
+
 // lessonFrontmatter is the YAML front matter in NN-slug.md files.
 type lessonFrontmatter struct {
 	Title string `yaml:"title"`

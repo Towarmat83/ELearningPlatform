@@ -145,6 +145,19 @@ func (gc *GitCache) Clear() {
 	gc.repos = make(map[string]*cachedRepo)
 }
 
+// ClearRepo removes a single cached repository identified by its URL and branch.
+func (gc *GitCache) ClearRepo(rawURL, branch string) {
+	key := gc.cacheKey(rawURL, branch)
+	gc.mu.Lock()
+	defer gc.mu.Unlock()
+	if cr, ok := gc.repos[key]; ok {
+		if cr.path != "" {
+			os.RemoveAll(cr.path)
+		}
+		delete(gc.repos, key)
+	}
+}
+
 func buildAuthURL(rawURL, token string) string {
 	if token == "" {
 		return rawURL

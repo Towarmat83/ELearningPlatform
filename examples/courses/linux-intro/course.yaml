@@ -9,18 +9,8 @@ spec:
   difficulty: beginner
   public: true
   modules:
-    - name: "Qu'est-ce que Linux ?"
-      type: "text"
+    - name: "Linux Introduction"
+      type: modules
       src: "https://github.com/Towarmat83/ELearningPlatform"
-      ref: "feat/sso-oauth-generic-providers"
-      path: "examples/courses/linux-intro/01-what-is-linux.md"
-    - name: "Naviguer dans le système de fichiers"
-      type: "text"
-      src: "https://github.com/Towarmat83/ELearningPlatform"
-      ref: "feat/sso-oauth-generic-providers"
-      path: "examples/courses/linux-intro/02-navigation.md"
-    - name: "Fichiers, permissions et utilisateurs"
-      type: "text"
-      src: "https://github.com/Towarmat83/ELearningPlatform"
-      ref: "feat/sso-oauth-generic-providers"
-      path: "examples/courses/linux-intro/03-files.md"
+      ref: "feat/issue-20-modules-type"
+      path: "examples/courses/linux-intro/index.yaml"

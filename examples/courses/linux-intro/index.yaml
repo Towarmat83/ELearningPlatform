@@ -1,0 +1,41 @@
+- name: "Qu'est-ce que Linux ?"
+  type: text
+  path: examples/linux-intro/01-what-is-linux.md
+
+- name: "Quiz Bases Linux"
+  type: quiz
+  path: examples/linux-intro/quizzes/quiz-bases-linux.yaml
+  prerequisites:
+    - qu-est-ce-que-linux
+
+- name: "Naviguer dans le système de fichiers"
+  type: text
+  path: examples/linux-intro/02-navigation.md
+  prerequisites:
+    - quiz-bases-linux
+
+- name: "Quiz Navigation"
+  type: quiz
+  path: examples/linux-intro/quizzes/quiz-navigation.yaml
+  prerequisites:
+    - naviguer-dans-le-système-de-fichiers
+
+- name: "Fichiers, permissions et utilisateurs"
+  type: text
+  path: examples/linux-intro/03-files.md
+  prerequisites:
+    - quiz-navigation
+
+- name: "Quiz Fichiers et Permissions"
+  type: quiz
+  path: examples/linux-intro/quizzes/quiz-fichiers-permissions.yaml
+  prerequisites:
+    - fichiers--permissions-et-utilisateurs
+
+- name: "Quiz Final Linux"
+  type: quiz
+  path: examples/linux-intro/quizzes/quiz-final-linux.yaml
+  prerequisites:
+    - quiz-bases-linux
+    - quiz-navigation
+    - quiz-fichiers-et-permissions

@@ -398,7 +398,7 @@ export interface ModuleSummary {
   index: number;
   name: string;
   slug: string;
-  type: 'text' | 'video' | 'image' | 'quiz';
+  type: 'text' | 'video' | 'image' | 'quiz' | 'modules';
   viewed: boolean;
   hidden: boolean;
   locked: boolean;
@@ -407,6 +407,10 @@ export interface ModuleSummary {
   max_score: number;
   passed: boolean;
   attempts: number;
+  // Admin-only
+  src?: string;
+  ref?: string;
+  path?: string;
 }
 
 export interface ModuleQuizConfig {
@@ -492,4 +496,9 @@ export const adminApi = {
     api.post<{ message: string; enrolled: number }>(`/admin/courses/${courseId}/enrollments/groups`, { group_id: groupId }, token),
   unenrollGroup: (courseId: string, groupId: string, token: string) =>
     api.delete(`/admin/courses/${courseId}/enrollments/groups/${groupId}`, token),
+
+  clearCourseCache: (courseSlug: string, token: string) =>
+    api.post<{ status: string; repos_cleared: number }>(`/admin/courses/${courseSlug}/cache/clear`, {}, token),
+  clearModuleCache: (courseSlug: string, index: number, token: string) =>
+    api.post<{ status: string; repos_cleared: number }>(`/admin/courses/${courseSlug}/modules/${index}/cache/clear`, {}, token),
 };

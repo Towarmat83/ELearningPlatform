@@ -71,6 +71,10 @@ type moduleResponse struct {
 	Questions     []any                    `json:"questions,omitempty"`
 	QuizConfig    *quizConfig              `json:"quiz_config,omitempty"`
 	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
+	// Admin-only fields (omitted for regular users)
+	Src  string `json:"src,omitempty"`
+	Ref  string `json:"ref,omitempty"`
+	Path string `json:"path,omitempty"`
 }
 
 type quizConfig struct {
@@ -369,6 +373,11 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			MaxScore:      p.MaxScore,
 			Passed:        p.Passed,
 			Attempts:      p.Attempts,
+		}
+		if claims != nil && claims.Role == "admin" {
+			resp.Src = m.Src
+			resp.Ref = m.Ref
+			resp.Path = m.Path
 		}
 		if m.Type == "quiz" {
 			if m.HasQuestions() {

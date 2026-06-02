@@ -10,6 +10,11 @@ PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
 CRD_FILE       := infra/manifests/crd.yaml
 COURSE_DIR     := examples
 
+REGISTRY       := ghcr.io/towarmat83
+IMAGE_COURSE   := $(REGISTRY)/elearning-course-service:latest
+IMAGE_USER     := $(REGISTRY)/elearning-user-service:latest
+IMAGE_FRONTEND := $(REGISTRY)/elearning-frontend:latest
+
 # ── KinD ────────────────────────────────────────────────────────────────────
 
 .PHONY: kind-create
@@ -27,13 +32,13 @@ kind-delete:
 docker-build: docker-build-course docker-build-user docker-build-frontend
 
 docker-build-course:
-	docker build -t localhost/elearning-course-service:latest course-service
+	docker build -t $(IMAGE_COURSE) course-service
 
 docker-build-user:
-	docker build -t localhost/elearning-user-service:latest  user-service
+	docker build -t $(IMAGE_USER) user-service
 
 docker-build-frontend:
-	docker build -t localhost/elearning-frontend:latest     frontend
+	docker build -t $(IMAGE_FRONTEND) frontend
 
 # ── Kind load ───────────────────────────────────────────────────────────────
 
@@ -42,26 +47,31 @@ docker-build-frontend:
 kind-load: kind-load-course kind-load-user kind-load-frontend
 
 kind-load-course:
-	kind load docker-image localhost/elearning-course-service:latest --name $(KIND_CLUSTER)
+	kind load docker-image $(IMAGE_COURSE) --name $(KIND_CLUSTER)
 
 kind-load-user:
-	kind load docker-image localhost/elearning-user-service:latest  --name $(KIND_CLUSTER)
+	kind load docker-image $(IMAGE_USER) --name $(KIND_CLUSTER)
 
 kind-load-frontend:
-	kind load docker-image localhost/elearning-frontend:latest     --name $(KIND_CLUSTER)
+	kind load docker-image $(IMAGE_FRONTEND) --name $(KIND_CLUSTER)
 
 # ── Quick rebuild + reload (single service) ────────────────────────────────
 
-.PHONY: rebuild-course rebuild-user rebuild-frontend
+.PHONY: rebuild rebuild-course rebuild-user rebuild-frontend
+
+rebuild: rebuild-course rebuild-user rebuild-frontend
 
 rebuild-course: docker-build-course kind-load-course
-	kubectl rollout restart deploy/$(HELM_RELEASE)-course-service
+	kubectl rollout restart deployment/$(HELM_RELEASE)-course-service
+	kubectl rollout status deployment/$(HELM_RELEASE)-course-service --timeout=120s
 
 rebuild-user: docker-build-user kind-load-user
-	kubectl rollout restart deploy/$(HELM_RELEASE)-user-service
+	kubectl rollout restart deployment/$(HELM_RELEASE)-user-service
+	kubectl rollout status deployment/$(HELM_RELEASE)-user-service --timeout=120s
 
 rebuild-frontend: docker-build-frontend kind-load-frontend
-	kubectl rollout restart deploy/$(HELM_RELEASE)-frontend
+	kubectl rollout restart deployment/$(HELM_RELEASE)-frontend
+	kubectl rollout status deployment/$(HELM_RELEASE)-frontend --timeout=120s
 
 # ── Helm ─────────────────────────────────────────────────────────────────────
 

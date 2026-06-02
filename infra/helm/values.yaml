@@ -38,9 +38,9 @@ admin:
 courseService:
   replicaCount: 1
   image:
-    repository: localhost/elearning-course-service
+    repository: ghcr.io/towarmat83/elearning-course-service
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8082
@@ -71,9 +71,9 @@ courseService:
 userService:
   replicaCount: 1
   image:
-    repository: localhost/elearning-user-service
+    repository: ghcr.io/towarmat83/elearning-user-service
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8081
@@ -98,9 +98,9 @@ userService:
 # ── Frontend (SvelteKit) ────────────────────────────────────────────────────
 frontend:
   image:
-    repository: localhost/elearning-frontend
+    repository: ghcr.io/towarmat83/elearning-frontend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 3000

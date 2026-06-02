@@ -78,8 +78,8 @@ jobs:
             --username "${{ github.actor }}" \
             --password-stdin
 
-      - name: Package Helm chart (no external dependencies)
-        run: helm lint infra/helm
+      - name: Lint Helm chart
+        run: helm lint helm
 
       - name: Determine chart version
         id: chart-version
@@ -87,14 +87,14 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
           else
-            BASE=$(grep '^version:' infra/helm/Chart.yaml | awk '{print $2}')
+            BASE=$(grep '^version:' helm/Chart.yaml | awk '{print $2}')
             VERSION="${BASE}-sha.$(git rev-parse --short HEAD)"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Package Helm chart
         run: |
-          helm package infra/helm \
+          helm package helm \
             --version "${{ steps.chart-version.outputs.version }}" \
             --app-version "${{ steps.chart-version.outputs.version }}" \
             --destination /tmp/charts

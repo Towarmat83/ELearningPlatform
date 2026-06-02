@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM golang:1.26-alpine AS builder
+FROM docker.io/library/golang:1.26-alpine AS builder
 
 RUN apk add --no-cache ca-certificates git
 
@@ -14,7 +14,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o course-service .
 
 # Stage 2: Runtime
-FROM alpine:3.21
+FROM docker.io/library/alpine:3.21
 
 RUN apk add --no-cache ca-certificates curl git
 

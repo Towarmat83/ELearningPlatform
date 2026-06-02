@@ -1,0 +1,86 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "elearning.fullname" . }}-postgresql
+  labels:
+    {{- include "elearning.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app.kubernetes.io/name: {{ include "elearning.name" . }}
+    app.kubernetes.io/component: postgresql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "elearning.fullname" . }}-postgresql
+  labels:
+    {{- include "elearning.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "elearning.name" . }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "elearning.name" . }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.postgresql.auth.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.auth.database | quote }}
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresql.auth.username | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          {{- if .Values.postgresql.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          {{- end }}
+      {{- if .Values.postgresql.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "elearning.fullname" . }}-postgresql
+      {{- end }}
+---
+{{- if .Values.postgresql.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "elearning.fullname" . }}-postgresql
+  labels:
+    {{- include "elearning.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  accessModes:
+    - {{ .Values.postgresql.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size }}
+  {{- if .Values.postgresql.persistence.storageClass }}
+  storageClassName: {{ .Values.postgresql.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+{{- end }}

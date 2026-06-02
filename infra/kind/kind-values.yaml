@@ -50,20 +50,6 @@ grafanaIngress:
 
 postgresql:
   enabled: false
-  auth:
-    username: elearning
-    password: elearning_secret
-    database: elearning
-  primary:
-    persistence:
-      enabled: false
-    podSecurityContext:
-      enabled: false
-    containerSecurityContext:
-      enabled: false
-    resources:
-      requests: {}
-      limits: {}
 
 prometheus:
   enabled: false

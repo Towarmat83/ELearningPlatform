@@ -98,7 +98,7 @@ Admin password resolution — priority order:
 {{- end }}
 
 {{/*
-Database URL — bitnami chart or external
+Database URL
 */}}
 {{- define "elearning.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}

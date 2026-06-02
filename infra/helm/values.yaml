@@ -193,9 +193,29 @@ grafanaIngress:
   host: grafana.elearning.local
   tls: []
 
-# ── PostgreSQL (internal — deployed manually as standalone deployment) ───────
+# ── PostgreSQL (optionnel — image officielle postgres:17-alpine) ─────────────
 postgresql:
   enabled: false
+  image:
+    repository: postgres
+    tag: "17-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    username: elearning
+    password: elearning_secret
+    database: elearning
+  persistence:
+    enabled: false
+    size: 5Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
 
 externalDatabase:
   host: "elearning-postgresql"

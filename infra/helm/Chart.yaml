@@ -8,8 +8,7 @@ keywords:
   - elearning
   - education
 
-dependencies:
-  - name: postgresql
-    version: "15.x.x"
-    repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled
+annotations:
+  org.opencontainers.image.source: https://github.com/Towarmat83/ELearningPlatform
+  org.opencontainers.image.description: eLearning Platform — Course Service + User Service + Frontend
+

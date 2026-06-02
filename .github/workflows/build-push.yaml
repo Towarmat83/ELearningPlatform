@@ -2,7 +2,7 @@ name: Build & Push
 
 on:
   push:
-    branches: ["*"]
+    branches: ["**"]
     tags: ["v*"]
 
 concurrency:

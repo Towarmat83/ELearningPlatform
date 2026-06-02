@@ -2,7 +2,7 @@ jwtSecret: "test-jwt-secret-for-kind-cluster-min-32-chars!!"
 
 courseService:
   image:
-    repository: localhost/elearning-course-service
+    repository: ghcr.io/towarmat83/elearning-course-service
     tag: latest
     pullPolicy: IfNotPresent
   service:
@@ -12,7 +12,7 @@ courseService:
 
 userService:
   image:
-    repository: localhost/elearning-user-service
+    repository: ghcr.io/towarmat83/elearning-user-service
     tag: latest
     pullPolicy: IfNotPresent
   env:
@@ -24,7 +24,7 @@ userService:
 
 frontend:
   image:
-    repository: localhost/elearning-frontend
+    repository: ghcr.io/towarmat83/elearning-frontend
     tag: latest
     pullPolicy: IfNotPresent
   origin: "http://localhost:3000"
@@ -50,20 +50,6 @@ grafanaIngress:
 
 postgresql:
   enabled: false
-  auth:
-    username: elearning
-    password: elearning_secret
-    database: elearning
-  primary:
-    persistence:
-      enabled: false
-    podSecurityContext:
-      enabled: false
-    containerSecurityContext:
-      enabled: false
-    resources:
-      requests: {}
-      limits: {}
 
 prometheus:
   enabled: false

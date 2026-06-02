@@ -38,9 +38,9 @@ admin:
 courseService:
   replicaCount: 1
   image:
-    repository: localhost/elearning-course-service
+    repository: ghcr.io/towarmat83/elearning-course-service
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8082
@@ -71,9 +71,9 @@ courseService:
 userService:
   replicaCount: 1
   image:
-    repository: localhost/elearning-user-service
+    repository: ghcr.io/towarmat83/elearning-user-service
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8081
@@ -98,9 +98,9 @@ userService:
 # ── Frontend (SvelteKit) ────────────────────────────────────────────────────
 frontend:
   image:
-    repository: localhost/elearning-frontend
+    repository: ghcr.io/towarmat83/elearning-frontend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 3000
@@ -193,9 +193,29 @@ grafanaIngress:
   host: grafana.elearning.local
   tls: []
 
-# ── PostgreSQL (internal — deployed manually as standalone deployment) ───────
+# ── PostgreSQL (optionnel — image officielle postgres:17-alpine) ─────────────
 postgresql:
   enabled: false
+  image:
+    repository: postgres
+    tag: "17-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    username: elearning
+    password: elearning_secret
+    database: elearning
+  persistence:
+    enabled: false
+    size: 5Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
 
 externalDatabase:
   host: "elearning-postgresql"

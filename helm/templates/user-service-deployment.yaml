@@ -47,6 +47,8 @@ spec:
               key: JWT_SECRET
         - name: CORS_ORIGINS
           value: {{ .Values.userService.env.CORS_ORIGINS | default (include "elearning.publicUrl" .) | quote }}
+        - name: OAUTH_REDIRECT_BASE
+          value: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:

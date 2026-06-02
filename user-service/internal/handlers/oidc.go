@@ -20,6 +20,7 @@ type oidcSettings struct {
 	ClientSecret   string
 	Scopes         []string
 	GroupClaim     string
+	RedirectBase   string // overrides config.OAuthRedirectBase for redirect_uri sent to the provider
 	BrowserBaseURL string // optional: rewrite internal base URL to this for browser redirects
 }
 
@@ -30,6 +31,7 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 		ClientID:       ReadSetting(ctx, s.Pool, "oidc_client_id", ""),
 		ClientSecret:   ReadSetting(ctx, s.Pool, "oidc_client_secret", ""),
 		GroupClaim:     ReadSetting(ctx, s.Pool, "oidc_group_claim", "groups"),
+		RedirectBase:   ReadSetting(ctx, s.Pool, "oidc_redirect_base", s.Config.OAuthRedirectBase),
 		BrowserBaseURL: ReadSetting(ctx, s.Pool, "oidc_browser_base_url", ""),
 	}
 	scopes := ReadSetting(ctx, s.Pool, "oidc_scopes", "openid email profile groups")
@@ -79,7 +81,7 @@ func (s *State) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURI := s.Config.OAuthRedirectBase + "/auth/callback"
+	redirectURI := strings.TrimRight(cfg.RedirectBase, "/") + "/auth/callback"
 
 	provider, err := gooidc.NewProvider(r.Context(), cfg.ProviderURL)
 	if err != nil {
@@ -145,7 +147,7 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURI := s.Config.OAuthRedirectBase + "/auth/callback"
+	redirectURI := strings.TrimRight(cfg.RedirectBase, "/") + "/auth/callback"
 	oauth2Cfg := oauth2.Config{
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,

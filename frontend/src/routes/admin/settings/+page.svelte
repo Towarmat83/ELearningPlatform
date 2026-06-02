@@ -284,6 +284,16 @@
         </div>
 
         <div>
+          <label class="label" for="oidc_redirect_base">Redirect base URL <span class="text-gray-400 font-normal">(optional)</span></label>
+          <p class="text-xs text-gray-400 mb-1">
+            Public URL of this app sent to the OIDC provider as <code class="bg-gray-100 px-1 rounded">redirect_uri</code> (e.g. <code class="bg-gray-100 px-1 rounded">https://elearning.example.com</code>). Defaults to the value set in Helm (<code class="bg-gray-100 px-1 rounded">sso.redirectBase</code>).
+          </p>
+          <input id="oidc_redirect_base" type="text" class="input font-mono text-sm"
+            bind:value={edits['oidc_redirect_base']}
+            placeholder="https://elearning.example.com" />
+        </div>
+
+        <div>
           <label class="label" for="oidc_browser_base_url">Browser base URL <span class="text-gray-400 font-normal">(optional)</span></label>
           <p class="text-xs text-gray-400 mb-1">
             Only needed when Provider URL is cluster-internal. The auth redirect will use this base instead (e.g. <code class="bg-gray-100 px-1 rounded">http://localhost:9000</code>).

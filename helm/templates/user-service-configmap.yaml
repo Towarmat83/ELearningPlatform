@@ -10,7 +10,7 @@ data:
     jwt_expiry_hours: {{ .Values.userService.env.JWT_EXPIRY_HOURS }}
     cors_origins:
       - "{{ include "elearning.publicUrl" . }}"
-    course_service_url: "http://{{ include "elearning.fullname" . }}-course-service:{{ .Values.courseService.service.port }}"
+    course_service_url: "http://{{ include "elearning.fullname" . }}-course-service.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.courseService.service.port }}"
     oauth_redirect_base: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
     {{- if and .Values.sso.enabled .Values.sso.providers }}
     providers:

@@ -166,6 +166,9 @@ ingress:
         - path: /api/my
           pathType: Prefix
           backend: user-service
+        - path: /api/admin/courses
+          pathType: Prefix
+          backend: course-service
         - path: /api/admin
           pathType: Prefix
           backend: user-service

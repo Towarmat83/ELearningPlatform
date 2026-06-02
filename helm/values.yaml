@@ -207,6 +207,8 @@ postgresql:
     username: elearning
     password: elearning_secret
     database: elearning
+    existingSecret: ""         # if set, POSTGRES_PASSWORD is read from this K8s secret
+    existingSecretKey: "db_password"
   persistence:
     enabled: false
     size: 5Gi

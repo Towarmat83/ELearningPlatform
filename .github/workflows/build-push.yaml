@@ -76,8 +76,8 @@ jobs:
             --username "${{ github.actor }}" \
             --password-stdin
 
-      - name: Package Helm chart (no external dependencies)
-        run: helm lint infra/helm
+      - name: Resolve Helm dependencies
+        run: helm dependency build infra/helm
 
       - name: Determine chart version
         id: chart-version

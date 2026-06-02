@@ -25,7 +25,7 @@ spec:
         nameservers:
           - 10.96.0.10
         searches:
-          - default.svc.cluster.local
+          - {{ .Release.Namespace }}.svc.cluster.local
           - svc.cluster.local
           - cluster.local
         options:

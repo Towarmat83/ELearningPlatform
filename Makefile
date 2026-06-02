@@ -3,11 +3,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 KIND_CLUSTER   := elearning
-HELM_DIR       := infra/helm
+HELM_DIR       := helm
 HELM_RELEASE   := elearning
 HELM_VALUES    := infra/kind/kind-values.yaml
 PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
-CRD_FILE       := infra/manifests/crd.yaml
 COURSE_DIR     := examples
 
 REGISTRY       := ghcr.io/towarmat83
@@ -82,7 +81,6 @@ helm-deps:
 .PHONY: helm-install
 helm-install:
 	helm upgrade --install $(HELM_RELEASE) $(HELM_DIR) --values $(HELM_VALUES)
-	kubectl apply -f $(CRD_FILE)
 	-kubectl apply -f infra/manifests/postgresql.yaml
 
 .PHONY: helm-delete
@@ -93,7 +91,6 @@ helm-delete:
 
 .PHONY: apply-courses
 apply-courses:
-	kubectl apply -f $(CRD_FILE)
 	@for f in $(COURSE_DIR)/*/course.yaml; do \
 		echo "Applying $$f..."; \
 		kubectl apply -f "$$f"; \

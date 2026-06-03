@@ -404,6 +404,11 @@ func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName s
 
 	u, err = scanUserPublic(pool.QueryRow(ctx, sel+` WHERE email = $1`, email))
 	if err == nil {
+		// Never silently take over a local account — that would lock out password login.
+		// Only link when the account has no provider yet or already belongs to this provider.
+		if u.AuthProvider != "" && u.AuthProvider != provider {
+			return nil, fmt.Errorf("an account with this email already exists with a different login method (%s)", u.AuthProvider)
+		}
 		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
 			`UPDATE users SET
 			   auth_provider    = $1,

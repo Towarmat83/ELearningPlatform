@@ -19,6 +19,7 @@ var allowedSettingKeys = map[string]bool{
 	// OIDC
 	"oidc_enabled":          true,
 	"oidc_provider_url":     true,
+	"oidc_issuer_url":       true,
 	"oidc_redirect_base":    true,
 	"oidc_browser_base_url": true,
 	"oidc_client_id":        true,

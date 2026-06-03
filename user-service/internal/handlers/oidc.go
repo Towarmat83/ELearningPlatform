@@ -16,6 +16,7 @@ import (
 type oidcSettings struct {
 	Enabled        bool
 	ProviderURL    string
+	IssuerURL      string // when set, bypasses issuer check (split-horizon: internal discovery URL ≠ public issuer)
 	ClientID       string
 	ClientSecret   string
 	Scopes         []string
@@ -28,6 +29,7 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 	cfg := oidcSettings{
 		Enabled:        ReadSetting(ctx, s.Pool, "oidc_enabled", "false") == "true",
 		ProviderURL:    ReadSetting(ctx, s.Pool, "oidc_provider_url", ""),
+		IssuerURL:      ReadSetting(ctx, s.Pool, "oidc_issuer_url", ""),
 		ClientID:       ReadSetting(ctx, s.Pool, "oidc_client_id", ""),
 		ClientSecret:   ReadSetting(ctx, s.Pool, "oidc_client_secret", ""),
 		GroupClaim:     ReadSetting(ctx, s.Pool, "oidc_group_claim", "groups"),
@@ -50,6 +52,16 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 		return cfg, fmt.Errorf("OIDC not fully configured (provider_url, client_id, client_secret required)")
 	}
 	return cfg, nil
+}
+
+// oidcContext returns a context with InsecureIssuerURLContext set when cfg.IssuerURL is provided.
+// This allows the discovery endpoint (ProviderURL) to differ from the issuer claim in tokens,
+// which is necessary in split-horizon setups (e.g. KinD where the internal DNS ≠ browser URL).
+func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
+	if cfg.IssuerURL != "" {
+		return gooidc.InsecureIssuerURLContext(ctx, cfg.IssuerURL)
+	}
+	return ctx
 }
 
 // extractURLBase returns scheme+host from a URL string (e.g. "http://host:80/path" → "http://host:80").
@@ -83,7 +95,8 @@ func (s *State) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	redirectURI := strings.TrimRight(cfg.RedirectBase, "/") + "/auth/callback"
 
-	provider, err := gooidc.NewProvider(r.Context(), cfg.ProviderURL)
+	providerCtx := oidcContext(r.Context(), cfg)
+	provider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
 		s.Error(w, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
 		return
@@ -141,7 +154,8 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oidcProvider, err := gooidc.NewProvider(ctx, cfg.ProviderURL)
+	providerCtx := oidcContext(ctx, cfg)
+	oidcProvider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
 		s.Error(w, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
 		return
@@ -169,7 +183,7 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	verifier := oidcProvider.Verifier(&gooidc.Config{ClientID: cfg.ClientID})
-	idToken, err := verifier.Verify(ctx, rawIDToken)
+	idToken, err := verifier.Verify(providerCtx, rawIDToken)
 	if err != nil {
 		s.Error(w, http.StatusUnauthorized, "ID token verification failed: "+err.Error())
 		return

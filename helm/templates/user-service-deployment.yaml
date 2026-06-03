@@ -52,8 +52,8 @@ spec:
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: {{ include "elearning.fullname" . }}-secrets
-              key: DATABASE_URL
+              name: {{ include "elearning.databaseUrlSecretName" . }}
+              key: {{ include "elearning.databaseUrlSecretKey" . }}
         # ADMIN_PASSWORD is exposed as a file (not an env var) so the kubelet
         # refreshes it automatically when the Secret changes — no pod restart needed.
         - name: ADMIN_PASSWORD_FILE

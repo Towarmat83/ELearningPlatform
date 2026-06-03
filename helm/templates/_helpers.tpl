@@ -84,9 +84,29 @@ Database URL
 */}}
 {{- define "elearning.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}
-postgres://{{ .Values.postgresql.auth.username }}:{{ .Values.postgresql.auth.password }}@{{ include "elearning.fullname" . }}-postgresql:5432/{{ .Values.postgresql.auth.database }}
+postgres://{{ .Values.postgresql.auth.username }}:{{ .Values.postgresql.auth.password }}@{{ include "elearning.fullname" . }}-postgresql.{{ .Release.Namespace }}.svc.cluster.local:5432/{{ .Values.postgresql.auth.database }}
 {{- else -}}
 postgres://{{ .Values.externalDatabase.username }}:{{ .Values.externalDatabase.password }}@{{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}/{{ .Values.externalDatabase.name }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the secret that holds DATABASE_URL.
+When externalDatabase.existingSecret is set, point directly to it.
+*/}}
+{{- define "elearning.databaseUrlSecretName" -}}
+{{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret -}}
+{{ .Values.externalDatabase.existingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.databaseUrlSecretKey" -}}
+{{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret -}}
+{{ .Values.externalDatabase.existingSecretKey | default "DATABASE_URL" }}
+{{- else -}}
+DATABASE_URL
 {{- end -}}
 {{- end }}
 

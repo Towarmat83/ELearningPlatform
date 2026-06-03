@@ -42,19 +42,11 @@ spec:
         env:
         - name: CONFIG_PATH
           value: /etc/course-service/config.yaml
-        - name: GIT_CREDENTIALS_PATH
-          value: /etc/git-credentials/git-credentials.yaml
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: {{ include "elearning.fullname" . }}-secrets
               key: JWT_SECRET
-        - name: PORT
-          value: {{ .Values.courseService.service.port | quote }}
-        - name: USER_SERVICE_URL
-          value: http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}
-        - name: CORS_ORIGINS
-          value: {{ .Values.courseService.env.CORS_ORIGINS | default (include "elearning.publicUrl" .) | quote }}
         volumeMounts:
         - name: config
           mountPath: /etc/course-service

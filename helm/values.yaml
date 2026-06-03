@@ -1,40 +1,35 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # eLearning Platform — Helm Values
-# Override any value with: helm upgrade --set key=value ...
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Shared JWT secret (must match between services)
+# ── Secrets ───────────────────────────────────────────────────────────────────
+
+# Shared JWT secret — must match between services.
 jwtSecret: "change-me-in-production-use-a-long-random-string"
 
-# ── Admin account bootstrap ──────────────────────────────────────────────────
-# The user-service seeds the admin account on startup (idempotent).
-# Three modes (evaluated in this order):
+# ── Admin account ─────────────────────────────────────────────────────────────
+# Seeded by user-service on startup (idempotent). Three modes:
 #
-# Mode 1 — auto-generated (default, recommended):
-#   admin:
-#     password: ""   ← leave empty; a random 32-char password is generated
-#                       on first install and persisted in the platform Secret.
-#                       Retrieve it after install with:
-#                         kubectl get secret <release>-secrets -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d
+#   Mode 1 — auto-generated (default):
+#     Leave password empty. A random 32-char password is generated on first
+#     install and persisted in the release Secret. Retrieve it with:
+#       kubectl get secret <release>-secrets \
+#         -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d
 #
-# Mode 2 — explicit inline password:
-#   admin:
-#     password: "MyStr0ngPassw0rd!"
+#   Mode 2 — explicit:
+#     admin.password: "MyStr0ngPassw0rd!"
 #
-# Mode 3 — existing K8s Secret (Vault / External Secrets / SOPS):
-#   admin:
-#     existingSecret: "my-admin-secret"
-#     existingSecretKey: "ADMIN_PASSWORD"
+#   Mode 3 — existing K8s Secret (Vault / ESO / SOPS):
+#     admin.existingSecret: "my-admin-secret"
 #
-# The value may be cleartext or a pre-computed bcrypt hash
-# (auto-detected: values starting with "$2" are treated as already hashed).
-# On password change the hash is refreshed on the next pod restart (no SQL needed).
+# Passwords may be cleartext or a bcrypt hash (values starting with "$2").
 admin:
-  password: ""               # leave empty to auto-generate on first install
-  existingSecret: ""         # if set, modes 1 & 2 are ignored
+  password: ""
+  existingSecret: ""
   existingSecretKey: "ADMIN_PASSWORD"
 
-# ── Course Service (Go, stateless) ──────────────────────────────────────────
+# ── Services ──────────────────────────────────────────────────────────────────
+
 courseService:
   replicaCount: 1
   image:
@@ -53,11 +48,7 @@ courseService:
       cpu: "200m"
   env:
     JWT_EXPIRY_HOURS: "24"
-    CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
-    UPLOADS_DIR: "/data/uploads"
-    K8S_NAMESPACE: "default"
     GIT_CACHE_TTL: "10"
-    GIT_CREDENTIALS_PATH: "/etc/git-credentials/git-credentials.yaml"
     GIT_TOKEN: ""
   autoscaling:
     enabled: false
@@ -67,7 +58,6 @@ courseService:
     targetMemoryUtilizationPercentage: 80
   nodeSelector: {}
 
-# ── User Service (Go, PostgreSQL) ───────────────────────────────────────────
 userService:
   replicaCount: 1
   image:
@@ -86,7 +76,6 @@ userService:
       cpu: "500m"
   env:
     JWT_EXPIRY_HOURS: "24"
-    CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -95,7 +84,6 @@ userService:
     targetMemoryUtilizationPercentage: 80
   nodeSelector: {}
 
-# ── Frontend (SvelteKit) ────────────────────────────────────────────────────
 frontend:
   image:
     repository: ghcr.io/towarmat83/elearning-frontend
@@ -111,45 +99,41 @@ frontend:
     limits:
       memory: "256Mi"
       cpu: "200m"
-  env:
-    NODE_ENV: "production"
   autoscaling:
     enabled: false
     minReplicas: 1
     maxReplicas: 3
     targetCPUUtilizationPercentage: 70
 
-# ── SSO / OAuth providers (optionnel) ────────────────────────────────────────
-# Chaque provider est un objet générique.
-# Providers OIDC (GitLab, Google, Authentik, Keycloak, …) : fournir issuer_url.
-# GitHub (OAuth2 pur, pas OIDC) : id: github, pas de issuer_url.
-# Exemples :
-#   providers:
-#     - id: gitlab
-#       name: GitLab
-#       client_id: "xxx"
-#       client_secret: "yyy"
-#       issuer_url: "https://gitlab.com"        # optionnel, self-hosted
-#     - id: github
-#       name: GitHub
-#       client_id: "aaa"
-#       client_secret: "bbb"
-#     - id: google
-#       name: Google
-#       client_id: "..."
-#       client_secret: "..."
-#       issuer_url: "https://accounts.google.com"
-#     - id: company-sso
-#       name: "Company SSO"
-#       client_id: "..."
-#       client_secret: "..."
-#       issuer_url: "https://sso.company.com"
+# ── SSO / OAuth ───────────────────────────────────────────────────────────────
+# redirectBase: public URL sent to the OIDC provider as redirect_uri.
+#   Defaults to the ingress host when empty.
+#   Can also be overridden at runtime via the admin UI (oidc_redirect_base setting).
+#
+# Provider examples:
+#   - id: github          # OAuth2 — no issuer_url needed
+#     name: GitHub
+#     client_id: "..."
+#     client_secret: "..."
+#
+#   - id: gitlab
+#     name: GitLab
+#     client_id: "..."
+#     client_secret: "..."
+#     issuer_url: "https://gitlab.com"
+#
+#   - id: google
+#     name: Google
+#     client_id: "..."
+#     client_secret: "..."
+#     issuer_url: "https://accounts.google.com"
 sso:
   enabled: false
-  redirectBase: ""        # defaults to ingress public URL when empty
+  redirectBase: ""
   providers: []
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
+# Path order matters — more specific paths must come before broader ones.
 ingress:
   enabled: true
   className: traefik
@@ -157,39 +141,27 @@ ingress:
   hosts:
     - host: elearning.local
       paths:
-        - path: /api/auth
-          pathType: Prefix
-          backend: user-service
-        - path: /api/settings
-          pathType: Prefix
-          backend: user-service
-        - path: /api/my
-          pathType: Prefix
-          backend: user-service
-        - path: /api/admin/courses
-          pathType: Prefix
-          backend: course-service
-        - path: /api/admin
-          pathType: Prefix
-          backend: user-service
-        - path: /api/courses
-          pathType: Prefix
-          backend: course-service
-        - path: /uploads
-          pathType: Prefix
-          backend: course-service
-        - path: /health
-          pathType: Exact
-          backend: course-service
-        - path: /metrics
-          pathType: Prefix
-          backend: course-service
-        - path: /
-          pathType: Prefix
-          backend: frontend
+        - { path: /api/auth,          pathType: Prefix, backend: user-service   }
+        - { path: /api/settings,      pathType: Prefix, backend: user-service   }
+        - { path: /api/my,            pathType: Prefix, backend: user-service   }
+        - { path: /api/admin/courses, pathType: Prefix, backend: course-service }
+        - { path: /api/admin,         pathType: Prefix, backend: user-service   }
+        - { path: /api/courses,       pathType: Prefix, backend: course-service }
+        - { path: /uploads,           pathType: Prefix, backend: course-service }
+        - { path: /health,            pathType: Exact,  backend: course-service }
+        - { path: /metrics,           pathType: Prefix, backend: course-service }
+        - { path: /,                  pathType: Prefix, backend: frontend       }
   tls: []
 
-# ── PostgreSQL (optionnel — image officielle postgres:17-alpine) ─────────────
+# ── Database ──────────────────────────────────────────────────────────────────
+# Option A — bundled PostgreSQL (dev / small deployments):
+#   postgresql.enabled: true
+#
+# Option B — external database (production):
+#   postgresql.enabled: false
+#   externalDatabase.host: "my-pg.example.com"
+#   externalDatabase.existingSecret: "my-secret"   # contains DATABASE_URL
+
 postgresql:
   enabled: false
   image:
@@ -200,7 +172,7 @@ postgresql:
     username: elearning
     password: elearning_secret
     database: elearning
-    existingSecret: ""         # if set, POSTGRES_PASSWORD is read from this K8s secret
+    existingSecret: ""       # if set, POSTGRES_PASSWORD is sourced from this Secret
     existingSecretKey: "db_password"
   persistence:
     enabled: false
@@ -221,6 +193,5 @@ externalDatabase:
   name: elearning
   username: elearning
   password: "elearning_secret"
-  existingSecret: ""
+  existingSecret: ""           # if set, DATABASE_URL is read from this Secret
   existingSecretKey: "DATABASE_URL"
-

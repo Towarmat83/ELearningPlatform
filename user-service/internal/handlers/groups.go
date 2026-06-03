@@ -45,7 +45,12 @@ func addToDefaultGroup(ctx context.Context, pool *pgxpool.Pool, userID string) {
 // updates the user's group memberships, and returns the highest platform role
 // found in group_role_mappings ('admin' beats 'student'). Defaults to 'student'.
 func syncGroupsAndDeriveRole(ctx context.Context, pool *pgxpool.Pool, userID string, groupNames []string, source string) (string, error) {
-	role := "student"
+	// Start from the user's current role so SSO logins without group mappings
+	// never silently downgrade an existing admin.
+	var role string
+	if err := pool.QueryRow(ctx, `SELECT role FROM users WHERE id = $1::uuid`, userID).Scan(&role); err != nil {
+		role = "student"
+	}
 
 	// Clear current memberships for this user
 	_, err := pool.Exec(ctx,
@@ -54,6 +59,7 @@ func syncGroupsAndDeriveRole(ctx context.Context, pool *pgxpool.Pool, userID str
 		return role, err
 	}
 
+	roleMapped := false
 	for _, name := range groupNames {
 		if name == "" {
 			continue
@@ -85,17 +91,25 @@ func syncGroupsAndDeriveRole(ctx context.Context, pool *pgxpool.Pool, userID str
 		err = pool.QueryRow(ctx,
 			`SELECT platform_role FROM group_role_mappings WHERE group_name = $1`, name).
 			Scan(&mappedRole)
-		if err == nil && mappedRole == "admin" {
-			role = "admin"
+		if err == nil {
+			roleMapped = true
+			if mappedRole == "admin" {
+				role = "admin"
+			} else if role != "admin" {
+				role = mappedRole
+			}
 		}
 	}
 
-	// Apply derived role to user
-	_, err = pool.Exec(ctx,
-		`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2::uuid`,
-		role, userID)
-	if err != nil {
-		return role, err
+	// Only persist the role when group mappings explicitly provided guidance.
+	// Without mappings, keep the existing role unchanged.
+	if roleMapped {
+		_, err = pool.Exec(ctx,
+			`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2::uuid`,
+			role, userID)
+		if err != nil {
+			return role, err
+		}
 	}
 
 	return role, nil

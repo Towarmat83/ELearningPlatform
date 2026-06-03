@@ -1,0 +1,40 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "elearning.fullname" . }}-course-service
+  labels:
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "elearning.courseService.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "elearning.frontend.selectorLabels" . | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "elearning.userService.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: {{ .Values.courseService.service.port }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "elearning.userService.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: {{ .Values.userService.service.port }}
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # External git repos
+    - ports:
+        - port: 443
+        - port: 22
+{{- end }}

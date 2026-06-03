@@ -7,6 +7,16 @@
 # Shared JWT secret — must match between services.
 jwtSecret: "change-me-in-production-use-a-long-random-string"
 
+# Image pull secrets — for private registries.
+# imagePullSecrets:
+#   - name: ghcr-credentials
+imagePullSecrets: []
+
+# NetworkPolicies — restrict pod-to-pod traffic.
+# Requires a CNI that supports NetworkPolicy (Calico, Cilium, Weave…).
+networkPolicy:
+  enabled: false
+
 # ── Admin account ─────────────────────────────────────────────────────────────
 # Seeded by user-service on startup (idempotent). Three modes:
 #
@@ -32,6 +42,20 @@ admin:
 
 courseService:
   replicaCount: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  topologySpreadConstraints: []
+  # Production example — spread across nodes:
+  # topologySpreadConstraints:
+  #   - maxSkew: 1
+  #     topologyKey: kubernetes.io/hostname
+  #     whenUnsatisfiable: DoNotSchedule
+  #     labelSelector:
+  #       matchLabels:
+  #         app.kubernetes.io/component: course-service
   image:
     repository: ghcr.io/towarmat83/elearning-course-service
     tag: latest
@@ -60,6 +84,12 @@ courseService:
 
 userService:
   replicaCount: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  topologySpreadConstraints: []
   image:
     repository: ghcr.io/towarmat83/elearning-user-service
     tag: latest
@@ -85,6 +115,13 @@ userService:
   nodeSelector: {}
 
 frontend:
+  replicaCount: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  topologySpreadConstraints: []
   image:
     repository: ghcr.io/towarmat83/elearning-frontend
     tag: latest

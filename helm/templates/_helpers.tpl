@@ -124,3 +124,17 @@ Public base URL of the app (used for CORS, ORIGIN)
 {{ include "elearning.scheme" . }}://{{ (first .Values.ingress.hosts).host }}
 {{- end }}
 
+{{/*
+Default container security context — restrictive, suitable for all services.
+Override per-container in values if a service needs specific capabilities.
+*/}}
+{{- define "elearning.securityContext" -}}
+runAsNonRoot: true
+runAsUser: 1000
+runAsGroup: 1000
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
+capabilities:
+  drop: [ALL]
+{{- end }}
+

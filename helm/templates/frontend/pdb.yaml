@@ -1,0 +1,13 @@
+{{- if gt (int (.Values.frontend.replicaCount | default 1)) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "elearning.fullname" . }}-frontend
+  labels:
+    {{- include "elearning.frontend.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "elearning.frontend.selectorLabels" . | nindent 6 }}
+{{- end }}

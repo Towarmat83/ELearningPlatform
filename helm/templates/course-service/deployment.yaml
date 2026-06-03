@@ -6,6 +6,8 @@ metadata:
     {{- include "elearning.courseService.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.courseService.replicaCount }}
+  strategy:
+    {{- toYaml .Values.courseService.strategy | nindent 4 }}
   selector:
     matchLabels:
       {{- include "elearning.courseService.selectorLabels" . | nindent 6 }}
@@ -20,21 +22,16 @@ spec:
     spec:
       serviceAccountName: {{ include "elearning.fullname" . }}-course-service
       automountServiceAccountToken: true
-      dnsPolicy: None
-      dnsConfig:
-        nameservers:
-          - 10.96.0.10
-        searches:
-          - {{ .Release.Namespace }}.svc.cluster.local
-          - svc.cluster.local
-          - cluster.local
-        options:
-          - name: ndots
-            value: "5"
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name: course-service
         image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag }}"
         imagePullPolicy: {{ .Values.courseService.image.pullPolicy }}
+        securityContext:
+          {{- include "elearning.securityContext" . | nindent 10 }}
         ports:
         - name: http
           containerPort: {{ .Values.courseService.service.port }}
@@ -68,6 +65,7 @@ spec:
           periodSeconds: 10
         resources:
           {{- toYaml .Values.courseService.resources | nindent 10 }}
+      terminationGracePeriodSeconds: 30
       volumes:
       - name: config
         configMap:
@@ -78,5 +76,9 @@ spec:
           optional: true
       {{- with .Values.courseService.nodeSelector }}
       nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.courseService.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}

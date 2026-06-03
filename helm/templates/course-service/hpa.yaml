@@ -1,0 +1,30 @@
+{{- if .Values.courseService.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "elearning.fullname" . }}-course-service
+  labels:
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "elearning.fullname" . }}-course-service
+  minReplicas: {{ .Values.courseService.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.courseService.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.courseService.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.courseService.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.courseService.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

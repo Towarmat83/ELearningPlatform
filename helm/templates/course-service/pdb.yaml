@@ -1,0 +1,13 @@
+{{- if gt (int .Values.courseService.replicaCount) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "elearning.fullname" . }}-course-service
+  labels:
+    {{- include "elearning.courseService.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "elearning.courseService.selectorLabels" . | nindent 6 }}
+{{- end }}

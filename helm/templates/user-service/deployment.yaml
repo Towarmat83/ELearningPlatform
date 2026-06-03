@@ -6,6 +6,8 @@ metadata:
     {{- include "elearning.userService.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.userService.replicaCount }}
+  strategy:
+    {{- toYaml .Values.userService.strategy | nindent 4 }}
   selector:
     matchLabels:
       {{- include "elearning.userService.selectorLabels" . | nindent 6 }}
@@ -18,21 +20,18 @@ spec:
         prometheus.io/port: "{{ .Values.userService.service.port }}"
         prometheus.io/path: "/metrics"
     spec:
-      dnsPolicy: None
-      dnsConfig:
-        nameservers:
-          - 10.96.0.10
-        searches:
-          - {{ .Release.Namespace }}.svc.cluster.local
-          - svc.cluster.local
-          - cluster.local
-        options:
-          - name: ndots
-            value: "5"
+      serviceAccountName: {{ include "elearning.fullname" . }}-user-service
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name: user-service
         image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"
         imagePullPolicy: {{ .Values.userService.image.pullPolicy }}
+        securityContext:
+          {{- include "elearning.securityContext" . | nindent 10 }}
         ports:
         - name: http
           containerPort: {{ .Values.userService.service.port }}
@@ -45,15 +44,13 @@ spec:
             secretKeyRef:
               name: {{ include "elearning.fullname" . }}-secrets
               key: JWT_SECRET
-        - name: CORS_ORIGINS
-          value: {{ .Values.userService.env.CORS_ORIGINS | default (include "elearning.publicUrl" .) | quote }}
         - name: OAUTH_REDIRECT_BASE
           value: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: {{ include "elearning.fullname" . }}-secrets
-              key: DATABASE_URL
+              name: {{ include "elearning.databaseUrlSecretName" . }}
+              key: {{ include "elearning.databaseUrlSecretKey" . }}
         # ADMIN_PASSWORD is exposed as a file (not an env var) so the kubelet
         # refreshes it automatically when the Secret changes — no pod restart needed.
         - name: ADMIN_PASSWORD_FILE
@@ -65,20 +62,28 @@ spec:
         - name: admin-password
           mountPath: /etc/admin-password
           readOnly: true
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          failureThreshold: 30
+          periodSeconds: 5
         livenessProbe:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 15
           periodSeconds: 30
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: http
           initialDelaySeconds: 5
           periodSeconds: 10
+          failureThreshold: 3
         resources:
           {{- toYaml .Values.userService.resources | nindent 10 }}
+      terminationGracePeriodSeconds: 60
       volumes:
       - name: config
         configMap:
@@ -100,5 +105,9 @@ spec:
           {{- end }}
       {{- with .Values.userService.nodeSelector }}
       nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.userService.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}

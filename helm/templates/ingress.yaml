@@ -33,35 +33,3 @@ spec:
           {{- end }}
     {{- end }}
 {{- end }}
----
-{{- if .Values.grafanaIngress.enabled }}
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ include "elearning.fullname" . }}-grafana
-  labels:
-    {{- include "elearning.grafana.labels" . | nindent 4 }}
-  {{- with .Values.grafanaIngress.annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-spec:
-  {{- if .Values.grafanaIngress.className }}
-  ingressClassName: {{ .Values.grafanaIngress.className }}
-  {{- end }}
-  {{- if .Values.grafanaIngress.tls }}
-  tls:
-    {{- toYaml .Values.grafanaIngress.tls | nindent 4 }}
-  {{- end }}
-  rules:
-    - host: {{ .Values.grafanaIngress.host | quote }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "elearning.fullname" . }}-grafana
-                port:
-                  name: http
-{{- end }}

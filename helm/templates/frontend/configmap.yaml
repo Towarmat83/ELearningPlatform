@@ -7,7 +7,7 @@ metadata:
 data:
   config.env: |
     PORT={{ .Values.frontend.service.port }}
-    NODE_ENV={{ .Values.frontend.env.NODE_ENV }}
+    NODE_ENV=production
     ORIGIN={{ include "elearning.publicUrl" . }}
     PUBLIC_API_URL={{ include "elearning.publicUrl" . }}
     INTERNAL_API_URL=http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}

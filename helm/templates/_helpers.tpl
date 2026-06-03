@@ -35,15 +35,6 @@ app.kubernetes.io/component: user-service
 app.kubernetes.io/component: frontend
 {{- end }}
 
-{{- define "elearning.prometheus.labels" -}}
-{{ include "elearning.labels" . }}
-app.kubernetes.io/component: prometheus
-{{- end }}
-
-{{- define "elearning.grafana.labels" -}}
-{{ include "elearning.labels" . }}
-app.kubernetes.io/component: grafana
-{{- end }}
 
 {{/*
 Selector labels
@@ -63,15 +54,6 @@ app.kubernetes.io/name: {{ include "elearning.name" . }}
 app.kubernetes.io/component: frontend
 {{- end }}
 
-{{- define "elearning.prometheus.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "elearning.name" . }}
-app.kubernetes.io/component: prometheus
-{{- end }}
-
-{{- define "elearning.grafana.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "elearning.name" . }}
-app.kubernetes.io/component: grafana
-{{- end }}
 
 {{/*
 Admin password resolution — priority order:
@@ -102,9 +84,29 @@ Database URL
 */}}
 {{- define "elearning.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}
-postgres://{{ .Values.postgresql.auth.username }}:{{ .Values.postgresql.auth.password }}@{{ include "elearning.fullname" . }}-postgresql:5432/{{ .Values.postgresql.auth.database }}
+postgres://{{ .Values.postgresql.auth.username }}:{{ .Values.postgresql.auth.password }}@{{ include "elearning.fullname" . }}-postgresql.{{ .Release.Namespace }}.svc.cluster.local:5432/{{ .Values.postgresql.auth.database }}
 {{- else -}}
 postgres://{{ .Values.externalDatabase.username }}:{{ .Values.externalDatabase.password }}@{{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}/{{ .Values.externalDatabase.name }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the secret that holds DATABASE_URL.
+When externalDatabase.existingSecret is set, point directly to it.
+*/}}
+{{- define "elearning.databaseUrlSecretName" -}}
+{{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret -}}
+{{ .Values.externalDatabase.existingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.databaseUrlSecretKey" -}}
+{{- if and (not .Values.postgresql.enabled) .Values.externalDatabase.existingSecret -}}
+{{ .Values.externalDatabase.existingSecretKey | default "DATABASE_URL" }}
+{{- else -}}
+DATABASE_URL
 {{- end -}}
 {{- end }}
 
@@ -123,8 +125,16 @@ Public base URL of the app (used for CORS, ORIGIN)
 {{- end }}
 
 {{/*
-Prometheus internal service URL
+Default container security context — restrictive, suitable for all services.
+Override per-container in values if a service needs specific capabilities.
 */}}
-{{- define "elearning.prometheusUrl" -}}
-http://{{ include "elearning.fullname" . }}-prometheus:{{ .Values.prometheus.service.port }}
+{{- define "elearning.securityContext" -}}
+runAsNonRoot: true
+runAsUser: 1000
+runAsGroup: 1000
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
+capabilities:
+  drop: [ALL]
 {{- end }}
+

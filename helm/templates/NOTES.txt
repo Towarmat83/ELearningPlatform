@@ -10,15 +10,6 @@
   User Service   : http://{{ include "elearning.fullname" . }}-user-service:{{ .Values.userService.service.port }}
   Frontend       : kubectl port-forward svc/{{ include "elearning.fullname" . }}-frontend 3000:3000
 {{- end }}
-{{- if and .Values.prometheus.enabled .Values.ingress.enabled }}
-
-📊 Prometheus: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (first .Values.ingress.hosts).host }}/metrics
-{{- end }}
-{{- if .Values.grafanaIngress.enabled }}
-
-📈 Grafana: http{{ if .Values.grafanaIngress.tls }}s{{ end }}://{{ .Values.grafanaIngress.host }}
-  Admin password: {{ .Values.grafana.adminPassword }}
-{{- end }}
 
 🔑 JWT secret: {{ .Values.jwtSecret | trunc 8 }}...
 

@@ -35,15 +35,6 @@ app.kubernetes.io/component: user-service
 app.kubernetes.io/component: frontend
 {{- end }}
 
-{{- define "elearning.prometheus.labels" -}}
-{{ include "elearning.labels" . }}
-app.kubernetes.io/component: prometheus
-{{- end }}
-
-{{- define "elearning.grafana.labels" -}}
-{{ include "elearning.labels" . }}
-app.kubernetes.io/component: grafana
-{{- end }}
 
 {{/*
 Selector labels
@@ -63,15 +54,6 @@ app.kubernetes.io/name: {{ include "elearning.name" . }}
 app.kubernetes.io/component: frontend
 {{- end }}
 
-{{- define "elearning.prometheus.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "elearning.name" . }}
-app.kubernetes.io/component: prometheus
-{{- end }}
-
-{{- define "elearning.grafana.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "elearning.name" . }}
-app.kubernetes.io/component: grafana
-{{- end }}
 
 {{/*
 Admin password resolution — priority order:
@@ -122,9 +104,3 @@ Public base URL of the app (used for CORS, ORIGIN)
 {{ include "elearning.scheme" . }}://{{ (first .Values.ingress.hosts).host }}
 {{- end }}
 
-{{/*
-Prometheus internal service URL
-*/}}
-{{- define "elearning.prometheusUrl" -}}
-http://{{ include "elearning.fullname" . }}-prometheus:{{ .Values.prometheus.service.port }}
-{{- end }}

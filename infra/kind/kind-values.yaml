@@ -15,8 +15,6 @@ userService:
     repository: ghcr.io/towarmat83/elearning-user-service
     tag: latest
     pullPolicy: IfNotPresent
-  env:
-    CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
   service:
     type: NodePort
     port: 8081
@@ -27,7 +25,6 @@ frontend:
     repository: ghcr.io/towarmat83/elearning-frontend
     tag: latest
     pullPolicy: IfNotPresent
-  origin: "http://localhost:3000"
   service:
     type: NodePort
     port: 3000
@@ -45,17 +42,11 @@ sso:
 ingress:
   enabled: false
 
-grafanaIngress:
-  enabled: false
-
 postgresql:
-  enabled: false
-
-prometheus:
-  enabled: false
-
-grafana:
-  enabled: false
-
-serviceMonitor:
-  enabled: false
+  enabled: true
+  auth:
+    username: elearning
+    password: elearning_secret
+    database: elearning
+  persistence:
+    enabled: false

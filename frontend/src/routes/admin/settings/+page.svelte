@@ -294,6 +294,16 @@
         </div>
 
         <div>
+          <label class="label" for="oidc_issuer_url">Issuer URL override <span class="text-gray-400 font-normal">(optional)</span></label>
+          <p class="text-xs text-gray-400 mb-1">
+            Split-horizon only: public issuer URL embedded in tokens when Provider URL is a cluster-internal address (e.g. <code class="bg-gray-100 px-1 rounded">http://localhost:9090</code>). Leave empty in production.
+          </p>
+          <input id="oidc_issuer_url" type="text" class="input font-mono text-sm"
+            bind:value={edits['oidc_issuer_url']}
+            placeholder="http://localhost:9090" />
+        </div>
+
+        <div>
           <label class="label" for="oidc_browser_base_url">Browser base URL <span class="text-gray-400 font-normal">(optional)</span></label>
           <p class="text-xs text-gray-400 mb-1">
             Only needed when Provider URL is cluster-internal. The auth redirect will use this base instead (e.g. <code class="bg-gray-100 px-1 rounded">http://localhost:9000</code>).

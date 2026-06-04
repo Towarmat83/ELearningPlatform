@@ -20,6 +20,7 @@ import (
 type State struct {
 	Config          *config.Config
 	Content         *content.Store
+	Patterns        *content.PatternStore
 	GitCreds        *content.GitCredentialStore
 	CooldownTracker *content.CooldownTracker
 	GitCache        *content.GitCache

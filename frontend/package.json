@@ -24,7 +24,8 @@
     "vite": "^5.2.11"
   },
   "dependencies": {
-    "lucide-svelte": "^0.379.0"
+    "lucide-svelte": "^0.379.0",
+    "yaml": "^2.0.0"
   },
   "type": "module"
 }

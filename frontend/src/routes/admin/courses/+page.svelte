@@ -3,6 +3,7 @@
   import { slide } from 'svelte/transition';
   import { adminApi, modulesApi, groupsApi, type Course, type CourseEnrollment, type Group, type ModuleSummary } from '$lib/api';
   import { auth, toasts } from '$lib/stores';
+  import { stringify as yamlStringify } from 'yaml';
 
   let courses: Course[] = [];
   let groups: Group[] = [];
@@ -201,21 +202,281 @@
   $: availableGroups = groups.filter(g => !groupEnrollments.some(ge => ge.id === g.id));
   $: panelCommonRepo = commonRepo(courseModules);
   $: enrollmentCount = enrollments.length + groupEnrollments.length;
+
+  // ── Module CRD management ────────────────────────────────────────────────────
+  type ModuleDraft = {
+    name: string;
+    type: string;
+    src: string;
+    ref: string;
+    path: string;
+    hidden: boolean;
+    quiz_ref: string;
+  };
+
+  const emptyModuleDraft = (): ModuleDraft => ({
+    name: '', type: 'text', src: '', ref: 'main', path: '', hidden: false, quiz_ref: '',
+  });
+
+  let moduleDraft: ModuleDraft | null = null;
+  let moduleDraftCourseId: string | null = null;
+  let moduleDraftEditIndex: number | null = null; // null = create
+  let moduleSaving = false;
+
+  function startAddModule(courseId: string) {
+    moduleDraft = emptyModuleDraft();
+    moduleDraftCourseId = courseId;
+    moduleDraftEditIndex = null;
+  }
+
+  function startEditModule(courseId: string, mod: ModuleSummary) {
+    moduleDraft = {
+      name: mod.name,
+      type: mod.type,
+      src: mod.src ?? '',
+      ref: mod.ref ?? 'main',
+      path: mod.path ?? '',
+      hidden: mod.hidden ?? false,
+      quiz_ref: '',
+    };
+    moduleDraftCourseId = courseId;
+    moduleDraftEditIndex = mod.index;
+  }
+
+  function cancelModuleDraft() {
+    moduleDraft = null;
+    moduleDraftCourseId = null;
+    moduleDraftEditIndex = null;
+  }
+
+  function moduleDraftToSpec(d: ModuleDraft): Record<string, any> {
+    const m: Record<string, any> = { name: d.name, type: d.type };
+    if (d.src)      m.src  = d.src;
+    if (d.ref)      m.ref  = d.ref;
+    if (d.path)     m.path = d.path;
+    if (d.hidden)   m.hidden = true;
+    if (d.quiz_ref) m.quiz_ref = d.quiz_ref;
+    return m;
+  }
+
+  async function saveModuleDraft() {
+    if (!moduleDraft || !moduleDraftCourseId) return;
+    moduleSaving = true;
+    try {
+      const crd = await adminApi.getCourseCRD(moduleDraftCourseId, $auth.token!);
+      const spec = crd.spec as any;
+      const mods: any[] = spec.modules ?? [];
+
+      if (moduleDraftEditIndex !== null) {
+        mods[moduleDraftEditIndex] = moduleDraftToSpec(moduleDraft);
+      } else {
+        mods.push(moduleDraftToSpec(moduleDraft));
+      }
+
+      await adminApi.updateCourseCRD(moduleDraftCourseId, { spec: { ...spec, modules: mods } }, $auth.token!);
+      toasts.success(moduleDraftEditIndex !== null ? 'Module updated' : 'Module added');
+      const reloadId = moduleDraftCourseId;
+      cancelModuleDraft();
+      await loadModules(reloadId);
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to save module');
+    } finally {
+      moduleSaving = false;
+    }
+  }
+
+  async function deleteModule(courseId: string, index: number, name: string) {
+    if (!confirm(`Remove module "${name}"?`)) return;
+    try {
+      const crd = await adminApi.getCourseCRD(courseId, $auth.token!);
+      const spec = crd.spec as any;
+      const mods: any[] = (spec.modules ?? []).filter((_: any, i: number) => i !== index);
+      await adminApi.updateCourseCRD(courseId, { spec: { ...spec, modules: mods } }, $auth.token!);
+      toasts.success(`Module "${name}" removed`);
+      await loadModules(courseId);
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to delete module');
+    }
+  }
+
+  // ── CRD management ──────────────────────────────────────────────────────────
+  type CourseDraft = {
+    slug: string;
+    title: string;
+    description: string;
+    category: string;
+    difficulty: string;
+    is_public: boolean;
+  };
+
+  const emptyDraft = (): CourseDraft => ({
+    slug: '', title: '', description: '', category: '', difficulty: 'beginner', is_public: false,
+  });
+
+  let draft: CourseDraft | null = null;
+  let editingSlug: string | null = null;
+  let crdSaving = false;
+
+  // YAML view modal (read-only)
+  let yamlModal: { yaml: string; slug: string } | null = null;
+
+  function startCreateDraft() {
+    draft = emptyDraft();
+    editingSlug = null;
+  }
+
+  async function startEditDraft(course: Course) {
+    try {
+      const res = await adminApi.getCourseCRD(course.id, $auth.token!);
+      const spec = res.spec as any;
+      draft = {
+        slug: course.id,
+        title: spec.title ?? course.title ?? '',
+        description: spec.description ?? course.description ?? '',
+        category: spec.category ?? course.category ?? '',
+        difficulty: spec.difficulty ?? course.difficulty ?? 'beginner',
+        is_public: spec.public ?? course.is_public ?? false,
+      };
+      editingSlug = course.id;
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to load CRD');
+    }
+  }
+
+  async function saveDraft() {
+    if (!draft) return;
+    crdSaving = true;
+    try {
+      const spec = {
+        title: draft.title,
+        ...(draft.description ? { description: draft.description } : {}),
+        ...(draft.category    ? { category: draft.category }       : {}),
+        ...(draft.difficulty  ? { difficulty: draft.difficulty }   : {}),
+        public: draft.is_public,
+      };
+      if (editingSlug) {
+        await adminApi.updateCourseCRD(editingSlug, { spec }, $auth.token!);
+        toasts.success(`Course "${editingSlug}" updated`);
+      } else {
+        await adminApi.createCourse({ slug: draft.slug, spec }, $auth.token!);
+        toasts.success(`Course "${draft.slug}" created`);
+      }
+      draft = null;
+      editingSlug = null;
+      await loadCourses();
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to save course');
+    } finally {
+      crdSaving = false;
+    }
+  }
+
+  async function openCourseYAML(course: Course) {
+    try {
+      const res = await adminApi.getCourseCRD(course.id, $auth.token!);
+      const yaml = `# kubectl apply -f course.yaml\n` + yamlStringify({
+        apiVersion: 'elearning.example.com/v1',
+        kind: 'Course',
+        metadata: { name: course.id, namespace: 'default' },
+        spec: res.spec,
+      });
+      yamlModal = { yaml, slug: course.id };
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to load CRD');
+    }
+  }
+
+  async function deleteCourse(course: Course) {
+    if (!confirm(`Delete course "${course.title}" (${course.id})? This removes the CRD from the cluster.`)) return;
+    try {
+      await adminApi.deleteCourseCRD(course.id, $auth.token!);
+      courses = courses.filter(c => c.id !== course.id);
+      if (openId === course.id) openId = null;
+      toasts.success(`Course "${course.title}" deleted`);
+    } catch (e: any) {
+      toasts.error(e.message || 'Failed to delete course');
+    }
+  }
+
+  $: slugValid = draft && !editingSlug ? /^[a-z0-9-]+$/.test(draft.slug) : true;
 </script>
 
 <svelte:head><title>Courses — Admin</title></svelte:head>
 
 <div class="p-8 max-w-5xl space-y-4">
-  <h2 class="text-2xl font-bold text-gray-900">Courses</h2>
+  <div class="flex items-center justify-between">
+    <h2 class="text-2xl font-bold text-gray-900">Courses</h2>
+    {#if !draft}
+      <button class="btn-primary" on:click={startCreateDraft}>+ New course</button>
+    {/if}
+  </div>
+
+  <!-- ── Create / Edit form ── -->
+  {#if draft}
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <h3 class="font-semibold text-gray-800">{editingSlug ? `Edit — ${editingSlug}` : 'New course'}</h3>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label" for="course-slug">Slug <span class="text-red-400">*</span></label>
+          <input id="course-slug" type="text" class="input font-mono"
+            bind:value={draft.slug}
+            disabled={!!editingSlug}
+            placeholder="my-course" />
+          {#if draft.slug && !slugValid}
+            <p class="text-xs text-red-500 mt-1">Lowercase letters, numbers and hyphens only.</p>
+          {/if}
+        </div>
+        <div>
+          <label class="label" for="course-title">Title <span class="text-red-400">*</span></label>
+          <input id="course-title" type="text" class="input" bind:value={draft.title} placeholder="Introduction to Kubernetes" />
+        </div>
+      </div>
+
+      <div>
+        <label class="label" for="course-desc">Description</label>
+        <textarea id="course-desc" class="input h-20 resize-y" bind:value={draft.description}
+          placeholder="A short description of the course…" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label" for="course-category">Category</label>
+          <input id="course-category" type="text" class="input" bind:value={draft.category} placeholder="DevOps" />
+        </div>
+        <div>
+          <label class="label" for="course-difficulty">Difficulty</label>
+          <select id="course-difficulty" class="input" bind:value={draft.difficulty}>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" class="rounded" bind:checked={draft.is_public} />
+        <span class="text-sm text-gray-700">Public <span class="text-gray-400 text-xs">(visible without enrollment)</span></span>
+      </label>
+
+      <div class="flex gap-2 pt-2">
+        <button class="btn-primary" on:click={saveDraft}
+          disabled={crdSaving || !draft.title.trim() || (!editingSlug && (!draft.slug.trim() || !slugValid))}>
+          {crdSaving ? 'Saving…' : editingSlug ? 'Save changes' : 'Create course'}
+        </button>
+        <button class="btn-secondary" on:click={() => { draft = null; editingSlug = null; }}>Cancel</button>
+      </div>
+    </div>
+  {/if}
 
   {#if loading}
     <div class="text-center py-10 text-gray-400">Loading…</div>
-  {:else if courses.length === 0}
+  {:else if courses.length === 0 && !draft}
     <div class="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400">
-      <p class="text-lg mb-2">No courses loaded</p>
-      <p class="text-sm">Courses are managed through Kubernetes CRDs.</p>
+      <p class="text-lg mb-2">No courses yet</p>
+      <p class="text-sm">Click <strong>+ New course</strong> to create your first course.</p>
     </div>
-  {:else}
+  {:else if courses.length > 0}
     <div class="space-y-2">
       {#each courses as course}
         <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -253,6 +514,14 @@
                   {/each}
                 </div>
               {/if}
+            </div>
+            <div class="flex items-center gap-1 shrink-0" on:click|stopPropagation>
+              <button class="text-xs text-violet-600 hover:text-violet-800 font-medium px-2 py-1 rounded hover:bg-violet-50"
+                on:click={() => openCourseYAML(course)}>⎈ YAML</button>
+              <button class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+                on:click={() => startEditDraft(course)}>Edit</button>
+              <button class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50"
+                on:click={() => deleteCourse(course)}>Delete</button>
             </div>
             <svg
               class="w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 {openId === course.id ? 'rotate-180' : ''}"
@@ -303,34 +572,99 @@
                           <svg class="w-4 h-4 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M23.546 10.93L13.067.452c-.604-.603-1.582-.603-2.188 0L8.708 2.627l2.76 2.76c.645-.215 1.379-.07 1.889.441.516.515.658 1.258.438 1.9l2.658 2.66c.645-.223 1.387-.078 1.9.435.721.72.721 1.884 0 2.604-.719.719-1.881.719-2.6 0-.539-.541-.674-1.337-.404-1.996L12.86 8.955v6.525c.176.086.342.203.488.348.713.721.713 1.883 0 2.6-.719.721-1.889.721-2.609 0-.719-.719-.719-1.879 0-2.598.182-.18.387-.316.605-.406V8.835c-.217-.091-.424-.222-.604-.401-.545-.545-.676-1.342-.396-2.009L7.636 3.7.45 10.881c-.6.605-.6 1.584 0 2.189l10.48 10.477c.604.604 1.582.604 2.186 0l10.43-10.43c.605-.603.605-1.582 0-2.187"/>
                           </svg>
-                          <a
-                            href={panelCommonRepo.src}
-                            target="_blank"
-                            rel="noopener"
+                          <a href={panelCommonRepo.src} target="_blank" rel="noopener"
                             class="text-sm font-mono text-gray-600 hover:text-blue-600 hover:underline truncate"
-                            on:click|stopPropagation>
-                            {panelCommonRepo.src}
-                          </a>
+                            on:click|stopPropagation>{panelCommonRepo.src}</a>
                           <span class="text-gray-300">@</span>
-                          <span class="text-sm font-mono font-semibold text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded shrink-0">
-                            {panelCommonRepo.ref}
-                          </span>
+                          <span class="text-sm font-mono font-semibold text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded shrink-0">{panelCommonRepo.ref}</span>
                         </div>
                       {/if}
                     </div>
-                    <button
-                      class="btn-secondary text-xs shrink-0"
-                      on:click|stopPropagation={() => clearCourseCache(course.id)}
-                      disabled={clearingCourseCache}
-                      title="Invalidate all git caches used by this course">
-                      {clearingCourseCache ? 'Clearing…' : '🗑 Clear all caches'}
-                    </button>
+                    <div class="flex gap-2 shrink-0">
+                      {#if moduleDraftCourseId !== course.id}
+                        <button class="btn-primary text-xs"
+                          on:click|stopPropagation={() => startAddModule(course.id)}>
+                          + Add module
+                        </button>
+                      {/if}
+                      <button class="btn-secondary text-xs"
+                        on:click|stopPropagation={() => clearCourseCache(course.id)}
+                        disabled={clearingCourseCache}
+                        title="Invalidate all git caches used by this course">
+                        {clearingCourseCache ? 'Clearing…' : '🗑 Clear caches'}
+                      </button>
+                    </div>
                   </div>
+
+                  <!-- Module form (add / edit) -->
+                  {#if moduleDraftCourseId === course.id && moduleDraft}
+                    <div class="bg-white rounded-lg border border-blue-200 p-4 space-y-3" transition:slide={{ duration: 150 }}>
+                      <p class="text-xs font-semibold text-blue-700">{moduleDraftEditIndex !== null ? `Edit module #${moduleDraftEditIndex}` : 'New module'}</p>
+
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label class="label text-xs" for="mod-name-{course.id}">Name <span class="text-red-400">*</span></label>
+                          <input id="mod-name-{course.id}" type="text" class="input text-sm"
+                            bind:value={moduleDraft.name} placeholder="Introduction" />
+                        </div>
+                        <div>
+                          <label class="label text-xs" for="mod-type-{course.id}">Type</label>
+                          <select id="mod-type-{course.id}" class="input text-sm" bind:value={moduleDraft.type}>
+                            <option value="text">text</option>
+                            <option value="video">video</option>
+                            <option value="image">image</option>
+                            <option value="quiz">quiz</option>
+                            <option value="modules">modules (index)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label class="label text-xs" for="mod-src-{course.id}">Git repo URL</label>
+                          <input id="mod-src-{course.id}" type="text" class="input text-sm font-mono"
+                            bind:value={moduleDraft.src} placeholder="https://github.com/org/repo" />
+                        </div>
+                        <div>
+                          <label class="label text-xs" for="mod-ref-{course.id}">Branch / tag / commit</label>
+                          <input id="mod-ref-{course.id}" type="text" class="input text-sm font-mono"
+                            bind:value={moduleDraft.ref} placeholder="main" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label class="label text-xs" for="mod-path-{course.id}">Path in repo</label>
+                        <input id="mod-path-{course.id}" type="text" class="input text-sm font-mono"
+                          bind:value={moduleDraft.path} placeholder="modules/01-intro/index.md" />
+                      </div>
+
+                      {#if moduleDraft.type === 'quiz'}
+                        <div>
+                          <label class="label text-xs" for="mod-quizref-{course.id}">Quiz ref (path to quiz YAML)</label>
+                          <input id="mod-quizref-{course.id}" type="text" class="input text-sm font-mono"
+                            bind:value={moduleDraft.quiz_ref} placeholder="quizzes/01-intro.yaml" />
+                        </div>
+                      {/if}
+
+                      <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" class="rounded" bind:checked={moduleDraft.hidden} />
+                        <span class="text-xs text-gray-700">Hidden <span class="text-gray-400">(not visible to students)</span></span>
+                      </label>
+
+                      <div class="flex gap-2 pt-1">
+                        <button class="btn-primary text-xs" on:click|stopPropagation={saveModuleDraft}
+                          disabled={moduleSaving || !moduleDraft.name.trim()}>
+                          {moduleSaving ? 'Saving…' : moduleDraftEditIndex !== null ? 'Save changes' : 'Add module'}
+                        </button>
+                        <button class="btn-secondary text-xs" on:click|stopPropagation={cancelModuleDraft}>Cancel</button>
+                      </div>
+                    </div>
+                  {/if}
 
                   {#if modulesLoading}
                     <p class="text-sm text-gray-400">Loading modules…</p>
                   {:else if courseModules.length === 0}
-                    <p class="text-sm text-gray-400">No modules found.</p>
+                    <p class="text-sm text-gray-400">No modules yet. Click <strong>+ Add module</strong> to add the first one.</p>
                   {:else}
                     <div class="space-y-1.5">
                       {#each courseModules as mod}
@@ -355,25 +689,28 @@
                                 </div>
                               {/if}
                               {#if mod.path}
-                                <p class="text-sm text-gray-500 font-mono">
-                                  {mod.path}
-                                  {#if mod.src && (!panelCommonRepo || mod.src !== panelCommonRepo.src || mod.ref !== panelCommonRepo.ref)}
-                                    <span class="text-gray-300 mx-1">·</span>
-                                    <span class="text-gray-400">{mod.src} @ {mod.ref}</span>
+                                <p class="text-xs text-gray-500 font-mono truncate">
+                                  {mod.path}{#if mod.src && (!panelCommonRepo || mod.src !== panelCommonRepo.src || mod.ref !== panelCommonRepo.ref)}
+                                    <span class="text-gray-300 mx-1">·</span>{mod.src} @ {mod.ref}
                                   {/if}
                                 </p>
                               {/if}
                             </div>
-                            {#if mod.src}
-                              <button
-                                class="shrink-0 text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 rounded px-2 py-1 transition-colors whitespace-nowrap"
-                                aria-label="Clear git cache for {mod.name}"
-                                title="Clears the git cache for this module's repo — other modules sharing the same repo will also be refreshed"
-                                on:click|stopPropagation={() => clearModuleCache(course.id, mod.index)}
-                                disabled={clearingModuleIdx === mod.index}>
-                                {clearingModuleIdx === mod.index ? 'Clearing…' : 'Clear cache'}
-                              </button>
-                            {/if}
+                            <div class="flex gap-1 shrink-0 items-center">
+                              {#if mod.src}
+                                <button
+                                  class="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 rounded px-2 py-1 transition-colors"
+                                  title="Clear git cache"
+                                  on:click|stopPropagation={() => clearModuleCache(course.id, mod.index)}
+                                  disabled={clearingModuleIdx === mod.index}>
+                                  {clearingModuleIdx === mod.index ? '…' : '🗑'}
+                                </button>
+                              {/if}
+                              <button class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+                                on:click|stopPropagation={() => startEditModule(course.id, mod)}>Edit</button>
+                              <button class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50"
+                                on:click|stopPropagation={() => deleteModule(course.id, mod.index, mod.name)}>Delete</button>
+                            </div>
                           </div>
                         </div>
                       {/each}
@@ -486,3 +823,25 @@
     </div>
   {/if}
 </div>
+
+<!-- ── YAML view modal (read-only) ── -->
+{#if yamlModal}
+  <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    on:click|self={() => yamlModal = null}>
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl flex flex-col gap-4 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-gray-800">CRD — {yamlModal.slug}</h2>
+        <button class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          on:click={() => yamlModal = null}>×</button>
+      </div>
+      <pre class="bg-gray-900 text-green-300 text-xs rounded-lg p-4 overflow-auto max-h-96 font-mono">{yamlModal.yaml}</pre>
+      <div class="flex gap-2 justify-end">
+        <button class="btn-secondary"
+          on:click={() => { if (yamlModal) navigator.clipboard.writeText(yamlModal.yaml).then(() => toasts.success('Copied')); }}>
+          Copy
+        </button>
+        <button class="btn-secondary" on:click={() => yamlModal = null}>Close</button>
+      </div>
+    </div>
+  </div>
+{/if}

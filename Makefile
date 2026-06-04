@@ -10,9 +10,9 @@ PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
 COURSE_DIR     := examples
 
 REGISTRY       := ghcr.io/towarmat83
-IMAGE_COURSE   := $(REGISTRY)/elearning-course-service:latest
-IMAGE_USER     := $(REGISTRY)/elearning-user-service:latest
-IMAGE_FRONTEND := $(REGISTRY)/elearning-frontend:latest
+IMAGE_COURSE   := localhost/elearning-course-service:local
+IMAGE_USER     := localhost/elearning-user-service:local
+IMAGE_FRONTEND := localhost/elearning-frontend:local
 
 # ── KinD ────────────────────────────────────────────────────────────────────
 

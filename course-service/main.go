@@ -36,6 +36,7 @@ func main() {
 	store := content.NewStore()
 
 	s := handlers.NewState(cfg, store)
+	s.Patterns = content.NewPatternStore()
 
 	watcher, err := content.NewK8sWatcher(store, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
@@ -48,6 +49,14 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("K8s CRD watcher started", "namespace", cfg.K8sNamespace)
+
+	patternWatcher, err := content.NewPatternWatcher(s.Patterns, cfg.Kubeconfig, cfg.K8sNamespace)
+	if err != nil {
+		slog.Warn("MarkdownPattern watcher unavailable", "err", err)
+	} else {
+		patternWatcher.Start(ctx)
+		slog.Info("MarkdownPattern CRD watcher started", "namespace", cfg.K8sNamespace)
+	}
 
 	r := handlers.BuildRouter(s, cfg, true)
 

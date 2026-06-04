@@ -18,6 +18,7 @@
     { href: '/admin/groups', label: 'Groups', icon: '🏷️' },
     { href: '/admin/leaderboard', label: 'Leaderboard', icon: '🏆' },
     { href: '/admin/monitoring', label: 'Monitoring', icon: '📈' },
+    { href: '/admin/patterns', label: 'Patterns', icon: '🎨' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
   ];
 </script>

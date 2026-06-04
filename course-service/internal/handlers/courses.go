@@ -249,7 +249,11 @@ func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 	}
 	if !c.IsPublic {
 		claims := s.claims(r)
-		if claims == nil || !s.isEnrolled(r, slug, claims.Subject) {
+		if claims == nil {
+			s.Error(w, http.StatusNotFound, "Course not found")
+			return
+		}
+		if claims.Role != "admin" && !s.isEnrolled(r, slug, claims.Subject) {
 			s.Error(w, http.StatusNotFound, "Course not found")
 			return
 		}

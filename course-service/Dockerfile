@@ -32,7 +32,7 @@ ENV PORT=8082 \
     UPLOADS_DIR="./uploads" \
     KUBECONFIG="" \
     K8S_NAMESPACE="default" \
-    USER_SERVICE_URL="http://user-service:8081" \
+    USER_SERVICE_URL="" \
     GIT_TOKEN="" \
     GIT_CREDENTIALS_PATH="/etc/course-service/git-credentials.yaml"
 

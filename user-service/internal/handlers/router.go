@@ -101,6 +101,7 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Get("/api/admin/groups/mappings", s.ListGroupMappings)
 		r.Post("/api/admin/groups/mappings", s.UpsertGroupMapping)
 		r.Delete("/api/admin/groups/mappings/{group_name}", s.DeleteGroupMapping)
+
 	})
 
 	// ── Internal API (for Course Service, no auth — rely on network policy) ──────

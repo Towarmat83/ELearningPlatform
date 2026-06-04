@@ -21,7 +21,7 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: {{ include "elearning.fullname" . }}-user-service
-      automountServiceAccountToken: false
+      automountServiceAccountToken: true
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

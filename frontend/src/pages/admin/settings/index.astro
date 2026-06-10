@@ -1,0 +1,390 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+<Admin title="Paramètres">
+  <style is:global>
+    .toggle {
+      width: 44px; height: 24px; border-radius: 12px;
+      background: #d1d5db; position: relative; flex-shrink: 0;
+      transition: background .2s; cursor: pointer; border: none;
+    }
+    .toggle.on { background: #22c55e; }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: white; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+      transition: transform .2s; pointer-events: none;
+    }
+    .toggle.on .toggle-thumb { transform: translateX(20px); }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .setting-label p { font-size: .875rem; font-weight: 500; color: var(--ink); margin-bottom: 2px; }
+    .setting-label small { font-size: .75rem; color: var(--ink-soft); }
+    .section { margin-bottom: 20px; }
+    .section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+    .stack { display: flex; flex-direction: column; gap: 16px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .warn-box { background: #fffbeb; border: 1px solid #fbbf24; border-radius: var(--radius); padding: 12px; font-size: .8rem; color: #92400e; }
+    .info-box { background: var(--blue-soft); border: 1px solid var(--blue); border-radius: var(--radius); padding: 12px; font-size: .8rem; color: var(--blue-deep); }
+    .pwd-preview { background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+    .pwd-preview p { font-size: .75rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
+    .pwd-preview ul { list-style: none; display: flex; flex-direction: column; gap: 3px; }
+    .pwd-preview li { font-size: .78rem; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
+    .pwd-preview li::before { content: '✓'; color: #22c55e; font-weight: 700; }
+    .domain-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .domain-chip { background: #dcfce7; color: #166534; font-size: .72rem; font-family: monospace; padding: 2px 8px; border-radius: 100px; }
+  </style>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+    <div>
+      <h1 style="font-size:1.5rem">Paramètres</h1>
+      <p class="text-soft text-sm" style="margin-top:4px">Configuration runtime — les changements prennent effet immédiatement.</p>
+    </div>
+    <button class="btn btn-primary" id="save-btn" disabled>Enregistrer</button>
+  </div>
+
+  <div id="loading" class="loading-state" style="padding:48px 0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div>
+
+  <div id="settings-body" style="display:none;max-width:680px">
+
+    <!-- ── Inscription ── -->
+    <div class="card section">
+      <h2>📝 Inscription</h2>
+      <div class="stack">
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Inscription ouverte</p>
+            <small>Quand désactivé, seuls les admins peuvent créer des comptes.</small>
+          </div>
+          <button type="button" class="toggle" id="toggle-registration_enabled"><span class="toggle-thumb"></span></button>
+        </div>
+        <div>
+          <label class="label" for="f-registration_email_whitelist">Domaines autorisés (whitelist)</label>
+          <small class="text-soft" style="display:block;margin-bottom:6px">Séparés par des virgules. Laisser vide pour tout autoriser. Ex : <code>company.com, partner.org</code></small>
+          <input class="input" id="f-registration_email_whitelist" type="text" placeholder="company.com, partner.org" />
+          <div id="domain-chips" class="domain-chips"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Politique de mot de passe ── -->
+    <div class="card section">
+      <h2>🔑 Politique de mot de passe</h2>
+      <div class="stack">
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Longueur minimale</p>
+            <small>S'applique à l'inscription et au changement de mot de passe.</small>
+          </div>
+          <input class="input" id="f-password_min_length" type="number" min="4" max="128" style="width:80px;text-align:center" />
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Exiger une majuscule</p>
+            <small>Au moins un caractère A–Z.</small>
+          </div>
+          <button type="button" class="toggle" id="toggle-password_require_uppercase"><span class="toggle-thumb"></span></button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Exiger un chiffre</p>
+            <small>Au moins un chiffre 0–9.</small>
+          </div>
+          <button type="button" class="toggle" id="toggle-password_require_number"><span class="toggle-thumb"></span></button>
+        </div>
+        <div class="pwd-preview">
+          <p>Règles actuelles :</p>
+          <ul id="pwd-rules"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Profils ── -->
+    <div class="card section">
+      <h2>👤 Profils utilisateurs</h2>
+      <div class="setting-row">
+        <div class="setting-label">
+          <p>Autoriser le changement de pseudo</p>
+          <small>Permettre aux utilisateurs de modifier leur pseudo dans leur profil.</small>
+        </div>
+        <button type="button" class="toggle" id="toggle-profile_allow_username_change"><span class="toggle-thumb"></span></button>
+      </div>
+    </div>
+
+    <!-- ── SSO ── -->
+    <div class="card section">
+      <h2>🔐 SSO &amp; Authentification</h2>
+      <div class="stack">
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Autoriser la connexion locale</p>
+            <small>Email + mot de passe. Désactiver pour forcer le SSO uniquement.</small>
+          </div>
+          <button type="button" class="toggle" id="toggle-sso_local_login_enabled"><span class="toggle-thumb"></span></button>
+        </div>
+        <div id="local-login-warn" style="display:none" class="warn-box">
+          ⚠️ La connexion locale est désactivée. Assurez-vous qu'au moins un fournisseur SSO est configuré.
+        </div>
+        <div>
+          <label class="label" for="f-gitlab_url">URL instance GitLab</label>
+          <small class="text-soft" style="display:block;margin-bottom:6px">Override pour un GitLab self-hosted. Les credentials OAuth sont dans les variables d'environnement.</small>
+          <input class="input" id="f-gitlab_url" type="text" placeholder="https://gitlab.com" />
+        </div>
+      </div>
+    </div>
+
+    <!-- ── OIDC ── -->
+    <div class="card section">
+      <h2>🌐 OIDC (OpenID Connect)</h2>
+      <p class="text-soft text-sm" style="margin-top:-10px;margin-bottom:14px">SSO avec Authentik, Keycloak, Azure AD, Google Workspace…</p>
+      <div class="stack">
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Activer l'authentification OIDC</p>
+            <small>Affiche le bouton OIDC sur la page de connexion.</small>
+          </div>
+          <button type="button" class="toggle" id="toggle-oidc_enabled"><span class="toggle-thumb"></span></button>
+        </div>
+        <div id="oidc-warn" style="display:none" class="warn-box">
+          ⚠️ OIDC est activé mais aucune Provider URL n'est définie.
+        </div>
+        <div>
+          <label class="label" for="f-oidc_provider_url">URL de découverte du provider</label>
+          <small class="text-soft" style="display:block;margin-bottom:6px">Ex Authentik : <code>https://auth.example.com/application/o/&lt;slug&gt;</code>. Utiliser l'URL interne au cluster en K8s.</small>
+          <input class="input" id="f-oidc_provider_url" type="text" placeholder="https://auth.example.com/application/o/elearning" />
+        </div>
+        <div>
+          <label class="label" for="f-oidc_redirect_base">URL de base pour redirect <span class="text-soft" style="font-weight:400">(optionnel)</span></label>
+          <small class="text-soft" style="display:block;margin-bottom:6px">URL publique envoyée comme <code>redirect_uri</code> au provider. Défaut : valeur Helm <code>sso.redirectBase</code>.</small>
+          <input class="input" id="f-oidc_redirect_base" type="text" placeholder="https://elearning.example.com" />
+        </div>
+        <div>
+          <label class="label" for="f-oidc_issuer_url">Override issuer URL <span class="text-soft" style="font-weight:400">(optionnel)</span></label>
+          <small class="text-soft" style="display:block;margin-bottom:6px">Uniquement pour split-horizon : issuer public quand la Provider URL est une adresse interne.</small>
+          <input class="input" id="f-oidc_issuer_url" type="text" placeholder="http://localhost:9090" />
+        </div>
+        <div>
+          <label class="label" for="f-oidc_browser_base_url">URL navigateur <span class="text-soft" style="font-weight:400">(optionnel)</span></label>
+          <small class="text-soft" style="display:block;margin-bottom:6px">Seulement si la Provider URL est interne. Le redirect auth utilisera cette base.</small>
+          <input class="input" id="f-oidc_browser_base_url" type="text" placeholder="http://localhost:9000" />
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="label" for="f-oidc_client_id">Client ID</label>
+            <input class="input" id="f-oidc_client_id" type="text" placeholder="client-id" />
+          </div>
+          <div>
+            <label class="label" for="f-oidc_client_secret">Client Secret</label>
+            <input class="input" id="f-oidc_client_secret" type="password" placeholder="••••••••" autocomplete="new-password" />
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="label" for="f-oidc_scopes">Scopes</label>
+            <small class="text-soft" style="display:block;margin-bottom:6px">Séparés par des espaces. Inclure <code>groups</code> pour la sync des groupes.</small>
+            <input class="input" id="f-oidc_scopes" type="text" placeholder="openid email profile groups" />
+          </div>
+          <div>
+            <label class="label" for="f-oidc_group_claim">Claim des groupes</label>
+            <small class="text-soft" style="display:block;margin-bottom:6px">Claim JWT contenant la liste des groupes.</small>
+            <input class="input" id="f-oidc_group_claim" type="text" placeholder="groups" />
+          </div>
+        </div>
+        <div class="info-box">
+          Les groupes OIDC sont mappés aux rôles depuis la page <a href="/admin/groups" style="font-weight:600;text-decoration:underline">Groupes</a>.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LDAP ── -->
+    <div class="card section">
+      <h2>🗂️ LDAP / Active Directory</h2>
+      <p class="text-soft text-sm" style="margin-top:-10px;margin-bottom:14px">Authentification via Authentik LDAP, OpenLDAP, Active Directory…</p>
+      <div class="stack">
+        <div class="setting-row">
+          <div class="setting-label">
+            <p>Activer l'authentification LDAP</p>
+            <small>Affiche l'option LDAP sur la page de connexion.</small>
+          </div>
+          <button type="button" class="toggle" id="toggle-ldap_enabled"><span class="toggle-thumb"></span></button>
+        </div>
+        <div>
+          <label class="label" for="f-ldap_server_url">URL du serveur</label>
+          <input class="input" id="f-ldap_server_url" type="text" placeholder="ldap://authentik.example.com:389" />
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="label" for="f-ldap_bind_dn">DN du compte de service</label>
+            <small class="text-soft" style="display:block;margin-bottom:6px">Utilisé pour rechercher dans l'annuaire.</small>
+            <input class="input" id="f-ldap_bind_dn" type="text" style="font-size:.8rem" placeholder="cn=service,ou=accounts,dc=example,dc=com" />
+          </div>
+          <div>
+            <label class="label" for="f-ldap_bind_password">Mot de passe du compte</label>
+            <input class="input" id="f-ldap_bind_password" type="password" placeholder="••••••••" autocomplete="new-password" style="margin-top:26px" />
+          </div>
+        </div>
+        <div>
+          <label class="label" for="f-ldap_user_base_dn">User base DN</label>
+          <input class="input" id="f-ldap_user_base_dn" type="text" style="font-size:.8rem" placeholder="ou=users,dc=ldap,dc=goauthentik,dc=io" />
+        </div>
+        <div>
+          <label class="label" for="f-ldap_user_filter">Filtre de recherche utilisateur</label>
+          <small class="text-soft" style="display:block;margin-bottom:6px"><code>%s</code> est remplacé par l'email de l'utilisateur.</small>
+          <input class="input" id="f-ldap_user_filter" type="text" placeholder="(mail=%s)" />
+        </div>
+        <div>
+          <label class="label" for="f-ldap_group_base_dn">Group base DN <span class="text-soft" style="font-weight:400">(optionnel)</span></label>
+          <input class="input" id="f-ldap_group_base_dn" type="text" style="font-size:.8rem" placeholder="ou=groups,dc=ldap,dc=goauthentik,dc=io" />
+        </div>
+        <div>
+          <label class="label" for="f-ldap_group_filter">Filtre de recherche groupe</label>
+          <small class="text-soft" style="display:block;margin-bottom:6px"><code>%s</code> est remplacé par le DN de l'utilisateur (jusqu'à 3 fois).</small>
+          <input class="input" id="f-ldap_group_filter" type="text" style="font-size:.8rem" placeholder="(|(member=%s)(uniqueMember=%s)(memberUid=%s))" />
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;padding-bottom:32px">
+      <button class="btn btn-primary" id="save-bottom">Enregistrer</button>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+
+    async function api(path: string, opts: { method?: string; body?: unknown } = {}) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      const res = await fetch('/api' + path, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as any).error || `HTTP ${res.status}`); }
+      return res.status === 204 ? null : res.json();
+    }
+
+    // Edits map: key → string value
+    const edits: Record<string, string> = {};
+
+    // ── Toggle helper ──
+    function initToggle(key: string, defaultVal = 'false') {
+      if (!(key in edits)) edits[key] = defaultVal;
+      const btn = document.getElementById('toggle-' + key) as HTMLButtonElement | null;
+      if (!btn) return;
+      btn.classList.toggle('on', edits[key] === 'true');
+      btn.addEventListener('click', () => {
+        edits[key] = edits[key] === 'true' ? 'false' : 'true';
+        btn.classList.toggle('on', edits[key] === 'true');
+        updateDependentUI();
+      });
+    }
+
+    // ── Input helper ──
+    function initInput(key: string, defaultVal = '') {
+      if (!(key in edits)) edits[key] = defaultVal;
+      const el = document.getElementById('f-' + key) as HTMLInputElement | HTMLTextAreaElement | null;
+      if (!el) return;
+      el.value = edits[key];
+      const handler = () => { edits[key] = el.value; updateDependentUI(); };
+      el.addEventListener('input', handler);
+      el.addEventListener('change', handler); // catches number inputs and selects
+    }
+
+    // ── Update conditional UI ──
+    function updateDependentUI() {
+      // Local login warning
+      const localWarn = document.getElementById('local-login-warn')!;
+      localWarn.style.display = edits['sso_local_login_enabled'] === 'false' ? 'block' : 'none';
+
+      // OIDC warning when enabled but no provider URL
+      const oidcWarn = document.getElementById('oidc-warn')!;
+      oidcWarn.style.display = edits['oidc_enabled'] === 'true' && !edits['oidc_provider_url']?.trim() ? 'block' : 'none';
+
+      // Password rules preview
+      const minLen = parseInt(edits['password_min_length'] || '8') || 8;
+      const rules: string[] = [`Au moins ${minLen} caractères`];
+      if (edits['password_require_uppercase'] === 'true') rules.push('Au moins une majuscule (A–Z)');
+      if (edits['password_require_number'] === 'true') rules.push('Au moins un chiffre (0–9)');
+      document.getElementById('pwd-rules')!.innerHTML = rules.map(r => `<li>${r}</li>`).join('');
+
+      // Domain chips preview
+      const whitelist = edits['registration_email_whitelist'] || '';
+      const domains = whitelist.split(',').map(s => s.trim()).filter(Boolean);
+      document.getElementById('domain-chips')!.innerHTML = domains.map(d => `<span class="domain-chip">@${d}</span>`).join('');
+    }
+
+    // ── Load settings from API ──
+    async function load() {
+      try {
+        const res = await api('/admin/settings');
+        const settings: { key: string; value: string }[] = res.settings || [];
+        for (const s of settings) edits[s.key] = s.value;
+
+        // Initialize all toggles
+        initToggle('registration_enabled', 'true');
+        initToggle('password_require_uppercase', 'false');
+        initToggle('password_require_number', 'false');
+        initToggle('profile_allow_username_change', 'true');
+        initToggle('sso_local_login_enabled', 'true');
+        initToggle('oidc_enabled', 'false');
+        initToggle('ldap_enabled', 'false');
+
+        // Initialize all text inputs
+        initInput('registration_email_whitelist');
+        initInput('password_min_length', '8');
+        initInput('gitlab_url');
+        initInput('oidc_provider_url');
+        initInput('oidc_redirect_base');
+        initInput('oidc_issuer_url');
+        initInput('oidc_browser_base_url');
+        initInput('oidc_client_id');
+        initInput('oidc_client_secret');
+        initInput('oidc_scopes');
+        initInput('oidc_group_claim');
+        initInput('ldap_server_url');
+        initInput('ldap_bind_dn');
+        initInput('ldap_bind_password');
+        initInput('ldap_user_base_dn');
+        initInput('ldap_user_filter');
+        initInput('ldap_group_base_dn');
+        initInput('ldap_group_filter');
+
+        updateDependentUI();
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('settings-body')!.style.display = 'block';
+        // Enable save buttons now that settings are loaded
+        (document.getElementById('save-btn') as HTMLButtonElement).disabled = false;
+      } catch (e: any) {
+        document.getElementById('loading')!.innerHTML = `<p style="color:var(--bad);padding:24px">${e.message}</p>`;
+      }
+    }
+
+    // ── Save all settings ──
+    async function save() {
+      const body: Record<string, string> = {};
+      // Collect all edits — skip empty password fields to avoid clearing them
+      for (const [k, v] of Object.entries(edits)) {
+        if ((k === 'oidc_client_secret' || k === 'ldap_bind_password') && !v) continue;
+        body[k] = v;
+      }
+
+      const btns = [
+        document.getElementById('save-btn') as HTMLButtonElement,
+        document.getElementById('save-bottom') as HTMLButtonElement,
+      ];
+      btns.forEach(b => { b.disabled = true; b.textContent = 'Enregistrement…'; });
+      try {
+        await api('/admin/settings', { method: 'PUT', body });
+        (window as any).showToast?.('Paramètres enregistrés', 'success');
+      } catch (err: any) {
+        (window as any).showToast?.(err.message || 'Erreur', 'error');
+      } finally {
+        btns.forEach(b => { b.disabled = false; b.textContent = 'Enregistrer'; });
+      }
+    }
+
+    document.getElementById('save-btn')!.addEventListener('click', save);
+    document.getElementById('save-bottom')!.addEventListener('click', save);
+
+    load();
+  </script>
+</Admin>

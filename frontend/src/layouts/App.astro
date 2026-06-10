@@ -1,0 +1,105 @@
+---
+import Base from './Base.astro';
+
+export interface Props {
+  title?: string;
+  description?: string;
+  activePage?: string;
+}
+
+const { title, description, activePage } = Astro.props;
+---
+<Base title={title} description={description}>
+  <nav class="topnav">
+    <a href="/courses" class="brand">
+      <img src="/pioupitre.png" alt="pioupitre" />
+      <span>pupitre</span>
+    </a>
+    <a href="/courses" class={`navlink${activePage === 'catalogue' ? ' active' : ''}`} id="nav-catalogue">Catalogue</a>
+    <a href="/my-courses" class={`navlink${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
+    <div class="nav-spacer"></div>
+    <slot name="nav-extra" />
+    <div id="nav-user">
+      <a href="/login" class="btn btn-secondary btn-sm" id="nav-login-link">Se connecter</a>
+    </div>
+  </nav>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <slot />
+
+  <script>
+    // Populate nav user from localStorage
+    function initNav() {
+      const raw = localStorage.getItem('user');
+      if (!raw) return;
+      try {
+        const user = JSON.parse(raw);
+        const navUser = document.getElementById('nav-user');
+        if (!navUser) return;
+
+        const initial = (user.username || '?')[0].toUpperCase();
+        const avatarEl = user.avatar_url
+          ? `<img src="${user.avatar_url}" alt="${user.username}" class="nav-avatar" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="nav-avatar-initial" style="display:none">${initial}</div>`
+          : `<div class="nav-avatar-initial">${initial}</div>`;
+
+        navUser.innerHTML = `
+          <a href="/profile" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit" title="${user.username}">
+            ${avatarEl}
+            <span style="font-size:.875rem;font-weight:500;color:var(--ink-soft);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${user.username}</span>
+          </a>
+          ${user.role === 'admin' ? '<a href="/admin" class="btn btn-secondary btn-sm">Admin</a>' : ''}
+          <button id="nav-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
+        `;
+
+        document.getElementById('nav-logout')?.addEventListener('click', () => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        });
+      } catch { /* ignore */ }
+    }
+
+    initNav();
+
+    // Toast system
+    window.addEventListener('toast', (e: Event) => {
+      const { message, type = 'info' } = (e as CustomEvent).detail;
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+
+      const icons: Record<string, string> = {
+        info: 'ℹ️', success: '✓', error: '✕', warning: '⚠'
+      };
+
+      toast.innerHTML = `<span>${icons[type] ?? 'ℹ️'}</span><span>${message}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all .25s';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    });
+
+    function showToast(message: string, type = 'info') {
+      window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }));
+    }
+
+    // Make showToast globally available
+    (window as any).showToast = showToast;
+  </script>
+
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+  </style>
+</Base>

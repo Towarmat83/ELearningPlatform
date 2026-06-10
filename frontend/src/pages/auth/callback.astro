@@ -1,0 +1,91 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base title="Connexion…">
+  <div style="min-height:100vh;background:var(--page);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div class="card" style="width:100%;max-width:380px;text-align:center;padding:48px 40px">
+      <div id="loading-state">
+        <div style="width:48px;height:48px;border:3px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 20px"></div>
+        <h2 style="margin-bottom:8px">Finalisation de la connexion…</h2>
+        <p class="text-soft text-sm">Veuillez patienter pendant la vérification de votre identité.</p>
+      </div>
+      <div id="error-state" style="display:none">
+        <div style="font-size:2.5rem;margin-bottom:16px">✕</div>
+        <h2 style="color:var(--bad);margin-bottom:8px">Connexion échouée</h2>
+        <p id="error-msg" class="text-soft text-sm" style="margin-bottom:24px"></p>
+        <a href="/login" class="btn btn-primary">Retour à la connexion</a>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <script>
+    function showError(msg: string) {
+      document.getElementById('loading-state')!.style.display = 'none';
+      document.getElementById('error-state')!.style.display = 'block';
+      document.getElementById('error-msg')!.textContent = msg;
+    }
+
+    async function apiFetch(path: string, opts: { method?: string; body?: unknown } = {}) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const res = await fetch('/api' + path, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    function decodeStateProvider(state: string): string {
+      try {
+        const payload = JSON.parse(atob(state.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return payload.provider || '';
+      } catch {
+        return '';
+      }
+    }
+
+    async function handleCallback() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const state = params.get('state');
+      const error = params.get('error');
+
+      if (error) {
+        showError(error === 'access_denied'
+          ? 'Accès refusé — vous avez annulé la connexion.'
+          : `Erreur OAuth : ${error}`);
+        return;
+      }
+
+      if (!code || !state) {
+        showError('Paramètres OAuth manquants. Veuillez réessayer.');
+        return;
+      }
+
+      try {
+        const provider = decodeStateProvider(state);
+        const res = provider === 'oidc'
+          ? await apiFetch('/auth/oidc/callback', { method: 'POST', body: { code, state } })
+          : await apiFetch('/auth/oauth/callback', { method: 'POST', body: { code, state } });
+
+        localStorage.setItem('token', (res as any).token);
+        localStorage.setItem('user', JSON.stringify((res as any).user));
+
+        const user = (res as any).user;
+        window.location.href = user?.role === 'admin' ? '/admin' : '/courses';
+      } catch (e: any) {
+        showError(e.message || 'Authentification SSO échouée. Veuillez réessayer.');
+      }
+    }
+
+    handleCallback();
+  </script>
+</Base>

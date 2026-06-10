@@ -1,0 +1,328 @@
+---
+import App from '../../../layouts/App.astro';
+---
+<App title="Cours" activePage="catalogue">
+  <style is:global>
+    .course-page {
+      display: grid;
+      grid-template-columns: 330px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 56px);
+      align-items: flex-start;
+    }
+    .course-sidebar {
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+      border-right: 1px solid var(--line);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .course-thumb {
+      width: 100%;
+      height: 160px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue-soft), #c8e4fd);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .course-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .course-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .course-main {
+      padding: 24px 28px;
+    }
+    .course-main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .mod-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .15s, background .15s;
+      margin-bottom: 8px;
+    }
+    .mod-row:hover { border-color: var(--blue); background: var(--blue-soft); }
+    .mod-row.current { border-color: var(--blue); background: var(--blue-soft); }
+    .mod-row.locked { opacity: .5; pointer-events: none; }
+    .mod-icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--fill);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+    }
+    .mod-icon.quiz { background: var(--orange-soft); }
+    .mod-icon.done { background: var(--good-soft); }
+    .mod-name { flex: 1; font-weight: 500; font-size: .9rem; }
+    .mod-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .course-page { grid-template-columns: 280px 1fr; }
+    }
+    @media (max-width: 640px) {
+      .course-page { grid-template-columns: 1fr; }
+      .course-sidebar {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+        overflow-y: visible;
+        padding: 20px 16px;
+        gap: 12px;
+      }
+      .course-thumb { height: 180px; }
+      .course-main { padding: 20px 16px; }
+    }
+  </style>
+
+  <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+
+  <div id="not-found" style="display:none;text-align:center;padding:80px 24px">
+    <div style="font-size:3rem;margin-bottom:16px">😕</div>
+    <h2>Cours introuvable</h2>
+    <a href="/courses" class="btn btn-primary" style="margin-top:16px;display:inline-flex">Retour au catalogue</a>
+  </div>
+
+  <div id="course-content" class="course-page" style="display:none">
+    <!-- Left sticky sidebar -->
+    <aside class="course-sidebar">
+      <div class="course-thumb" id="thumb-area">📚</div>
+      <h1 id="course-title" style="font-size:1.1rem;font-weight:700;line-height:1.35"></h1>
+      <div id="course-tags" class="course-tags"></div>
+      <p id="course-desc" class="text-soft text-sm" style="line-height:1.6;font-size:.85rem"></p>
+      <div id="enroll-area"></div>
+      <div id="course-meta" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px;margin-top:4px"></div>
+    </aside>
+
+    <!-- Right: module list -->
+    <div class="course-main">
+      <div class="course-main-header">
+        <h2 style="font-size:1rem;font-weight:700">Contenu du cours</h2>
+        <span id="module-count" class="text-soft text-sm"></span>
+      </div>
+      <div id="modules-list"></div>
+      <div id="modules-empty" style="display:none;padding:48px 24px;text-align:center;color:var(--ink-soft)">
+        <div style="font-size:2.5rem;margin-bottom:12px">📭</div>
+        <p>Inscrivez-vous pour accéder aux modules.</p>
+      </div>
+      <div id="prereq-blocked" style="display:none;background:var(--orange-soft);border:1.5px solid var(--orange);border-radius:14px;padding:32px;text-align:center">
+        <div style="font-size:2rem;margin-bottom:10px">🔒</div>
+        <p style="font-weight:600;margin-bottom:4px">Prérequis non satisfaits</p>
+        <p class="text-soft text-sm">Terminez les cours prérequis pour accéder à ce contenu.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const slug = window.location.pathname.split('/').filter(Boolean)[1];
+    const token = localStorage.getItem('token');
+
+    async function apiFetch(path: string, opts: { method?: string; body?: unknown; token?: string } = {}) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
+      const res = await fetch('/api' + path, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      if (res.status === 401) { localStorage.clear(); window.location.href = '/login'; throw new Error('Session expirée'); }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const error = new Error((err as any).error || `HTTP ${res.status}`) as any;
+        error.status = res.status;
+        throw error;
+      }
+      return res.json();
+    }
+
+    function moduleHref(m: any) {
+      if (m.locked) return null;
+      if (m.type === 'quiz') return `/courses/${slug}/quiz/${m.index}`;
+      return `/courses/${slug}/lessons/${m.index}`;
+    }
+
+    function moduleIcon(m: any) {
+      if (m.locked) return '🔒';
+      if (m.type === 'video') return '🎬';
+      if (m.type === 'image') return '🖼️';
+      if (m.type === 'quiz') return '🧩';
+      return '📝';
+    }
+
+    function moduleStatusBadges(m: any): string {
+      const parts: string[] = [];
+      const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lesson: 'Lecture' };
+      parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeLabel[m.type] || m.type}</span>`);
+      if (m.locked) {
+        parts.push(`<span class="badge badge-gray" style="font-size:.7rem">Verrouillé</span>`);
+      } else if (m.type === 'quiz') {
+        if (m.passed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ ${m.best_score}/${m.max_score} pts</span>`);
+        else if (m.attempts > 0) parts.push(`<span class="badge badge-orange" style="font-size:.7rem">${m.attempts} tentative${m.attempts > 1 ? 's' : ''}</span>`);
+        else parts.push(`<span class="badge badge-orange" style="font-size:.7rem">★ quiz</span>`);
+      } else {
+        if (m.viewed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ Vu</span>`);
+      }
+      return parts.join('');
+    }
+
+    function renderModules(modules: any[]) {
+      return modules.map(m => {
+        const href = moduleHref(m);
+        const tag = href ? 'a' : 'div';
+        const hrefAttr = href ? `href="${href}"` : '';
+        const iconCls = m.locked ? '' : m.type === 'quiz' ? ' quiz' : (m.viewed || m.passed) ? ' done' : '';
+        return `
+          <${tag} ${hrefAttr} class="mod-row${m.locked ? ' locked' : ''}">
+            <div class="mod-icon${iconCls}">${moduleIcon(m)}</div>
+            <div class="mod-name">${m.name}</div>
+            <div class="mod-badges">${moduleStatusBadges(m)}</div>
+            ${href ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>` : ''}
+          </${tag}>
+        `;
+      }).join('');
+    }
+
+    async function init() {
+      try {
+        const course = await apiFetch(`/courses/${slug}`, token ? { token } : {}) as any;
+
+        document.title = `${course.title} — pupitre`;
+        document.getElementById('course-title')!.textContent = course.title;
+        document.getElementById('course-desc')!.textContent = course.description || '';
+
+        // Thumbnail
+        const thumbArea = document.getElementById('thumb-area')!;
+        if (course.thumbnail) {
+          thumbArea.innerHTML = `<img src="${course.thumbnail}" alt="${course.title}" />`;
+        }
+
+        // Tags
+        const tagsEl = document.getElementById('course-tags')!;
+        const tagParts: string[] = [];
+        if (course.difficulty) {
+          const map: Record<string, string> = { beginner: 'badge-green', intermediate: 'badge-orange', advanced: 'badge-red' };
+          const labels: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
+          tagParts.push(`<span class="badge ${map[course.difficulty] || 'badge-blue'}">${labels[course.difficulty] || course.difficulty}</span>`);
+        }
+        if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
+        tagsEl.innerHTML = tagParts.join('');
+
+        // Meta (module count, enrollment count)
+        const meta = document.getElementById('course-meta')!;
+        const metaParts: string[] = [];
+        if (course.lab_count) metaParts.push(`<div class="text-soft text-sm">📦 ${course.lab_count} module${course.lab_count !== 1 ? 's' : ''}</div>`);
+        if (course.enrollment_count !== undefined) metaParts.push(`<div class="text-soft text-sm">👥 ${course.enrollment_count} inscrits</div>`);
+        meta.innerHTML = metaParts.join('');
+        if (!metaParts.length) meta.style.display = 'none';
+
+        // Enrollment check
+        let enrolled = false;
+        let modules: any[] = [];
+        let prereqBlocked = false;
+
+        if (token) {
+          try {
+            const myRes = await apiFetch('/my/courses', { token: token! }) as any;
+            enrolled = (myRes.courses || []).some((c: any) => c.slug === slug || c.id === slug);
+          } catch { /* ignore */ }
+
+          if (enrolled) {
+            try {
+              const modRes = await apiFetch(`/courses/${slug}/modules`, { token: token! }) as any;
+              modules = modRes.modules || [];
+            } catch (e: any) {
+              if (e.status === 403) prereqBlocked = true;
+            }
+          }
+        }
+
+        // Inline quizzes are embedded in previous modules — exclude from standalone list and counts
+        const visibleModules = modules.filter((m: any) => !m.inline);
+
+        // Enroll area
+        const enrollArea = document.getElementById('enroll-area')!;
+        const completedCount = visibleModules.filter((m: any) => m.type === 'quiz' ? m.passed : m.viewed).length;
+        const totalCount = visibleModules.length;
+        const pct = totalCount > 0 ? Math.round(completedCount / totalCount * 100) : 0;
+
+        if (!enrolled) {
+          if (course.is_public) {
+            enrollArea.innerHTML = `<button class="btn btn-primary w-full" id="enroll-btn">S'inscrire au cours</button>`;
+            document.getElementById('enroll-btn')!.addEventListener('click', async () => {
+              if (!token) { window.location.href = `/login?redirect=/courses/${slug}`; return; }
+              try {
+                await apiFetch(`/courses/${slug}/enroll`, { method: 'POST', body: {}, token: token! });
+              } catch { /* ok */ }
+              window.location.reload();
+            });
+          } else {
+            enrollArea.innerHTML = `
+              <div style="background:var(--fill);border:1px solid var(--line);border-radius:var(--radius);padding:14px;font-size:.875rem;color:var(--ink-soft);text-align:center">
+                🔒 Accès restreint — contactez un administrateur
+              </div>
+            `;
+          }
+        } else if (totalCount > 0) {
+          // Find first incomplete module for CTA
+          const nextMod = visibleModules.find((m: any) => !(m.type === 'quiz' ? m.passed : m.viewed) && !m.locked);
+          const ctaHref = nextMod
+            ? (nextMod.type === 'quiz' ? `/courses/${slug}/quiz/${nextMod.index}` : `/courses/${slug}/lessons/${nextMod.index}`)
+            : (visibleModules[0] ? (visibleModules[0].type === 'quiz' ? `/courses/${slug}/quiz/${visibleModules[0].index}` : `/courses/${slug}/lessons/${visibleModules[0].index}`) : '#');
+
+          enrollArea.innerHTML = `
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--ink-soft);margin-bottom:6px">
+                <span>${completedCount}/${totalCount} modules</span>
+                <span style="font-weight:600;color:var(--blue)">${pct}%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+            <a href="${ctaHref}" class="btn btn-primary w-full" style="display:inline-flex">
+              ${pct === 0 ? 'Commencer le cours ▸' : pct === 100 ? 'Revoir le cours ▸' : 'Continuer le cours ▸'}
+            </a>
+          `;
+        }
+
+        // Module count
+        document.getElementById('module-count')!.textContent = visibleModules.length > 0 ? `${visibleModules.length} module${visibleModules.length !== 1 ? 's' : ''}` : '';
+
+        // Render modules (inline quizzes excluded — they appear embedded in the previous lesson)
+        if (prereqBlocked) {
+          document.getElementById('prereq-blocked')!.style.display = 'block';
+        } else if (enrolled && visibleModules.length > 0) {
+          document.getElementById('modules-list')!.innerHTML = renderModules(visibleModules);
+        } else if (enrolled) {
+          document.getElementById('modules-empty')!.textContent = 'Aucun contenu disponible pour le moment.';
+          document.getElementById('modules-empty')!.style.display = 'block';
+        } else {
+          document.getElementById('modules-empty')!.style.display = 'block';
+        }
+
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('course-content')!.style.display = 'grid';
+      } catch {
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('not-found')!.style.display = 'block';
+      }
+    }
+
+    init();
+  </script>
+</App>

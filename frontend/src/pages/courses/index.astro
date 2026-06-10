@@ -5,179 +5,172 @@ import App from '../../layouts/App.astro';
   <style is:global>
     .cat-page { padding: 22px 26px 80px; }
 
-    /* Continue hero */
+    /* ── Continue hero ────────────────────────────────────────────────── */
     .continue-hero {
       display: flex;
       align-items: center;
       gap: 20px;
       background: var(--blue-soft);
       border: 1.5px solid var(--blue);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 20px;
       cursor: pointer;
+      margin-bottom: 28px;
     }
     .continue-hero:hover { filter: brightness(.97); }
     .continue-thumb {
-      width: 200px;
-      height: 118px;
-      border-radius: 10px;
-      background: var(--fill);
-      border: 1.5px solid var(--line);
-      flex: 0 0 auto;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 200px; height: 118px; border-radius: 10px;
+      background: var(--fill); border: 1.5px solid var(--line);
+      flex: 0 0 auto; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
       font-size: 2.5rem;
     }
     .continue-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .continue-meta {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      justify-content: center;
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 10px; justify-content: center;
     }
     .continue-badge {
-      display: inline-flex;
-      align-items: center;
-      height: 26px;
-      padding: 0 11px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      background: var(--orange-soft);
-      color: #9a5a00;
-      border: 1px solid var(--orange);
+      display: inline-flex; align-items: center;
+      height: 26px; padding: 0 11px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+      background: var(--orange-soft); color: #9a5a00; border: 1px solid var(--orange);
       width: max-content;
     }
-    .continue-title {
-      font-weight: 700;
-      font-size: 1rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .continue-prog {
-      height: 8px;
-      background: rgba(27,134,242,.18);
-      border-radius: 5px;
-      max-width: 340px;
-      overflow: hidden;
-    }
+    .continue-title { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .continue-prog { height: 8px; background: rgba(27,134,242,.18); border-radius: 5px; max-width: 340px; overflow: hidden; }
     .continue-prog-fill { height: 100%; background: var(--blue); border-radius: 5px; }
     .continue-sub { font-size: .8rem; color: var(--ink-soft); }
     .continue-btn {
-      align-self: center;
-      flex: 0 0 auto;
-      height: 40px;
-      padding: 0 18px;
-      border-radius: 9px;
-      background: var(--blue);
-      color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background .12s;
+      align-self: center; flex: 0 0 auto;
+      height: 40px; padding: 0 18px; border-radius: 9px;
+      background: var(--blue); color: #fff; font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer; white-space: nowrap; transition: background .12s;
     }
     .continue-btn:hover { background: #1470d6; }
 
-    /* Rails */
-    .cat-rail { margin-top: 20px; }
-    .cat-rail-header {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-    .cat-rail-title { font-size: 1rem; font-weight: 700; color: var(--ink); }
-    .cat-rail-count { font-size: .8rem; color: var(--ink-soft); }
-    .rail-scroll {
-      display: flex;
-      gap: 16px;
-      overflow-x: auto;
-      padding-bottom: 8px;
-      -ms-overflow-style: none;
-      scrollbar-width: thin;
-      scrollbar-color: var(--line) transparent;
-    }
-    .rail-scroll::-webkit-scrollbar { height: 4px; }
-    .rail-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
-
-    /* Rail card */
-    .rail-card {
-      flex: 0 0 auto;
-      width: 210px;
-      border: 1.5px solid var(--line);
-      border-radius: 12px;
-      background: var(--paper);
-      overflow: hidden;
-      cursor: pointer;
-      transition: box-shadow .15s, border-color .15s;
-    }
-    .rail-card:hover { border-color: var(--blue); box-shadow: 0 4px 14px rgba(27,134,242,.15); }
-    .rail-card-thumb {
-      width: 100%;
-      height: 108px;
-      background: var(--fill);
-      border-bottom: 1.5px solid var(--line);
-      overflow: hidden;
+    /* ── Toolbar ──────────────────────────────────────────────────────── */
+    .cat-toolbar {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 2rem;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .cat-toolbar .search-wrap { position: relative; flex: 1; max-width: 420px; }
+    .cat-toolbar .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); pointer-events: none; }
+    .cat-toolbar .input { padding-left: 38px; width: 100%; height: 38px; font-size: .875rem; }
+    .cat-count-label { font-size: .8rem; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
+
+    /* ── Category chips ───────────────────────────────────────────────── */
+    .cat-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 26px;
+      align-items: center;
+    }
+    .cat-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 30px; padding: 0 12px; border-radius: 999px;
+      font-size: .78rem; font-weight: 600;
+      border: 1.5px solid var(--line); background: var(--paper); color: var(--ink-soft);
+      cursor: pointer; transition: all .15s; user-select: none; white-space: nowrap;
+    }
+    .cat-chip:hover { border-color: var(--ink-soft); color: var(--ink); }
+    .cat-chip .chip-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .cat-chip .chip-count { font-size: .7rem; font-weight: 700; opacity: .55; }
+    .cat-chip.active { color: #fff !important; border-color: transparent; }
+    .cat-chip.active .chip-count { opacity: .8; }
+    /* "Tout" reset chip */
+    .chip-reset {
+      display: inline-flex; align-items: center;
+      height: 30px; padding: 0 12px; border-radius: 999px;
+      font-size: .78rem; font-weight: 600;
+      border: 1.5px solid var(--line); background: var(--fill); color: var(--ink-soft);
+      cursor: pointer; transition: all .15s; user-select: none;
+    }
+    .chip-reset.has-filter {
+      border-color: var(--ink); color: var(--ink); background: var(--paper);
+    }
+    .chip-reset.has-filter:hover { background: var(--ink); color: #fff; }
+
+    /* ── Flat course grid ─────────────────────────────────────────────── */
+    .courses-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .rail-card {
+      border: 1.5px solid var(--line);
+      border-top: 3px solid var(--cat-color, var(--line));
+      border-radius: 10px;
+      background: var(--paper); overflow: hidden;
+      cursor: pointer; transition: box-shadow .15s, transform .12s;
+      display: flex; flex-direction: column;
+    }
+    .rail-card:hover {
+      box-shadow: 0 4px 18px rgba(0,0,0,.11);
+      transform: translateY(-2px);
+    }
+    .rail-card-thumb-wrap {
+      position: relative; flex-shrink: 0;
+    }
+    .rail-card-thumb {
+      width: 100%; height: 88px;
+      overflow: hidden; display: flex; align-items: center; justify-content: center;
+      font-size: 1.8rem;
     }
     .rail-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .rail-card-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-    .rail-card-title {
-      font-size: .875rem;
-      font-weight: 600;
-      color: var(--ink);
-      line-height: 1.35;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+    .rail-card-cat {
+      position: absolute; top: 6px; right: 6px;
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 7px 2px 5px;
+      border-radius: 99px;
+      font-size: .62rem; font-weight: 700; letter-spacing: .01em;
+      background: var(--cat-color, #888); color: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.18);
+      white-space: nowrap;
     }
-    .rail-card-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
-    .rail-card-tags .badge { font-size: 11px; }
-    .rail-card-prog { height: 5px; background: var(--fill); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+    .rail-card-body { padding: 10px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
+    .rail-card-title {
+      font-size: .8rem; font-weight: 600; color: var(--ink); line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .rail-card-footer { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+    .rail-card-prog { height: 4px; background: var(--fill); border-radius: 3px; overflow: hidden; margin-top: 4px; }
     .rail-card-prog-fill { height: 100%; background: var(--blue); border-radius: 3px; }
 
-    /* Page search bar */
-    .cat-search-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 22px;
-    }
-    .cat-search-bar .search-wrap { position: relative; flex: 1; max-width: 480px; }
-    .cat-search-bar .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); pointer-events: none; }
-    .cat-search-bar .input { padding-left: 38px; width: 100%; height: 40px; font-size: .9rem; }
-
-    /* Responsive */
+    /* ── Responsive ───────────────────────────────────────────────────── */
     @media (max-width: 640px) {
       .cat-page { padding: 14px 14px 80px; }
       .continue-hero { flex-direction: column; align-items: stretch; gap: 14px; }
       .continue-thumb { width: 100%; height: 140px; }
       .continue-prog { max-width: 100%; }
       .continue-btn { align-self: stretch; width: 100%; }
-      .rail-card { width: 180px; }
-      .cat-search-bar .search-wrap { max-width: 100%; }
+      .cat-toolbar .search-wrap { max-width: 100%; flex: 1; }
+      .courses-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    }
+    @media (min-width: 1200px) {
+      .courses-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     }
   </style>
 
   <div class="cat-page">
-    <!-- Search bar -->
-    <div class="cat-search-bar">
+
+    <!-- Toolbar -->
+    <div class="cat-toolbar">
       <div class="search-wrap">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input class="input js-cat-search" type="search" placeholder="Rechercher un cours…" />
       </div>
+      <span class="cat-count-label" id="count-label"></span>
     </div>
+
+    <!-- Category chips -->
+    <div class="cat-chips" id="cat-chips" style="display:none"></div>
 
     <!-- Loading -->
     <div id="loading" class="loading-state">
@@ -188,17 +181,17 @@ import App from '../../layouts/App.astro';
     <!-- Content -->
     <div id="cat-content" style="display:none">
       <!-- Continue hero -->
-      <div id="continue-hero" style="display:none"></div>
+      <div id="continue-hero"></div>
 
       <!-- Empty state -->
       <div id="empty" style="display:none;text-align:center;padding:64px 24px">
         <div style="font-size:3rem;margin-bottom:16px">📭</div>
         <h3 style="margin-bottom:6px">Aucun cours trouvé</h3>
-        <p class="text-soft text-sm">Essayez d'ajuster votre recherche</p>
+        <p class="text-soft text-sm">Essayez d'ajuster votre recherche ou vos filtres</p>
       </div>
 
-      <!-- Rails container -->
-      <div id="rails-container"></div>
+      <!-- Courses grid -->
+      <div id="groups-container"></div>
     </div>
   </div>
 
@@ -221,38 +214,87 @@ import App from '../../layouts/App.astro';
     let enrolledCourses: any[] = [];
     let enrolledIds = new Set<string>();
     let searchTimer: ReturnType<typeof setTimeout>;
+    let selectedCategories = new Set<string>();
 
+    // ── Difficulty labels ──────────────────────────────────────────────
     const diffLabels: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
     const diffColors: Record<string, string> = { beginner: 'badge-green', intermediate: 'badge-orange', advanced: 'badge-red' };
 
-    function renderCourseCard(c: any): string {
-      const enrolled = enrolledIds.has(c.id);
-      const diff = c.difficulty ? `<span class="badge ${diffColors[c.difficulty] || 'badge-blue'}">${diffLabels[c.difficulty] || c.difficulty}</span>` : '';
-      const cat = c.category ? `<span class="badge badge-blue">${c.category}</span>` : '';
+    // ── Category display metadata ──────────────────────────────────────
+    const CAT_META: Record<string, { label: string; icon: string }> = {
+      linux:            { label: 'Linux',           icon: '🐧' },
+      devops:           { label: 'DevOps',           icon: '⚙️'  },
+      kubernetes:       { label: 'Kubernetes',       icon: '☸️'  },
+      docker:           { label: 'Docker',           icon: '🐳' },
+      networking:       { label: 'Réseaux',          icon: '🌐' },
+      security:         { label: 'Sécurité',         icon: '🔒' },
+      programming:      { label: 'Programmation',    icon: '💻' },
+      python:           { label: 'Python',           icon: '🐍' },
+      git:              { label: 'Git',              icon: '🔀' },
+      cloud:            { label: 'Cloud',            icon: '☁️'  },
+      database:         { label: 'Base de données',  icon: '🗄️'  },
+      'internal-testing': { label: 'Tests internes', icon: '🧪' },
+    };
 
-      let footer = '';
-      if (enrolled) {
-        footer = `<div class="rail-card-prog"><div class="rail-card-prog-fill" style="width:100%"></div></div>`;
-      }
+    function getCatLabel(slug: string): string {
+      return CAT_META[slug]?.label ?? slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, ' ');
+    }
+    function getCatIcon(slug: string): string {
+      return CAT_META[slug]?.icon ?? '📚';
+    }
+
+    // ── Color palette per category group ──────────────────────────────
+    const GROUP_PALETTE = [
+      { bg: 'var(--blue-soft)',  border: 'var(--blue)',   dot: '#1b86f2', thumbBg: '#dbeeff' },
+      { bg: 'var(--orange-soft)',border: 'var(--orange)', dot: '#ff9d18', thumbBg: '#fff0d0' },
+      { bg: 'var(--good-soft)',  border: 'var(--good)',   dot: '#3bb273', thumbBg: '#d2f0e1' },
+      { bg: '#ede9fe',           border: '#7c3aed',       dot: '#7c3aed', thumbBg: '#e5dcff' },
+      { bg: '#fce7f3',           border: '#db2777',       dot: '#db2777', thumbBg: '#fad4e8' },
+      { bg: '#e0f7fa',           border: '#0891b2',       dot: '#0891b2', thumbBg: '#cff0f7' },
+      { bg: 'var(--bad-soft)',   border: 'var(--bad)',    dot: '#e5534b', thumbBg: '#fcd5d3' },
+      { bg: '#eef2ff',           border: '#4f46e5',       dot: '#4f46e5', thumbBg: '#dde2ff' },
+    ];
+
+    const catColorIndex = new Map<string, number>();
+
+    function getCatColor(cat: string) {
+      if (!catColorIndex.has(cat)) catColorIndex.set(cat, catColorIndex.size % GROUP_PALETTE.length);
+      return GROUP_PALETTE[catColorIndex.get(cat)!];
+    }
+
+    // ── Render course card ─────────────────────────────────────────────
+    function renderCourseCard(c: any, color: typeof GROUP_PALETTE[0]): string {
+      const enrolled = enrolledIds.has(c.id);
+      const diff = c.difficulty
+        ? `<span class="badge ${diffColors[c.difficulty] || 'badge-blue'}">${diffLabels[c.difficulty] || c.difficulty}</span>`
+        : '';
+      const prog = enrolled
+        ? `<div class="rail-card-prog"><div class="rail-card-prog-fill" style="width:100%"></div></div>`
+        : '';
+      const thumbContent = c.thumbnail
+        ? `<img src="${c.thumbnail}" alt="${c.title}" />`
+        : `<span style="font-size:2rem">${getCatIcon(c.category || '')}</span>`;
+      const catLabel = getCatLabel(c.category || '');
+      const catIcon  = getCatIcon(c.category || '');
 
       return `
-        <div class="rail-card" onclick="goToCourse('${c.id}')">
-          <div class="rail-card-thumb">
-            ${c.thumbnail ? `<img src="${c.thumbnail}" alt="${c.title}" />` : '📖'}
+        <div class="rail-card" style="--cat-color:${color.dot}" onclick="goToCourse('${c.id}')">
+          <div class="rail-card-thumb-wrap">
+            <div class="rail-card-thumb" style="background:${color.thumbBg};">${thumbContent}</div>
+            <span class="rail-card-cat">${catIcon} ${catLabel}</span>
           </div>
           <div class="rail-card-body">
             <div class="rail-card-title">${c.title}</div>
-            <div class="rail-card-tags">${diff}${cat}</div>
-            ${footer}
+            <div class="rail-card-footer">${diff}</div>
+            ${prog}
           </div>
         </div>
       `;
     }
 
+    // ── Render continue hero ───────────────────────────────────────────
     function renderContinueHero(course: any): string {
-      const thumb = course.thumbnail
-        ? `<img src="${course.thumbnail}" alt="${course.title}" />`
-        : '📖';
+      const thumb = course.thumbnail ? `<img src="${course.thumbnail}" alt="${course.title}" />` : '📖';
       const labsDone = course.completed_labs ?? 0;
       const labsTotal = course.lab_count ?? 0;
       const pct = labsTotal > 0 ? Math.round(labsDone / labsTotal * 100) : 0;
@@ -263,58 +305,103 @@ import App from '../../layouts/App.astro';
             <div class="continue-badge">Reprendre</div>
             <div class="continue-title">${course.title}</div>
             <div class="continue-prog"><div class="continue-prog-fill" style="width:${pct}%"></div></div>
-            <div class="continue-sub">${labsDone}/${labsTotal} modules</div>
+            <div class="continue-sub">${labsDone}/${labsTotal} modules · ${pct}%</div>
           </div>
           <button class="continue-btn" onclick="event.stopPropagation();goToCourse('${course.id}')">Continuer ▸</button>
         </div>
       `;
     }
 
-    function renderRails(courses: any[], search: string) {
+    // ── Render chips ───────────────────────────────────────────────────
+    function renderChips(slugs: string[]) {
+      const chipsEl = document.getElementById('cat-chips')!;
+      if (slugs.length < 2) { chipsEl.style.display = 'none'; return; }
+      chipsEl.style.display = 'flex';
+
+      const hasFilter = selectedCategories.size > 0;
+      const resetClass = 'chip-reset' + (hasFilter ? ' has-filter' : '');
+
+      const resetBtn = `<button class="${resetClass}" onclick="clearCats()">Tout</button>`;
+
+      const chips = slugs.map(slug => {
+        const color = getCatColor(slug);
+        const isActive = selectedCategories.has(slug);
+        const count = allCourses.filter(c => (c.category || '') === slug).length;
+        const style = isActive
+          ? `background:${color.dot};border-color:${color.dot};`
+          : '';
+        return `
+          <button class="cat-chip${isActive ? ' active' : ''}" style="${style}"
+                  data-cat="${slug}" onclick="toggleCat('${slug}')">
+            <span class="chip-dot" style="background:${color.dot};${isActive ? 'background:#fff8;' : ''}"></span>
+            ${getCatLabel(slug)}
+            <span class="chip-count">${count}</span>
+          </button>
+        `;
+      }).join('');
+
+      chipsEl.innerHTML = resetBtn + chips;
+    }
+
+    // ── Render groups ──────────────────────────────────────────────────
+    function renderGroups(courses: any[], search: string) {
       const q = search.toLowerCase().trim();
       const filtered = q
-        ? courses.filter(c => c.title.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q))
+        ? courses.filter(c =>
+            c.title.toLowerCase().includes(q) ||
+            (c.description || '').toLowerCase().includes(q) ||
+            (c.category || '').toLowerCase().includes(q)
+          )
         : courses;
 
-      if (filtered.length === 0) {
+      const activeCats = Array.from(selectedCategories);
+      const visible = activeCats.length > 0
+        ? filtered.filter(c => activeCats.includes(c.category || ''))
+        : filtered;
+
+      const countLabel = document.getElementById('count-label')!;
+      countLabel.textContent = visible.length > 0 ? `${visible.length} cours` : '';
+
+      if (visible.length === 0) {
         document.getElementById('empty')!.style.display = 'block';
-        document.getElementById('rails-container')!.innerHTML = '';
+        document.getElementById('groups-container')!.innerHTML = '';
         return;
       }
       document.getElementById('empty')!.style.display = 'none';
 
+      // Group by category (stable order), flatten into a single grid
       const categories = new Map<string, any[]>();
-      for (const c of filtered) {
-        const cat = c.category || 'Cours';
+      for (const c of visible) {
+        const cat = c.category || '';
         if (!categories.has(cat)) categories.set(cat, []);
         categories.get(cat)!.push(c);
       }
 
-      let html = '';
-      for (const [cat, list] of categories) {
-        html += `
-          <div class="cat-rail">
-            <div class="cat-rail-header">
-              <h2 class="cat-rail-title">${cat}</h2>
-              <span class="cat-rail-count">${list.length} cours</span>
-            </div>
-            <div class="rail-scroll">
-              ${list.map(c => renderCourseCard(c)).join('')}
-            </div>
-          </div>
-        `;
-      }
-      document.getElementById('rails-container')!.innerHTML = html;
+      const cards = Array.from(categories.values())
+        .flatMap(list => list.map(c => renderCourseCard(c, getCatColor(c.category || ''))));
+
+      document.getElementById('groups-container')!.innerHTML =
+        `<div class="courses-grid">${cards.join('')}</div>`;
+    }
+
+    function rerender() {
+      const q = (document.querySelector<HTMLInputElement>('.js-cat-search')?.value) || '';
+      const allSlugs = Array.from(new Set(allCourses.map(c => c.category || '').filter(Boolean)));
+      renderChips(allSlugs);
+      renderGroups(allCourses, q);
     }
 
     (window as any).goToCourse = (id: string) => { window.location.href = `/courses/${id}`; };
-    (window as any).enrollAndGo = async (id: string, e: Event) => {
-      e.stopPropagation();
-      if (!token) { window.location.href = `/login?redirect=/courses/${id}`; return; }
-      try {
-        await apiFetch(`/courses/${id}/enroll`, { method: 'POST', body: {}, token: token! });
-      } catch { /* ok if already enrolled */ }
-      window.location.href = `/courses/${id}`;
+
+    (window as any).toggleCat = (cat: string) => {
+      if (selectedCategories.has(cat)) selectedCategories.delete(cat);
+      else selectedCategories.add(cat);
+      rerender();
+    };
+
+    (window as any).clearCats = () => {
+      selectedCategories.clear();
+      rerender();
     };
 
     async function loadAll() {
@@ -333,33 +420,31 @@ import App from '../../layouts/App.astro';
           enrolledIds = new Set(enrolledCourses.map((c: any) => c.id));
         }
 
+        // Continue hero: in-progress first, then most recent enrolled
         const heroContainer = document.getElementById('continue-hero')!;
         const inProgress = enrolledCourses.filter((c: any) => {
           const p = c.lab_count > 0 ? c.completed_labs / c.lab_count : 0;
           return p > 0 && p < 1;
         });
-        const heroTarget = inProgress[0] || enrolledCourses[0];
-        if (heroTarget) {
-          heroContainer.style.display = 'block';
-          heroContainer.innerHTML = renderContinueHero(heroTarget);
-        }
+        const heroTarget = inProgress[0] ?? enrolledCourses[0] ?? null;
+        if (heroTarget) heroContainer.innerHTML = renderContinueHero(heroTarget);
 
-        renderRails(allCourses, '');
+        // Seed stable color assignments before first render
+        const allSlugs = Array.from(new Set(allCourses.map((c: any) => c.category || '').filter(Boolean)));
+        allSlugs.forEach(s => getCatColor(s));
+
+        renderChips(allSlugs);
+        renderGroups(allCourses, '');
         document.getElementById('cat-content')!.style.display = 'block';
-      } catch { /* show empty */ } finally {
+      } catch { /* leave empty */ } finally {
         document.getElementById('loading')!.style.display = 'none';
       }
     }
 
-    // Bind all search inputs (nav + mobile)
-    const searchInputs = document.querySelectorAll<HTMLInputElement>('.js-cat-search');
-    searchInputs.forEach(inp => {
-      inp.addEventListener('input', () => {
-        const q = inp.value;
-        searchInputs.forEach(other => { if (other !== inp) other.value = q; });
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => renderRails(allCourses, q), 300);
-      });
+    const searchEl = document.querySelector<HTMLInputElement>('.js-cat-search')!;
+    searchEl?.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => renderGroups(allCourses, searchEl.value), 280);
     });
 
     loadAll();

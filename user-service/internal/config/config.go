@@ -26,6 +26,8 @@ type Config struct {
 	OAuthRedirectBase string           `yaml:"oauth_redirect_base"`
 	Providers         []ProviderConfig `yaml:"providers"`
 	CourseServiceURL  string           `yaml:"course_service_url"`
+	K8sNamespace      string           `yaml:"k8s_namespace"`
+	Kubeconfig        string           `yaml:"kubeconfig"`
 	// AdminPassword is the password (or pre-computed bcrypt hash) for the
 	// bootstrapped admin account.
 	// Resolution order:
@@ -89,6 +91,12 @@ func Load() *Config {
 	}
 	if v := os.Getenv("COURSE_SERVICE_URL"); v != "" {
 		c.CourseServiceURL = v
+	}
+	if v := os.Getenv("K8S_NAMESPACE"); v != "" {
+		c.K8sNamespace = v
+	}
+	if v := os.Getenv("KUBECONFIG"); v != "" {
+		c.Kubeconfig = v
 	}
 	// ADMIN_PASSWORD_FILE takes priority: read initial value from the mounted
 	// secret file so the watcher goroutine can detect future changes.

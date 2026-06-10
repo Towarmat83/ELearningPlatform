@@ -103,6 +103,21 @@ func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bo
 		r.Delete("/api/admin/groups/mappings/{group_name}", s.DeleteGroupMapping)
 	})
 
+	// ── Patterns (authenticated) ─────────────────────────────────────────────────
+
+	r.Group(func(r chi.Router) {
+		r.Use(authMW)
+		r.Get("/api/patterns", s.ListPatterns)
+		r.Get("/api/patterns/{id}", s.GetPattern)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(adminMW)
+		r.Post("/api/admin/patterns", s.CreatePattern)
+		r.Put("/api/admin/patterns/{name}", s.UpdatePattern)
+		r.Delete("/api/admin/patterns/{name}", s.DeletePattern)
+	})
+
 	// ── Internal API (for Course Service, no auth — rely on network policy) ──────
 
 	r.Post("/internal/enrollments/auto", s.InternalAutoEnroll)

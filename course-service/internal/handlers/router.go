@@ -42,6 +42,10 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 		r.Use(authMW)
 
 		r.Get("/api/admin/courses", s.ListAdminCourses)
+		r.Post("/api/admin/courses", s.CreateCourseCRD)
+		r.Get("/api/admin/courses/{slug}/crd", s.GetCourseCRD)
+		r.Put("/api/admin/courses/{slug}/crd", s.UpdateCourseCRD)
+		r.Delete("/api/admin/courses/{slug}/crd", s.DeleteCourseCRD)
 		r.Post("/api/admin/cache/clear", s.ClearCache)
 		r.Post("/api/admin/courses/{slug}/cache/clear", s.ClearCourseCache)
 		r.Post("/api/admin/courses/{slug}/modules/{index}/cache/clear", s.ClearModuleCache)

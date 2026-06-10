@@ -51,6 +51,8 @@ spec:
         - name: git-credentials
           mountPath: /etc/git-credentials
           readOnly: true
+        - name: tmp
+          mountPath: /tmp
         livenessProbe:
           httpGet:
             path: /health
@@ -74,6 +76,8 @@ spec:
         secret:
           secretName: course-repo-secret
           optional: true
+      - name: tmp
+        emptyDir: {}
       {{- with .Values.courseService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

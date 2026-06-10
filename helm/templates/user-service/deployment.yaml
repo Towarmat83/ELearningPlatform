@@ -21,7 +21,7 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: {{ include "elearning.fullname" . }}-user-service
-      automountServiceAccountToken: false
+      automountServiceAccountToken: true
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -55,6 +55,10 @@ spec:
         # refreshes it automatically when the Secret changes — no pod restart needed.
         - name: ADMIN_PASSWORD_FILE
           value: /etc/admin-password/ADMIN_PASSWORD
+        - name: K8S_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         volumeMounts:
         - name: config
           mountPath: /etc/user-service

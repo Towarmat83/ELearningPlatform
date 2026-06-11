@@ -96,7 +96,7 @@ spec:
                         type: string
                       type:
                         type: string
-                        enum: [video, text, image, quiz, modules]
+                        enum: [video, text, image, quiz, lab, modules]
                       src:
                         type: string
                       ref:

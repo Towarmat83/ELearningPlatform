@@ -396,6 +396,11 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			resp.Ref = m.Ref
 			resp.Path = m.Path
 		}
+		// Lab modules expose their target URL to everyone — the frontend
+		// opens it directly in a new tab.
+		if m.Type == "lab" && !locked {
+			resp.Src = m.Src
+		}
 		if m.Type == "quiz" {
 			if m.HasQuestions() {
 				resp.QuestionCount = len(m.Questions)
@@ -472,6 +477,8 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	switch m.Type {
 	case "video", "image":
 		resp.Content = content.ReplicatedPath(m, s.Config.UploadsDir)
+	case "lab":
+		resp.Content = m.Src
 	case "text":
 		if m.HasGitContent() {
 			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))

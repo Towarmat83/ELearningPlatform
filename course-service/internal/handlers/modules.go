@@ -720,6 +720,8 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.recordModuleProgress(courseSlug, userID, m.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
+
 	apiResults := make([]questionResultAPI, len(result.QuestionResults))
 	for i, qr := range result.QuestionResults {
 		apiResults[i] = questionResultAPI{

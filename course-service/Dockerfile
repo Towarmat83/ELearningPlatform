@@ -22,19 +22,9 @@ WORKDIR /app
 
 COPY --from=builder /app/course-service /app/course-service
 
-# ── All configuration via env vars (ConfigMap friendly) ──────────────────────
-
-ENV PORT=8082 \
-    CONFIG_PATH="" \
-    JWT_SECRET="change-me-in-production-use-a-long-random-string" \
-    JWT_EXPIRY_HOURS=24 \
-    CORS_ORIGINS="http://localhost:3000,http://localhost:5173" \
-    UPLOADS_DIR="./uploads" \
-    KUBECONFIG="" \
-    K8S_NAMESPACE="default" \
-    USER_SERVICE_URL="http://user-service:8081" \
-    GIT_TOKEN="" \
-    GIT_CREDENTIALS_PATH="/etc/course-service/git-credentials.yaml"
+# No ENV config defaults here: env vars override the mounted ConfigMap file
+# (precedence: code defaults → CONFIG_PATH file → env). Defaults live in
+# internal/config/config.go.
 
 EXPOSE 8082
 

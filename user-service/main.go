@@ -55,12 +55,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Seed mock users and enrollments (dev/demo only).
+	if os.Getenv("SEED_MOCK_DATA") == "true" {
+		if err := db.SeedMockData(ctx, pool); err != nil {
+			slog.Error("failed to seed mock data", "err", err)
+		}
+	}
+
 	// Watch the admin password file for live rotation (no pod restart needed).
 	// Active only when ADMIN_PASSWORD_FILE is set (i.e. K8s Secret volume mount).
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
 	if cfg.AdminPasswordFile != "" {
 		go db.WatchAdminPassword(watchCtx, pool, cfg.AdminPasswordFile)
+	}
+
+	// MarkdownPattern CRD watcher — syncs CRDs into the markdown_patterns table.
+	// Disabled when K8S_NAMESPACE is empty (local dev without cluster).
+	if cfg.K8sNamespace != "" {
+		watchCtxPat, watchCancelPat := context.WithCancel(ctx)
+		defer watchCancelPat()
+		pw, err := handlers.NewPatternWatcher(pool, cfg.Kubeconfig, cfg.K8sNamespace)
+		if err != nil {
+			slog.Warn("pattern CRD watcher disabled", "reason", err)
+		} else if err := pw.Start(watchCtxPat); err != nil {
+			slog.Warn("pattern CRD watcher failed to start", "err", err)
+		} else {
+			slog.Info("pattern CRD watcher started", "namespace", cfg.K8sNamespace)
+		}
 	}
 
 	s := &handlers.State{

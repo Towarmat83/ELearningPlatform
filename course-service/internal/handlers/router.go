@@ -35,16 +35,11 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 
 	r.Get("/api/courses", s.ListCourses)
 	r.Get("/api/courses/{slug}", s.GetCourse)
-	r.Get("/api/patterns", s.ListPatterns)
 
 	r.Get("/uploads/{filename}", s.ServeUpload)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
-
-		r.Post("/api/admin/patterns", s.CreatePatternCRD)
-		r.Put("/api/admin/patterns/{name}", s.UpdatePatternCRD)
-		r.Delete("/api/admin/patterns/{name}", s.DeletePatternCRD)
 
 		r.Get("/api/admin/courses", s.ListAdminCourses)
 		r.Post("/api/admin/courses", s.CreateCourseCRD)

@@ -1,0 +1,159 @@
+---
+import App from '../../layouts/App.astro';
+---
+<App title="Administration">
+  <div id="loading" class="loading-state"><div class="spinner"></div><span>Vérification…</span></div>
+  <div id="admin-content" style="display:none">
+    <div class="page-content">
+      <div style="display:grid;grid-template-columns:230px 1fr;gap:28px;align-items:start">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="card-sm" style="margin-bottom:12px;padding:14px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:10px">Administration</div>
+            <nav class="sidebar-nav">
+              <a href="/admin" class="sidebar-link active">📊 Tableau de bord</a>
+              <a href="/admin/users" class="sidebar-link">👥 Utilisateurs</a>
+              <a href="/admin/courses" class="sidebar-link">📚 Cours</a>
+              <a href="/admin/groups" class="sidebar-link">🏷️ Groupes</a>
+              <a href="/admin/patterns" class="sidebar-link">🔶 Patterns</a>
+              <a href="/admin/leaderboard" class="sidebar-link">🏆 Classement</a>
+              <a href="/admin/settings" class="sidebar-link">⚙️ Paramètres</a>
+              <a href="/admin/monitoring" class="sidebar-link">📈 Monitoring</a>
+            </nav>
+          </div>
+          <a href="/courses" class="btn btn-ghost btn-sm w-full" style="justify-content:flex-start">← Retour au catalogue</a>
+        </aside>
+
+        <!-- Main -->
+        <div>
+          <div style="margin-bottom:24px">
+            <h1>Administration</h1>
+            <p class="text-soft" style="margin-top:4px">Panneau d'administration de la plateforme pupitre</p>
+          </div>
+
+          <!-- Stats cards -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px" id="stats-grid">
+            <div class="card-sm" style="text-align:center;padding:20px">
+              <div class="spinner" style="margin:0 auto"></div>
+            </div>
+            <div class="card-sm" style="text-align:center;padding:20px">
+              <div class="spinner" style="margin:0 auto"></div>
+            </div>
+            <div class="card-sm" style="text-align:center;padding:20px">
+              <div class="spinner" style="margin:0 auto"></div>
+            </div>
+          </div>
+
+          <!-- Notice -->
+          <div class="card" style="background:var(--blue-soft);border-color:var(--blue)">
+            <div style="display:flex;align-items:flex-start;gap:14px">
+              <img src="/pioupitre.png" alt="pioupitre" style="width:40px;height:40px;object-fit:contain;flex-shrink:0" />
+              <div>
+                <h3 style="color:var(--blue-deep);margin-bottom:6px">Interface d'administration pupitre</h3>
+                <p class="text-soft text-sm" style="line-height:1.6">
+                  L'interface d'administration complète est accessible via les liens dans la barre latérale.
+                  Les cours sont définis comme des CRDs Kubernetes — utilisez <code style="background:var(--paper);padding:2px 6px;border-radius:4px">kubectl</code> pour gérer les ressources de cours directement.
+                </p>
+                <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+                  <a href="/admin/users" class="btn btn-primary btn-sm">Gérer les utilisateurs</a>
+                  <a href="/admin/settings" class="btn btn-secondary btn-sm">Paramètres</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent leaderboard -->
+          <div class="card" style="margin-top:20px">
+            <h3 style="margin-bottom:16px">Classement</h3>
+            <div id="leaderboard-list">
+              <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="forbidden" style="display:none;min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center">
+    <div style="text-align:center;padding:48px">
+      <div style="font-size:3rem;margin-bottom:16px">🔒</div>
+      <h2 style="margin-bottom:8px">Accès refusé</h2>
+      <p class="text-soft text-sm" style="margin-bottom:20px">Vous devez être administrateur pour accéder à cette page.</p>
+      <a href="/courses" class="btn btn-primary">Retour au catalogue</a>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token) {
+      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+    } else if (user?.role !== 'admin') {
+      document.getElementById('loading')!.style.display = 'none';
+      document.getElementById('forbidden')!.style.display = 'flex';
+    } else {
+      document.getElementById('loading')!.style.display = 'none';
+      document.getElementById('admin-content')!.style.display = 'block';
+      loadStats();
+      loadLeaderboard();
+    }
+
+    async function apiFetch(path: string, opts: { method?: string; token?: string } = {}) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
+      const res = await fetch('/api' + path, { method: opts.method || 'GET', headers });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).error || `HTTP ${res.status}`); }
+      return res.json();
+    }
+
+    async function loadStats() {
+      try {
+        const stats = await apiFetch('/admin/stats', { token: token! }) as any;
+        const grid = document.getElementById('stats-grid')!;
+        grid.innerHTML = `
+          <div class="card-sm" style="text-align:center;padding:20px">
+            <div style="font-size:2rem;font-weight:700;color:var(--blue)">${stats.total_users ?? '—'}</div>
+            <div class="text-soft text-sm" style="margin-top:4px">Utilisateurs</div>
+          </div>
+          <div class="card-sm" style="text-align:center;padding:20px">
+            <div style="font-size:2rem;font-weight:700;color:var(--blue)">${stats.total_courses ?? '—'}</div>
+            <div class="text-soft text-sm" style="margin-top:4px">Cours</div>
+          </div>
+          <div class="card-sm" style="text-align:center;padding:20px">
+            <div style="font-size:2rem;font-weight:700;color:var(--good)">${stats.success_rate ?? '—'}</div>
+            <div class="text-soft text-sm" style="margin-top:4px">Taux de réussite</div>
+          </div>
+        `;
+      } catch {
+        document.getElementById('stats-grid')!.innerHTML = '<div class="text-soft text-sm">Statistiques indisponibles</div>';
+      }
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const res = await apiFetch('/admin/leaderboard', { token: token! }) as any;
+        const entries = (res.leaderboard || []).slice(0, 10);
+        const list = document.getElementById('leaderboard-list')!;
+        if (entries.length === 0) {
+          list.innerHTML = '<p class="text-soft text-sm">Aucune donnée disponible.</p>';
+          return;
+        }
+        list.innerHTML = entries.map((e: any, i: number) => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)">
+            <span style="font-weight:700;color:${i < 3 ? 'var(--orange)' : 'var(--ink-soft)'};width:24px;text-align:center;font-size:.9rem">${i + 1}</span>
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--blue);font-size:.85rem;flex-shrink:0">
+              ${(e.username || '?')[0].toUpperCase()}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:500;font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.username}</div>
+              <div style="font-size:.75rem;color:var(--ink-soft)">${e.passed_modules} modules · ${e.enrolled_courses} cours</div>
+            </div>
+            <span style="font-weight:700;color:var(--blue);flex-shrink:0">${e.total_score} pts</span>
+          </div>
+        `).join('');
+      } catch {
+        document.getElementById('leaderboard-list')!.innerHTML = '<p class="text-soft text-sm">Classement indisponible.</p>';
+      }
+    }
+  </script>
+</App>

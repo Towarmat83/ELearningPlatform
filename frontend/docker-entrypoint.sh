@@ -16,4 +16,4 @@ if [ -f "$CONFIG_FILE" ]; then
   done < "$CONFIG_FILE"
 fi
 
-exec node build/index.js
+exec node dist/server/entry.mjs

@@ -501,39 +501,4 @@ export const adminApi = {
     api.post<{ status: string; repos_cleared: number }>(`/admin/courses/${courseSlug}/cache/clear`, {}, token),
   clearModuleCache: (courseSlug: string, index: number, token: string) =>
     api.post<{ status: string; repos_cleared: number }>(`/admin/courses/${courseSlug}/modules/${index}/cache/clear`, {}, token),
-
-  // CRD management
-  createCourse: (body: Record<string, any>, token: string) =>
-    api.post<{ slug: string }>('/admin/courses', body, token),
-  getCourseCRD: (slug: string, token: string) =>
-    api.get<{ slug: string; spec: Record<string, any> }>(`/admin/courses/${slug}/crd`, token),
-  updateCourseCRD: (slug: string, body: Record<string, any>, token: string) =>
-    api.put<{ slug: string }>(`/admin/courses/${slug}/crd`, body, token),
-  deleteCourseCRD: (slug: string, token: string) =>
-    api.delete<{ message: string }>(`/admin/courses/${slug}/crd`, token),
-};
-
-export interface Pattern {
-  id?: string;
-  name: string;
-  label: string;
-  scope: string;
-  html: string;
-  css: string;
-  js: string;
-  source?: 'crd' | 'db';   // "crd" = from MarkdownPattern CR, "db" = managed via admin UI
-  created_at?: string;
-  updated_at?: string;
-}
-
-// Patterns are stored exclusively as MarkdownPattern CRDs, served by course-service.
-export const patternsApi = {
-  list: (scope?: string) =>
-    api.get<{ patterns: Pattern[] }>(`/patterns${scope ? `?scope=${scope}` : ''}`),
-  create: (pattern: Omit<Pattern, 'source'>, token: string) =>
-    api.post<{ name: string }>('/admin/patterns', pattern, token),
-  update: (name: string, pattern: Omit<Pattern, 'name' | 'source'>, token: string) =>
-    api.put<{ name: string }>(`/admin/patterns/${name}`, pattern, token),
-  delete: (name: string, token: string) =>
-    api.delete<{ message: string }>(`/admin/patterns/${name}`, token),
 };

@@ -22,21 +22,9 @@ WORKDIR /app
 
 COPY --from=builder /app/user-service /app/user-service
 
-# ── All configuration via env vars (ConfigMap friendly) ──────────────────────
-
-ENV PORT=8081 \
-    CONFIG_PATH="" \
-    DATABASE_URL="postgres://elearning:elearning@localhost:5432/elearning" \
-    JWT_SECRET="change-me-in-production-use-a-long-random-string" \
-    JWT_EXPIRY_HOURS=24 \
-    CORS_ORIGINS="http://localhost:3000,http://localhost:5173" \
-    GITLAB_CLIENT_ID="" \
-    GITLAB_CLIENT_SECRET="" \
-    GITLAB_URL="https://gitlab.com" \
-    GITHUB_CLIENT_ID="" \
-    GITHUB_CLIENT_SECRET="" \
-    OAUTH_REDIRECT_BASE="http://localhost:3000" \
-    COURSE_SERVICE_URL="http://elearning-course-service:8082"
+# No ENV config defaults here: env vars override the mounted ConfigMap file
+# (precedence: code defaults → CONFIG_PATH file → env). Defaults live in
+# internal/config/config.go.
 
 EXPOSE 8081
 

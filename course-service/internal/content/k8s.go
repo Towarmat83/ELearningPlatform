@@ -190,6 +190,7 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		for i, raw := range rawModules {
 			m, ok := raw.(map[string]interface{})
 			if !ok {
+				slog.Info("module not map", "slug", slug, "index", i, "type", fmt.Sprintf("%T", raw))
 				continue
 			}
 			var modPrereqs []string
@@ -208,6 +209,7 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 				Path:          getStr(m, "path"),
 				Replication:   getBool(m, "replication"),
 				Hidden:        getBool(m, "hidden"),
+				Inline:        getBool(m, "inline"),
 				Prerequisites: modPrereqs,
 				PassingScore:  getInt(m, "passing_score"),
 				MaxAttemptsPerQuestion: func() *int {

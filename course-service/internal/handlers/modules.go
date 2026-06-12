@@ -53,6 +53,20 @@ func sanitizeQuestions(qq []content.Question, admin bool) []any {
 	return out
 }
 
+type inlineQuizResponse struct {
+	Index         int         `json:"index"`
+	Name          string      `json:"name"`
+	Slug          string      `json:"slug"`
+	Questions     []any       `json:"questions,omitempty"`
+	QuestionCount int         `json:"question_count"`
+	PassingScore  int         `json:"passing_score"`
+	BestScore     int         `json:"best_score,omitempty"`
+	MaxScore      int         `json:"max_score,omitempty"`
+	Passed        bool        `json:"passed"`
+	Attempts      int         `json:"attempts,omitempty"`
+	QuizConfig    *quizConfig `json:"quiz_config,omitempty"`
+}
+
 type moduleResponse struct {
 	Index         int                      `json:"index"`
 	Name          string                   `json:"name"`
@@ -71,6 +85,8 @@ type moduleResponse struct {
 	Questions     []any                    `json:"questions,omitempty"`
 	QuizConfig    *quizConfig              `json:"quiz_config,omitempty"`
 	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
+	Inline        bool                     `json:"inline,omitempty"`
+	InlineQuiz    *inlineQuizResponse      `json:"inline_quiz,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`
@@ -367,6 +383,7 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			Type:          m.Type,
 			Viewed:        viewed[m.Slug()],
 			Hidden:        m.Hidden,
+			Inline:        m.Inline,
 			Locked:        locked,
 			Prerequisites: m.Prerequisites,
 			BestScore:     p.BestScore,
@@ -443,6 +460,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 		Slug:   m.Slug(),
 		Type:   m.Type,
 		Hidden: m.Hidden,
+		Inline: m.Inline,
 	}
 	if m.Type == "quiz" && m.HasQuestions() {
 		resp.QuestionCount = len(m.Questions)
@@ -510,6 +528,61 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 			}
 			if len(cooldowns) > 0 {
 				resp.Cooldowns = cooldowns
+			}
+		}
+	}
+
+	// If the next module is an inline quiz, embed it in the response
+	if idx+1 < len(modules) {
+		next := modules[idx+1]
+		if next.Type == "quiz" && next.Inline {
+			iq := &inlineQuizResponse{
+				Index:        idx + 1,
+				Name:         next.Name,
+				Slug:         next.Slug(),
+				PassingScore: next.PassingScore,
+			}
+			isAdmin := claims != nil && claims.Role == "admin"
+			var quizQuestions []content.Question
+			if next.HasGitContent() {
+				quiz, err := content.FetchQuizContent(next.Src, next.Ref, next.Path, s.tokenForRepo(next.Src))
+				if err == nil {
+					quizQuestions = quiz.Questions
+					iq.Questions = sanitizeQuestions(quiz.Questions, isAdmin)
+					iq.PassingScore = quiz.PassingScore
+					iq.QuizConfig = &quizConfig{
+						PassingScore:           quiz.PassingScore,
+						Cooldown:               cooldown(quiz.Cooldown),
+						MaxAttemptsPerQuestion: quiz.MaxAttemptsPerQuestion,
+						LockOnMaxAttempts:      quiz.LockOnMaxAttempts,
+					}
+				}
+			} else if next.HasQuestions() {
+				quizQuestions = next.Questions
+				iq.Questions = sanitizeQuestions(next.Questions, isAdmin)
+				iq.QuizConfig = &quizConfig{
+					PassingScore:           next.PassingScore,
+					Cooldown:               cooldown(next.Cooldown),
+					MaxAttemptsPerQuestion: next.MaxAttemptsPerQuestion,
+					LockOnMaxAttempts:      next.LockOnMaxAttempts,
+				}
+			}
+			if len(quizQuestions) > 0 {
+				iq.QuestionCount = len(quizQuestions)
+				maxScore := 0
+				for _, q := range quizQuestions {
+					maxScore += q.Points
+				}
+				iq.MaxScore = maxScore
+				if claims != nil {
+					prog := s.fetchModuleProgress(r, courseSlug, claims.Subject)
+					if p, ok := prog[idx+1]; ok {
+						iq.BestScore = p.BestScore
+						iq.Attempts = p.Attempts
+						iq.Passed = p.Passed
+					}
+				}
+				resp.InlineQuiz = iq
 			}
 		}
 	}
@@ -646,6 +719,8 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 			s.CooldownTracker.ClearModule(userID, courseSlug, idx, qr.QuestionID)
 		}
 	}
+
+	s.recordModuleProgress(courseSlug, userID, m.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
 
 	apiResults := make([]questionResultAPI, len(result.QuestionResults))
 	for i, qr := range result.QuestionResults {

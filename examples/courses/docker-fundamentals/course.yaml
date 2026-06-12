@@ -1,0 +1,87 @@
+apiVersion: elearning.example.com/v1
+kind: Course
+metadata:
+  name: docker-fundamentals
+spec:
+  title: "Docker Fundamentals"
+  description: "Maîtrise Docker de zéro : images, conteneurs, volumes et réseaux. Construis et déploie tes premières applications conteneurisées."
+  category: devops
+  difficulty: beginner
+  public: true
+  prerequisites:
+    - course: "linux-intro"
+  modules:
+    - name: "Qu'est-ce que Docker ?"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/01-intro.md"
+    - name: "Images et conteneurs"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/02-images.md"
+      prerequisites:
+        - "qu-est-ce-que-docker-"
+    - name: "Volumes et persistance"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/03-networking.md"
+      prerequisites:
+        - "images-et-conteneurs"
+    - name: "Réseaux Docker"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/04-compose.md"
+      prerequisites:
+        - "volumes-et-persistance"
+    - name: "Docker Compose"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/04-compose.md"
+      prerequisites:
+        - "réseaux-docker"
+    - name: "Quiz Docker Fundamentals"
+      type: "quiz"
+      inline: true
+      prerequisites:
+        - "qu-est-ce-que-docker-"
+        - "images-et-conteneurs"
+        - "volumes-et-persistance"
+        - "réseaux-docker"
+        - "docker-compose"
+      passing_score: 70
+      questions:
+        - text: "Quelle commande permet de lister les conteneurs en cours d'exécution ?"
+          answers:
+            - text: "docker ps"
+              correct: true
+            - text: "docker list"
+              correct: false
+            - text: "docker containers"
+              correct: false
+            - text: "docker show"
+              correct: false
+        - text: "Quel fichier est utilisé pour définir une image Docker ?"
+          answers:
+            - text: "Dockerfile"
+              correct: true
+            - text: "docker-compose.yml"
+              correct: false
+            - text: "container.yml"
+              correct: false
+            - text: "image.conf"
+              correct: false
+        - text: "Quelle commande permet de construire une image Docker ?"
+          answers:
+            - text: "docker build"
+              correct: true
+            - text: "docker create"
+              correct: false
+            - text: "docker make"
+              correct: false
+            - text: "docker compile"
+              correct: false

@@ -1,0 +1,293 @@
+---
+import App from '../layouts/App.astro';
+---
+<App title="Mon profil">
+  <div class="page-content">
+    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+    <div id="profile-content" style="display:none">
+      <div class="profile-layout">
+        <!-- Left sidebar nav -->
+        <aside class="sidebar">
+          <div class="card-sm" style="margin-bottom:16px;text-align:center;padding:20px">
+            <div id="avatar-area" style="margin:0 auto 12px;width:80px;height:80px"></div>
+            <div id="profile-name" style="font-weight:700;margin-bottom:2px"></div>
+            <div id="profile-email" style="font-size:.8rem;color:var(--ink-soft)"></div>
+            <div id="profile-role" style="margin-top:8px"></div>
+          </div>
+          <nav class="sidebar-nav">
+            <a class="sidebar-link active" href="#compte" data-section="compte">👤 Compte</a>
+            <a class="sidebar-link" href="#securite" data-section="securite">🔒 Sécurité</a>
+          </nav>
+        </aside>
+
+        <!-- Right: sections -->
+        <div class="stack-lg">
+          <!-- Compte section -->
+          <div id="section-compte" class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+              <h2 style="font-size:1.1rem">Mon compte</h2>
+              <button class="btn btn-secondary btn-sm" id="edit-btn">Modifier</button>
+            </div>
+
+            <!-- View mode -->
+            <div id="view-mode">
+              <div class="stack" style="gap:14px">
+                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
+                  <span class="text-soft text-sm" style="padding-top:2px">Nom d'utilisateur</span>
+                  <span id="view-username" style="font-weight:500;font-size:.9rem"></span>
+                </div>
+                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
+                  <span class="text-soft text-sm" style="padding-top:2px">Email</span>
+                  <span id="view-email" style="font-size:.9rem"></span>
+                </div>
+                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
+                  <span class="text-soft text-sm" style="padding-top:2px">Bio</span>
+                  <span id="view-bio" style="font-size:.9rem;color:var(--ink-soft)"></span>
+                </div>
+                <div id="view-avatar-row" style="display:none;display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
+                  <span class="text-soft text-sm" style="padding-top:2px">URL avatar</span>
+                  <span id="view-avatar" style="font-size:.85rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Edit mode -->
+            <form id="edit-mode" style="display:none" class="stack" style="gap:14px">
+              <div id="avatar-field" class="form-group" style="display:none">
+                <label class="label" for="edit-avatar">URL de l'avatar</label>
+                <input class="input" type="url" id="edit-avatar" placeholder="https://example.com/avatar.png" />
+              </div>
+              <div class="form-group">
+                <label class="label" for="edit-bio">Bio</label>
+                <textarea class="input" id="edit-bio" rows="3" placeholder="Dites-nous quelque chose sur vous…"></textarea>
+              </div>
+              <div id="sso-avatar-notice" style="display:none;font-size:.8rem;color:var(--blue);background:var(--blue-soft);border:1px solid var(--blue);border-radius:var(--radius);padding:10px 14px"></div>
+              <div style="display:flex;gap:10px">
+                <button type="submit" class="btn btn-primary" id="save-btn">Enregistrer</button>
+                <button type="button" class="btn btn-secondary" id="cancel-btn">Annuler</button>
+              </div>
+              <p id="save-error" style="display:none;color:var(--bad);font-size:.85rem"></p>
+            </form>
+          </div>
+
+          <!-- Sécurité section -->
+          <div id="section-securite" class="card" style="display:none">
+            <h2 style="font-size:1.1rem;margin-bottom:20px">Sécurité</h2>
+            <div id="security-content"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) { window.location.href = '/login?redirect=/profile'; }
+
+    async function apiFetch(path: string, opts: { method?: string; body?: unknown; token?: string } = {}) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
+      const res = await fetch('/api' + path, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      if (res.status === 401) { localStorage.clear(); window.location.href = '/login'; throw new Error('Session expirée'); }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).error || `HTTP ${res.status}`); }
+      return res.json();
+    }
+
+    let user: any = null;
+
+    const providerLabels: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', google: 'Google', oidc: 'SSO / OIDC', ldap: 'LDAP / Active Directory' };
+
+    async function init() {
+      if (!token) return;
+      try {
+        user = await apiFetch('/auth/me', { token: token! }) as any;
+        render();
+      } catch {
+        (window as any).showToast?.('Erreur lors du chargement du profil', 'error');
+      }
+    }
+
+    function render() {
+      document.getElementById('loading')!.style.display = 'none';
+      document.getElementById('profile-content')!.style.display = 'block';
+
+      const isSso = user.auth_provider && user.auth_provider !== 'local' && user.auth_provider !== '';
+      const initial = (user.username || '?')[0].toUpperCase();
+
+      // Sidebar mini-profile
+      const avatarArea = document.getElementById('avatar-area')!;
+      if (user.avatar_url) {
+        avatarArea.innerHTML = `<img src="${user.avatar_url}" alt="${user.username}" class="avatar-circle" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="avatar-initial" style="display:none">${initial}</div>`;
+      } else {
+        avatarArea.innerHTML = `<div class="avatar-initial">${initial}</div>`;
+      }
+      document.getElementById('profile-name')!.textContent = user.username;
+      document.getElementById('profile-email')!.textContent = user.email;
+
+      const roleDiv = document.getElementById('profile-role')!;
+      roleDiv.innerHTML = '';
+      if (user.role === 'admin') roleDiv.innerHTML += '<span class="badge badge-red">Admin</span> ';
+      if (isSso) roleDiv.innerHTML += `<span class="badge badge-blue">${providerLabels[user.auth_provider] || user.auth_provider}</span>`;
+
+      // View mode
+      document.getElementById('view-username')!.textContent = user.username;
+      document.getElementById('view-email')!.textContent = user.email;
+      document.getElementById('view-bio')!.textContent = user.bio || '—';
+
+      if (!isSso && user.avatar_url) {
+        const row = document.getElementById('view-avatar-row')!;
+        row.style.display = 'grid';
+        document.getElementById('view-avatar')!.textContent = user.avatar_url;
+      }
+
+      // Edit mode setup
+      if (!isSso) {
+        document.getElementById('avatar-field')!.style.display = 'block';
+        (document.getElementById('edit-avatar') as HTMLInputElement).value = user.avatar_url || '';
+      } else {
+        const notice = document.getElementById('sso-avatar-notice')!;
+        notice.style.display = 'block';
+        notice.textContent = `Votre avatar est synchronisé automatiquement depuis ${providerLabels[user.auth_provider] || user.auth_provider} à chaque connexion.`;
+      }
+      (document.getElementById('edit-bio') as HTMLTextAreaElement).value = user.bio || '';
+
+      // Security section
+      const secContent = document.getElementById('security-content')!;
+      if (isSso) {
+        secContent.innerHTML = `<p class="text-soft text-sm">Votre compte est géré par <strong>${providerLabels[user.auth_provider] || user.auth_provider}</strong>. La gestion du mot de passe est assurée par votre fournisseur d'identité.</p>`;
+      } else {
+        secContent.innerHTML = `
+          <div id="pw-view">
+            <p class="text-soft text-sm" style="margin-bottom:12px">Utilisez un mot de passe fort d'au moins 8 caractères.</p>
+            <button class="btn btn-secondary btn-sm" id="change-pw-btn">Changer le mot de passe</button>
+          </div>
+          <form id="pw-form" style="display:none" class="stack" style="gap:12px">
+            <div class="form-group">
+              <label class="label" for="old-pw">Mot de passe actuel</label>
+              <input class="input" type="password" id="old-pw" autocomplete="current-password" />
+            </div>
+            <div class="form-group">
+              <label class="label" for="new-pw">Nouveau mot de passe</label>
+              <input class="input" type="password" id="new-pw" autocomplete="new-password" />
+            </div>
+            <div class="form-group">
+              <label class="label" for="new-pw2">Confirmer le mot de passe</label>
+              <input class="input" type="password" id="new-pw2" autocomplete="new-password" />
+            </div>
+            <div style="display:flex;gap:10px">
+              <button type="submit" class="btn btn-primary" id="pw-save-btn">Mettre à jour</button>
+              <button type="button" class="btn btn-secondary" id="pw-cancel-btn">Annuler</button>
+            </div>
+            <p id="pw-error" style="display:none;color:var(--bad);font-size:.85rem"></p>
+          </form>
+        `;
+
+        document.getElementById('change-pw-btn')!.addEventListener('click', () => {
+          document.getElementById('pw-view')!.style.display = 'none';
+          document.getElementById('pw-form')!.style.display = 'block';
+        });
+        document.getElementById('pw-cancel-btn')!.addEventListener('click', () => {
+          document.getElementById('pw-view')!.style.display = 'block';
+          document.getElementById('pw-form')!.style.display = 'none';
+        });
+        document.getElementById('pw-form')!.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const old = (document.getElementById('old-pw') as HTMLInputElement).value;
+          const nw = (document.getElementById('new-pw') as HTMLInputElement).value;
+          const nw2 = (document.getElementById('new-pw2') as HTMLInputElement).value;
+          const errEl = document.getElementById('pw-error')!;
+          errEl.style.display = 'none';
+          if (nw !== nw2) { errEl.textContent = 'Les mots de passe ne correspondent pas'; errEl.style.display = 'block'; return; }
+          if (nw.length < 8) { errEl.textContent = 'Minimum 8 caractères'; errEl.style.display = 'block'; return; }
+          const btn = document.getElementById('pw-save-btn') as HTMLButtonElement;
+          btn.disabled = true; btn.textContent = 'Enregistrement…';
+          try {
+            await apiFetch('/auth/password', { method: 'PUT', body: { old_password: old, new_password: nw }, token: token! });
+            (window as any).showToast?.('Mot de passe mis à jour', 'success');
+            document.getElementById('pw-view')!.style.display = 'block';
+            document.getElementById('pw-form')!.style.display = 'none';
+            (document.getElementById('old-pw') as HTMLInputElement).value = '';
+            (document.getElementById('new-pw') as HTMLInputElement).value = '';
+            (document.getElementById('new-pw2') as HTMLInputElement).value = '';
+          } catch (err: any) {
+            errEl.textContent = err.message || 'Erreur lors du changement';
+            errEl.style.display = 'block';
+          } finally {
+            btn.disabled = false; btn.textContent = 'Mettre à jour';
+          }
+        });
+      }
+
+    }
+
+    // Edit profile events
+    document.getElementById('edit-btn')!.addEventListener('click', () => {
+      document.getElementById('view-mode')!.style.display = 'none';
+      document.getElementById('edit-mode')!.style.display = 'block';
+    });
+
+    document.getElementById('cancel-btn')!.addEventListener('click', () => {
+      document.getElementById('view-mode')!.style.display = 'block';
+      document.getElementById('edit-mode')!.style.display = 'none';
+    });
+
+    document.getElementById('edit-mode')!.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('save-error')!;
+      errEl.style.display = 'none';
+      const btn = document.getElementById('save-btn') as HTMLButtonElement;
+      btn.disabled = true; btn.textContent = 'Enregistrement…';
+
+      const bio = (document.getElementById('edit-bio') as HTMLTextAreaElement).value;
+      const avatarInput = document.getElementById('edit-avatar') as HTMLInputElement;
+      const body: Record<string, string> = { bio };
+      if (avatarInput && avatarInput.value) body.avatar_url = avatarInput.value;
+
+      try {
+        const updated = await apiFetch('/auth/profile', { method: 'PUT', body, token: token! }) as any;
+        user = updated;
+        localStorage.setItem('user', JSON.stringify(updated));
+        document.getElementById('view-mode')!.style.display = 'block';
+        document.getElementById('edit-mode')!.style.display = 'none';
+        render();
+        (window as any).showToast?.('Profil mis à jour', 'success');
+      } catch (err: any) {
+        errEl.textContent = err.message || 'Erreur lors de la sauvegarde';
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Enregistrer';
+      }
+    });
+
+    // Sidebar tab switching
+    function switchSection(name: string) {
+      document.querySelectorAll<HTMLElement>('[id^="section-"]').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
+      const section = document.getElementById(`section-${name}`);
+      if (section) section.style.display = 'block';
+      const link = document.querySelector<HTMLElement>(`.sidebar-link[data-section="${name}"]`);
+      if (link) link.classList.add('active');
+    }
+
+    document.querySelectorAll<HTMLElement>('.sidebar-link[data-section]').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        switchSection(link.dataset.section!);
+        history.replaceState(null, '', `#${link.dataset.section}`);
+      });
+    });
+
+    if (!token) {
+      window.location.href = '/login?redirect=/profile';
+    } else {
+      const hash = location.hash.replace('#', '');
+      if (hash) switchSection(hash);
+      init();
+    }
+  </script>
+</App>

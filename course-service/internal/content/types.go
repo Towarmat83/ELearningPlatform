@@ -46,6 +46,7 @@ type Module struct {
 	Path                   string       `json:"path,omitempty"`
 	Replication            bool         `json:"replication,omitempty"`
 	Hidden                 bool         `json:"hidden,omitempty"`
+	Inline                 bool         `json:"inline,omitempty"` // quiz rendered inside the previous module
 	Prerequisites          []string     `json:"prerequisites,omitempty"` // module slugs that must be completed first
 	Questions              []Question   `json:"questions,omitempty"`
 	PassingScore           int          `json:"passing_score,omitempty"`
@@ -126,6 +127,7 @@ type ModuleYAML struct {
 	Path                   string           `yaml:"path,omitempty"`
 	Replication            bool             `yaml:"replication,omitempty"`
 	Hidden                 bool             `yaml:"hidden,omitempty"`
+	Inline                 bool             `yaml:"inline,omitempty"`
 	Prerequisites          []string         `yaml:"prerequisites,omitempty"`
 	Questions              []QuestionYAML   `yaml:"questions,omitempty"`
 	PassingScore           int              `yaml:"passing_score"`

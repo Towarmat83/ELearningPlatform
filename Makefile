@@ -7,7 +7,7 @@ HELM_DIR       := helm
 HELM_RELEASE   := elearning
 HELM_VALUES    := infra/kind/kind-values.yaml
 PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
-COURSE_DIR     := examples
+COURSE_DIR     := examples/courses
 
 REGISTRY       := ghcr.io/towarmat83
 IMAGE_COURSE   := localhost/elearning-course-service:local
@@ -81,7 +81,6 @@ helm-deps:
 .PHONY: helm-install
 helm-install:
 	helm upgrade --install $(HELM_RELEASE) $(HELM_DIR) --values $(HELM_VALUES)
-	-kubectl apply -f infra/manifests/postgresql.yaml
 
 .PHONY: helm-delete
 helm-delete:

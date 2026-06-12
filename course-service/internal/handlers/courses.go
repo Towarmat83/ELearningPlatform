@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/elearning/course-service/internal/content"
+	"github.com/elearning/course-service/internal/middleware"
 )
 
 type prerequisiteResponse struct {
@@ -248,12 +249,17 @@ func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !c.IsPublic {
+		// Try to extract claims from Authorization header (route has no auth middleware).
 		claims := s.claims(r)
 		if claims == nil {
-			s.Error(w, http.StatusNotFound, "Course not found")
-			return
+			if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+				parsed, err := middleware.VerifyToken(strings.TrimPrefix(auth, "Bearer "), s.Config.JWTSecret)
+				if err == nil {
+					claims = parsed
+				}
+			}
 		}
-		if claims.Role != "admin" && !s.isEnrolled(r, slug, claims.Subject) {
+		if claims == nil || (claims.Role != "admin" && !s.isEnrolled(r, slug, claims.Subject)) {
 			s.Error(w, http.StatusNotFound, "Course not found")
 			return
 		}

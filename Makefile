@@ -129,7 +129,7 @@ dev: kind-delete kind-create docker-build kind-load helm-install apply-courses
 	@kubectl rollout status deploy/$(HELM_RELEASE)-course-service --timeout=120s
 	@kubectl rollout status deploy/$(HELM_RELEASE)-user-service  --timeout=120s
 	@kubectl rollout status deploy/$(HELM_RELEASE)-frontend      --timeout=120s
-	@kubectl rollout status deploy/elearning-postgresql          --timeout=60s
+	@kubectl rollout status statefulset/$(HELM_RELEASE)-postgresql --timeout=60s
 	@echo ""
 	@echo "=== Deployment ready ==="
 	@echo "Run 'make port-forward' to expose services locally."
@@ -160,7 +160,7 @@ logs:
 	@kubectl logs deploy/$(HELM_RELEASE)-frontend --tail=10 2>&1
 	@echo ""
 	@echo "=== postgresql ==="
-	@kubectl logs deploy/elearning-postgresql --tail=5 2>&1 || true
+	@kubectl logs statefulset/$(HELM_RELEASE)-postgresql --tail=5 2>&1 || true
 
 # ── OpenAPI ──────────────────────────────────────────────────────────────────
 #

@@ -48,23 +48,23 @@ spec:
             - containerPort: 5432
           env:
             - name: POSTGRES_USER
-              value: {{ .Values.postgresql.auth.username | quote }}
+              value: {{ .Values.database.auth.username | quote }}
             - name: POSTGRES_PASSWORD
-              {{- if .Values.postgresql.auth.existingSecret }}
+              {{- if .Values.database.auth.existingSecret }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.postgresql.auth.existingSecret }}
-                  key: {{ .Values.postgresql.auth.existingSecretKey | default "db_password" }}
+                  name: {{ .Values.database.auth.existingSecret }}
+                  key: {{ .Values.database.auth.passwordKey | default "db_password" }}
               {{- else }}
-              value: {{ .Values.postgresql.auth.password | quote }}
+              value: {{ .Values.database.auth.password | quote }}
               {{- end }}
             - name: POSTGRES_DB
-              value: {{ .Values.postgresql.auth.database | quote }}
+              value: {{ .Values.database.name | quote }}
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", {{ .Values.postgresql.auth.username | quote }}]
+              command: ["pg_isready", "-U", {{ .Values.database.auth.username | quote }}]
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:

@@ -191,26 +191,28 @@ ingress:
   tls: []
 
 # ── Database ──────────────────────────────────────────────────────────────────
-# Option A — bundled PostgreSQL (dev / small deployments):
-#   postgresql.enabled: true
+# `database` is the single source of truth for connection + credentials. It is
+# shared by the bundled PostgreSQL (when postgresql.enabled=true) and by the
+# application services.
 #
-# Option B — external database (production):
-#   postgresql.enabled: false
-#   externalDatabase.host: "my-pg.example.com"
-#   externalDatabase.existingSecret: "my-secret"   # contains DATABASE_URL
+#   Option A — bundled PostgreSQL (dev / small deployments):
+#     postgresql.enabled: true
+#     The in-cluster instance is provisioned from database.auth and database.name;
+#     services connect to it automatically (database.host/port are ignored).
+#
+#   Option B — external / managed database (production):
+#     postgresql.enabled: false
+#     Point database.host/port/name at your managed PostgreSQL and supply
+#     credentials through database.auth.existingSecret (no secrets in values).
 
+# Toggle + runtime settings for the bundled in-cluster PostgreSQL.
+# Credentials/connection live under `database` below — not here.
 postgresql:
   enabled: false
   image:
     repository: postgres
     tag: "17-alpine"
     pullPolicy: IfNotPresent
-  auth:
-    username: elearning
-    password: elearning_secret
-    database: elearning
-    existingSecret: ""       # if set, POSTGRES_PASSWORD is sourced from this Secret
-    existingSecretKey: "db_password"
   persistence:
     enabled: false
     size: 5Gi
@@ -224,11 +226,28 @@ postgresql:
       memory: "512Mi"
       cpu: "500m"
 
-externalDatabase:
-  host: "elearning-postgresql"
+database:
+  # Connection target for an EXTERNAL database (Option B).
+  # Ignored when postgresql.enabled=true — services then reach the in-cluster
+  # Service at <release>-postgresql.<namespace>.svc.cluster.local:5432.
+  host: "postgresql.example.com"
   port: 5432
+  # Database (schema) name. Also used to provision the bundled instance.
   name: elearning
-  username: elearning
-  password: "elearning_secret"
-  existingSecret: ""           # if set, DATABASE_URL is read from this Secret
-  existingSecretKey: "DATABASE_URL"
+  auth:
+    username: elearning
+    # Cleartext password. Fine for dev; for production leave this and rely on
+    # existingSecret instead so no credentials are committed to values.
+    password: elearning_secret
+    # ── Production secret sourcing (Vault / External Secrets / SOPS) ──
+    # Name of an existing Secret to read credentials from. Empty disables it.
+    existingSecret: ""
+    # Key holding the FULL connection string, e.g.
+    #   postgres://user:pass@host:5432/db
+    # Preferred for external databases: DATABASE_URL is read straight from the
+    # Secret and never rendered into the chart's own Secret. Set to "" to instead
+    # have the URL assembled from the fields above (e.g. password-only secrets).
+    urlKey: "DATABASE_URL"
+    # Key holding ONLY the password. Used as POSTGRES_PASSWORD for the bundled
+    # database when postgresql.enabled=true.
+    passwordKey: "db_password"

@@ -68,9 +68,67 @@ import App from '../../../layouts/App.astro';
       font-size: 1rem; flex-shrink: 0;
     }
     .mod-icon.quiz { background: var(--orange-soft); }
+    .mod-icon.lab { background: var(--blue-soft); }
     .mod-icon.done { background: var(--good-soft); }
     .mod-name { flex: 1; font-weight: 500; font-size: .9rem; }
     .mod-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+
+    /* ── AI Summary ── */
+    .ai-card {
+      margin-bottom: 24px;
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--paper);
+    }
+    .ai-card-header {
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--fill);
+    }
+    .ai-avatar {
+      width: 26px; height: 26px;
+      border-radius: 6px;
+      background: linear-gradient(135deg,#1b86f2,#1466c4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; flex-shrink: 0; color: #fff;
+    }
+    .ai-card-header-name { font-size: .82rem; font-weight: 700; color: var(--ink); }
+    .ai-card-body { padding: 18px 20px 14px; }
+    .ai-thinking {
+      display: flex; align-items: center; gap: 8px;
+      font-size: .82rem; color: var(--ink-soft);
+    }
+    .ai-dots span {
+      display: inline-block; width: 5px; height: 5px;
+      border-radius: 50%; background: var(--blue);
+      animation: bounce-dot .9s ease-in-out infinite;
+    }
+    .ai-dots span:nth-child(2){animation-delay:.2s}
+    .ai-dots span:nth-child(3){animation-delay:.4s}
+    @keyframes bounce-dot{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+    .ai-bullets { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .ai-bullet {
+      display: flex; gap: 10px; align-items: flex-start;
+      font-size: .875rem; line-height: 1.65; color: var(--ink);
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .4s ease, transform .4s ease;
+    }
+    .ai-bullet.visible { opacity: 1; transform: translateY(0); }
+    .ai-bullet-dot {
+      margin-top: 7px; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--blue);
+      flex-shrink: 0;
+    }
+    .ai-footer {
+      margin-top: 14px; padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: .72rem; color: var(--ink-soft);
+      display: flex; align-items: center; gap: 6px;
+    }
 
     /* ── Responsive ── */
     @media (max-width: 900px) {
@@ -113,6 +171,25 @@ import App from '../../../layouts/App.astro';
 
     <!-- Right: module list -->
     <div class="course-main">
+
+      <!-- AI Summary -->
+      <div class="ai-card" id="ai-card" style="display:none">
+        <div class="ai-card-header">
+          <div class="ai-avatar">✦</div>
+          <span class="ai-card-header-name">Ce qu'il faut retenir</span>
+        </div>
+        <div class="ai-card-body">
+          <div class="ai-thinking" id="ai-thinking">
+            <span>Analyse du cours</span>
+            <div class="ai-dots"><span></span><span></span><span></span></div>
+          </div>
+          <ul class="ai-bullets" id="ai-bullets" style="display:none"></ul>
+          <div class="ai-footer" id="ai-footer" style="display:none">
+            <span>✦</span> Résumé généré par IA
+          </div>
+        </div>
+      </div>
+
       <div class="course-main-header">
         <h2 style="font-size:1rem;font-weight:700">Contenu du cours</h2>
         <span id="module-count" class="text-soft text-sm"></span>
@@ -127,6 +204,7 @@ import App from '../../../layouts/App.astro';
         <p style="font-weight:600;margin-bottom:4px">Prérequis non satisfaits</p>
         <p class="text-soft text-sm">Terminez les cours prérequis pour accéder à ce contenu.</p>
       </div>
+
     </div>
   </div>
 
@@ -155,6 +233,7 @@ import App from '../../../layouts/App.astro';
     function moduleHref(m: any) {
       if (m.locked) return null;
       if (m.type === 'quiz') return `/courses/${slug}/quiz/${m.index}`;
+      if (m.type === 'lab') return m.src || null;
       return `/courses/${slug}/lessons/${m.index}`;
     }
 
@@ -163,12 +242,13 @@ import App from '../../../layouts/App.astro';
       if (m.type === 'video') return '🎬';
       if (m.type === 'image') return '🖼️';
       if (m.type === 'quiz') return '🧩';
+      if (m.type === 'lab') return '🧪';
       return '📝';
     }
 
     function moduleStatusBadges(m: any): string {
       const parts: string[] = [];
-      const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lesson: 'Lecture' };
+      const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lab: 'Lab', lesson: 'Lecture' };
       parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeLabel[m.type] || m.type}</span>`);
       if (m.locked) {
         parts.push(`<span class="badge badge-gray" style="font-size:.7rem">Verrouillé</span>`);
@@ -186,8 +266,9 @@ import App from '../../../layouts/App.astro';
       return modules.map(m => {
         const href = moduleHref(m);
         const tag = href ? 'a' : 'div';
-        const hrefAttr = href ? `href="${href}"` : '';
-        const iconCls = m.locked ? '' : m.type === 'quiz' ? ' quiz' : (m.viewed || m.passed) ? ' done' : '';
+        const isLab = m.type === 'lab' && href;
+        const hrefAttr = href ? `href="${href}"${isLab ? ` target="_blank" rel="noopener" data-lab-slug="${m.slug}"` : ''}` : '';
+        const iconCls = m.locked ? '' : m.type === 'quiz' ? ' quiz' : (m.viewed || m.passed) ? ' done' : m.type === 'lab' ? ' lab' : '';
         return `
           <${tag} ${hrefAttr} class="mod-row${m.locked ? ' locked' : ''}">
             <div class="mod-icon${iconCls}">${moduleIcon(m)}</div>
@@ -224,13 +305,7 @@ import App from '../../../layouts/App.astro';
         if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
         tagsEl.innerHTML = tagParts.join('');
 
-        // Meta (module count, enrollment count)
-        const meta = document.getElementById('course-meta')!;
-        const metaParts: string[] = [];
-        if (course.lab_count) metaParts.push(`<div class="text-soft text-sm">📦 ${course.lab_count} module${course.lab_count !== 1 ? 's' : ''}</div>`);
-        if (course.enrollment_count !== undefined) metaParts.push(`<div class="text-soft text-sm">👥 ${course.enrollment_count} inscrits</div>`);
-        meta.innerHTML = metaParts.join('');
-        if (!metaParts.length) meta.style.display = 'none';
+        document.getElementById('course-meta')!.style.display = 'none';
 
         // Enrollment check
         let enrolled = false;
@@ -282,9 +357,9 @@ import App from '../../../layouts/App.astro';
         } else if (totalCount > 0) {
           // Find first incomplete module for CTA
           const nextMod = visibleModules.find((m: any) => !(m.type === 'quiz' ? m.passed : m.viewed) && !m.locked);
-          const ctaHref = nextMod
-            ? (nextMod.type === 'quiz' ? `/courses/${slug}/quiz/${nextMod.index}` : `/courses/${slug}/lessons/${nextMod.index}`)
-            : (visibleModules[0] ? (visibleModules[0].type === 'quiz' ? `/courses/${slug}/quiz/${visibleModules[0].index}` : `/courses/${slug}/lessons/${visibleModules[0].index}`) : '#');
+          const ctaHref = (nextMod ? moduleHref(nextMod) : null)
+            ?? (visibleModules[0] ? moduleHref(visibleModules[0]) : null)
+            ?? '#';
 
           enrollArea.innerHTML = `
             <div style="margin-bottom:10px">
@@ -307,7 +382,18 @@ import App from '../../../layouts/App.astro';
         if (prereqBlocked) {
           document.getElementById('prereq-blocked')!.style.display = 'block';
         } else if (enrolled && visibleModules.length > 0) {
-          document.getElementById('modules-list')!.innerHTML = renderModules(visibleModules);
+          const list = document.getElementById('modules-list')!;
+          list.innerHTML = renderModules(visibleModules);
+          // Opening a lab counts as completing it (link opens in a new tab,
+          // so we can record progress without blocking navigation)
+          list.querySelectorAll('a[data-lab-slug]').forEach(el => {
+            el.addEventListener('click', () => {
+              const labSlug = (el as HTMLElement).dataset.labSlug;
+              if (token && labSlug) {
+                apiFetch(`/courses/${slug}/lessons/${labSlug}/complete`, { method: 'POST', body: {}, token: token! }).catch(() => {});
+              }
+            });
+          });
         } else if (enrolled) {
           document.getElementById('modules-empty')!.textContent = 'Aucun contenu disponible pour le moment.';
           document.getElementById('modules-empty')!.style.display = 'block';
@@ -317,10 +403,72 @@ import App from '../../../layouts/App.astro';
 
         document.getElementById('loading')!.style.display = 'none';
         document.getElementById('course-content')!.style.display = 'grid';
+        launchAI(slug);
       } catch {
         document.getElementById('loading')!.style.display = 'none';
         document.getElementById('not-found')!.style.display = 'block';
       }
+    }
+
+    // ── AI mock summaries ──
+    type AiBullet = [string, string]; // [bold part, normal part]
+    const AI_SUMMARIES: Record<string, AiBullet[]> = {
+      'microservices-kubernetes': [
+        ['Les microservices décomposent un monolithe en services indépendants,', ' chacun responsable d\'un périmètre métier précis, avec sa propre base de données, déployable sans toucher aux autres.'],
+        ['Kubernetes orchestre ces services à l\'échelle :', ' il gère le déploiement, la montée en charge automatique, la résilience et la découverte de services via DNS interne.'],
+        ['L\'observabilité est indispensable en production :', ' Prometheus collecte les métriques, Grafana les visualise, et ArgoCD automatise les déploiements en mode GitOps — sans ça, un cluster microservices devient ingérable.'],
+      ],
+      'docker-conteneurisation': [
+        ['Docker isole chaque application dans un conteneur reproductible,', ' garantissant que ce qui tourne en dev tourne de façon identique en staging et en production.'],
+        ['Les Dockerfiles multi-stage réduisent drastiquement la taille des images finales', ' en séparant l\'étape de build des artefacts déployés — typiquement de 800 Mo à moins de 20 Mo pour une app Go.'],
+        ['Docker Compose orchestre plusieurs conteneurs localement en un seul fichier YAML,', ' remplaçant des dizaines de commandes docker run par un simple docker compose up.'],
+      ],
+      'golang-fondamentaux': [
+        ['Go est un langage compilé, statiquement typé et opinioné,', ' conçu par Google pour allier la performance du C à la lisibilité d\'un langage moderne — sans garbage collector bloquant.'],
+        ['Les goroutines et les channels sont le cœur de la concurrence en Go :', ' des milliers de goroutines peuvent tourner en parallèle avec une empreinte mémoire infime comparée aux threads OS.'],
+        ['La gestion des erreurs en Go est explicite et volontairement verbeuse,', ' forçant le développeur à traiter chaque cas d\'échec plutôt que de s\'appuyer sur des exceptions implicites.'],
+      ],
+      'observabilite-prometheus-grafana': [
+        ['L\'observabilité repose sur trois piliers complémentaires :', ' les métriques (Prometheus), les logs (Loki/ELK) et le tracing distribué (Jaeger) — chacun répond à un type de question différent.'],
+        ['Prometheus scrape les endpoints /metrics de vos services à intervalle régulier', ' et stocke les séries temporelles dans une base de données optimisée pour les requêtes PromQL.'],
+        ['Grafana transforme les données brutes en dashboards actionnables,', ' avec des alertes configurables qui déclenchent des notifications PagerDuty, Slack ou email dès qu\'un seuil est franchi.'],
+      ],
+      'securite-kubernetes': [
+        ['Le RBAC Kubernetes contrôle qui peut faire quoi sur quelles ressources,', ' via des ServiceAccounts, Roles et RoleBindings — mal configuré, il devient la principale surface d\'attaque d\'un cluster.'],
+        ['Les Network Policies fonctionnent comme un firewall East-West interne au cluster,', ' bloquant par défaut tout trafic inter-pods sauf ce qui est explicitement autorisé.'],
+        ['Vault gère le cycle de vie complet des secrets :', ' rotation automatique, accès temporaire avec TTL, et audit trail — là où les Kubernetes Secrets natifs ne sont qu\'encodés en base64.'],
+      ],
+      'api-rest-grpc': [
+        ['REST est un style architectural basé sur HTTP et les ressources,', ' lisible par l\'humain, universellement supporté — mais verbeux et sans contrat fort entre client et serveur.'],
+        ['gRPC utilise Protocol Buffers comme format de sérialisation binaire,', ' offrant des performances 5 à 10× supérieures à JSON/REST pour les communications inter-services à fort volume.'],
+        ['OpenAPI (anciennement Swagger) génère automatiquement documentation, clients et mocks', ' à partir d\'un fichier YAML, réduisant la dérive entre le contrat d\'API et son implémentation réelle.'],
+      ],
+    };
+
+    const AI_DEFAULT: AiBullet[] = [
+      ['Ce cours progresse des fondamentaux vers les cas d\'usage avancés,', ' chaque module s\'appuyant sur le précédent pour construire une compréhension solide et durable.'],
+      ['Les exercices pratiques accompagnent chaque notion clé,', ' permettant de passer immédiatement de la théorie à la mise en œuvre dans un environnement réel.'],
+      ['Un quiz final valide vos acquis avant de progresser,', ' avec un score minimum requis pour garantir que les bases sont bien ancrées.'],
+    ];
+
+    function launchAI(courseSlug: string) {
+      const card = document.getElementById('ai-card')!;
+      card.style.display = 'block';
+      const bullets = AI_SUMMARIES[courseSlug] || AI_DEFAULT;
+      const thinking = document.getElementById('ai-thinking')!;
+      const bulletsEl = document.getElementById('ai-bullets')!;
+      const footer = document.getElementById('ai-footer')!;
+
+      setTimeout(() => {
+        thinking.style.display = 'none';
+        bulletsEl.style.display = 'flex';
+        bulletsEl.innerHTML = bullets.map(([b, n]) =>
+          `<li class="ai-bullet"><div class="ai-bullet-dot"></div><span><strong>${b}</strong>${n}</span></li>`
+        ).join('');
+        const items = bulletsEl.querySelectorAll<HTMLElement>('.ai-bullet');
+        items.forEach((el, i) => setTimeout(() => el.classList.add('visible'), i * 280));
+        setTimeout(() => { footer.style.display = 'flex'; }, items.length * 280 + 200);
+      }, 1100);
     }
 
     init();

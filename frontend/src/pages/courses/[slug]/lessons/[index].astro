@@ -464,6 +464,7 @@ import App from '../../../../layouts/App.astro';
       if (m.type === 'quiz') return '🧩';
       if (m.type === 'video') return '🎬';
       if (m.type === 'image') return '🖼️';
+      if (m.type === 'lab') return '🧪';
       return '📝';
     }
 
@@ -533,7 +534,15 @@ import App from '../../../../layouts/App.astro';
 
       // Render content
       const contentBody = document.getElementById('content-body')!;
-      if (mod.type === 'video' && mod.content) {
+      if (mod.type === 'lab' && mod.content) {
+        contentBody.innerHTML = `
+          <div style="text-align:center;padding:48px 24px;background:var(--blue-soft);border-radius:10px;margin:24px 0">
+            <div style="font-size:3rem;margin-bottom:12px">🧪</div>
+            <p style="color:var(--ink-soft);margin-bottom:20px">Ce module est un lab pratique hébergé sur un environnement externe.</p>
+            <a href="${mod.content}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-flex">Ouvrir le lab ↗</a>
+          </div>
+        `;
+      } else if (mod.type === 'video' && mod.content) {
         contentBody.innerHTML = `<div style="display:flex;justify-content:center;margin:24px 0"><video controls style="max-width:100%;border-radius:10px"><source src="${mod.content}" type="video/mp4" /></video></div>`;
       } else if (mod.type === 'image' && mod.content) {
         contentBody.innerHTML = `<div style="display:flex;justify-content:center;margin:24px 0"><img src="${mod.content}" alt="${mod.name}" style="max-width:100%;border-radius:10px" /></div>`;

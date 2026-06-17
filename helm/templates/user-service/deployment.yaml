@@ -46,6 +46,50 @@ spec:
               key: {{ include "elearning.jwtSecretKey" . }}
         - name: OAUTH_REDIRECT_BASE
           value: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
+        {{- if .Values.sso.oidc.enabled }}
+        # OIDC bootstrap — seeded into platform_settings on startup. The client
+        # secret is mounted as a file (OIDC_CLIENT_SECRET_FILE), never an env var.
+        - name: OIDC_ENABLED
+          value: "true"
+        - name: OIDC_PROVIDER_URL
+          value: {{ .Values.sso.oidc.providerURL | quote }}
+        {{- if .Values.sso.oidc.issuerURL }}
+        - name: OIDC_ISSUER_URL
+          value: {{ .Values.sso.oidc.issuerURL | quote }}
+        {{- end }}
+        - name: OIDC_CLIENT_ID
+          value: {{ .Values.sso.oidc.clientID | quote }}
+        - name: OIDC_SCOPES
+          value: {{ .Values.sso.oidc.scopes | quote }}
+        - name: OIDC_GROUP_CLAIM
+          value: {{ .Values.sso.oidc.groupClaim | quote }}
+        {{- if .Values.sso.oidc.browserBaseURL }}
+        - name: OIDC_BROWSER_BASE_URL
+          value: {{ .Values.sso.oidc.browserBaseURL | quote }}
+        {{- end }}
+        {{- if .Values.sso.oidc.redirectBase }}
+        - name: OIDC_REDIRECT_BASE
+          value: {{ .Values.sso.oidc.redirectBase | quote }}
+        {{- end }}
+        - name: OIDC_CLIENT_SECRET_FILE
+          value: /etc/oidc/OIDC_CLIENT_SECRET
+        {{- end }}
+        {{- if .Values.sso.enabled }}
+        {{- range .Values.sso.providers }}
+        {{- if or .client_secret .existingSecret }}
+        - name: SSO_{{ .id | upper }}_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              {{- if .existingSecret }}
+              name: {{ .existingSecret | quote }}
+              key: {{ .existingSecretKey | default "client_secret" | quote }}
+              {{- else }}
+              name: {{ include "elearning.fullname" $ }}-secrets
+              key: SSO_{{ .id | upper }}_CLIENT_SECRET
+              {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -66,6 +110,11 @@ spec:
         - name: admin-password
           mountPath: /etc/admin-password
           readOnly: true
+        {{- if .Values.sso.oidc.enabled }}
+        - name: oidc-secret
+          mountPath: /etc/oidc
+          readOnly: true
+        {{- end }}
         startupProbe:
           httpGet:
             path: /health
@@ -107,6 +156,22 @@ spec:
             - key: ADMIN_PASSWORD
               path: ADMIN_PASSWORD
           {{- end }}
+      {{- if .Values.sso.oidc.enabled }}
+      # OIDC client secret — mounted as a file so it never appears in the pod env.
+      - name: oidc-secret
+        secret:
+          {{- if .Values.sso.oidc.existingSecret }}
+          secretName: {{ .Values.sso.oidc.existingSecret | quote }}
+          items:
+            - key: {{ .Values.sso.oidc.existingSecretKey | quote }}
+              path: OIDC_CLIENT_SECRET
+          {{- else }}
+          secretName: {{ include "elearning.fullname" . }}-secrets
+          items:
+            - key: OIDC_CLIENT_SECRET
+              path: OIDC_CLIENT_SECRET
+          {{- end }}
+      {{- end }}
       {{- with .Values.userService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

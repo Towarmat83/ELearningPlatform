@@ -17,6 +17,39 @@ type ProviderConfig struct {
 	IssuerURL    string `yaml:"issuer_url"`
 }
 
+// OIDCBootstrap holds the OIDC settings provisioned at deploy time (Helm).
+// When OIDC_ENABLED=true these values are seeded into platform_settings on
+// startup (see db.SeedOIDC), so the integration works out of the box without
+// anyone having to type the client secret into the admin UI. The secret itself
+// is sourced from a mounted Kubernetes Secret (file) or env var — never from
+// hardcoded chart values.
+type OIDCBootstrap struct {
+	Enabled          bool
+	ProviderURL      string
+	IssuerURL        string
+	ClientID         string
+	ClientSecret     string // value supplied via OIDC_CLIENT_SECRET
+	ClientSecretFile string // path to a mounted secret file (takes priority)
+	Scopes           string
+	GroupClaim       string
+	RedirectBase     string
+	BrowserBaseURL   string
+}
+
+// ResolveClientSecret returns the OIDC client secret, preferring the mounted
+// secret file (so the value never has to live in an env var) and falling back
+// to the OIDC_CLIENT_SECRET env var.
+func (o OIDCBootstrap) ResolveClientSecret() string {
+	if o.ClientSecretFile != "" {
+		if data, err := os.ReadFile(o.ClientSecretFile); err == nil {
+			if s := strings.TrimSpace(string(data)); s != "" {
+				return s
+			}
+		}
+	}
+	return o.ClientSecret
+}
+
 type Config struct {
 	DatabaseURL       string           `yaml:"database_url"`
 	JWTSecret         string           `yaml:"jwt_secret"`
@@ -37,6 +70,9 @@ type Config struct {
 	//  3. Neither set — hardcoded default "Admin@1234" with a loud warning.
 	AdminPassword     string `yaml:"-"`
 	AdminPasswordFile string `yaml:"-"` // path to the mounted secret file, if any
+	// OIDC holds deploy-time OIDC configuration (Helm). Seeded into
+	// platform_settings on startup when Enabled.
+	OIDC OIDCBootstrap `yaml:"-"`
 }
 
 func (c *Config) FindProvider(id string) *ProviderConfig {
@@ -113,6 +149,38 @@ func Load() *Config {
 	// ADMIN_PASSWORD env var as fallback (or when no file path is configured).
 	if c.AdminPassword == "" {
 		c.AdminPassword = os.Getenv("ADMIN_PASSWORD")
+	}
+
+	// ── OIDC bootstrap (Helm) ──────────────────────────────────────────────
+	// The client secret is sourced from a mounted Secret file (preferred) or an
+	// env var, so it never has to be hardcoded in chart values.
+	c.OIDC = OIDCBootstrap{
+		Enabled:          os.Getenv("OIDC_ENABLED") == "true",
+		ProviderURL:      os.Getenv("OIDC_PROVIDER_URL"),
+		IssuerURL:        os.Getenv("OIDC_ISSUER_URL"),
+		ClientID:         os.Getenv("OIDC_CLIENT_ID"),
+		ClientSecret:     os.Getenv("OIDC_CLIENT_SECRET"),
+		ClientSecretFile: os.Getenv("OIDC_CLIENT_SECRET_FILE"),
+		Scopes:           os.Getenv("OIDC_SCOPES"),
+		GroupClaim:       os.Getenv("OIDC_GROUP_CLAIM"),
+		RedirectBase:     os.Getenv("OIDC_REDIRECT_BASE"),
+		BrowserBaseURL:   os.Getenv("OIDC_BROWSER_BASE_URL"),
+	}
+
+	// ── OAuth provider secrets (Helm) ──────────────────────────────────────
+	// Provider client secrets are injected from a Kubernetes Secret rather than
+	// baked into the ConfigMap. Convention, per provider id:
+	//   SSO_<ID>_CLIENT_SECRET_FILE  — path to a mounted secret file (priority)
+	//   SSO_<ID>_CLIENT_SECRET       — direct value
+	for i := range c.Providers {
+		envKey := "SSO_" + strings.ToUpper(c.Providers[i].ID) + "_CLIENT_SECRET"
+		if f := os.Getenv(envKey + "_FILE"); f != "" {
+			if data, err := os.ReadFile(f); err == nil {
+				c.Providers[i].ClientSecret = strings.TrimSpace(string(data))
+			}
+		} else if v := os.Getenv(envKey); v != "" {
+			c.Providers[i].ClientSecret = v
+		}
 	}
 
 	return c

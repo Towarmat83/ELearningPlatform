@@ -162,30 +162,73 @@ frontend:
     targetCPUUtilizationPercentage: 70
 
 # ── SSO / OAuth ───────────────────────────────────────────────────────────────
-# redirectBase: public URL sent to the OIDC provider as redirect_uri.
+# redirectBase: public URL sent to the providers as redirect_uri.
 #   Defaults to the ingress host when empty.
 #   Can also be overridden at runtime via the admin UI (oidc_redirect_base setting).
 #
-# Provider examples:
-#   - id: github          # OAuth2 — no issuer_url needed
-#     name: GitHub
-#     client_id: "..."
-#     client_secret: "..."
+# Two complementary mechanisms:
+#   - sso.oidc      → a single OpenID Connect provider (e.g. Keycloak). Seeded
+#                     into the platform settings on startup; configurable later
+#                     in the admin UI. Recommended for Keycloak.
+#   - sso.providers → one or more OAuth2/OIDC providers (GitHub, GitLab, Google…).
 #
-#   - id: gitlab
-#     name: GitLab
-#     client_id: "..."
-#     client_secret: "..."
-#     issuer_url: "https://gitlab.com"
-#
-#   - id: google
-#     name: Google
-#     client_id: "..."
-#     client_secret: "..."
-#     issuer_url: "https://accounts.google.com"
+# In BOTH cases client secrets are sourced from a Kubernetes Secret, never
+# hardcoded in the chart. For dev you may put the secret inline (clientSecret /
+# client_secret) and the chart renders it into the release Secret; for production
+# point at an existingSecret you manage (Vault / External Secrets / SOPS).
 sso:
   enabled: false
   redirectBase: ""
+
+  # ── OpenID Connect provider (Keycloak, Authentik, …) ──────────────────────
+  # When enabled, these values seed the OIDC platform settings on startup. The
+  # client secret is mounted from a Secret and re-seeded on each pod start, so
+  # rotating it requires a pod restart.
+  oidc:
+    enabled: false
+    # OIDC discovery URL. For Keycloak: https://<host>/realms/<realm>
+    providerURL: ""
+    # Optional. Set when the discovery URL is cluster-internal but the issuer
+    # claim in tokens is the public URL (split-horizon, e.g. KinD).
+    issuerURL: ""
+    clientID: ""
+    # Cleartext client secret — dev only. Rendered into the release Secret.
+    # For production leave empty and use existingSecret below.
+    clientSecret: ""
+    scopes: "openid email profile groups"
+    groupClaim: "groups"
+    # Optional. Rewrites the internal base URL to a browser-reachable one in the
+    # authorize redirect (split-horizon).
+    browserBaseURL: ""
+    # Optional per-OIDC redirect base override (defaults to sso.redirectBase).
+    redirectBase: ""
+    # ── Production secret sourcing (Vault / External Secrets / SOPS) ──
+    # Name of an existing Secret holding the client secret. Empty disables it.
+    existingSecret: ""
+    existingSecretKey: "OIDC_CLIENT_SECRET"
+
+  # ── OAuth2 / OIDC providers ───────────────────────────────────────────────
+  # Each provider's client secret is injected from a Secret (env var), not the
+  # ConfigMap. Supply it inline via client_secret (rendered into the release
+  # Secret) OR reference an existingSecret/existingSecretKey you manage.
+  #
+  #   - id: github          # OAuth2 — no issuer_url needed
+  #     name: GitHub
+  #     client_id: "..."
+  #     client_secret: "..."           # dev: rendered into the release Secret
+  #
+  #   - id: gitlab
+  #     name: GitLab
+  #     client_id: "..."
+  #     issuer_url: "https://gitlab.com"
+  #     existingSecret: gitlab-oauth    # prod: secret you manage
+  #     existingSecretKey: client_secret
+  #
+  #   - id: google
+  #     name: Google
+  #     client_id: "..."
+  #     client_secret: "..."
+  #     issuer_url: "https://accounts.google.com"
   providers: []
 
 # ── Ingress ───────────────────────────────────────────────────────────────────

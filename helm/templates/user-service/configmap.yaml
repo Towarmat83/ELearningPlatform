@@ -13,6 +13,17 @@ data:
     course_service_url: "http://{{ include "elearning.fullname" . }}-course-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.courseService.service.port }}"
     oauth_redirect_base: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
     {{- if and .Values.sso.enabled .Values.sso.providers }}
+    # Client secrets are deliberately omitted here — they are injected as
+    # SSO_<ID>_CLIENT_SECRET env vars sourced from a Secret (see deployment.yaml).
     providers:
-{{ toYaml .Values.sso.providers | indent 6 }}
+    {{- range .Values.sso.providers }}
+      - id: {{ .id | quote }}
+        name: {{ .name | quote }}
+        {{- if .client_id }}
+        client_id: {{ .client_id | quote }}
+        {{- end }}
+        {{- if .issuer_url }}
+        issuer_url: {{ .issuer_url | quote }}
+        {{- end }}
+    {{- end }}
     {{- end }}

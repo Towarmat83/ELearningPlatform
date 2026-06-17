@@ -1,0 +1,26 @@
+suite: course-service deployment
+templates:
+  - course-service/deployment.yaml
+release:
+  name: elearning
+tests:
+  - it: renders a Deployment named after the release
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: elearning-course-service
+  - it: runs the course-service container from the configured image
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: course-service
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/towarmat83/elearning-course-service:latest
+  - it: exposes the configured service port
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8082

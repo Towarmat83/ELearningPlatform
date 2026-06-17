@@ -142,11 +142,20 @@ jobs:
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      - name: Patch chart appVersion for tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          # Patch appVersion directly in Chart.yaml (instead of passing
+          # --app-version at package time) so the published version is
+          # recorded in the source artifact and auditable during review.
+          yq -i '.appVersion = "${{ steps.chart-version.outputs.version }}"' helm/Chart.yaml
+          echo "Chart.yaml appVersion set to ${{ steps.chart-version.outputs.version }}"
+          grep '^appVersion:' helm/Chart.yaml
+
       - name: Package Helm chart
         run: |
           helm package helm \
             --version "${{ steps.chart-version.outputs.version }}" \
-            --app-version "${{ steps.chart-version.outputs.version }}" \
             --destination /tmp/charts
 
       - name: Push Helm chart to GHCR

@@ -127,6 +127,25 @@ DATABASE_URL
 {{- end }}
 
 {{/*
+Name of the Secret that holds JWT_SECRET.
+*/}}
+{{- define "elearning.jwtSecretName" -}}
+{{- if .Values.jwtExistingSecret -}}
+{{ .Values.jwtExistingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.jwtSecretKey" -}}
+{{- if .Values.jwtExistingSecret -}}
+{{ .Values.jwtExistingSecretKey }}
+{{- else -}}
+JWT_SECRET
+{{- end -}}
+{{- end }}
+
+{{/*
 Ingress scheme (http or https)
 */}}
 {{- define "elearning.scheme" -}}

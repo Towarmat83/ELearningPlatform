@@ -42,8 +42,8 @@ spec:
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ include "elearning.fullname" . }}-secrets
-              key: JWT_SECRET
+              name: {{ include "elearning.jwtSecretName" . }}
+              key: {{ include "elearning.jwtSecretKey" . }}
         - name: OAUTH_REDIRECT_BASE
           value: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
         - name: DATABASE_URL

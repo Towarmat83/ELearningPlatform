@@ -9,7 +9,13 @@ fullnameOverride: ""
 # ── Secrets ───────────────────────────────────────────────────────────────────
 
 # Shared JWT secret — must match between services.
+# Three modes (same priority order as admin.password):
+#   1. jwtExistingSecret — reference a pre-existing K8s Secret (Vault / ESO / SOPS)
+#   2. jwtSecret non-empty — explicit value rendered into the chart Secret
+#   3. Default — the placeholder value below (change before production)
 jwtSecret: "change-me-in-production-use-a-long-random-string"
+jwtExistingSecret: ""
+jwtExistingSecretKey: "JWT_SECRET"
 
 # Image pull secrets — for private registries.
 # imagePullSecrets:

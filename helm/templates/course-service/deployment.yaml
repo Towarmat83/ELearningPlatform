@@ -42,8 +42,8 @@ spec:
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ include "elearning.fullname" . }}-secrets
-              key: JWT_SECRET
+              name: {{ include "elearning.jwtSecretName" . }}
+              key: {{ include "elearning.jwtSecretKey" . }}
         volumeMounts:
         - name: config
           mountPath: /etc/course-service

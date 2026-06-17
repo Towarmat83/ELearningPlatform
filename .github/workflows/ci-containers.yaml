@@ -1,0 +1,53 @@
+name: CI — Containers
+
+# Pre-build static analysis of Dockerfiles. KICS needs no Docker daemon and
+# no built image, so it runs early on every PR / push. Actual image
+# vulnerability scanning (Trivy) lives in build-push.yaml, downstream of the
+# image push, since it requires the built images.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/Dockerfile"
+      - ".github/workflows/ci-containers.yaml"
+  pull_request:
+    paths:
+      - "**/Dockerfile"
+      - ".github/workflows/ci-containers.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  kics-dockerfile:
+    name: KICS Dockerfile scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run KICS
+        uses: checkmarx/kics-github-action@v2.1.6
+        with:
+          path: "course-service/Dockerfile,user-service/Dockerfile,frontend/Dockerfile"
+          platform_type: Dockerfile
+          output_path: kics-results
+          output_formats: "sarif"
+          # Fail the build on high/medium findings; low/info are reported in
+          # the Security tab but kept informational.
+          fail_on: high,medium
+
+      - name: Upload KICS SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kics-results/results.sarif
+          category: kics-dockerfile

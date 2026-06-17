@@ -6,6 +6,10 @@
 nameOverride: ""
 fullnameOverride: ""
 
+# ── Cluster ───────────────────────────────────────────────────────────────────
+# Override when your cluster uses a non-standard DNS domain.
+clusterDomain: cluster.local
+
 # ── Secrets ───────────────────────────────────────────────────────────────────
 
 # Shared JWT secret — must match between services.
@@ -239,7 +243,7 @@ postgresql:
 database:
   # Connection target for an EXTERNAL database (Option B).
   # Ignored when postgresql.enabled=true — services then reach the in-cluster
-  # Service at <release>-postgresql.<namespace>.svc.cluster.local:5432.
+  # Service at <release>-postgresql.<namespace>.svc.<clusterDomain>:5432.
   host: "postgresql.example.com"
   port: 5432
   # Database (schema) name. Also used to provision the bundled instance.

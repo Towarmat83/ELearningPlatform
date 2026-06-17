@@ -99,7 +99,7 @@ Bundled PostgreSQL → in-cluster Service; otherwise → database.host/port.
 */}}
 {{- define "elearning.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}
-postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ include "elearning.fullname" . }}-postgresql.{{ .Release.Namespace }}.svc.cluster.local:5432/{{ .Values.database.name }}
+postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ include "elearning.fullname" . }}-postgresql.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:5432/{{ .Values.database.name }}
 {{- else -}}
 postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}
 {{- end -}}

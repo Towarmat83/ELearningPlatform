@@ -2,11 +2,15 @@
 Expand the name of the chart.
 */}}
 {{- define "elearning.name" -}}
-{{- .Chart.Name | trunc 63 | trimSuffix "-" }}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{- define "elearning.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
 {{- printf "%s" .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
 {{- end }}
 
 {{/*

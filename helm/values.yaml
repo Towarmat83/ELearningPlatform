@@ -2,6 +2,10 @@
 # eLearning Platform — Helm Values
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Name overrides ────────────────────────────────────────────────────────────
+nameOverride: ""
+fullnameOverride: ""
+
 # ── Secrets ───────────────────────────────────────────────────────────────────
 
 # Shared JWT secret — must match between services.

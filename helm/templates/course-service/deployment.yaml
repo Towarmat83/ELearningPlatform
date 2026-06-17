@@ -28,7 +28,7 @@ spec:
       {{- end }}
       containers:
       - name: course-service
-        image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag }}"
+        image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.courseService.image.pullPolicy }}
         securityContext:
           {{- include "elearning.securityContext" . | nindent 10 }}

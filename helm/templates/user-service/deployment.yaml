@@ -28,7 +28,7 @@ spec:
       {{- end }}
       containers:
       - name: user-service
-        image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"
+        image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.userService.image.pullPolicy }}
         securityContext:
           {{- include "elearning.securityContext" . | nindent 10 }}

@@ -68,8 +68,8 @@ courseService:
   #         app.kubernetes.io/component: course-service
   image:
     repository: ghcr.io/towarmat83/elearning-course-service
-    tag: latest
-    pullPolicy: Always
+    tag: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8082
@@ -102,8 +102,8 @@ userService:
   topologySpreadConstraints: []
   image:
     repository: ghcr.io/towarmat83/elearning-user-service
-    tag: latest
-    pullPolicy: Always
+    tag: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8081
@@ -134,8 +134,8 @@ frontend:
   topologySpreadConstraints: []
   image:
     repository: ghcr.io/towarmat83/elearning-frontend
-    tag: latest
-    pullPolicy: Always
+    tag: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 3000

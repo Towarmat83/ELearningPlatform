@@ -44,6 +44,13 @@ spec:
             secretKeyRef:
               name: {{ include "elearning.jwtSecretName" . }}
               key: {{ include "elearning.jwtSecretKey" . }}
+        {{- if eq (include "elearning.gitTokenEnabled" .) "true" }}
+        - name: GIT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.gitTokenSecretName" . }}
+              key: {{ include "elearning.gitTokenSecretKey" . }}
+        {{- end }}
         volumeMounts:
         - name: config
           mountPath: /etc/course-service

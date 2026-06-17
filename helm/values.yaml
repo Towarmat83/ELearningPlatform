@@ -87,7 +87,12 @@ courseService:
   env:
     JWT_EXPIRY_HOURS: "24"
     GIT_CACHE_TTL: "10"
-    GIT_TOKEN: ""
+  # Git token for private repository access.
+  # gitTokenExistingSecret: "my-git-secret"   # preferred for production
+  # gitTokenExistingSecretKey: "GIT_TOKEN"
+  gitToken: ""
+  gitTokenExistingSecret: ""
+  gitTokenExistingSecretKey: "GIT_TOKEN"
   autoscaling:
     enabled: false
     minReplicas: 1

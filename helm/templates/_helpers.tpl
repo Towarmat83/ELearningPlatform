@@ -127,6 +127,34 @@ DATABASE_URL
 {{- end }}
 
 {{/*
+Name of the Secret that holds GIT_TOKEN.
+*/}}
+{{- define "elearning.gitTokenSecretName" -}}
+{{- if .Values.courseService.gitTokenExistingSecret -}}
+{{ .Values.courseService.gitTokenExistingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.gitTokenSecretKey" -}}
+{{- if .Values.courseService.gitTokenExistingSecret -}}
+{{ .Values.courseService.gitTokenExistingSecretKey }}
+{{- else -}}
+GIT_TOKEN
+{{- end -}}
+{{- end }}
+
+{{/*
+Whether GIT_TOKEN should be injected as an env var (true when a token is configured).
+*/}}
+{{- define "elearning.gitTokenEnabled" -}}
+{{- if or .Values.courseService.gitToken .Values.courseService.gitTokenExistingSecret -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
 Name of the Secret that holds JWT_SECRET.
 */}}
 {{- define "elearning.jwtSecretName" -}}

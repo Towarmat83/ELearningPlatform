@@ -1,0 +1,112 @@
+name: Go Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "course-service/**"
+      - "user-service/**"
+      - ".github/workflows/ci-golang.yaml"
+  pull_request:
+    paths:
+      - "course-service/**"
+      - "user-service/**"
+      - ".github/workflows/ci-golang.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - course-service
+          - user-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so golangci-lint can diff against the base for
+          # `only-new-issues` (lint new/changed code without failing on the
+          # pre-existing baseline).
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ matrix.service }}/go.mod
+          cache-dependency-path: ${{ matrix.service }}/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: ${{ matrix.service }}
+          args: --timeout=5m
+          only-new-issues: true
+
+  test:
+    name: Test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - course-service
+          - user-service
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ matrix.service }}/go.mod
+          cache-dependency-path: ${{ matrix.service }}/go.sum
+
+      - name: Run tests
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: ${{ matrix.service }}/coverage.out
+          if-no-files-found: warn
+
+  build:
+    name: Build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - course-service
+          - user-service
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    env:
+      CGO_ENABLED: "0"
+      GO111MODULE: "on"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ matrix.service }}/go.mod
+          cache-dependency-path: ${{ matrix.service }}/go.sum
+
+      - name: Build
+        run: go build ./...

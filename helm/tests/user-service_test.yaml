@@ -1,0 +1,26 @@
+suite: user-service deployment
+templates:
+  - user-service/deployment.yaml
+release:
+  name: elearning
+tests:
+  - it: renders a Deployment named after the release
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: elearning-user-service
+  - it: runs the user-service container from the configured image
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: user-service
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/towarmat83/elearning-user-service:latest
+  - it: exposes the configured service port
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8081

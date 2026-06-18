@@ -1,0 +1,26 @@
+# golangci-lint configuration — user-service
+# Schema v2 (golangci-lint v2.x / golangci-lint-action@v8)
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - misspell
+    - unconvert
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/elearning/user-service

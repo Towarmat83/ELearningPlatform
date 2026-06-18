@@ -1,0 +1,56 @@
+name: Helm Validation
+
+# Pre-publish validation of the Helm chart. Runs on every PR / push to main
+# touching the chart, independently of build-push.yaml (which publishes the
+# chart only on main / tags).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "helm/**"
+      - ".github/workflows/ci-helm.yaml"
+  pull_request:
+    paths:
+      - "helm/**"
+      - ".github/workflows/ci-helm.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  helm-lint:
+    name: Helm lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v4.2.1
+
+      - name: helm lint --strict
+        run: helm lint helm --strict
+
+  helm-unittest:
+    name: Helm unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v4.2.1
+
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+
+      - name: Run helm unit tests
+        run: helm unittest helm

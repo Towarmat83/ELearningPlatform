@@ -1,4 +1,4 @@
-name: CI — Go services
+name: Go Validation
 
 on:
   push:

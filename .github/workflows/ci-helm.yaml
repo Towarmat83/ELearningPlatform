@@ -1,4 +1,4 @@
-name: CI — Helm
+name: Helm Validation
 
 # Pre-publish validation of the Helm chart. Runs on every PR / push to main
 # touching the chart, independently of build-push.yaml (which publishes the
@@ -33,7 +33,7 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.16.4
+          version: v4.2.1
 
       - name: helm lint --strict
         run: helm lint helm --strict
@@ -47,10 +47,10 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.16.4
+          version: v4.2.1
 
       - name: Install helm-unittest plugin
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
 
       - name: Run helm unit tests
         run: helm unittest helm

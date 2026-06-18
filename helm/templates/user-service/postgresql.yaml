@@ -105,7 +105,7 @@ spec:
       terminationGracePeriodSeconds: 60
       {{- if not .Values.postgresql.persistence.enabled }}
       volumes:
-        # Ephemeral storage for dev/CI — data is lost when the pod is recreated.
+        # Ephemeral storage for dev/data is lost when the pod is recreated.
         - name: data
           emptyDir: {}
       {{- end }}

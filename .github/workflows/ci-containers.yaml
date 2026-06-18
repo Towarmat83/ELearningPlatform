@@ -1,4 +1,4 @@
-name: CI — Containers
+name: Containers Validation
 
 # Pre-build static analysis of Dockerfiles. KICS needs no Docker daemon and
 # no built image, so it runs early on every PR / push. Actual image

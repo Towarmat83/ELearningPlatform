@@ -44,10 +44,3 @@ jobs:
           # Fail the build on high/medium findings; low/info are reported in
           # the Security tab but kept informational.
           fail_on: high,medium
-
-      - name: Upload KICS SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: kics-results/results.sarif
-          category: kics-dockerfile

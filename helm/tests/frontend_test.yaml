@@ -12,10 +12,12 @@ tests:
           path: metadata.name
           value: elearning-frontend
   - it: runs the frontend container from the configured image
+    set:
+      frontend.image.tag: "test"
     asserts:
       - equal:
           path: spec.template.spec.containers[0].name
           value: frontend
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/towarmat83/elearning-frontend:latest
+          value: ghcr.io/towarmat83/elearning-frontend:test

@@ -28,7 +28,7 @@ spec:
       {{- end }}
       containers:
       - name: course-service
-        image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag }}"
+        image: "{{ .Values.courseService.image.repository }}:{{ .Values.courseService.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.courseService.image.pullPolicy }}
         securityContext:
           {{- include "elearning.securityContext" . | nindent 10 }}
@@ -42,8 +42,15 @@ spec:
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ include "elearning.fullname" . }}-secrets
-              key: JWT_SECRET
+              name: {{ include "elearning.jwtSecretName" . }}
+              key: {{ include "elearning.jwtSecretKey" . }}
+        {{- if eq (include "elearning.gitTokenEnabled" .) "true" }}
+        - name: GIT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.gitTokenSecretName" . }}
+              key: {{ include "elearning.gitTokenSecretKey" . }}
+        {{- end }}
         volumeMounts:
         - name: config
           mountPath: /etc/course-service

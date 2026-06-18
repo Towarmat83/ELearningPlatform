@@ -28,7 +28,7 @@ spec:
       {{- end }}
       containers:
       - name: user-service
-        image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"
+        image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.userService.image.pullPolicy }}
         securityContext:
           {{- include "elearning.securityContext" . | nindent 10 }}
@@ -42,8 +42,8 @@ spec:
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ include "elearning.fullname" . }}-secrets
-              key: JWT_SECRET
+              name: {{ include "elearning.jwtSecretName" . }}
+              key: {{ include "elearning.jwtSecretKey" . }}
         - name: OAUTH_REDIRECT_BASE
           value: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
         - name: DATABASE_URL

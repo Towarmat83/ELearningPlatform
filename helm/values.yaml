@@ -2,10 +2,24 @@
 # eLearning Platform — Helm Values
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Name overrides ────────────────────────────────────────────────────────────
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Cluster ───────────────────────────────────────────────────────────────────
+# Override when your cluster uses a non-standard DNS domain.
+clusterDomain: cluster.local
+
 # ── Secrets ───────────────────────────────────────────────────────────────────
 
 # Shared JWT secret — must match between services.
+# Three modes (same priority order as admin.password):
+#   1. jwtExistingSecret — reference a pre-existing K8s Secret (Vault / ESO / SOPS)
+#   2. jwtSecret non-empty — explicit value rendered into the chart Secret
+#   3. Default — the placeholder value below (change before production)
 jwtSecret: "change-me-in-production-use-a-long-random-string"
+jwtExistingSecret: ""
+jwtExistingSecretKey: "JWT_SECRET"
 
 # Image pull secrets — for private registries.
 # imagePullSecrets:
@@ -58,8 +72,8 @@ courseService:
   #         app.kubernetes.io/component: course-service
   image:
     repository: ghcr.io/towarmat83/elearning-course-service
-    tag: latest
-    pullPolicy: Always
+    tag: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8082
@@ -73,7 +87,12 @@ courseService:
   env:
     JWT_EXPIRY_HOURS: "24"
     GIT_CACHE_TTL: "10"
-    GIT_TOKEN: ""
+  # Git token for private repository access.
+  # gitTokenExistingSecret: "my-git-secret"   # preferred for production
+  # gitTokenExistingSecretKey: "GIT_TOKEN"
+  gitToken: ""
+  gitTokenExistingSecret: ""
+  gitTokenExistingSecretKey: "GIT_TOKEN"
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -92,8 +111,8 @@ userService:
   topologySpreadConstraints: []
   image:
     repository: ghcr.io/towarmat83/elearning-user-service
-    tag: latest
-    pullPolicy: Always
+    tag: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8081
@@ -124,8 +143,8 @@ frontend:
   topologySpreadConstraints: []
   image:
     repository: ghcr.io/towarmat83/elearning-frontend
-    tag: latest
-    pullPolicy: Always
+    tag: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 3000
@@ -229,7 +248,7 @@ postgresql:
 database:
   # Connection target for an EXTERNAL database (Option B).
   # Ignored when postgresql.enabled=true — services then reach the in-cluster
-  # Service at <release>-postgresql.<namespace>.svc.cluster.local:5432.
+  # Service at <release>-postgresql.<namespace>.svc.<clusterDomain>:5432.
   host: "postgresql.example.com"
   port: 5432
   # Database (schema) name. Also used to provision the bundled instance.

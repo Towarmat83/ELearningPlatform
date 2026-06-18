@@ -2,11 +2,15 @@
 Expand the name of the chart.
 */}}
 {{- define "elearning.name" -}}
-{{- .Chart.Name | trunc 63 | trimSuffix "-" }}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{- define "elearning.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
 {{- printf "%s" .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -95,7 +99,7 @@ Bundled PostgreSQL → in-cluster Service; otherwise → database.host/port.
 */}}
 {{- define "elearning.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}
-postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ include "elearning.fullname" . }}-postgresql.{{ .Release.Namespace }}.svc.cluster.local:5432/{{ .Values.database.name }}
+postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ include "elearning.fullname" . }}-postgresql.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:5432/{{ .Values.database.name }}
 {{- else -}}
 postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}
 {{- end -}}
@@ -119,6 +123,53 @@ otherwise the chart renders DATABASE_URL into its own Secret.
 {{ .Values.database.auth.urlKey }}
 {{- else -}}
 DATABASE_URL
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the Secret that holds GIT_TOKEN.
+*/}}
+{{- define "elearning.gitTokenSecretName" -}}
+{{- if .Values.courseService.gitTokenExistingSecret -}}
+{{ .Values.courseService.gitTokenExistingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.gitTokenSecretKey" -}}
+{{- if .Values.courseService.gitTokenExistingSecret -}}
+{{ .Values.courseService.gitTokenExistingSecretKey }}
+{{- else -}}
+GIT_TOKEN
+{{- end -}}
+{{- end }}
+
+{{/*
+Whether GIT_TOKEN should be injected as an env var (true when a token is configured).
+*/}}
+{{- define "elearning.gitTokenEnabled" -}}
+{{- if or .Values.courseService.gitToken .Values.courseService.gitTokenExistingSecret -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the Secret that holds JWT_SECRET.
+*/}}
+{{- define "elearning.jwtSecretName" -}}
+{{- if .Values.jwtExistingSecret -}}
+{{ .Values.jwtExistingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.jwtSecretKey" -}}
+{{- if .Values.jwtExistingSecret -}}
+{{ .Values.jwtExistingSecretKey }}
+{{- else -}}
+JWT_SECRET
 {{- end -}}
 {{- end }}
 

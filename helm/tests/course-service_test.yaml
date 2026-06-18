@@ -12,13 +12,15 @@ tests:
           path: metadata.name
           value: elearning-course-service
   - it: runs the course-service container from the configured image
+    set:
+      courseService.image.tag: "test"
     asserts:
       - equal:
           path: spec.template.spec.containers[0].name
           value: course-service
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/towarmat83/elearning-course-service:latest
+          value: ghcr.io/towarmat83/elearning-course-service:test
   - it: exposes the configured service port
     asserts:
       - equal:

@@ -3,10 +3,48 @@
 The platform supports three authentication mechanisms in addition to local email/password:
 
 - **`sso.providers`** (Helm) — OAuth2/OIDC providers configured at deploy time (GitHub, GitLab, Google, etc.)
-- **OIDC via admin UI** — a single OIDC provider configured at runtime in `/admin/settings`, no Helm change required
+- **OIDC** — a single OIDC provider (e.g. Keycloak). Can be bootstrapped at deploy time via **`sso.oidc`** (Helm) and/or configured at runtime in `/admin/settings`.
 - **LDAP / Active Directory** — authenticate against any LDAP directory, configured at runtime in `/admin/settings`
 
 All three can be active simultaneously.
+
+> **Secrets are never hardcoded in the chart.** For both `sso.oidc` and `sso.providers`,
+> client secrets are sourced from a Kubernetes Secret — either rendered into the
+> release Secret from an inline value (dev) or referenced from an `existingSecret`
+> you manage with Vault / External Secrets / SOPS (production). Provider secrets are
+> injected as env vars and the OIDC secret is mounted as a file; neither appears in
+> the ConfigMap.
+
+---
+
+## Two OIDC paths — which to use
+
+OIDC can be configured **two different ways**, backed by **two separate code paths**
+with **different feature sets**. This matters: an OIDC provider configured in the
+`sso.providers` list does **not** get group → role mapping or split-horizon support.
+
+| | `sso.providers` list | Dedicated OIDC (`sso.oidc` / admin UI `oidc_*`) |
+|---|---|---|
+| **How many** | Multiple, simultaneously | Exactly **one** |
+| **Configured via** | Helm `sso.providers` (deploy time, config file) | Helm `sso.oidc` **or** `/admin/settings` (runtime) |
+| **Routes** | `/api/auth/oauth/{id}/authorize` · `/api/auth/oauth/callback` | `/api/auth/oidc/authorize` · `/api/auth/oidc/callback` |
+| **Scopes** | Fixed: `openid email profile` | Configurable (`oidc_scopes`, default incl. `groups`) |
+| **Group → role mapping** | ❌ **Not supported** | ✅ via `oidc_group_claim` |
+| **Split-horizon** (internal discovery URL ≠ public issuer) | ❌ Not supported | ✅ via `issuer_url` / `browser_base_url` |
+| **`auth_provider` stored** | the provider `id` (e.g. `keycloak`) | always `oidc` |
+
+**Rule of thumb:**
+
+- Need **several** IdPs at once, or simple social login (GitHub/GitLab/Google) where
+  everyone gets the default role → use **`sso.providers`**.
+- Need **group-based roles** (map IdP groups to `admin`/`student`) or you're behind
+  split-horizon DNS (typical in-cluster Keycloak) → use the **dedicated OIDC** path
+  (`sso.oidc`). You can only have one, but it's the full-featured one.
+
+> ⚠️ Do **not** expect group → role mapping to work for IdPs listed under
+> `sso.providers` (Keycloak, Authentik, Azure AD, Okta, Auth0, …). Even though the
+> login succeeds and `groups` may be in the token, that flow never reads the claim.
+> For role mapping, configure the IdP through `sso.oidc` instead.
 
 ---
 
@@ -26,7 +64,13 @@ For OIDC providers, the platform fetches claims from **both** the ID token and t
 
 ---
 
-## How it works
+## How it works (`sso.providers` flow)
+
+> This section describes the **`sso.providers`** (multi-provider) flow. The
+> dedicated single-provider OIDC flow is described under
+> [OIDC provider via Helm](#oidc-provider-via-helm-ssooidc) and
+> [Admin UI OIDC](#admin-ui-oidc-runtime). See
+> [Two OIDC paths](#two-oidc-paths--which-to-use) for the difference.
 
 ```
 Browser → GET /api/auth/oauth/{id}/authorize  → redirect to provider
@@ -36,6 +80,11 @@ Browser → GET /api/auth/oauth/{id}/authorize  → redirect to provider
 ```
 
 The backend reads `sso.providers` from the Helm configmap. For each provider with a non-empty `client_id`, a button appears on the login page.
+
+> **No group → role mapping in this flow.** Users created through `sso.providers`
+> are added to the default group and get the default role; IdP group claims are
+> **not** read. If you need group-based roles, configure that IdP through
+> [`sso.oidc`](#oidc-provider-via-helm-ssooidc) instead.
 
 **Two internal flows:**
 
@@ -52,13 +101,92 @@ The `id` value is stored in the database as `auth_provider` for each user — ch
 
 ```yaml
 sso:
-  enabled: false          # set to true to enable
+  enabled: false          # set to true to enable the providers list
   redirectBase: ""        # public URL of the frontend — defaults to ingress host
-  providers: []
+  oidc:
+    enabled: false        # single OIDC provider (e.g. Keycloak) — see below
+  providers: []           # OAuth2/OIDC providers list (GitHub, GitLab, …)
 ```
 
 `redirectBase` must match the **Callback URL** registered with each provider.  
 The actual redirect URI sent to providers is `{redirectBase}/auth/callback`.
+
+### Sourcing provider client secrets from a Secret
+
+Each entry in `sso.providers` accepts its `client_secret` inline (rendered into the
+release Secret, fine for dev) **or** a reference to an existing Secret you manage:
+
+```yaml
+sso:
+  enabled: true
+  providers:
+    - id: gitlab
+      name: GitLab
+      client_id: "xxx"
+      issuer_url: "https://gitlab.com"
+      existingSecret: gitlab-oauth      # Secret you manage (Vault / ESO / SOPS)
+      existingSecretKey: client_secret  # key inside that Secret (default: client_secret)
+```
+
+The client secret is injected into user-service as the `SSO_<ID>_CLIENT_SECRET`
+env var and is **never** written to the ConfigMap.
+
+---
+
+## OIDC provider via Helm (`sso.oidc`)
+
+This is the recommended path for a single enterprise IdP such as **Keycloak**. The
+values are seeded into the platform settings on startup (the same settings the admin
+UI edits), so OIDC works immediately after `helm install` — no manual configuration.
+
+```yaml
+sso:
+  enabled: true
+  redirectBase: "https://your-app.com"
+  oidc:
+    enabled: true
+    providerURL: "https://keycloak.company.com/realms/{realm}"  # OIDC discovery URL
+    clientID: "elearning"
+    clientSecret: "yyy"          # dev: rendered into the release Secret
+    scopes: "openid email profile groups"
+    groupClaim: "groups"
+    # issuerURL: ""              # split-horizon: set when discovery URL ≠ token issuer
+    # browserBaseURL: ""         # split-horizon: rewrite internal URL for browser redirects
+    # redirectBase: ""           # per-OIDC override (defaults to sso.redirectBase)
+```
+
+**Production — source the client secret from a Secret you manage:**
+
+```yaml
+sso:
+  oidc:
+    enabled: true
+    providerURL: "https://keycloak.company.com/realms/{realm}"
+    clientID: "elearning"
+    existingSecret: keycloak-oidc       # Secret you manage
+    existingSecretKey: OIDC_CLIENT_SECRET
+```
+
+The OIDC client secret is mounted as a file (`OIDC_CLIENT_SECRET_FILE`) and seeded
+into the database on startup — it never appears in the pod environment or the
+ConfigMap.
+
+**Behaviour notes:**
+
+- When `sso.oidc.enabled=true`, the Helm values are **authoritative** and re-seeded
+  on every pod start (GitOps). Editing these fields in the admin UI works but is
+  reset on the next restart/upgrade. Leave `sso.oidc.enabled=false` to manage OIDC
+  purely from the admin UI.
+- Rotating the client secret requires a pod restart so the new value is re-seeded.
+
+**Keycloak client setup** (Clients → Create):
+
+| Field | Value |
+|---|---|
+| Client type | OpenID Connect |
+| Client authentication | On (to get a secret) |
+| Valid redirect URIs | `{redirectBase}/auth/callback` |
+| Client scopes | ensure a `groups` mapper is added if you use group → role mapping |
 
 ---
 
@@ -182,9 +310,18 @@ providers:
 The `issuer_url` is shown in the Authentik provider detail page.  
 Required scopes: `openid`, `email`, `profile`.
 
+> For group → role mapping with Authentik, use the dedicated
+> [`sso.oidc`](#oidc-provider-via-helm-ssooidc) path — group claims are not read in
+> the `sso.providers` flow.
+
 ---
 
 ### Keycloak
+
+> 💡 For Keycloak with **group → role mapping** or **split-horizon DNS** (the usual
+> in-cluster case), prefer the dedicated [`sso.oidc`](#oidc-provider-via-helm-ssooidc)
+> path instead — the `sso.providers` entry below logs users in but ignores group
+> claims.
 
 ```yaml
 providers:
@@ -249,7 +386,11 @@ providers:
 
 ## Multiple providers
 
-You can list as many providers as needed — each gets its own button on the login page:
+You can list as many providers as needed — each gets its own button on the login page.
+This is the **only** way to run several OIDC providers at once; the dedicated
+[`sso.oidc`](#oidc-provider-via-helm-ssooidc) path supports a single provider but adds
+group → role mapping and split-horizon support
+([comparison](#two-oidc-paths--which-to-use)).
 
 ```yaml
 sso:
@@ -316,9 +457,11 @@ const providerIcon: Record<string, string> = {
 
 ---
 
-## Admin UI OIDC (runtime, no Helm)
+## Admin UI OIDC (runtime)
 
-One additional OIDC provider can be configured at runtime in `/admin/settings`:
+One OIDC provider can be configured at runtime in `/admin/settings` (or bootstrapped
+at deploy time via [`sso.oidc`](#oidc-provider-via-helm-ssooidc), which seeds these
+same keys):
 
 | Setting key | Description |
 |---|---|

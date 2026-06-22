@@ -55,6 +55,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Bootstrap OIDC settings from deploy-time config (no-op unless OIDC_ENABLED).
+	if err := db.SeedOIDC(ctx, pool, cfg); err != nil {
+		slog.Error("failed to seed OIDC settings", "err", err)
+		os.Exit(1)
+	}
+
 	// Seed mock users and enrollments (dev/demo only).
 	if os.Getenv("SEED_MOCK_DATA") == "true" {
 		if err := db.SeedMockData(ctx, pool); err != nil {

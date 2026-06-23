@@ -20,7 +20,6 @@ graph TD
     GitLab["GitLab\n(student projects)"]
 
     OAuthProviders["OAuth2 / OIDC\nGitHub · GitLab · Keycloak · …"]
-    LDAP["LDAP / Active Directory"]
 
     Browser --> Frontend
     Frontend -- "/api/auth/* /api/my/* /api/admin/*" --> UserService
@@ -34,13 +33,12 @@ graph TD
     CourseService --> GitRepos
     CheckerService --> GitRepos
     UserService -. "OAuth2 / OIDC" .-> OAuthProviders
-    UserService -. "LDAP bind" .-> LDAP
 ```
 
 | Service | Role | Tech |
 |---------|------|------|
 | **Course Service** | Course content, media, quiz, inline lab rendering, checker proxy, lab_checks persistence | Go + chi + client-go + pgx |
-| **User Service** | Auth (local · OAuth2/OIDC · LDAP), enrollments, progress, admin | Go + chi + pgx |
+| **User Service** | Auth (local · OAuth2/OIDC), enrollments, progress, admin | Go + chi + pgx |
 | **Checker Service** | Fetch live GitLab state, evaluate OPA/Rego policy, return violations | Go + chi + go-gitlab + OPA |
 | **Frontend** | Astro SSR, API proxy, markdown lab rendering, admin Labs page | Astro |
 
@@ -124,6 +122,7 @@ Each service is configured via a **ConfigMap mounted as a file** in the containe
 |---|---|---|
 | **course-service** | `/etc/course-service/config.yaml` | `JWT_SECRET`, `DATABASE_URL`, `CHECKER_SERVICE_URL`, `GIT_TOKEN` |
 | **user-service** | `/etc/user-service/config.yaml` | `JWT_SECRET`, `DATABASE_URL`, `OIDC_*` |
+
 | **checker-service** | env only | `GITLAB_TOKEN`, `GITLAB_BASE_URL` |
 | **frontend** | `/etc/frontend/config.env` | `COURSE_API`, `USER_API` |
 

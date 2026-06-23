@@ -44,6 +44,7 @@ type Module struct {
 	Src                    string       `json:"src,omitempty"`
 	Ref                    string       `json:"ref,omitempty"`
 	Path                   string       `json:"path,omitempty"`
+	LabURL                 string       `json:"lab_url,omitempty"`
 	Replication            bool         `json:"replication,omitempty"`
 	Hidden                 bool         `json:"hidden,omitempty"`
 	Inline                 bool         `json:"inline,omitempty"`        // quiz rendered inside the previous module
@@ -125,6 +126,7 @@ type ModuleYAML struct {
 	Src                    string           `yaml:"src,omitempty"`
 	Ref                    string           `yaml:"ref,omitempty"`
 	Path                   string           `yaml:"path,omitempty"`
+	LabURL                 string           `yaml:"lab_url,omitempty"`
 	Replication            bool             `yaml:"replication,omitempty"`
 	Hidden                 bool             `yaml:"hidden,omitempty"`
 	Inline                 bool             `yaml:"inline,omitempty"`

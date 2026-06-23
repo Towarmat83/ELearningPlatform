@@ -233,7 +233,7 @@ import App from '../../../layouts/App.astro';
     function moduleHref(m: any) {
       if (m.locked) return null;
       if (m.type === 'quiz') return `/courses/${slug}/quiz/${m.index}`;
-      if (m.type === 'lab') return m.src || null;
+      if (m.type === 'lab') return `/courses/${slug}/lessons/${m.index}`;
       return `/courses/${slug}/lessons/${m.index}`;
     }
 
@@ -266,8 +266,7 @@ import App from '../../../layouts/App.astro';
       return modules.map(m => {
         const href = moduleHref(m);
         const tag = href ? 'a' : 'div';
-        const isLab = m.type === 'lab' && href;
-        const hrefAttr = href ? `href="${href}"${isLab ? ` target="_blank" rel="noopener" data-lab-slug="${m.slug}"` : ''}` : '';
+        const hrefAttr = href ? `href="${href}"` : '';
         const iconCls = m.locked ? '' : m.type === 'quiz' ? ' quiz' : (m.viewed || m.passed) ? ' done' : m.type === 'lab' ? ' lab' : '';
         return `
           <${tag} ${hrefAttr} class="mod-row${m.locked ? ' locked' : ''}">

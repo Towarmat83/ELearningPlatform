@@ -12,7 +12,9 @@ import (
 
 	"github.com/elearning/course-service/internal/config"
 	"github.com/elearning/course-service/internal/content"
+	coursedb "github.com/elearning/course-service/internal/db"
 	"github.com/elearning/course-service/internal/handlers"
+	"github.com/elearning/course-service/migrations"
 )
 
 // @title          Course Service API
@@ -36,6 +38,20 @@ func main() {
 	store := content.NewStore()
 
 	s := handlers.NewState(cfg, store)
+
+	if cfg.DatabaseURL != "" {
+		pool, err := coursedb.Connect(ctx, cfg.DatabaseURL)
+		if err != nil {
+			slog.Warn("database unavailable, lab result tracking disabled", "err", err)
+		} else {
+			if err := coursedb.RunMigrations(ctx, pool, migrations.FS); err != nil {
+				slog.Warn("db migration failed", "err", err)
+			} else {
+				s.DB = pool
+				slog.Info("database connected, lab tracking enabled")
+			}
+		}
+	}
 
 	watcher, err := content.NewK8sWatcher(store, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {

@@ -46,6 +46,7 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 		r.Get("/api/admin/courses/{slug}/crd", s.GetCourseCRD)
 		r.Put("/api/admin/courses/{slug}/crd", s.UpdateCourseCRD)
 		r.Delete("/api/admin/courses/{slug}/crd", s.DeleteCourseCRD)
+		r.Get("/api/admin/lab-checks", s.GetLabResults)
 		r.Post("/api/admin/cache/clear", s.ClearCache)
 		r.Post("/api/admin/courses/{slug}/cache/clear", s.ClearCourseCache)
 		r.Post("/api/admin/courses/{slug}/modules/{index}/cache/clear", s.ClearModuleCache)
@@ -53,6 +54,7 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 		r.Get("/api/courses/{slug}/modules", s.ListModules)
 		r.Get("/api/courses/{slug}/modules/{index}", s.GetModule)
 		r.Post("/api/courses/{slug}/modules/{index}/submit", s.SubmitModule)
+		r.Post("/api/courses/{slug}/modules/{index}/check", s.CheckModule)
 
 		r.Get("/api/courses/{slug}/labs", s.ListLabs)
 		r.Get("/api/courses/{slug}/labs/{lab_id}", s.GetLab)

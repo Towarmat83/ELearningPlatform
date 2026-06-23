@@ -44,24 +44,29 @@ spec:
                      ▼              ▼
           ┌──────────────────┐  ┌──────────────────────────┐
           │   User Service    │  │   Course Service          │
-          │   (PostgreSQL)    │  │   (stateless)             │
+          │   (PostgreSQL)    │  │   (PostgreSQL)            │
           │                   │  │                           │
           │  - register       │  │  - K8s CRD watcher        │
           │  - login / JWT    │  │  - liste cours/modules    │
           │  - OAuth          │  │  - git per module         │
           │  - profile        │  │  - upload media           │
           │  - enrollments    │◄─┤  - serve fichiers         │
-          │  - lesson_progress│  │                           │
-          │  - platform_sets  │  │  JWT: valide seul         │
+          │  - lesson_progress│  │  - lab check proxy        │
+          │  - platform_sets  │  │  - lab_checks (DB)        │
           │  - users CRUD     │  │                           │
-          └────────┬─────────-┘  └──────────────────────────┘
-                   │
-                   │  API REST interne
-                   │
-                    ├─ GET  /internal/enrollments/check?user_id=&course_slug=  → bool
-                    ├─ POST /internal/enrollments/auto  {user_id, course_slug}  → auto-enroll (public courses)
-                    ├─ GET  /internal/progress/viewed?user_id=&course_slug=     → [lesson_slug]
-                    └─ POST /internal/progress/complete                          → mark complete
+          └────────┬─────────-┘  └───────────┬──────────────┘
+                   │                          │
+                   │  API REST interne        │  POST /evaluate
+                   │                          ▼
+                    ├─ GET  /internal/...   ┌──────────────────┐
+                    └─ POST /internal/...   │  Checker Service  │
+                                            │  (OPA/Rego)       │
+                                            │                   │
+                                            │  - fetch GitLab   │
+                                            │    state via API  │
+                                            │  - évalue policy  │
+                                            │    Rego           │
+                                            └──────────────────┘
 ```
 
 ## Contrat API interne (Course → User)

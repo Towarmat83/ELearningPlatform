@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "elearning.fullname" . }}-checker-service
+  labels:
+    {{- include "elearning.checkerService.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.checkerService.replicaCount }}
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "elearning.checkerService.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "elearning.checkerService.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: checker-service
+        image: "{{ .Values.checkerService.image.repository }}:{{ .Values.checkerService.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.checkerService.image.pullPolicy }}
+        securityContext:
+          {{- include "elearning.securityContext" . | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.checkerService.service.port }}
+          protocol: TCP
+        env:
+        - name: PORT
+          value: {{ .Values.checkerService.service.port | quote }}
+        - name: GITLAB_BASE_URL
+          value: {{ .Values.checkerService.env.GITLAB_BASE_URL | quote }}
+        - name: CORS_ORIGINS
+          value: "{{ include "elearning.publicUrl" . }}"
+        - name: GITLAB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.fullname" . }}-secrets
+              key: GITLAB_TOKEN
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.checkerService.resources | nindent 10 }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.checkerService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

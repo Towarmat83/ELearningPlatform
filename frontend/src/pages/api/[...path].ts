@@ -15,7 +15,8 @@ function resolveTarget(path: string): string {
     path.startsWith('courses/') ||
     path.startsWith('uploads/') ||
     path.startsWith('admin/courses') ||
-    path.startsWith('admin/cache')
+    path.startsWith('admin/cache') ||
+    path.startsWith('admin/lab-checks')
   ) {
     return COURSE_API;
   }

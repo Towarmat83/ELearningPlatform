@@ -1,0 +1,43 @@
+apiVersion: elearning.example.com/v1
+kind: Course
+metadata:
+  name: devops-lab-demo
+spec:
+  title: "DevOps Lab — GitLab CI/CD"
+  description: "Cours de démonstration du Lab Checker. Les apprenants réalisent des labs pratiques sur GitLab et cliquent sur Vérifier pour valider leur travail."
+  category: devops
+  difficulty: intermediate
+  public: true
+  modules:
+    - name: "Introduction au CI/CD avec GitLab"
+      type: "text"
+      content: ""
+
+    - name: "Lab 1 : GitLab Branching & CI/CD with Conventional Commits"
+      type: "lab"
+      src: "http://10.89.0.1:8880/e-learning/devops-course.git"
+      ref: "main"
+      path: "modules/lab1/content.md"
+      lab_url: "http://localhost:8880/e-learning/devops-course/-/blob/main/modules/lab1/content.md"
+      prerequisites:
+        - "introduction-au-ci-cd-avec-gitlab"
+
+    - name: "Quiz de validation"
+      type: "quiz"
+      inline: false
+      passing_score: 70
+      questions:
+        - id: "q1"
+          type: "single"
+          text: "Qu'est-ce qu'une Merge Request dans GitLab ?"
+          points: 1
+          choices:
+            - id: "a"
+              text: "Une demande de fusion de branches"
+              correct: true
+            - id: "b"
+              text: "Un type de pipeline"
+              correct: false
+            - id: "c"
+              text: "Un outil de monitoring"
+              correct: false

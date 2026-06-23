@@ -15,3 +15,4 @@ data:
     user_service_url: "http://{{ include "elearning.fullname" . }}-user-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.userService.service.port }}"
     git_cache_ttl_minutes: {{ .Values.courseService.env.GIT_CACHE_TTL }}
     git_credentials_path: "/etc/git-credentials/git-credentials.yaml"
+    checker_service_url: "http://{{ include "elearning.fullname" . }}-checker-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.checkerService.service.port }}"

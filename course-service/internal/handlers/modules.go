@@ -515,7 +515,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 			}
 			resp.Content = string(data)
 		} else {
-			resp.Content = m.Src
+			resp.Content = m.Content()
 		}
 	case "text":
 		if m.HasGitContent() {

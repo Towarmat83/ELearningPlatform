@@ -226,7 +226,17 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 					return nil
 				}(),
 				LockOnMaxAttempts: getBool(m, "lock_on_max_attempts"),
-			}
+					CheckProvider: getStr(m, "check_provider"),
+					CheckType:     getStr(m, "check_type"),
+					CheckParams: func() map[string]interface{} {
+						if v, ok := m["check_params"]; ok {
+							if mp, ok := v.(map[string]interface{}); ok {
+								return mp
+							}
+						}
+						return nil
+					}(),
+				}
 			if mod.Name == "" {
 				mod.Name = fmt.Sprintf("module-%d", i+1)
 			}

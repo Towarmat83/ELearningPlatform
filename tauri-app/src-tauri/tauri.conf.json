@@ -1,0 +1,31 @@
+{
+  "productName": "Pupitre",
+  "version": "0.1.0",
+  "identifier": "com.pupitre.elearning",
+  "build": {
+    "frontendDist": "../src",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Pupitre",
+        "width": 1440,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "url": "http://localhost:3000"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
+  }
+}

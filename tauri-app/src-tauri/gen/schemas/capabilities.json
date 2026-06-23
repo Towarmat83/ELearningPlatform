@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Capability par défaut — accès aux commandes locales Pupitre","local":true,"windows":["main"],"permissions":["core:default"]}}

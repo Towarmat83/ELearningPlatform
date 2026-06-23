@@ -556,8 +556,16 @@ import App from '../../../../layouts/App.astro';
             resultDiv.innerHTML = '';
             try {
               const { modulesApi } = await import('/src/lib/api');
+              const { resolveCheck } = await import('/src/lib/local-check');
               const checkToken = localStorage.getItem('token') || '';
-              const result = await modulesApi.check(slug, mod.index, checkToken);
+              const result = await resolveCheck(
+                {
+                  check_provider: mod.check_provider,
+                  check_type: mod.check_type,
+                  check_params: mod.check_params,
+                },
+                () => modulesApi.check(slug, mod.index, checkToken)
+              );
               if (result.allow) {
                 resultDiv.innerHTML = `
                   <div style="padding:16px 20px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;color:#16a34a;font-weight:600;display:flex;align-items:center;gap:8px">

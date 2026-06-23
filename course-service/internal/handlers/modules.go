@@ -87,8 +87,11 @@ type moduleResponse struct {
 	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
 	Inline        bool                     `json:"inline,omitempty"`
 	InlineQuiz    *inlineQuizResponse      `json:"inline_quiz,omitempty"`
-	HasCheck bool   `json:"has_check,omitempty"`
-	LabURL   string `json:"lab_url,omitempty"`
+	HasCheck      bool                   `json:"has_check,omitempty"`
+	LabURL        string                 `json:"lab_url,omitempty"`
+	CheckProvider string                 `json:"check_provider,omitempty"`
+	CheckType     string                 `json:"check_type,omitempty"`
+	CheckParams   map[string]interface{} `json:"check_params,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`
@@ -491,6 +494,13 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	if m.Type == "lab" && m.HasGitContent() {
 		resp.HasCheck = true
 		resp.LabURL = m.LabURL
+	}
+	// Local check modules (Tauri) expose check meta to the frontend
+	if m.CheckProvider == "local" {
+		resp.HasCheck = true
+		resp.CheckProvider = m.CheckProvider
+		resp.CheckType = m.CheckType
+		resp.CheckParams = m.CheckParams
 	}
 
 	switch m.Type {

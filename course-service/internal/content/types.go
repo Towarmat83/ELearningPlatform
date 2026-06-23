@@ -39,22 +39,25 @@ type Lesson struct {
 
 // Module is a course element as defined in the CRD spec.modules[].
 type Module struct {
-	Name                   string       `json:"name"`
-	Type                   string       `json:"type"` // video, text, image, quiz
-	Src                    string       `json:"src,omitempty"`
-	Ref                    string       `json:"ref,omitempty"`
-	Path                   string       `json:"path,omitempty"`
-	LabURL                 string       `json:"lab_url,omitempty"`
-	InlineContent          string       `json:"content,omitempty"`
-	Replication            bool         `json:"replication,omitempty"`
-	Hidden                 bool         `json:"hidden,omitempty"`
-	Inline                 bool         `json:"inline,omitempty"`        // quiz rendered inside the previous module
-	Prerequisites          []string     `json:"prerequisites,omitempty"` // module slugs that must be completed first
-	Questions              []Question   `json:"questions,omitempty"`
-	PassingScore           int          `json:"passing_score,omitempty"`
-	Cooldown               CooldownSpec `json:"cooldown,omitempty"`
-	MaxAttemptsPerQuestion *int         `json:"max_attempts_per_question,omitempty"`
-	LockOnMaxAttempts      bool         `json:"lock_on_max_attempts,omitempty"`
+	Name                   string                 `json:"name"`
+	Type                   string                 `json:"type"` // video, text, image, quiz, lab
+	Src                    string                 `json:"src,omitempty"`
+	Ref                    string                 `json:"ref,omitempty"`
+	Path                   string                 `json:"path,omitempty"`
+	LabURL                 string                 `json:"lab_url,omitempty"`
+	InlineContent          string                 `json:"content,omitempty"`
+	Replication            bool                   `json:"replication,omitempty"`
+	Hidden                 bool                   `json:"hidden,omitempty"`
+	Inline                 bool                   `json:"inline,omitempty"`        // quiz rendered inside the previous module
+	Prerequisites          []string               `json:"prerequisites,omitempty"` // module slugs that must be completed first
+	Questions              []Question             `json:"questions,omitempty"`
+	PassingScore           int                    `json:"passing_score,omitempty"`
+	Cooldown               CooldownSpec           `json:"cooldown,omitempty"`
+	MaxAttemptsPerQuestion *int                   `json:"max_attempts_per_question,omitempty"`
+	LockOnMaxAttempts      bool                   `json:"lock_on_max_attempts,omitempty"`
+	CheckProvider          string                 `json:"check_provider,omitempty"` // "local" | "gitlab"
+	CheckType              string                 `json:"check_type,omitempty"`
+	CheckParams            map[string]interface{} `json:"check_params,omitempty"`
 }
 
 // Slug returns a DNS-compliant slug derived from the module name.
@@ -122,22 +125,25 @@ type CourseSpec struct {
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
 type ModuleYAML struct {
-	Name                   string           `yaml:"name"`
-	Type                   string           `yaml:"type"`
-	Src                    string           `yaml:"src,omitempty"`
-	Ref                    string           `yaml:"ref,omitempty"`
-	Path                   string           `yaml:"path,omitempty"`
-	LabURL                 string           `yaml:"lab_url,omitempty"`
-	InlineContent          string           `yaml:"content,omitempty"`
-	Replication            bool             `yaml:"replication,omitempty"`
-	Hidden                 bool             `yaml:"hidden,omitempty"`
-	Inline                 bool             `yaml:"inline,omitempty"`
-	Prerequisites          []string         `yaml:"prerequisites,omitempty"`
-	Questions              []QuestionYAML   `yaml:"questions,omitempty"`
-	PassingScore           int              `yaml:"passing_score"`
-	Cooldown               CooldownSpecYAML `yaml:"cooldown"`
-	MaxAttemptsPerQuestion *int             `yaml:"max_attempts_per_question"`
-	LockOnMaxAttempts      bool             `yaml:"lock_on_max_attempts"`
+	Name                   string                 `yaml:"name"`
+	Type                   string                 `yaml:"type"`
+	Src                    string                 `yaml:"src,omitempty"`
+	Ref                    string                 `yaml:"ref,omitempty"`
+	Path                   string                 `yaml:"path,omitempty"`
+	LabURL                 string                 `yaml:"lab_url,omitempty"`
+	InlineContent          string                 `yaml:"content,omitempty"`
+	Replication            bool                   `yaml:"replication,omitempty"`
+	Hidden                 bool                   `yaml:"hidden,omitempty"`
+	Inline                 bool                   `yaml:"inline,omitempty"`
+	Prerequisites          []string               `yaml:"prerequisites,omitempty"`
+	Questions              []QuestionYAML         `yaml:"questions,omitempty"`
+	PassingScore           int                    `yaml:"passing_score"`
+	Cooldown               CooldownSpecYAML       `yaml:"cooldown"`
+	MaxAttemptsPerQuestion *int                   `yaml:"max_attempts_per_question"`
+	LockOnMaxAttempts      bool                   `yaml:"lock_on_max_attempts"`
+	CheckProvider          string                 `yaml:"check_provider,omitempty"`
+	CheckType              string                 `yaml:"check_type,omitempty"`
+	CheckParams            map[string]interface{} `yaml:"check_params,omitempty"`
 }
 
 // ModuleIndexEntry is one entry in a module index YAML file (type: modules).

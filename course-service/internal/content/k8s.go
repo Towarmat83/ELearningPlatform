@@ -207,6 +207,7 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 				Ref:           getStr(m, "ref"),
 				Path:          getStr(m, "path"),
 				LabURL:        getStr(m, "lab_url"),
+				InlineContent: getStr(m, "content"),
 				Replication:   getBool(m, "replication"),
 				Hidden:        getBool(m, "hidden"),
 				Inline:        getBool(m, "inline"),

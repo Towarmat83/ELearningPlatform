@@ -45,6 +45,7 @@ type Module struct {
 	Ref                    string       `json:"ref,omitempty"`
 	Path                   string       `json:"path,omitempty"`
 	LabURL                 string       `json:"lab_url,omitempty"`
+	InlineContent          string       `json:"content,omitempty"`
 	Replication            bool         `json:"replication,omitempty"`
 	Hidden                 bool         `json:"hidden,omitempty"`
 	Inline                 bool         `json:"inline,omitempty"`        // quiz rendered inside the previous module
@@ -79,7 +80,7 @@ func (m Module) Content() string {
 	case "video", "image":
 		return m.Src
 	default:
-		return ""
+		return m.InlineContent
 	}
 }
 
@@ -127,6 +128,7 @@ type ModuleYAML struct {
 	Ref                    string           `yaml:"ref,omitempty"`
 	Path                   string           `yaml:"path,omitempty"`
 	LabURL                 string           `yaml:"lab_url,omitempty"`
+	InlineContent          string           `yaml:"content,omitempty"`
 	Replication            bool             `yaml:"replication,omitempty"`
 	Hidden                 bool             `yaml:"hidden,omitempty"`
 	Inline                 bool             `yaml:"inline,omitempty"`

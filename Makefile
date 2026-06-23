@@ -8,6 +8,7 @@ HELM_RELEASE   := elearning
 HELM_VALUES    := infra/kind/kind-values.yaml
 PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
 COURSE_DIR     := examples/courses
+DOCKER         ?= podman
 
 REGISTRY        := ghcr.io/towarmat83
 IMAGE_COURSE    := localhost/elearning-course-service:local
@@ -32,16 +33,16 @@ kind-delete:
 docker-build: docker-build-course docker-build-user docker-build-frontend docker-build-checker
 
 docker-build-course:
-	docker build -t $(IMAGE_COURSE) course-service
+	$(DOCKER) build -t $(IMAGE_COURSE) course-service
 
 docker-build-user:
-	docker build -t $(IMAGE_USER) user-service
+	$(DOCKER) build -t $(IMAGE_USER) user-service
 
 docker-build-frontend:
-	docker build -t $(IMAGE_FRONTEND) frontend
+	$(DOCKER) build -t $(IMAGE_FRONTEND) frontend
 
 docker-build-checker:
-	docker build -t $(IMAGE_CHECKER) -f checker-service/Containerfile checker-service
+	$(DOCKER) build -t $(IMAGE_CHECKER) -f checker-service/Containerfile checker-service
 
 # ── Kind load ───────────────────────────────────────────────────────────────
 
@@ -50,16 +51,16 @@ docker-build-checker:
 kind-load: kind-load-course kind-load-user kind-load-frontend kind-load-checker
 
 kind-load-course:
-	kind load docker-image $(IMAGE_COURSE) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_COURSE) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 kind-load-user:
-	kind load docker-image $(IMAGE_USER) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_USER) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 kind-load-frontend:
-	kind load docker-image $(IMAGE_FRONTEND) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_FRONTEND) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 kind-load-checker:
-	kind load docker-image $(IMAGE_CHECKER) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_CHECKER) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 # ── Quick rebuild + reload (single service) ────────────────────────────────
 

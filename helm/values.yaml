@@ -265,8 +265,9 @@ ingress:
         - { path: /api/auth,          pathType: Prefix, backend: user-service   }
         - { path: /api/settings,      pathType: Prefix, backend: user-service   }
         - { path: /api/my,            pathType: Prefix, backend: user-service   }
-        - { path: /api/admin/courses, pathType: Prefix, backend: course-service }
-        - { path: /api/admin,         pathType: Prefix, backend: user-service   }
+        - { path: /api/admin/courses,     pathType: Prefix, backend: course-service }
+        - { path: /api/admin/lab-checks, pathType: Prefix, backend: course-service }
+        - { path: /api/admin,            pathType: Prefix, backend: user-service   }
         - { path: /api/courses,       pathType: Prefix, backend: course-service }
         - { path: /uploads,           pathType: Prefix, backend: course-service }
         - { path: /health,            pathType: Exact,  backend: course-service }

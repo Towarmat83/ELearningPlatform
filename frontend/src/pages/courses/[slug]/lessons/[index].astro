@@ -624,11 +624,14 @@ import App from '../../../../layouts/App.astro';
 
       const navDiv = document.getElementById('lesson-nav')!;
 
+      const nextLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Module suivant ▸';
+
       let rightBtn = '';
       if (!mod.viewed) {
-        rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">Terminer le module ▸</button>`;
+        const btnLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Terminer le module ▸';
+        rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">${btnLabel}</button>`;
       } else if (nextMod) {
-        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">Module suivant ▸</a>`;
+        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`;
       } else {
         rightBtn = `<a href="/courses/${slug}" class="btn btn-primary">Terminer le cours ▸</a>`;
       }
@@ -653,7 +656,7 @@ import App from '../../../../layouts/App.astro';
           }
 
           navDiv.innerHTML = nextMod
-            ? `${prevBtn}<a href="${modHref(nextMod)}" class="btn btn-primary">Module suivant ▸</a>`
+            ? `${prevBtn}<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`
             : `${prevBtn}<a href="/courses/${slug}" class="btn btn-primary">Terminer le cours ▸</a>`;
         } catch {
           (window as any).showToast?.('Erreur lors de la mise à jour', 'error');

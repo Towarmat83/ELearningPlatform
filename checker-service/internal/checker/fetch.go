@@ -71,10 +71,14 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 		}
 	}
 
-	// File contents
+	// File contents — check on the source branch of the first open MR (if any), else default branch
+	ref := proj.DefaultBranch
+	if len(state.OpenMRs) > 0 {
+		ref = state.OpenMRs[0].SourceBranch
+	}
 	for _, filePath := range files {
 		file, _, err := f.client.RepositoryFiles.GetFile(project, filePath, &gitlab.GetFileOptions{
-			Ref: gitlab.Ptr(proj.DefaultBranch),
+			Ref: gitlab.Ptr(ref),
 		})
 		if err != nil {
 			continue

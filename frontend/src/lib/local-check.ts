@@ -10,14 +10,16 @@ export interface LocalCheckMeta {
 }
 
 function isTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI__" in window;
+  return (
+    typeof window !== "undefined" &&
+    ("__TAURI__" in window || "__TAURI_INTERNALS__" in window)
+  );
 }
 
 async function invokeLocalCheck(
   checkType: string,
   params: Record<string, unknown>
 ): Promise<CheckResult> {
-  // @tauri-apps/api/core est injecté dynamiquement pour ne pas casser le build web
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<CheckResult>("local_check", { checkType, params });
 }

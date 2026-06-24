@@ -1,0 +1,122 @@
+apiVersion: elearning.example.com/v1
+kind: Course
+metadata:
+  name: lab2-harbor-podman
+  namespace: default
+spec:
+  title: "Lab 2 : Harbor Searching & Podman Running"
+  description: Recherche une image sur Harbor et exécute un conteneur nginx avec Podman.
+  category: devops
+  difficulty: beginner
+  public: true
+  modules:
+  - name: "Lab 2 : Harbor Searching & Podman Running"
+    type: lab
+    check_provider: local
+    check_type: podman_lab2
+    check_params:
+      image: nginx
+      container_name: my-nginx
+    content: |
+      ## Objectifs
+
+      Apprendre à :
+
+      - Rechercher des images Docker sur Harbor (interface web du registre)
+      - Tirer (pull) une image avec Podman (CLI conteneurs)
+      - Exécuter un conteneur avec des options spécifiques :
+        - `-it` → Mode Interactif Terminal
+        - `--name` → Donner un nom personnalisé
+        - `--rm` → Supprimer automatiquement à la sortie
+      - Valider que le conteneur est en cours d'exécution
+
+      > **Tips :** Besoin d'aide sur une commande Podman ? Utilise `man podman-run` (page de manuel en CLI)
+
+      ---
+
+      ## Contexte
+
+      | Composant | Rôle | Type |
+      |---|---|---|
+      | Harbor | Stocker et gérer les images de conteneurs | Interface Web |
+      | Podman | Gérer les conteneurs (compatible Docker) | CLI |
+
+      > **Pourquoi Podman ?** Il ne nécessite pas de privilèges root (`sudo`), ce qui le rend plus sûr pour les postes de travail.
+
+      ---
+
+      ## Étapes détaillées
+
+      ### 1. Accéder à Harbor DMZ
+
+      Ouvre ton navigateur et accède à l'instance Harbor.
+
+      > **Tips :** Trouve l'URL dans les favoris Firefox.
+
+      ### 2. Rechercher l'image nginx
+
+      Utilise la barre de recherche en haut de Harbor :
+
+      ```
+      docker.io/library/nginx
+      ```
+
+      Si l'image n'est pas sur la première page → utilise les boutons de pagination en bas.
+
+      ### 3. Tirer (pull) l'image
+
+      Clique sur l'image → copie la commande de pull via le bouton de copie.
+
+      Exécute dans le terminal :
+
+      ```bash
+      podman pull docker.io/library/nginx:latest
+      ```
+
+      Télécharge la dernière version de l'image nginx sur ta machine.
+
+      ### 4. Exécuter le conteneur
+
+      Exécute avec ces options :
+
+      ```bash
+      podman run -it --name my-nginx --rm docker.io/library/nginx:latest
+      ```
+
+      | Option | Signification | Utilité |
+      |---|---|---|
+      | `-it` | Interactif Terminal | Ouvre un shell dans le conteneur |
+      | `--name my-nginx` | — | Assigne un nom lisible |
+      | `--rm` | supprimer | Supprime automatiquement le conteneur à la sortie |
+
+      Lance un conteneur interactif `my-nginx`. Sors avec **CTRL + C**.
+
+      ### 5. Valider
+
+      Ouvre un nouveau terminal (**CTRL + MAJ + T**) et exécute :
+
+      ```bash
+      podman ps -a
+      ```
+
+      Liste tous les conteneurs (en cours + arrêtés). Cherche `my-nginx`.
+
+      ---
+
+      ## Bravo !
+
+      Tu as réussi à :
+
+      - Rechercher une image sur Harbor
+      - La tirer avec Podman
+      - L'exécuter avec des options personnalisées
+      - Vérifier que le conteneur fonctionne
+
+      ---
+
+      ## Ressources
+
+      | Ressource | Lien |
+      |---|---|
+      | Docs Podman | docs.podman.io |
+      | Manuel Podman | `man podman-run` dans le terminal |

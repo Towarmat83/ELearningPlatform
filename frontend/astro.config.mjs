@@ -7,7 +7,7 @@ export default defineConfig({
     mode: 'standalone',
   }),
   vite: {
-    server: {
+server: {
       proxy: {
         '/api': {
           target: 'http://localhost:8080',

@@ -60,11 +60,14 @@ fn check_podman_lab2(params: PodmanLab2Params) -> Result<LocalCheckResult, Strin
     }
 
     // 2. podman events — un conteneur nginx a-t-il démarré dans les dernières 24h ?
+    // --stream=false : lit les événements existants et quitte immédiatement
+    let container_filter = format!("container={}", params.container_name);
     let events = run_podman(&[
         "events",
+        "--stream=false",
         "--filter", "type=container",
         "--filter", "event=start",
-        "--filter", &format!("image=docker.io/library/{}:latest", params.image),
+        "--filter", &container_filter,
         "--since", "24h",
         "--no-trunc",
     ])

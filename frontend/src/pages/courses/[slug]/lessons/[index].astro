@@ -564,7 +564,9 @@ import App from '../../../../layouts/App.astro';
                   check_type: mod.check_type,
                   check_params: mod.check_params,
                 },
-                () => modulesApi.check(slug, mod.index, checkToken)
+                () => modulesApi.check(slug, mod.index, checkToken),
+                `/api/courses/${slug}/modules/${mod.index}/record`,
+                checkToken,
               );
               if (result.allow) {
                 resultDiv.innerHTML = `

@@ -31,13 +31,23 @@ async function invokeLocalCheck(
  */
 export async function resolveCheck(
   meta: LocalCheckMeta,
-  remoteCheck: () => Promise<CheckResult>
+  remoteCheck: () => Promise<CheckResult>,
+  recordUrl?: string,
+  token?: string,
 ): Promise<CheckResult> {
   if (meta.check_provider === "local" && isTauri()) {
     if (!meta.check_type) {
       return { allow: false, violations: ["check_type manquant dans le module"] };
     }
-    return invokeLocalCheck(meta.check_type, meta.check_params ?? {});
+    const result = await invokeLocalCheck(meta.check_type, meta.check_params ?? {});
+    if (recordUrl) {
+      fetch(recordUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(result),
+      }).catch(() => {});
+    }
+    return result;
   }
   return remoteCheck();
 }

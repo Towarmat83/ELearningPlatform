@@ -59,6 +59,17 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     let allRows: any[] = [];
+    let allCourses: string[] = [];
+
+    async function populateCourseFilter(current: string) {
+      if (allCourses.length === 0) {
+        const rows = await api('/admin/lab-checks');
+        allCourses = [...new Set(rows.map((r: any) => r.course_slug))].sort() as string[];
+      }
+      const sel = document.getElementById('course-filter') as HTMLSelectElement;
+      sel.innerHTML = `<option value="">Tous les cours</option>` +
+        allCourses.map((c: string) => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
+    }
 
     async function load(course = '') {
       const body = document.getElementById('lab-body')!;
@@ -67,13 +78,7 @@ import Admin from '../../../layouts/Admin.astro';
       const qs = course ? `?course=${encodeURIComponent(course)}` : '';
       allRows = await api(`/admin/lab-checks${qs}`);
 
-      // Populate course filter
-      const courses = [...new Set(allRows.map((r: any) => r.course_slug))].sort();
-      const sel = document.getElementById('course-filter') as HTMLSelectElement;
-      const current = sel.value;
-      sel.innerHTML = `<option value="">Tous les cours</option>` +
-        courses.map((c: string) => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
-
+      await populateCourseFilter(course);
       render(allRows);
     }
 

@@ -158,3 +158,39 @@ func (s *State) storeLabCheck(ctx context.Context, username, courseSlug string, 
 		slog.Warn("failed to store lab check", "err", err)
 	}
 }
+
+// RecordLocalCheck persists the result of a Tauri-side local check (podman, etc.)
+// without re-running any verification server-side.
+// POST /api/courses/{slug}/modules/{index}/record
+func (s *State) RecordLocalCheck(w http.ResponseWriter, r *http.Request) {
+	courseSlug := param(r, "slug")
+	indexStr := param(r, "index")
+	claims := s.claims(r)
+
+	c := s.Content.Get(courseSlug)
+	if c == nil {
+		s.Error(w, http.StatusNotFound, "Course not found")
+		return
+	}
+
+	idx, err := strconv.Atoi(indexStr)
+	if err != nil || idx < 0 || idx >= len(c.Modules) {
+		s.Error(w, http.StatusBadRequest, "Invalid module index")
+		return
+	}
+	m := c.Modules[idx]
+
+	var result CheckResponse
+	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
+		s.Error(w, http.StatusBadRequest, "Invalid body")
+		return
+	}
+
+	displayName := claims.Email
+	if displayName == "" {
+		displayName = "unknown"
+	}
+
+	s.storeLabCheck(r.Context(), displayName, courseSlug, idx, m.Name, result)
+	s.JSON(w, http.StatusOK, result)
+}

@@ -18,6 +18,12 @@ pub struct PodmanLab2Params {
     pub container_name: String,
 }
 
+#[derive(Deserialize)]
+pub struct DistroboxLab3Params {
+    pub container_name: String,
+    pub app: String,
+}
+
 fn run_podman(args: &[&str]) -> Result<String, String> {
     let out = Command::new("podman")
         .args(args)
@@ -86,6 +92,48 @@ fn check_podman_lab2(params: PodmanLab2Params) -> Result<LocalCheckResult, Strin
     })
 }
 
+#[tauri::command]
+fn check_distrobox_lab3(params: DistroboxLab3Params) -> Result<LocalCheckResult, String> {
+    let mut violations: Vec<String> = vec![];
+
+    // 1. Vérifier que le container Distrobox existe
+    let exists = Command::new("podman")
+        .args(["container", "exists", &params.container_name])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !exists {
+        violations.push(format!(
+            "Distrobox '{}' introuvable. Avez-vous bien exécuté 'distrobox create --name {}' ?",
+            params.container_name, params.container_name
+        ));
+    }
+
+    // 2. Vérifier que l'application est exportée (~/.local/share/applications/)
+    let home = std::env::var("HOME").unwrap_or_default();
+    let apps_dir = std::path::Path::new(&home).join(".local/share/applications");
+    let exported = apps_dir.read_dir().ok().map_or(false, |mut entries| {
+        entries.any(|e| {
+            e.ok()
+                .and_then(|e| e.file_name().into_string().ok())
+                .map_or(false, |name| name.contains(&params.app))
+        })
+    });
+
+    if !exported {
+        violations.push(format!(
+            "Application '{}' non exportée. Avez-vous bien exécuté 'distrobox-export -a {}' depuis la Distrobox ?",
+            params.app, params.app
+        ));
+    }
+
+    Ok(LocalCheckResult {
+        allow: violations.is_empty(),
+        violations,
+    })
+}
+
 /// Point d'entrée générique pour les checks locaux.
 #[tauri::command]
 fn local_check(
@@ -103,6 +151,11 @@ fn local_check(
                 .map_err(|e| format!("Params invalides : {e}"))?;
             check_podman_lab2(p)
         }
+        "distrobox_lab3" => {
+            let p: DistroboxLab3Params = serde_json::from_value(params)
+                .map_err(|e| format!("Params invalides : {e}"))?;
+            check_distrobox_lab3(p)
+        }
         _ => Err(format!("check_type inconnu : {check_type}")),
     }
 }
@@ -113,7 +166,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             local_check,
             check_podman_images,
-            check_podman_lab2
+            check_podman_lab2,
+            check_distrobox_lab3
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au démarrage de Tauri");

@@ -16,9 +16,9 @@ func (s *State) AdminStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var totalUsers, totalEnrollments, totalCourses int64
-	s.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE role = 'student'").Scan(&totalUsers)
-	s.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM enrollments").Scan(&totalEnrollments)
-	s.Pool.QueryRow(ctx, "SELECT COUNT(DISTINCT course_slug) FROM enrollments").Scan(&totalCourses)
+	_ = s.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE role = 'student'").Scan(&totalUsers)
+	_ = s.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM enrollments").Scan(&totalEnrollments)
+	_ = s.Pool.QueryRow(ctx, "SELECT COUNT(DISTINCT course_slug) FROM enrollments").Scan(&totalCourses)
 
 	s.JSON(w, http.StatusOK, map[string]any{
 		"total_users":       totalUsers,

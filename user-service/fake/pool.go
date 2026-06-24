@@ -124,7 +124,7 @@ func assignOne(dst, src any) error {
 		return nil
 	}
 	dv := reflect.ValueOf(dst)
-	if dv.Kind() != reflect.Ptr {
+	if dv.Kind() != reflect.Pointer {
 		return fmt.Errorf("dst must be pointer, got %T", dst)
 	}
 	de := dv.Elem()
@@ -134,7 +134,7 @@ func assignOne(dst, src any) error {
 		de.Set(sv)
 		return nil
 	}
-	if de.Kind() == reflect.Ptr {
+	if de.Kind() == reflect.Pointer {
 		inner := de.Type().Elem()
 		if sv.Type() == inner || sv.Type().AssignableTo(inner) {
 			ptr := reflect.New(inner)

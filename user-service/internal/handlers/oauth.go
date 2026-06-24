@@ -305,9 +305,9 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 		return "", "", nil, nil, "", fmt.Errorf("GitHub token request failed: %w", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	resp.Body.Close() //nolint:errcheck
 	var tokenRes map[string]any
-	json.Unmarshal(body, &tokenRes)
+	_ = json.Unmarshal(body, &tokenRes)
 
 	accessToken, _ := tokenRes["access_token"].(string)
 	if accessToken == "" {
@@ -338,7 +338,7 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 	emailStr, _ := profile["email"].(string)
 	if emailStr == "" {
 		var emails []map[string]any
-		doGet(client, "https://api.github.com/user/emails", accessToken, &emails)
+		_ = doGet(client, "https://api.github.com/user/emails", accessToken, &emails)
 		for _, e := range emails {
 			if prim, _ := e["primary"].(bool); !prim {
 				continue
@@ -429,7 +429,7 @@ func upsertSSOUser(ctx context.Context, pool db.Pool, email, displayName string,
 
 	username := sanitizeUsername(displayName)
 	var taken int64
-	pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE username = $1", username).Scan(&taken)
+	_ = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE username = $1", username).Scan(&taken)
 	if taken > 0 {
 		username = username + "_" + uuid.New().String()[:6]
 	}

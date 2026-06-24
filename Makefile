@@ -162,16 +162,6 @@ logs:
 	@echo "=== postgresql ==="
 	@kubectl logs statefulset/$(HELM_RELEASE)-postgresql --tail=5 2>&1 || true
 
-# ── Go tests ─────────────────────────────────────────────────────────────────
-
-.PHONY: go/test
-go/test:
-	@echo "=== Running course-service tests ==="
-	@cd course-service && go test ./... -count=1
-	@echo ""
-	@echo "=== Running user-service tests ==="
-	@cd user-service && go test ./... -count=1
-
 # ── OpenAPI ──────────────────────────────────────────────────────────────────
 #
 # Prerequisites:
@@ -205,6 +195,20 @@ go/test-course:
 go/test-user:
 	@echo "=== user-service tests ==="
 	@cd user-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+
+# ── Go Lint ─────────────────────────────────────────────────────────────────
+
+.PHONY: go/lint go/lint-course go/lint-user
+
+go/lint: go/lint-course go/lint-user
+
+go/lint-course:
+	@echo "=== Linting course-service ==="
+	@cd course-service && golangci-lint run ./...
+
+go/lint-user:
+	@echo "=== Linting user-service ==="
+	@cd user-service && golangci-lint run ./...
 
 # ── Status ──────────────────────────────────────────────────────────────────
 

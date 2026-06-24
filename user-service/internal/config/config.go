@@ -95,11 +95,11 @@ func Load() *Config {
 		CourseServiceURL:  "http://course-service:8082",
 	}
 
-	godotenv.Load()
+	_ = godotenv.Load()
 
 	if path := os.Getenv("CONFIG_PATH"); path != "" {
 		if data, err := os.ReadFile(path); err == nil {
-			yaml.Unmarshal(data, c)
+			_ = yaml.Unmarshal(data, c)
 		}
 	}
 

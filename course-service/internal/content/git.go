@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -31,7 +30,7 @@ type GitCache struct {
 }
 
 func NewGitCache(cacheDir string, ttl time.Duration) *GitCache {
-	os.MkdirAll(cacheDir, 0755)
+	_ = os.MkdirAll(cacheDir, 0755)
 	return &GitCache{
 		cacheDir:       cacheDir,
 		ttl:            ttl,
@@ -106,14 +105,14 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 	slog.Debug("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
 
 	if _, err := os.Stat(repoDir); err == nil {
-		os.RemoveAll(repoDir)
+		_ = os.RemoveAll(repoDir)
 	}
 
 	var stderr bytes.Buffer
 	cmd := exec.Command("git", "clone", "--depth=1", "--branch="+branch, authURL, repoDir)
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		os.RemoveAll(repoDir)
+		_ = os.RemoveAll(repoDir)
 
 		gc.mu.Lock()
 		gc.repos[key] = &cachedRepo{failedUntil: time.Now().Add(gc.failureBackoff)}
@@ -139,7 +138,7 @@ func (gc *GitCache) Clear() {
 	defer gc.mu.Unlock()
 	for _, cr := range gc.repos {
 		if cr.path != "" {
-			os.RemoveAll(cr.path)
+			_ = os.RemoveAll(cr.path)
 		}
 	}
 	gc.repos = make(map[string]*cachedRepo)
@@ -152,7 +151,7 @@ func (gc *GitCache) ClearRepo(rawURL, branch string) {
 	defer gc.mu.Unlock()
 	if cr, ok := gc.repos[key]; ok {
 		if cr.path != "" {
-			os.RemoveAll(cr.path)
+			_ = os.RemoveAll(cr.path)
 		}
 		delete(gc.repos, key)
 	}
@@ -192,37 +191,4 @@ func SetGlobalGitCache(gc *GitCache) {
 
 func FetchModuleContent(rawURL, branch, filePath, token string) ([]byte, error) {
 	return globalGitCache.FetchModuleContent(rawURL, branch, filePath, token)
-}
-
-func fetchGitRaw(rawURL, branch, filePath, token string) ([]byte, error) {
-	tmpDir, err := os.MkdirTemp("", "elearning-git-*")
-	if err != nil {
-		return nil, fmt.Errorf("temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	authURL := buildAuthURL(rawURL, token)
-
-	slog.Debug("cloning module repo", "url", rawURL, "branch", branch)
-	var stderr bytes.Buffer
-	cmd := exec.Command("git", "clone", "--depth=1", "--branch="+branch, authURL, tmpDir)
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		slog.Error("git clone failed", "stderr", stderr.String())
-		return nil, fmt.Errorf("git clone failed: %s", sanitizeGitOutput(stderr.String(), token))
-	}
-
-	fullPath := filepath.Join(tmpDir, filePath)
-	f, err := os.Open(fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("open file %s in repo: %w", filePath, err)
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, fmt.Errorf("read file %s: %w", filePath, err)
-	}
-
-	return data, nil
 }

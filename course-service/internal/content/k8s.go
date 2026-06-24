@@ -158,7 +158,6 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 		title = slug
 	}
 
-
 	var prerequisites []CoursePrerequisite
 	if rawPrereqs, ok := spec["prerequisites"].([]interface{}); ok {
 		for _, rp := range rawPrereqs {

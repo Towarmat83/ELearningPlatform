@@ -63,8 +63,8 @@ func TestToQuiz_DefaultPointsAndDifficulty(t *testing.T) {
 func TestToQuiz_DefaultIDAndTitle(t *testing.T) {
 	qy := QuizYAML{} // no ID, no Title
 	quiz := qy.ToQuiz()
-	if quiz.ID == "" && quiz.Title == "" {
-		// Both empty is acceptable when input is empty
+	if quiz.ID != "" || quiz.Title != "" {
+		t.Errorf("expected empty ID and Title for empty input, got %q and %q", quiz.ID, quiz.Title)
 	}
 }
 

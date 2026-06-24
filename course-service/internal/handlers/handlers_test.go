@@ -22,7 +22,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		Description: "Intro to Kubernetes",
 		Category:    "kubernetes",
 		Difficulty:  "beginner",
-		IsPublic: true,
+		IsPublic:    true,
 		Modules: []content.Module{
 			{Name: "What is K8s", Type: "text"},
 			{Name: "Architecture", Type: "video", Src: "/uploads/arch.mp4"},
@@ -36,7 +36,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		Description: "Learn Docker from scratch",
 		Category:    "docker",
 		Difficulty:  "beginner",
-		IsPublic: false,
+		IsPublic:    false,
 	})
 
 	store.Put(&content.Course{
@@ -45,7 +45,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		Description: "Deep dive into K8s networking and scheduling",
 		Category:    "kubernetes",
 		Difficulty:  "advanced",
-		IsPublic: true,
+		IsPublic:    true,
 	})
 
 	cfg := &config.Config{
@@ -550,8 +550,8 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 	store := content.NewStore()
 
 	store.Put(&content.Course{
-		Slug:        "linux-intro",
-		Title:       "Intro Linux",
+		Slug:     "linux-intro",
+		Title:    "Intro Linux",
 		IsPublic: true,
 		Modules: []content.Module{
 			{Name: "What is Linux", Type: "text"},
@@ -569,8 +569,8 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 	})
 
 	store.Put(&content.Course{
-		Slug:        "kubernetes-adv",
-		Title:       "Advanced Kubernetes",
+		Slug:     "kubernetes-adv",
+		Title:    "Advanced Kubernetes",
 		IsPublic: true,
 		Prerequisites: []content.CoursePrerequisite{
 			{Course: "linux-intro", MinScore: 30, Modules: []string{"quiz-bases-linux"}},
@@ -581,8 +581,8 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 	})
 
 	store.Put(&content.Course{
-		Slug:        "network-basics",
-		Title:       "Network Basics",
+		Slug:     "network-basics",
+		Title:    "Network Basics",
 		IsPublic: true,
 		Prerequisites: []content.CoursePrerequisite{
 			{Course: "linux-intro", MinScore: 50},
@@ -593,8 +593,8 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 	})
 
 	store.Put(&content.Course{
-		Slug:        "free-course",
-		Title:       "Free Course (any linux-intro progress)",
+		Slug:     "free-course",
+		Title:    "Free Course (any linux-intro progress)",
 		IsPublic: true,
 		Prerequisites: []content.CoursePrerequisite{
 			{Course: "linux-intro"},
@@ -1670,8 +1670,8 @@ func TestGetModule_PrerequisitesNotMet(t *testing.T) {
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
 		"/internal/progress/course-summary": func(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]any{
-				"total_score":   0,
-				"viewed_count":  0,
+				"total_score":    0,
+				"viewed_count":   0,
 				"passed_modules": []string{},
 			})
 		},
@@ -1826,7 +1826,7 @@ func TestSanitizeQuestions_Empty(t *testing.T) {
 
 func TestCompletedSlugs_ViewedAndPassed(t *testing.T) {
 	modules := []content.Module{
-		{Name: "Intro", Type: "text"},  // slug: intro
+		{Name: "Intro", Type: "text"},    // slug: intro
 		{Name: "Quiz One", Type: "quiz"}, // slug: quiz-one
 	}
 	viewedMap := map[string]bool{"intro": true}
@@ -2479,9 +2479,7 @@ func TestTokenForRepo_WithMatchingCredentials(t *testing.T) {
 	defer mock.Close()
 	s := newTestState(t, mock)
 
-	creds := &content.GitCredentialStore{}
-	// Use LoadCredentials path indirectly: manually set creds via exported ctor
-	// Since GitCredentialStore is not exported with an Add method, use LoadCredentials.
+	var creds *content.GitCredentialStore
 	tmp, err := os.CreateTemp("", "creds-*.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -2536,9 +2534,9 @@ func newStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 				PassingScore: 50,
 				Questions: []content.Question{
 					{
-						ID:     "iq1",
-						Type:   "boolean",
-						Points: 5,
+						ID:       "iq1",
+						Type:     "boolean",
+						Points:   5,
 						Feedback: content.Feedback{Correct: "yes", Wrong: "no"},
 					},
 				},

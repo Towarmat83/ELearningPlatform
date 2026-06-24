@@ -236,8 +236,8 @@ func TestCrdToCourse_WithModules(t *testing.T) {
 					"path": "module1.md",
 				},
 				map[string]interface{}{
-					"name":        "Quiz 1",
-					"type":        "quiz",
+					"name":          "Quiz 1",
+					"type":          "quiz",
 					"passing_score": float64(80),
 				},
 			},
@@ -572,7 +572,7 @@ func TestCrdToCourse_ModuleDefaultNameAndType(t *testing.T) {
 	obj.Object = map[string]interface{}{
 		"metadata": map[string]interface{}{"name": "defaults-course"},
 		"spec": map[string]interface{}{
-			"title":  "", // empty title → should use slug
+			"title": "", // empty title → should use slug
 			"modules": []interface{}{
 				map[string]interface{}{}, // empty module → name and type default
 			},
@@ -666,9 +666,9 @@ func TestCrdToCourse_MaxAttemptsInt(t *testing.T) {
 			"title": "Int Attempts",
 			"modules": []interface{}{
 				map[string]interface{}{
-					"name":                       "Quiz",
-					"type":                       "quiz",
-					"max_attempts_per_question":  5, // int (not float64)
+					"name":                      "Quiz",
+					"type":                      "quiz",
+					"max_attempts_per_question": 5, // int (not float64)
 				},
 			},
 		},

@@ -46,7 +46,7 @@ type Module struct {
 	Path                   string       `json:"path,omitempty"`
 	Replication            bool         `json:"replication,omitempty"`
 	Hidden                 bool         `json:"hidden,omitempty"`
-	Inline                 bool         `json:"inline,omitempty"` // quiz rendered inside the previous module
+	Inline                 bool         `json:"inline,omitempty"`        // quiz rendered inside the previous module
 	Prerequisites          []string     `json:"prerequisites,omitempty"` // module slugs that must be completed first
 	Questions              []Question   `json:"questions,omitempty"`
 	PassingScore           int          `json:"passing_score,omitempty"`

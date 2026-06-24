@@ -103,12 +103,12 @@ func TestCourseYAML_MergeSpec_NilSpec(t *testing.T) {
 func TestCourseYAML_MergeSpec_FromSpec(t *testing.T) {
 	c := &CourseYAML{
 		Spec: &CourseSpec{
-			Title:       "Spec Title",
-			Description: "Spec Desc",
-			Public:      true,
-			Category:    "k8s",
-			Difficulty:  "hard",
-			Modules:     []ModuleYAML{{Name: "mod1"}},
+			Title:         "Spec Title",
+			Description:   "Spec Desc",
+			Public:        true,
+			Category:      "k8s",
+			Difficulty:    "hard",
+			Modules:       []ModuleYAML{{Name: "mod1"}},
 			Prerequisites: []CoursePrerequisite{{Course: "prereq1"}},
 		},
 	}

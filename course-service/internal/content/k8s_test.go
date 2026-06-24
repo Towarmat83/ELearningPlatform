@@ -109,7 +109,7 @@ func TestStore_Operations(t *testing.T) {
 		Description: "A test course",
 		Category:    "testing",
 		Difficulty:  "beginner",
-		IsPublic: true,
+		IsPublic:    true,
 		Source:      "local",
 		Modules: []Module{
 			{Name: "Module 1", Type: "text", Path: "intro.md"},

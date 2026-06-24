@@ -14,7 +14,7 @@ const defaultGroupName = "everyone"
 // syncGroupEnrollments ensures the user is enrolled in every course
 // that any of their groups are enrolled in. Called after every login.
 func syncGroupEnrollments(ctx context.Context, pool db.Pool, userID string) {
-	pool.Exec(ctx,
+	_, _ = pool.Exec(ctx, //nolint:errcheck
 		`INSERT INTO enrollments (user_id, course_slug)
 		 SELECT $1::uuid, ge.course_slug
 		 FROM group_enrollments ge
@@ -28,7 +28,7 @@ func syncGroupEnrollments(ctx context.Context, pool db.Pool, userID string) {
 // Called after every login regardless of auth method.
 func addToDefaultGroup(ctx context.Context, pool db.Pool, userID string) {
 	var groupID string
-	pool.QueryRow(ctx,
+	_ = pool.QueryRow(ctx,
 		`INSERT INTO groups (name, source, description)
 		 VALUES ($1, 'local', 'Default group — all users are members automatically')
 		 ON CONFLICT (name) DO UPDATE SET updated_at = NOW()
@@ -36,7 +36,7 @@ func addToDefaultGroup(ctx context.Context, pool db.Pool, userID string) {
 	if groupID == "" {
 		return
 	}
-	pool.Exec(ctx,
+	_, _ = pool.Exec(ctx, //nolint:errcheck
 		`INSERT INTO user_groups (user_id, group_id)
 		 VALUES ($1::uuid, $2::uuid)
 		 ON CONFLICT DO NOTHING`, userID, groupID)

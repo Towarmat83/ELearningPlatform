@@ -4,9 +4,8 @@ import (
 	"testing"
 )
 
-func boolPtr(b bool) *bool { return &b }
+func boolPtr(b bool) *bool    { return &b }
 func strPtr(s string) *string { return &s }
-func intPtr(i int) *int { return &i }
 
 func makeQuestion(id, typ string, points int) Question {
 	return Question{

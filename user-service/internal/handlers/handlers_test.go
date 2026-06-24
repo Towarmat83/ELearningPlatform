@@ -141,8 +141,8 @@ func TestRegister_RegistrationDisabled(t *testing.T) {
 
 func TestRegister_EmailDomainBlocked(t *testing.T) {
 	pool := &fake.Pool{}
-	pool.PushRow(nil, "true")           // registration_enabled → "true"
-	pool.PushRow(nil, "example.com")    // registration_email_whitelist → "example.com"
+	pool.PushRow(nil, "true")        // registration_enabled → "true"
+	pool.PushRow(nil, "example.com") // registration_email_whitelist → "example.com"
 	r := newTestRouter(pool)
 	body := `{"username":"testuser","email":"t@other.com","password":"TestPass99"}`
 	rec := htDo(t, r, "POST", "/api/auth/register", body, "")
@@ -173,9 +173,9 @@ func TestRegister_PasswordTooShort(t *testing.T) {
 
 func TestRegister_PasswordNeedsUppercase(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 2)            // registration_enabled → fallback, email_whitelist → fallback
-	pool.PushRow(nil, "8")          // password_min_length → "8"
-	pool.PushRow(nil, "true")       // password_require_uppercase → "true"
+	skipErrRows(pool, 2)      // registration_enabled → fallback, email_whitelist → fallback
+	pool.PushRow(nil, "8")    // password_min_length → "8"
+	pool.PushRow(nil, "true") // password_require_uppercase → "true"
 	r := newTestRouter(pool)
 	body := `{"username":"validuser","email":"t@test.com","password":"nouppercase"}`
 	rec := htDo(t, r, "POST", "/api/auth/register", body, "")
@@ -186,10 +186,10 @@ func TestRegister_PasswordNeedsUppercase(t *testing.T) {
 
 func TestRegister_PasswordNeedsNumber(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 2)            // registration_enabled, email_whitelist → fallbacks
-	pool.PushRow(nil, "8")          // password_min_length → "8"
-	pool.PushRow(nil, "false")      // password_require_uppercase → "false"
-	pool.PushRow(nil, "true")       // password_require_number → "true"
+	skipErrRows(pool, 2)       // registration_enabled, email_whitelist → fallbacks
+	pool.PushRow(nil, "8")     // password_min_length → "8"
+	pool.PushRow(nil, "false") // password_require_uppercase → "false"
+	pool.PushRow(nil, "true")  // password_require_number → "true"
 	r := newTestRouter(pool)
 	body := `{"username":"validuser","email":"t@test.com","password":"NoNumbersHere"}`
 	rec := htDo(t, r, "POST", "/api/auth/register", body, "")
@@ -201,8 +201,8 @@ func TestRegister_PasswordNeedsNumber(t *testing.T) {
 func TestRegister_PasswordMinLenFallback(t *testing.T) {
 	// When the min_length setting returns "0" (< 1), it falls back to 8
 	pool := &fake.Pool{}
-	skipErrRows(pool, 2)       // registration_enabled, email_whitelist
-	pool.PushRow(nil, "0")     // password_min_length="0" → triggers minLen<1 fallback → minLen=8
+	skipErrRows(pool, 2)   // registration_enabled, email_whitelist
+	pool.PushRow(nil, "0") // password_min_length="0" → triggers minLen<1 fallback → minLen=8
 	r := newTestRouter(pool)
 	body := `{"username":"validuser","email":"t@test.com","password":"short"}`
 	rec := htDo(t, r, "POST", "/api/auth/register", body, "")
@@ -214,10 +214,10 @@ func TestRegister_PasswordMinLenFallback(t *testing.T) {
 func TestRegister_PasswordHasUppercasePasses(t *testing.T) {
 	// password_require_uppercase=true, password HAS uppercase → passes that check
 	pool := &fake.Pool{}
-	skipErrRows(pool, 2)        // registration_enabled, email_whitelist
-	pool.PushRow(nil, "8")      // password_min_length
-	pool.PushRow(nil, "true")   // password_require_uppercase=true
-	pool.PushRow(nil, "false")  // password_require_number=false
+	skipErrRows(pool, 2)       // registration_enabled, email_whitelist
+	pool.PushRow(nil, "8")     // password_min_length
+	pool.PushRow(nil, "true")  // password_require_uppercase=true
+	pool.PushRow(nil, "false") // password_require_number=false
 	// After validation passes, hit a DB error on COUNT(*) to stop
 	pool.PushRow(fmt.Errorf("db down"))
 	r := newTestRouter(pool)
@@ -231,10 +231,10 @@ func TestRegister_PasswordHasUppercasePasses(t *testing.T) {
 func TestRegister_PasswordHasNumberPasses(t *testing.T) {
 	// password_require_number=true, password HAS number → passes that check
 	pool := &fake.Pool{}
-	skipErrRows(pool, 2)        // registration_enabled, email_whitelist
-	pool.PushRow(nil, "8")      // password_min_length
-	pool.PushRow(nil, "false")  // password_require_uppercase=false
-	pool.PushRow(nil, "true")   // password_require_number=true
+	skipErrRows(pool, 2)       // registration_enabled, email_whitelist
+	pool.PushRow(nil, "8")     // password_min_length
+	pool.PushRow(nil, "false") // password_require_uppercase=false
+	pool.PushRow(nil, "true")  // password_require_number=true
 	// After validation passes, hit a DB error on COUNT(*) to stop
 	pool.PushRow(fmt.Errorf("db down"))
 	r := newTestRouter(pool)
@@ -247,8 +247,8 @@ func TestRegister_PasswordHasNumberPasses(t *testing.T) {
 
 func TestRegister_Conflict(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 5)            // 2 before validation + 3 in validatePasswordPolicy
-	pool.PushRow(nil, int64(1))     // COUNT(*) → existing=1
+	skipErrRows(pool, 5)        // 2 before validation + 3 in validatePasswordPolicy
+	pool.PushRow(nil, int64(1)) // COUNT(*) → existing=1
 	r := newTestRouter(pool)
 	body := `{"username":"validuser","email":"t@test.com","password":"TestPass99"}`
 	rec := htDo(t, r, "POST", "/api/auth/register", body, "")
@@ -304,7 +304,7 @@ func TestLogin_NullPasswordHash(t *testing.T) {
 	pool := &fake.Pool{}
 	skipErrRows(pool, 1) // sso_local_login_enabled → fallback "true"
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com",
-		nil,      // password_hash (nil → SSO user)
+		nil, // password_hash (nil → SSO user)
 		"student", nil, nil, true, "github", "2024-01-01")
 	r := newTestRouter(pool)
 	rec := htDo(t, r, "POST", "/api/auth/login", `{"email":"t@test.com","password":"TestPass99"}`, "")
@@ -457,7 +457,7 @@ func TestChangePassword_SSOUser(t *testing.T) {
 
 func TestChangePassword_WrongOldPassword(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 3) // 3 ReadSettings in validatePasswordPolicy → fallbacks
+	skipErrRows(pool, 3)           // 3 ReadSettings in validatePasswordPolicy → fallbacks
 	pool.PushRow(nil, htLoginHash) // password_hash
 	r := newTestRouter(pool)
 	rec := htDo(t, r, "PUT", "/api/auth/password", `{"old_password":"WrongOld","new_password":"NewPass9999"}`, htAuthHeader(t, "student"))
@@ -468,7 +468,7 @@ func TestChangePassword_WrongOldPassword(t *testing.T) {
 
 func TestChangePassword_Success(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 3) // validatePasswordPolicy ReadSettings → defaults
+	skipErrRows(pool, 3)           // validatePasswordPolicy ReadSettings → defaults
 	pool.PushRow(nil, htLoginHash) // SELECT password_hash
 	pool.PushExec(1, nil)          // UPDATE password_hash
 	r := newTestRouter(pool)
@@ -481,9 +481,9 @@ func TestChangePassword_Success(t *testing.T) {
 
 func TestChangePassword_DBUpdateError(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 3)                         // validatePasswordPolicy ReadSettings
-	pool.PushRow(nil, htLoginHash)               // SELECT password_hash
-	pool.PushExec(0, fmt.Errorf("db down"))      // UPDATE fails
+	skipErrRows(pool, 3)                    // validatePasswordPolicy ReadSettings
+	pool.PushRow(nil, htLoginHash)          // SELECT password_hash
+	pool.PushExec(0, fmt.Errorf("db down")) // UPDATE fails
 	r := newTestRouter(pool)
 	body := fmt.Sprintf(`{"old_password":%q,"new_password":"NewPass9999"}`, htLoginPassword)
 	rec := htDo(t, r, "PUT", "/api/auth/password", body, htAuthHeader(t, "student"))
@@ -1471,10 +1471,10 @@ func TestAdminUnenrollGroup_DBError(t *testing.T) {
 
 func TestRegister_Success(t *testing.T) {
 	pool := &fake.Pool{}
-	skipErrRows(pool, 2) // registration_enabled, email_whitelist
-	skipErrRows(pool, 3) // validatePasswordPolicy: min_length, uppercase, number
-	pool.PushRow(nil, int64(0))                                               // COUNT(*) → no conflict
-	pool.PushRow(nil, "new-user-uuid", "testuser", "test@example.com",        // INSERT RETURNING
+	skipErrRows(pool, 2)                                               // registration_enabled, email_whitelist
+	skipErrRows(pool, 3)                                               // validatePasswordPolicy: min_length, uppercase, number
+	pool.PushRow(nil, int64(0))                                        // COUNT(*) → no conflict
+	pool.PushRow(nil, "new-user-uuid", "testuser", "test@example.com", // INSERT RETURNING
 		"student", nil, nil, true, "local", "2024-01-01")
 	pool.PushRow(nil, "group-uuid-1") // addToDefaultGroup: INSERT INTO groups RETURNING
 	r := newTestRouter(pool)
@@ -1707,8 +1707,8 @@ func TestInternalCourseSummary_DBError(t *testing.T) {
 
 func TestInternalCourseSummary_Success(t *testing.T) {
 	pool := &fake.Pool{}
-	pool.PushRow(nil, 180)        // total_score
-	pool.PushRows(nil,            // passed module slugs
+	pool.PushRow(nil, 180) // total_score
+	pool.PushRows(nil,     // passed module slugs
 		[]any{"module-1"},
 		[]any{"module-2"},
 	)
@@ -1733,11 +1733,11 @@ func TestInternalCourseSummary_Success(t *testing.T) {
 
 func newOAuthRouter(pool *fake.Pool, providers ...config.ProviderConfig) http.Handler {
 	cfg := &config.Config{
-		JWTSecret:       htSecret,
-		JWTExpiryH:      htExpiry,
-		CORSOrigins:     []string{"*"},
+		JWTSecret:         htSecret,
+		JWTExpiryH:        htExpiry,
+		CORSOrigins:       []string{"*"},
 		OAuthRedirectBase: "http://localhost:3000",
-		Providers:       providers,
+		Providers:         providers,
 	}
 	s := &State{Pool: pool, Config: cfg}
 	return BuildRouter(s, cfg, pool, false)
@@ -2503,10 +2503,10 @@ func TestSyncGroupsAndDeriveRole_WithGroup(t *testing.T) {
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student") // SELECT role
 	// For each group name: INSERT group, INSERT user_groups, SELECT mapped_role
-	pool.PushRow(nil, "group-uuid-1")  // INSERT/SELECT group
-	pool.PushExec(1, nil)              // INSERT user_groups
-	pool.PushRow(nil, "admin")         // SELECT mapped_role → admin
-	pool.PushExec(1, nil)              // UPDATE users SET role
+	pool.PushRow(nil, "group-uuid-1") // INSERT/SELECT group
+	pool.PushExec(1, nil)             // INSERT user_groups
+	pool.PushRow(nil, "admin")        // SELECT mapped_role → admin
+	pool.PushExec(1, nil)             // UPDATE users SET role
 	role, err := syncGroupsAndDeriveRole(context.Background(), pool, "user-uuid", []string{"admins"}, "oidc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2789,15 +2789,15 @@ func TestLoadOIDCSettings_EnabledAndConfigured(t *testing.T) {
 
 func TestLoadOIDCSettings_MissingClientID(t *testing.T) {
 	pool := &fake.Pool{}
-	pool.PushRow(nil, "true")        // oidc_enabled
+	pool.PushRow(nil, "true")                    // oidc_enabled
 	pool.PushRow(nil, "https://sso.example.com") // oidc_provider_url
-	pool.PushRow(fmt.Errorf("no row")) // oidc_issuer_url → empty
-	pool.PushRow(fmt.Errorf("no row")) // oidc_client_id → empty
-	pool.PushRow(nil, "my-secret")   // oidc_client_secret
-	pool.PushRow(fmt.Errorf("no row")) // oidc_group_claim → default
-	pool.PushRow(fmt.Errorf("no row")) // oidc_redirect_base → default
-	pool.PushRow(fmt.Errorf("no row")) // oidc_browser_base_url → empty
-	pool.PushRow(fmt.Errorf("no row")) // oidc_scopes → default
+	pool.PushRow(fmt.Errorf("no row"))           // oidc_issuer_url → empty
+	pool.PushRow(fmt.Errorf("no row"))           // oidc_client_id → empty
+	pool.PushRow(nil, "my-secret")               // oidc_client_secret
+	pool.PushRow(fmt.Errorf("no row"))           // oidc_group_claim → default
+	pool.PushRow(fmt.Errorf("no row"))           // oidc_redirect_base → default
+	pool.PushRow(fmt.Errorf("no row"))           // oidc_browser_base_url → empty
+	pool.PushRow(fmt.Errorf("no row"))           // oidc_scopes → default
 	s := &State{Pool: pool, Config: &config.Config{OAuthRedirectBase: "http://localhost:3000"}}
 	_, err := s.loadOIDCSettings(context.Background())
 	if err == nil {
@@ -2989,9 +2989,9 @@ func TestSyncGroupsAndDeriveRole_UpdateRoleError(t *testing.T) {
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student")
 	pool.PushRow(nil, "group-uuid")
-	pool.PushRow(nil, "admin") // mapped_role
-	pool.PushExec(1, nil)       // DELETE
-	pool.PushExec(1, nil)       // INSERT user_groups
+	pool.PushRow(nil, "admin")                   // mapped_role
+	pool.PushExec(1, nil)                        // DELETE
+	pool.PushExec(1, nil)                        // INSERT user_groups
 	pool.PushExec(0, fmt.Errorf("update error")) // UPDATE users
 	_, err := syncGroupsAndDeriveRole(context.Background(), pool, "user-uuid", []string{"admins"}, "oidc")
 	if err == nil {

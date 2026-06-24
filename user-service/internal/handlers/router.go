@@ -4,14 +4,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elearning/user-service/internal/config"
+	"github.com/elearning/user-service/internal/db"
 	"github.com/elearning/user-service/internal/metrics"
 	apimiddleware "github.com/elearning/user-service/internal/middleware"
 )
 
-func BuildRouter(s *State, cfg *config.Config, pool *pgxpool.Pool, withLogger bool) *chi.Mux {
+func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(pool, cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(pool, cfg.JWTSecret)
 

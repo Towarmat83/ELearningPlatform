@@ -162,6 +162,16 @@ logs:
 	@echo "=== postgresql ==="
 	@kubectl logs statefulset/$(HELM_RELEASE)-postgresql --tail=5 2>&1 || true
 
+# ── Go tests ─────────────────────────────────────────────────────────────────
+
+.PHONY: go/test
+go/test:
+	@echo "=== Running course-service tests ==="
+	@cd course-service && go test ./... -count=1
+	@echo ""
+	@echo "=== Running user-service tests ==="
+	@cd user-service && go test ./... -count=1
+
 # ── OpenAPI ──────────────────────────────────────────────────────────────────
 #
 # Prerequisites:

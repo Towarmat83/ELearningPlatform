@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/elearning/user-service/internal/db"
 )
 
 type Claims struct {
@@ -63,7 +64,7 @@ func httpErr(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-func Auth(_ *pgxpool.Pool, secret string) func(http.Handler) http.Handler {
+func Auth(_ db.Pool, secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")
@@ -86,7 +87,7 @@ func Auth(_ *pgxpool.Pool, secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func Admin(_ *pgxpool.Pool, secret string) func(http.Handler) http.Handler {
+func Admin(_ db.Pool, secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")

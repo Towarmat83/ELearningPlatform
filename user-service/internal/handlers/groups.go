@@ -5,14 +5,15 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/elearning/user-service/internal/db"
 )
 
 const defaultGroupName = "everyone"
 
 // syncGroupEnrollments ensures the user is enrolled in every course
 // that any of their groups are enrolled in. Called after every login.
-func syncGroupEnrollments(ctx context.Context, pool *pgxpool.Pool, userID string) {
+func syncGroupEnrollments(ctx context.Context, pool db.Pool, userID string) {
 	pool.Exec(ctx,
 		`INSERT INTO enrollments (user_id, course_slug)
 		 SELECT $1::uuid, ge.course_slug
@@ -25,7 +26,7 @@ func syncGroupEnrollments(ctx context.Context, pool *pgxpool.Pool, userID string
 
 // addToDefaultGroup ensures the user belongs to the platform default group.
 // Called after every login regardless of auth method.
-func addToDefaultGroup(ctx context.Context, pool *pgxpool.Pool, userID string) {
+func addToDefaultGroup(ctx context.Context, pool db.Pool, userID string) {
 	var groupID string
 	pool.QueryRow(ctx,
 		`INSERT INTO groups (name, source, description)
@@ -44,7 +45,7 @@ func addToDefaultGroup(ctx context.Context, pool *pgxpool.Pool, userID string) {
 // syncGroupsAndDeriveRole upserts groups from an IdP into the groups table,
 // updates the user's group memberships, and returns the highest platform role
 // found in group_role_mappings ('admin' beats 'student'). Defaults to 'student'.
-func syncGroupsAndDeriveRole(ctx context.Context, pool *pgxpool.Pool, userID string, groupNames []string, source string) (string, error) {
+func syncGroupsAndDeriveRole(ctx context.Context, pool db.Pool, userID string, groupNames []string, source string) (string, error) {
 	// Start from the user's current role so SSO logins without group mappings
 	// never silently downgrade an existing admin.
 	var role string

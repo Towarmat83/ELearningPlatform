@@ -15,8 +15,9 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/oauth2"
+
+	"github.com/elearning/user-service/internal/db"
 
 	"github.com/elearning/user-service/internal/config"
 	"github.com/elearning/user-service/internal/metrics"
@@ -380,7 +381,7 @@ func doGet(client *http.Client, rawURL, bearer string, out any) error {
 
 // ── User upsert ───────────────────────────────────────────────────────────────
 
-func upsertSSOUser(ctx context.Context, pool *pgxpool.Pool, email, displayName string, avatarURL, bio *string, provider, providerUserID string) (*userPublicRow, error) {
+func upsertSSOUser(ctx context.Context, pool db.Pool, email, displayName string, avatarURL, bio *string, provider, providerUserID string) (*userPublicRow, error) {
 	const sel = `SELECT id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text FROM users`
 
 	u, err := scanUserPublic(pool.QueryRow(ctx,

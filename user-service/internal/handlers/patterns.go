@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gopkg.in/yaml.v3"
+
+	"github.com/elearning/user-service/internal/db"
 )
 
 type MarkdownPattern struct {
@@ -41,7 +42,7 @@ type patternConfigFile struct {
 	} `yaml:"patterns"`
 }
 
-func LoadPatternsFromConfig(ctx context.Context, pool *pgxpool.Pool, path string) error {
+func LoadPatternsFromConfig(ctx context.Context, pool db.Pool, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err

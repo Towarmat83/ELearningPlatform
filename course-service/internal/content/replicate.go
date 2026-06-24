@@ -62,10 +62,10 @@ func downloadFile(url, dest string) error {
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
-		os.Remove(dest)
+		_ = os.Remove(dest)
 		return fmt.Errorf("write file: %w", err)
 	}
 

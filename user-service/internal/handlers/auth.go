@@ -298,7 +298,7 @@ func (s *State) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			var taken int64
-			s.Pool.QueryRow(ctx,
+			_ = s.Pool.QueryRow(ctx,
 				"SELECT COUNT(*) FROM users WHERE username = $1 AND id != $2::uuid",
 				uname, c.Subject).Scan(&taken)
 			if taken > 0 {

@@ -185,10 +185,7 @@ func (qy QuizYAML) ToQuiz() *Quiz {
 		LockOnMaxAttempts:      qy.LockOnMaxAttempts,
 	}
 	for _, c := range qy.Covers {
-		q.Covers = append(q.Covers, CoverEntry{
-			Course:  c.Course,
-			Modules: c.Modules,
-		})
+		q.Covers = append(q.Covers, CoverEntry(c))
 	}
 	for _, qa := range qy.Questions {
 		qq := Question{
@@ -203,10 +200,10 @@ func (qy QuizYAML) ToQuiz() *Quiz {
 			Items:         make([]OrderItem, len(qa.Items)),
 		}
 		for i, a := range qa.Answers {
-			qq.Answers[i] = Answer{ID: a.ID, Text: a.Text, Correct: a.Correct}
+			qq.Answers[i] = Answer(a)
 		}
 		for i, it := range qa.Items {
-			qq.Items[i] = OrderItem{ID: it.ID, Text: it.Text}
+			qq.Items[i] = OrderItem(it)
 		}
 		if qa.PartialScoring != nil {
 			qq.PartialScoring = &PartialScoring{
@@ -219,12 +216,7 @@ func (qy QuizYAML) ToQuiz() *Quiz {
 			Correct: qa.Feedback.Correct,
 		}
 		for _, sr := range qa.Feedback.SourceRefs {
-			qq.Feedback.SourceRefs = append(qq.Feedback.SourceRefs, SourceRef{
-				Course:   sr.Course,
-				Module:   sr.Module,
-				Anchor:   sr.Anchor,
-				Priority: sr.Priority,
-			})
+			qq.Feedback.SourceRefs = append(qq.Feedback.SourceRefs, SourceRef(sr))
 		}
 		if qq.Points == 0 {
 			qq.Points = 1

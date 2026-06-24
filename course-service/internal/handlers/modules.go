@@ -225,7 +225,7 @@ func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug string, idx,
 		resp, err := http.Post(s.Config.UserServiceURL+"/internal/progress/module",
 			"application/json", bytes.NewReader(body))
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	}()
 }
@@ -342,6 +342,10 @@ func (s *State) checkCoursePrerequisites(prereqs []content.CoursePrerequisite, u
 func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	claims := s.claims(r)
+	if claims == nil {
+		s.Error(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	c := s.Content.Get(courseSlug)
 	if c == nil {
@@ -391,7 +395,7 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			Passed:        p.Passed,
 			Attempts:      p.Attempts,
 		}
-		if claims != nil && claims.Role == "admin" {
+		if claims.Role == "admin" {
 			resp.Src = m.Src
 			resp.Ref = m.Ref
 			resp.Path = m.Path
@@ -427,6 +431,10 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	indexStr := param(r, "index")
 	claims := s.claims(r)
+	if claims == nil {
+		s.Error(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	c := s.Content.Get(courseSlug)
 	if c == nil {
@@ -668,7 +676,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		}
 		questions = quiz.Questions
 		passingScore = quiz.PassingScore
-		cooldownSpec = content.CooldownSpec(quiz.Cooldown)
+		cooldownSpec = quiz.Cooldown
 	} else if m.HasQuestions() {
 		questions = m.Questions
 		passingScore = m.PassingScore

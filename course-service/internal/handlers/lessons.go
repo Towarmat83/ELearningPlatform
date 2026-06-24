@@ -35,7 +35,7 @@ func (s *State) autoEnroll(userID, courseSlug string) {
 	resp, err := http.Post(s.Config.UserServiceURL+"/internal/enrollments/auto",
 		"application/json", bytes.NewReader(body))
 	if err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 
@@ -257,7 +257,7 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 		"lesson_slug": lessonSlug,
 	}
 	var buf bytes.Buffer
-	json.NewEncoder(&buf).Encode(body)
+	_ = json.NewEncoder(&buf).Encode(body)
 
 	resp, err := http.Post(s.Config.UserServiceURL+"/internal/progress/complete", "application/json", &buf)
 	if err != nil {

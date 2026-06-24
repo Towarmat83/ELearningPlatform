@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -14,6 +13,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/elearning/user-service/internal/db"
 )
 
 var patternGVR = schema.GroupVersionResource{
@@ -24,12 +25,12 @@ var patternGVR = schema.GroupVersionResource{
 
 // PatternWatcher watches MarkdownPattern CRDs and syncs them into the DB.
 type PatternWatcher struct {
-	pool      *pgxpool.Pool
+	pool      db.Pool
 	client    dynamic.NamespaceableResourceInterface
 	namespace string
 }
 
-func NewPatternWatcher(pool *pgxpool.Pool, kubeconfig, namespace string) (*PatternWatcher, error) {
+func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatcher, error) {
 	cfg, err := buildRestConfig(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)

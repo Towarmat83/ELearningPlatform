@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/elearning/user-service/internal/db"
 )
 
 var allowedSettingKeys = map[string]bool{
@@ -37,7 +37,7 @@ var allowedSettingKeys = map[string]bool{
 	"ldap_group_filter":  true,
 }
 
-func ReadSetting(ctx context.Context, pool *pgxpool.Pool, key, fallback string) string {
+func ReadSetting(ctx context.Context, pool db.Pool, key, fallback string) string {
 	var val string
 	err := pool.QueryRow(ctx, "SELECT value FROM platform_settings WHERE key = $1", key).Scan(&val)
 	if err != nil {

@@ -15,6 +15,20 @@ linters:
     - bodyclose
     - misspell
     - unconvert
+  exclusions:
+    rules:
+      # Test files: relax errcheck for setup helpers (os.Setenv, defer os.Remove, etc.)
+      - path: ".*_test\\.go$"
+        linters:
+          - errcheck
+      # defer resp.Body.Close() is an accepted Go idiom; the error is unrecoverable
+      - source: "defer .+\\.Body\\.Close\\(\\)"
+        linters:
+          - errcheck
+      # defer conn.Close() cleanup
+      - source: "defer conn\\.Close\\(\\)"
+        linters:
+          - errcheck
 
 formatters:
   enable:

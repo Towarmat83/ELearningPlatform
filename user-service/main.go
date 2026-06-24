@@ -81,7 +81,7 @@ func main() {
 	if cfg.K8sNamespace != "" {
 		watchCtxPat, watchCancelPat := context.WithCancel(ctx)
 		defer watchCancelPat()
-		pw, err := handlers.NewPatternWatcher(pool, cfg.Kubeconfig, cfg.K8sNamespace)
+		pw, err := handlers.NewPatternWatcher(db.NewAdapter(pool), cfg.Kubeconfig, cfg.K8sNamespace)
 		if err != nil {
 			slog.Warn("pattern CRD watcher disabled", "reason", err)
 		} else if err := pw.Start(watchCtxPat); err != nil {
@@ -92,11 +92,11 @@ func main() {
 	}
 
 	s := &handlers.State{
-		Pool:   pool,
+		Pool:   db.NewAdapter(pool),
 		Config: cfg,
 	}
 
-	r := handlers.BuildRouter(s, cfg, pool, true)
+	r := handlers.BuildRouter(s, cfg, db.NewAdapter(pool), true)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := &http.Server{

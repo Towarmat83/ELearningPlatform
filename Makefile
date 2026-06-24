@@ -182,6 +182,34 @@ openapi-gen-user-service:
 	@echo "Generating user-service/openapi.json from code..."
 	@cd user-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
 
+# ── Go Tests ────────────────────────────────────────────────────────────────
+
+.PHONY: go/test go/test-course go/test-user
+
+go/test: go/test-course go/test-user
+
+go/test-course:
+	@echo "=== course-service tests ==="
+	@cd course-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+
+go/test-user:
+	@echo "=== user-service tests ==="
+	@cd user-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+
+# ── Go Lint ─────────────────────────────────────────────────────────────────
+
+.PHONY: go/lint go/lint-course go/lint-user
+
+go/lint: go/lint-course go/lint-user
+
+go/lint-course:
+	@echo "=== Linting course-service ==="
+	@cd course-service && golangci-lint run ./...
+
+go/lint-user:
+	@echo "=== Linting user-service ==="
+	@cd user-service && golangci-lint run ./...
+
 # ── Status ──────────────────────────────────────────────────────────────────
 
 .PHONY: status

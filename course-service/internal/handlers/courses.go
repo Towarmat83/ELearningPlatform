@@ -15,18 +15,18 @@ type prerequisiteResponse struct {
 }
 
 type courseResponse struct {
-	Slug          string                 `json:"slug"`
-	ID            string                 `json:"id"`
-	Title         string                 `json:"title"`
-	Description   string                 `json:"description"`
-	Category      string                 `json:"category"`
-	Difficulty    string                 `json:"difficulty"`
-	IsPublic      bool                   `json:"is_public"`
-	ModuleCount   int                    `json:"module_count"`
-	LabCount      int                    `json:"lab_count"`
-	EnrollmentCount int                  `json:"enrollment_count"`
-	Source        string                 `json:"source,omitempty"`
-	Prerequisites []prerequisiteResponse `json:"prerequisites,omitempty"`
+	Slug            string                 `json:"slug"`
+	ID              string                 `json:"id"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	Category        string                 `json:"category"`
+	Difficulty      string                 `json:"difficulty"`
+	IsPublic        bool                   `json:"is_public"`
+	ModuleCount     int                    `json:"module_count"`
+	LabCount        int                    `json:"lab_count"`
+	EnrollmentCount int                    `json:"enrollment_count"`
+	Source          string                 `json:"source,omitempty"`
+	Prerequisites   []prerequisiteResponse `json:"prerequisites,omitempty"`
 }
 
 func toCourseResponse(c *content.Course) courseResponse {

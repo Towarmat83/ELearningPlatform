@@ -5,38 +5,51 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions 
 ## Architecture
 
 ```mermaid
-graph TD
-    Browser(["Browser"])
+graph LR
+    subgraph Clients["Clients"]
+        Browser(["Browser"])
+        Pupitre(["Pupitre\n(Tauri desktop)"])
+    end
 
-    Frontend["**Frontend** :3000\nAstro SSR + API proxy"]
+    subgraph Platform["Platform — Kubernetes"]
+        Frontend["Frontend\nAstro SSR · :3000"]
 
-    UserService["**User Service** :8081\nAuth · OAuth/OIDC · LDAP\nEnrollments · Progress · Admin"]
-    CourseService["**Course Service** :8082\nCourses · Media · Quiz · Labs\nK8s CRD watcher · lab_checks DB"]
-    CheckerService["**Checker Service** :8083\nOPA/Rego policy evaluation\nGitLab state fetch"]
+        subgraph Services["Backend Services"]
+            UserService["User Service :8081\nAuth · Enrollments · Progress"]
+            CourseService["Course Service :8082\nCourses · Labs · Quiz"]
+            CheckerService["Checker Service :8083\nOPA/Rego · GitLab fetch"]
+        end
 
-    PostgreSQL[("PostgreSQL :5432")]
-    K8sCRD["K8s CRD\nelearning.example.com/v1"]
-    GitRepos["Git repos\n(module content + Rego policies)"]
-    GitLab["GitLab\n(student projects)"]
+        subgraph Data["Data"]
+            PostgreSQL[("PostgreSQL")]
+            K8sCRD[["K8s CRD\nCourse definitions"]]
+            GitRepos[["Git repos\nLab content"]]
+        end
+    end
 
-    OAuthProviders["OAuth2 / OIDC\nGitHub · GitLab · Keycloak · …"]
+    subgraph External["External"]
+        GitLab["GitLab\nStudent projects"]
+        OAuth["OAuth2 / OIDC\nKeycloak · GitHub…"]
+        Podman["Podman\nLocal machine"]
+    end
 
-    Pupitre["**Pupitre** (Tauri)\nDesktop app wrapper\nLocal check commands"]
+    Browser -->|HTTP| Frontend
+    Pupitre -->|WebView| Frontend
+    Pupitre -->|"local_check\n(Rust command)"| Podman
 
-    Browser --> Frontend
-    Pupitre --> Frontend
-    Pupitre -- "local_check (Rust)\npodman images/events" --> Pupitre
-    Frontend -- "/api/auth/* /api/my/* /api/admin/*" --> UserService
-    Frontend -- "/api/courses/* /api/admin/courses* /api/admin/lab-checks" --> CourseService
-    CourseService -- "Internal API\n/internal/enrollments/check\n/internal/progress/*" --> UserService
-    CourseService -- "POST /evaluate" --> CheckerService
-    CheckerService -- "GitLab API\n(MRs, commits, pipeline, files)" --> GitLab
+    Frontend --> UserService
+    Frontend --> CourseService
+
+    CourseService -->|Internal API| UserService
+    CourseService -->|"POST /evaluate\n(GitLab labs)"| CheckerService
+
     UserService --> PostgreSQL
     CourseService --> PostgreSQL
     CourseService --> K8sCRD
     CourseService --> GitRepos
     CheckerService --> GitRepos
-    UserService -. "OAuth2 / OIDC" .-> OAuthProviders
+    CheckerService --> GitLab
+    UserService -.->|OIDC| OAuth
 ```
 
 | Service | Role | Tech |

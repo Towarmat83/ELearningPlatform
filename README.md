@@ -21,7 +21,11 @@ graph TD
 
     OAuthProviders["OAuth2 / OIDC\nGitHub · GitLab · Keycloak · …"]
 
+    Pupitre["**Pupitre** (Tauri)\nDesktop app wrapper\nLocal check commands"]
+
     Browser --> Frontend
+    Pupitre --> Frontend
+    Pupitre -- "local_check (Rust)\npodman images/events" --> Pupitre
     Frontend -- "/api/auth/* /api/my/* /api/admin/*" --> UserService
     Frontend -- "/api/courses/* /api/admin/courses* /api/admin/lab-checks" --> CourseService
     CourseService -- "Internal API\n/internal/enrollments/check\n/internal/progress/*" --> UserService
@@ -74,6 +78,39 @@ Instructors can review all attempts at `/admin/labs`.
 
 See [`docs/interactive-labs.md`](docs/interactive-labs.md) for full documentation.
 
+## Pupitre — Desktop App (Local Labs)
+
+Some labs require verifying work done locally on the student's machine (e.g. `podman pull`, `podman run`). For these, the platform runs as a **Tauri v2 desktop app** called **Pupitre**.
+
+```
+tauri-app/
+├── src/              # Minimal HTML shell (loads localhost:3000)
+└── src-tauri/        # Rust backend
+    └── src/lib.rs    # Local check commands (podman images, podman events)
+```
+
+When running inside Pupitre, the "Vérifier mon travail" button calls a local Rust command instead of the remote checker-service:
+
+```
+Student clicks "Vérifier" (inside Pupitre)
+  → frontend detects window.__TAURI_INTERNALS__
+  → invoke("local_check", { checkType, params })
+  → Rust runs podman commands locally
+  → {allow, violations} returned to frontend
+```
+
+Lab modules with `check_provider: local` in the CRD use this flow. Labs with `check_provider: gitlab` (or no provider) use the remote checker-service as before.
+
+### Build Pupitre
+
+```bash
+# macOS (ARM64)
+cd tauri-app/src-tauri && cargo build --release
+
+# Linux x86_64 (via Silverblue VM or toolbox)
+toolbox run bash -c 'source ~/.cargo/env && cd ~/tauri-app/src-tauri && cargo build --release'
+```
+
 ## Quick start
 
 ```bash
@@ -108,8 +145,9 @@ See `CONTRIB.md` for the full step-by-step guide, troubleshooting, and deploymen
 │   │   └── config/       # Env config
 │   └── migrations/       # Embedded SQL migrations
 ├── frontend/             # Astro
+├── tauri-app/            # Pupitre desktop app (Tauri v2)
 ├── helm/                 # Helm chart (all services)
-├── infra/                # Kind config + manifests
+├── infra/                # Kind config + manifests + course CRDs
 ├── docs/                 # Architecture, Course spec, Labs, SSO
 └── examples/             # Sample Course CRD manifests
 ```

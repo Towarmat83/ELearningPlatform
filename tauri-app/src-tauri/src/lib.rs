@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tauri::{Listener, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[derive(Serialize)]
 pub struct LocalCheckResult {
@@ -23,6 +24,13 @@ pub struct PodmanLab2Params {
 pub struct DistroboxLab3Params {
     pub container_name: String,
     pub app: String,
+}
+
+fn deep_link_to_nav_url(url: &str) -> String {
+    let path = url
+        .trim_start_matches("pupitre://")
+        .replace("modules/", "lessons/");
+    format!("http://localhost:3000/{}", path)
 }
 
 fn run_podman(args: &[&str]) -> Result<String, String> {
@@ -172,15 +180,22 @@ pub fn run() {
             check_distrobox_lab3
         ])
         .setup(|app| {
+            // Lancement frais via pupitre:// : récupère l'URL qui a ouvert l'app
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                if let Some(url) = urls.first() {
+                    let nav_url = deep_link_to_nav_url(&url.to_string());
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.navigate(nav_url.parse().unwrap());
+                    }
+                }
+            }
+
+            // App déjà ouverte : reçoit un nouveau deep link
             let handle = app.handle().clone();
             app.listen("deep-link://new-url", move |event| {
                 if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
                     if let Some(url) = urls.first() {
-                        // pupitre://courses/{slug}/modules/{index}
-                        let path = url
-                            .trim_start_matches("pupitre://")
-                            .replace("modules/", "lessons/");
-                        let nav_url = format!("http://localhost:3000/{}", path);
+                        let nav_url = deep_link_to_nav_url(url);
                         if let Some(window) = handle.get_webview_window("main") {
                             let _ = window.navigate(nav_url.parse().unwrap());
                         }

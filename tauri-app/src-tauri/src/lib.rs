@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use tauri::{Listener, Manager};
 
 #[derive(Serialize)]
 pub struct LocalCheckResult {
@@ -163,12 +164,31 @@ fn local_check(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![
             local_check,
             check_podman_images,
             check_podman_lab2,
             check_distrobox_lab3
         ])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            app.listen("deep-link://new-url", move |event| {
+                if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
+                    if let Some(url) = urls.first() {
+                        // pupitre://courses/{slug}/modules/{index}
+                        let path = url
+                            .trim_start_matches("pupitre://")
+                            .replace("modules/", "lessons/");
+                        let nav_url = format!("http://localhost:3000/{}", path);
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.navigate(nav_url.parse().unwrap());
+                        }
+                    }
+                }
+            });
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("Erreur au démarrage de Tauri");
 }

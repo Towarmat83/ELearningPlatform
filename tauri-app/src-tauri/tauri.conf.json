@@ -27,5 +27,12 @@
     "active": true,
     "targets": "all",
     "icon": []
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["pupitre"]
+      }
+    }
   }
 }

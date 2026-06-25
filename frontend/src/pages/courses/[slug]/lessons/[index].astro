@@ -547,13 +547,7 @@ import App from '../../../../layouts/App.astro';
         const checkBar = mod.has_check ? `
           <div style="margin-top:32px;padding:20px 24px;background:var(--blue-soft);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
             <span style="color:var(--ink-soft);font-size:0.95rem">Une fois le lab terminé, revenez ici pour valider votre travail.</span>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              ${isLocal && !inTauri ? `<a href="${deepLinkUrl}" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px" title="Ouvre l'app Pupitre directement sur ce lab">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12h6M12 9l3 3-3 3"/></svg>
-                Ouvrir dans Pupitre
-              </a>` : ''}
-              <button id="check-btn" class="btn btn-primary">Vérifier mon travail</button>
-            </div>
+            <button id="check-btn" class="btn btn-primary">Vérifier mon travail</button>
           </div>
           <div id="check-result" style="margin-top:12px"></div>` : '';
         contentBody.innerHTML = mdHtml + checkBar;

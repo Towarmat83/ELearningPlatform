@@ -33,8 +33,23 @@ fn deep_link_to_nav_url(url: &str) -> String {
     format!("http://localhost:3000/{}", path)
 }
 
+fn podman_bin() -> &'static str {
+    const CANDIDATES: &[&str] = &[
+        "/usr/bin/podman",          // Linux
+        "/opt/podman/bin/podman",   // Podman Desktop macOS
+        "/usr/local/bin/podman",    // Homebrew Intel
+        "/opt/homebrew/bin/podman", // Homebrew Apple Silicon
+    ];
+    for path in CANDIDATES {
+        if std::path::Path::new(path).exists() {
+            return path;
+        }
+    }
+    "podman"
+}
+
 fn run_podman(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("podman")
+    let out = Command::new(podman_bin())
         .args(args)
         .output()
         .map_err(|e| format!("Impossible de lancer podman : {e}"))?;
@@ -106,7 +121,7 @@ fn check_distrobox_lab3(params: DistroboxLab3Params) -> Result<LocalCheckResult,
     let mut violations: Vec<String> = vec![];
 
     // 1. Vérifier que le container Distrobox existe
-    let exists = Command::new("podman")
+    let exists = Command::new(podman_bin())
         .args(["container", "exists", &params.container_name])
         .status()
         .map(|s| s.success())

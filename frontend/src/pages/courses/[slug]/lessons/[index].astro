@@ -594,7 +594,8 @@ import App from '../../../../layouts/App.astro';
                   </div>`;
               }
             } catch (e: any) {
-              resultDiv.innerHTML = `<div style="padding:12px 16px;background:#fef2f2;border-radius:8px;color:#dc2626">${e.message ?? 'Erreur lors de la vérification'}</div>`;
+              const msg = typeof e === 'string' ? e : (e.message ?? 'Erreur lors de la vérification');
+              resultDiv.innerHTML = `<div style="padding:12px 16px;background:#fef2f2;border-radius:8px;color:#dc2626">${msg}</div>`;
             } finally {
               btn.disabled = false;
               btn.textContent = 'Vérifier mon travail';

@@ -561,6 +561,13 @@ import App from '../../../../layouts/App.astro';
           document.getElementById('check-btn')!.addEventListener('click', async () => {
             const btn = document.getElementById('check-btn') as HTMLButtonElement;
             const resultDiv = document.getElementById('check-result')!;
+            if (isLocal && !inTauri) {
+              resultDiv.innerHTML = `<div style="padding:14px 18px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;color:#1d4ed8;display:flex;align-items:center;gap:10px">
+                <span>Ce lab se vérifie dans l'application Pupitre.</span>
+                <a href="${deepLinkUrl}" style="font-weight:600;white-space:nowrap;color:#1d4ed8">Ouvrir dans Pupitre →</a>
+              </div>`;
+              return;
+            }
             btn.disabled = true;
             btn.textContent = 'Vérification…';
             resultDiv.innerHTML = '';

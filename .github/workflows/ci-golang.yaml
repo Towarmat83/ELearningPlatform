@@ -7,11 +7,13 @@ on:
     paths:
       - "course-service/**"
       - "user-service/**"
+      - "checker-service/**"
       - ".github/workflows/ci-golang.yaml"
   pull_request:
     paths:
       - "course-service/**"
       - "user-service/**"
+      - "checker-service/**"
       - ".github/workflows/ci-golang.yaml"
 
 concurrency:
@@ -31,6 +33,7 @@ jobs:
         service:
           - course-service
           - user-service
+          - checker-service
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,6 +65,7 @@ jobs:
         service:
           - course-service
           - user-service
+          - checker-service
     defaults:
       run:
         working-directory: ${{ matrix.service }}
@@ -93,6 +97,7 @@ jobs:
         service:
           - course-service
           - user-service
+          - checker-service
     defaults:
       run:
         working-directory: ${{ matrix.service }}

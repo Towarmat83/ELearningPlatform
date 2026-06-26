@@ -13,7 +13,9 @@ on:
       - "v*"
   pull_request:
     paths:
-      - "**/Dockerfile"
+      - "course-service/**"
+      - "user-service/**"
+      - "checker-service/**"
       - ".github/workflows/ci-containers.yaml"
 
 concurrency:
@@ -36,7 +38,7 @@ jobs:
       - name: Run KICS
         uses: checkmarx/kics-github-action@v2.1.20
         with:
-          path: "course-service/Dockerfile,user-service/Dockerfile,frontend/Dockerfile"
+          path: "course-service/Dockerfile,user-service/Dockerfile,frontend/Dockerfile,checker-service/Dockerfile"
           platform_type: Dockerfile
           output_path: kics-results
           output_formats: "sarif"
@@ -60,6 +62,8 @@ jobs:
             context: ./user-service
           - service: frontend
             context: ./frontend
+          - service: checker-service
+            context: ./checker-service
     steps:
       - uses: actions/checkout@v4
 
@@ -127,6 +131,7 @@ jobs:
         service:
           - course-service
           - user-service
+          - checker-service
           - frontend
     steps:
       - name: Log in to GHCR

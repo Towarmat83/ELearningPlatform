@@ -42,7 +42,7 @@ docker-build-frontend:
 	$(DOCKER) build -t $(IMAGE_FRONTEND) frontend
 
 docker-build-checker:
-	$(DOCKER) build -t $(IMAGE_CHECKER) -f checker-service/Containerfile checker-service
+	$(DOCKER) build -t $(IMAGE_CHECKER) checker-service
 
 # ── Kind load ───────────────────────────────────────────────────────────────
 
@@ -213,6 +213,10 @@ go/test-user:
 	@echo "=== user-service tests ==="
 	@cd user-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
 
+go/test-checker:
+	@echo "=== checker-service tests ==="
+	@cd checker-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+
 # ── Go Lint ─────────────────────────────────────────────────────────────────
 
 .PHONY: go/lint go/lint-course go/lint-user
@@ -226,6 +230,10 @@ go/lint-course:
 go/lint-user:
 	@echo "=== Linting user-service ==="
 	@cd user-service && golangci-lint run ./...
+
+go/lint-checker:
+	@echo "=== Linting checker-service ==="
+	@cd checker-service && golangci-lint run ./...
 
 # ── Status ──────────────────────────────────────────────────────────────────
 

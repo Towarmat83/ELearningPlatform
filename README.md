@@ -77,6 +77,7 @@ modules/lab1/
 ```
 
 Validation flow:
+
 ```
 Student clicks "Vérifier"
   → course-service reads check.yaml + check.rego from git
@@ -130,7 +131,7 @@ toolbox run bash -c 'source ~/.cargo/env && cd ~/tauri-app/src-tauri && cargo bu
 make dev
 ```
 
-See `CONTRIB.md` for the full step-by-step guide, troubleshooting, and deployment details.
+See `CONTRIBUTING.md` for the full step-by-step guide, troubleshooting, and deployment details.
 
 ## Project structure
 
@@ -187,6 +188,7 @@ kubectl create secret generic course-repo-secret \
 ```
 
 `git-credentials.yaml` format:
+
 ```yaml
 credentials:
   - url: "github.com/org/*"

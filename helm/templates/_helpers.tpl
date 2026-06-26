@@ -58,6 +58,16 @@ app.kubernetes.io/name: {{ include "elearning.name" . }}
 app.kubernetes.io/component: frontend
 {{- end }}
 
+{{- define "elearning.checkerService.labels" -}}
+{{ include "elearning.labels" . }}
+app.kubernetes.io/component: checker-service
+{{- end }}
+
+{{- define "elearning.checkerService.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "elearning.name" . }}
+app.kubernetes.io/component: checker-service
+{{- end }}
+
 
 {{/*
 Admin password resolution — priority order:

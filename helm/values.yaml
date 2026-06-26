@@ -101,6 +101,28 @@ courseService:
     targetMemoryUtilizationPercentage: 80
   nodeSelector: {}
 
+checkerService:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/towarmat83/elearning-checker-service
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8083
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  env:
+    GITLAB_BASE_URL: "http://gitlab.local:8880"
+  # GitLab API token for checker-service (stored in the platform Secret as GITLAB_TOKEN)
+  gitLabToken: ""
+  nodeSelector: {}
+
 userService:
   replicaCount: 1
   strategy:
@@ -243,8 +265,9 @@ ingress:
         - { path: /api/auth,          pathType: Prefix, backend: user-service   }
         - { path: /api/settings,      pathType: Prefix, backend: user-service   }
         - { path: /api/my,            pathType: Prefix, backend: user-service   }
-        - { path: /api/admin/courses, pathType: Prefix, backend: course-service }
-        - { path: /api/admin,         pathType: Prefix, backend: user-service   }
+        - { path: /api/admin/courses,     pathType: Prefix, backend: course-service }
+        - { path: /api/admin/lab-checks, pathType: Prefix, backend: course-service }
+        - { path: /api/admin,            pathType: Prefix, backend: user-service   }
         - { path: /api/courses,       pathType: Prefix, backend: course-service }
         - { path: /uploads,           pathType: Prefix, backend: course-service }
         - { path: /health,            pathType: Exact,  backend: course-service }

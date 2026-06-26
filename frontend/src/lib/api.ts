@@ -398,7 +398,7 @@ export interface ModuleSummary {
   index: number;
   name: string;
   slug: string;
-  type: 'text' | 'video' | 'image' | 'quiz' | 'modules';
+  type: 'text' | 'video' | 'image' | 'quiz' | 'lab' | 'modules';
   viewed: boolean;
   hidden: boolean;
   locked: boolean;
@@ -407,7 +407,8 @@ export interface ModuleSummary {
   max_score: number;
   passed: boolean;
   attempts: number;
-  // Admin-only
+  lab_url?: string;
+  // Admin-only / git content
   src?: string;
   ref?: string;
   path?: string;
@@ -429,13 +430,19 @@ export interface ModuleDetail {
   index: number;
   name: string;
   slug: string;
-  type: 'text' | 'video' | 'image' | 'quiz';
+  type: 'text' | 'video' | 'image' | 'quiz' | 'lab';
   content: string | null;
   viewed: boolean;
   hidden: boolean;
+  has_check?: boolean;
   questions?: QuizQuestion[];
   quiz_config?: ModuleQuizConfig;
   cooldowns?: Record<string, QuizCooldown>;
+}
+
+export interface CheckResult {
+  allow: boolean;
+  violations: string[] | null;
 }
 
 export const lessonsApi = {
@@ -450,6 +457,8 @@ export const modulesApi = {
     api.get<ModuleDetail>(`/courses/${courseSlug}/modules/${index}`, token),
   submit: (courseSlug: string, index: number, answers: Record<string, QuizUserAnswer>, token: string) =>
     api.post<QuizSubmitResponse>(`/courses/${courseSlug}/modules/${index}/submit`, { answers }, token),
+  check: (courseSlug: string, index: number, token: string) =>
+    api.post<CheckResult>(`/courses/${courseSlug}/modules/${index}/check`, {}, token),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

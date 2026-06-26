@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability par défaut — accès aux commandes locales Pupitre",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

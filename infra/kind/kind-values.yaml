@@ -2,19 +2,31 @@ jwtSecret: "test-jwt-secret-for-kind-cluster-min-32-chars!!"
 
 courseService:
   image:
-    repository: ghcr.io/towarmat83/elearning-course-service
-    tag: latest
-    pullPolicy: IfNotPresent
+    repository: localhost/elearning-course-service
+    tag: local
+    pullPolicy: Never
   service:
     type: NodePort
     port: 8082
     nodePort: 30082
 
+checkerService:
+  image:
+    repository: localhost/elearning-checker-service
+    tag: local
+    pullPolicy: Never
+  service:
+    type: ClusterIP
+    port: 8083
+  gitLabToken: ""
+  env:
+    GITLAB_BASE_URL: "http://gitlab.local:8880"
+
 userService:
   image:
-    repository: ghcr.io/towarmat83/elearning-user-service
-    tag: latest
-    pullPolicy: IfNotPresent
+    repository: localhost/elearning-user-service
+    tag: local
+    pullPolicy: Never
   service:
     type: NodePort
     port: 8081
@@ -22,9 +34,9 @@ userService:
 
 frontend:
   image:
-    repository: ghcr.io/towarmat83/elearning-frontend
-    tag: latest
-    pullPolicy: IfNotPresent
+    repository: localhost/elearning-frontend
+    tag: local
+    pullPolicy: Never
   service:
     type: NodePort
     port: 3000

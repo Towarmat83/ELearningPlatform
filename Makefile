@@ -8,11 +8,13 @@ HELM_RELEASE   := elearning
 HELM_VALUES    := infra/kind/kind-values.yaml
 PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
 COURSE_DIR     := examples/courses
+DOCKER         ?= podman
 
-REGISTRY       := ghcr.io/towarmat83
-IMAGE_COURSE   := localhost/elearning-course-service:local
-IMAGE_USER     := localhost/elearning-user-service:local
-IMAGE_FRONTEND := localhost/elearning-frontend:local
+REGISTRY        := ghcr.io/towarmat83
+IMAGE_COURSE    := localhost/elearning-course-service:local
+IMAGE_USER      := localhost/elearning-user-service:local
+IMAGE_FRONTEND  := localhost/elearning-frontend:local
+IMAGE_CHECKER   := localhost/elearning-checker-service:local
 
 # ── KinD ────────────────────────────────────────────────────────────────────
 
@@ -26,39 +28,45 @@ kind-delete:
 
 # ── Docker ───────────────────────────────────────────────────────────────────
 
-.PHONY: docker-build docker-build-course docker-build-user docker-build-frontend
+.PHONY: docker-build docker-build-course docker-build-user docker-build-frontend docker-build-checker
 
-docker-build: docker-build-course docker-build-user docker-build-frontend
+docker-build: docker-build-course docker-build-user docker-build-frontend docker-build-checker
 
 docker-build-course:
-	docker build -t $(IMAGE_COURSE) course-service
+	$(DOCKER) build -t $(IMAGE_COURSE) course-service
 
 docker-build-user:
-	docker build -t $(IMAGE_USER) user-service
+	$(DOCKER) build -t $(IMAGE_USER) user-service
 
 docker-build-frontend:
-	docker build -t $(IMAGE_FRONTEND) frontend
+	$(DOCKER) build -t $(IMAGE_FRONTEND) frontend
+
+docker-build-checker:
+	$(DOCKER) build -t $(IMAGE_CHECKER) -f checker-service/Containerfile checker-service
 
 # ── Kind load ───────────────────────────────────────────────────────────────
 
-.PHONY: kind-load kind-load-course kind-load-user kind-load-frontend
+.PHONY: kind-load kind-load-course kind-load-user kind-load-frontend kind-load-checker
 
-kind-load: kind-load-course kind-load-user kind-load-frontend
+kind-load: kind-load-course kind-load-user kind-load-frontend kind-load-checker
 
 kind-load-course:
-	kind load docker-image $(IMAGE_COURSE) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_COURSE) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 kind-load-user:
-	kind load docker-image $(IMAGE_USER) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_USER) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 kind-load-frontend:
-	kind load docker-image $(IMAGE_FRONTEND) --name $(KIND_CLUSTER)
+	$(DOCKER) save $(IMAGE_FRONTEND) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
+
+kind-load-checker:
+	$(DOCKER) save $(IMAGE_CHECKER) | kind load image-archive /dev/stdin --name $(KIND_CLUSTER)
 
 # ── Quick rebuild + reload (single service) ────────────────────────────────
 
-.PHONY: rebuild rebuild-course rebuild-user rebuild-frontend
+.PHONY: rebuild rebuild-course rebuild-user rebuild-frontend rebuild-checker
 
-rebuild: rebuild-course rebuild-user rebuild-frontend
+rebuild: rebuild-course rebuild-user rebuild-frontend rebuild-checker
 
 rebuild-course: docker-build-course kind-load-course
 	kubectl rollout restart deployment/$(HELM_RELEASE)-course-service
@@ -71,6 +79,10 @@ rebuild-user: docker-build-user kind-load-user
 rebuild-frontend: docker-build-frontend kind-load-frontend
 	kubectl rollout restart deployment/$(HELM_RELEASE)-frontend
 	kubectl rollout status deployment/$(HELM_RELEASE)-frontend --timeout=120s
+
+rebuild-checker: docker-build-checker kind-load-checker
+	kubectl rollout restart deployment/$(HELM_RELEASE)-checker-service
+	kubectl rollout status deployment/$(HELM_RELEASE)-checker-service --timeout=120s
 
 # ── Helm ─────────────────────────────────────────────────────────────────────
 
@@ -109,11 +121,12 @@ create-git-secret:
 
 .PHONY: port-forward
 port-forward:
-	kubectl port-forward svc/$(HELM_RELEASE)-course-service 18082:8082 &
-	kubectl port-forward svc/$(HELM_RELEASE)-user-service  18081:8081 &
-	kubectl port-forward svc/$(HELM_RELEASE)-frontend      3000:3000 &
+	kubectl port-forward svc/$(HELM_RELEASE)-course-service  18082:8082 &
+	kubectl port-forward svc/$(HELM_RELEASE)-user-service   18081:8081 &
+	kubectl port-forward svc/$(HELM_RELEASE)-frontend       3000:3000  &
+	kubectl port-forward svc/$(HELM_RELEASE)-checker-service 18083:8083 &
 	sleep 2
-	@echo "Port-forwards started (course:18082, user:18081, frontend:3000)"
+	@echo "Port-forwards started (course:18082, user:18081, frontend:3000, checker:18083)"
 
 .PHONY: port-forward-stop
 port-forward-stop:
@@ -126,9 +139,10 @@ port-forward-stop:
 dev: kind-delete kind-create docker-build kind-load helm-install apply-courses
 	@echo ""
 	@echo "Waiting for deployments to be ready..."
-	@kubectl rollout status deploy/$(HELM_RELEASE)-course-service --timeout=120s
-	@kubectl rollout status deploy/$(HELM_RELEASE)-user-service  --timeout=120s
-	@kubectl rollout status deploy/$(HELM_RELEASE)-frontend      --timeout=120s
+	@kubectl rollout status deploy/$(HELM_RELEASE)-course-service  --timeout=120s
+	@kubectl rollout status deploy/$(HELM_RELEASE)-user-service   --timeout=120s
+	@kubectl rollout status deploy/$(HELM_RELEASE)-frontend       --timeout=120s
+	@kubectl rollout status deploy/$(HELM_RELEASE)-checker-service --timeout=120s
 	@kubectl rollout status statefulset/$(HELM_RELEASE)-postgresql --timeout=60s
 	@echo ""
 	@echo "=== Deployment ready ==="
@@ -155,6 +169,9 @@ logs:
 	@echo ""
 	@echo "=== user-service ==="
 	@kubectl logs deploy/$(HELM_RELEASE)-user-service --tail=20 2>&1 | grep -v health
+	@echo ""
+	@echo "=== checker-service ==="
+	@kubectl logs deploy/$(HELM_RELEASE)-checker-service --tail=20 2>&1 | grep -v health
 	@echo ""
 	@echo "=== frontend ==="
 	@kubectl logs deploy/$(HELM_RELEASE)-frontend --tail=10 2>&1

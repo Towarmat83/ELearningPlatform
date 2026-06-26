@@ -534,14 +534,99 @@ import App from '../../../../layouts/App.astro';
 
       // Render content
       const contentBody = document.getElementById('content-body')!;
-      if (mod.type === 'lab' && mod.content) {
-        contentBody.innerHTML = `
-          <div style="text-align:center;padding:48px 24px;background:var(--blue-soft);border-radius:10px;margin:24px 0">
-            <div style="font-size:3rem;margin-bottom:12px">🧪</div>
-            <p style="color:var(--ink-soft);margin-bottom:20px">Ce module est un lab pratique hébergé sur un environnement externe.</p>
-            <a href="${mod.content}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-flex">Ouvrir le lab ↗</a>
+      if (mod.type === 'lab') {
+        // Render markdown content directly in the page
+        let mdHtml = '';
+        if (mod.content) {
+          try { mdHtml = await renderMarkdown(mod.content); } catch { mdHtml = mod.content; }
+        }
+        const isLocal = mod.check_provider === 'local';
+        const inTauri = typeof window !== 'undefined' && ('__TAURI__' in window || '__TAURI_INTERNALS__' in window);
+        const deepLinkUrl = `pupitre://courses/${slug}/modules/${mod.index}`;
+
+        const steps: {title: string; check_type: string; check_params: Record<string,unknown>}[] = mod.steps ?? [];
+        const hasSteps = steps.length > 0;
+
+        const renderStepResult = (result: any) => {
+          if (result.allow) {
+            return `<div style="padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;color:#16a34a;font-weight:600;font-size:0.9rem">✓ Étape validée</div>`;
+          }
+          const items = (result.violations ?? []).map((v: string) => `<li style="margin-bottom:4px">${v}</li>`).join('');
+          return `<div style="padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px">
+            <div style="color:#dc2626;font-weight:600;font-size:0.9rem;margin-bottom:4px">✗ Pas encore</div>
+            ${items ? `<ul style="margin:0;padding-left:18px;color:#7f1d1d;font-size:0.85rem">${items}</ul>` : ''}
+          </div>`;
+        };
+
+        const stepsHtml = hasSteps ? `
+          <div style="margin-top:32px;display:flex;flex-direction:column;gap:12px">
+            ${steps.map((s, i) => `
+              <div style="padding:16px 20px;background:var(--blue-soft);border-radius:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                  <span style="font-weight:500;color:var(--ink)">${s.title}</span>
+                  <button id="step-btn-${i}" class="btn btn-primary" style="font-size:0.9rem;padding:8px 16px">Vérifier</button>
+                </div>
+                <div id="step-result-${i}" style="margin-top:10px"></div>
+              </div>`).join('')}
+          </div>` : '';
+
+        const checkBar = !hasSteps && mod.has_check ? `
+          <div style="margin-top:32px;padding:20px 24px;background:var(--blue-soft);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <span style="color:var(--ink-soft);font-size:0.95rem">Une fois le lab terminé, revenez ici pour valider votre travail.</span>
+            <button id="check-btn" class="btn btn-primary">Vérifier mon travail</button>
           </div>
-        `;
+          <div id="check-result" style="margin-top:12px"></div>` : '';
+
+        contentBody.innerHTML = mdHtml + stepsHtml + checkBar;
+
+        const runCheck = async (checkType: string, checkParams: Record<string,unknown>, resultDiv: HTMLElement) => {
+          if (isLocal && !inTauri) {
+            resultDiv.innerHTML = `<div style="padding:12px 16px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;color:#1d4ed8;display:flex;align-items:center;gap:10px;font-size:0.9rem">
+              <span>Ce lab se vérifie dans Pupitre.</span>
+              <a href="${deepLinkUrl}" style="font-weight:600;white-space:nowrap;color:#1d4ed8">Ouvrir dans Pupitre →</a>
+            </div>`;
+            return;
+          }
+          try {
+            const { resolveCheck } = await import('/src/lib/local-check');
+            const { modulesApi } = await import('/src/lib/api');
+            const checkToken = localStorage.getItem('token') || '';
+            const result = await resolveCheck(
+              { check_provider: mod.check_provider, check_type: checkType, check_params: checkParams },
+              () => modulesApi.check(slug, mod.index, checkToken),
+              `/api/courses/${slug}/modules/${mod.index}/record`,
+              checkToken,
+            );
+            resultDiv.innerHTML = renderStepResult(result);
+          } catch (e: any) {
+            const msg = typeof e === 'string' ? e : (e.message ?? 'Erreur lors de la vérification');
+            resultDiv.innerHTML = `<div style="padding:10px 14px;background:#fef2f2;border-radius:6px;color:#dc2626;font-size:0.9rem">${msg}</div>`;
+          }
+        };
+
+        if (hasSteps) {
+          steps.forEach((s, i) => {
+            const btn = document.getElementById(`step-btn-${i}`) as HTMLButtonElement;
+            const resultDiv = document.getElementById(`step-result-${i}`)!;
+            btn.addEventListener('click', async () => {
+              btn.disabled = true;
+              btn.textContent = '…';
+              await runCheck(s.check_type, s.check_params ?? {}, resultDiv);
+              btn.disabled = false;
+              btn.textContent = 'Vérifier';
+            });
+          });
+        } else if (mod.has_check) {
+          document.getElementById('check-btn')!.addEventListener('click', async () => {
+            const btn = document.getElementById('check-btn') as HTMLButtonElement;
+            const resultDiv = document.getElementById('check-result')!;
+            btn.disabled = true;
+            btn.textContent = 'Vérification…';
+            await runCheck(mod.check_type, mod.check_params ?? {}, resultDiv);
+            btn.disabled = false;
+            btn.textContent = 'Vérifier mon travail';
+          });
+        }
       } else if (mod.type === 'video' && mod.content) {
         contentBody.innerHTML = `<div style="display:flex;justify-content:center;margin:24px 0"><video controls style="max-width:100%;border-radius:10px"><source src="${mod.content}" type="video/mp4" /></video></div>`;
       } else if (mod.type === 'image' && mod.content) {
@@ -585,11 +670,14 @@ import App from '../../../../layouts/App.astro';
 
       const navDiv = document.getElementById('lesson-nav')!;
 
+      const nextLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Module suivant ▸';
+
       let rightBtn = '';
       if (!mod.viewed) {
-        rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">Terminer le module ▸</button>`;
+        const btnLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Terminer le module ▸';
+        rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">${btnLabel}</button>`;
       } else if (nextMod) {
-        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">Module suivant ▸</a>`;
+        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`;
       } else {
         rightBtn = `<a href="/courses/${slug}" class="btn btn-primary">Terminer le cours ▸</a>`;
       }
@@ -614,7 +702,7 @@ import App from '../../../../layouts/App.astro';
           }
 
           navDiv.innerHTML = nextMod
-            ? `${prevBtn}<a href="${modHref(nextMod)}" class="btn btn-primary">Module suivant ▸</a>`
+            ? `${prevBtn}<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`
             : `${prevBtn}<a href="/courses/${slug}" class="btn btn-primary">Terminer le cours ▸</a>`;
         } catch {
           (window as any).showToast?.('Erreur lors de la mise à jour', 'error');

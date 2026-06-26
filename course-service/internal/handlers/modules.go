@@ -87,6 +87,12 @@ type moduleResponse struct {
 	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
 	Inline        bool                     `json:"inline,omitempty"`
 	InlineQuiz    *inlineQuizResponse      `json:"inline_quiz,omitempty"`
+	HasCheck      bool                   `json:"has_check,omitempty"`
+	LabURL        string                 `json:"lab_url,omitempty"`
+	CheckProvider string                 `json:"check_provider,omitempty"`
+	CheckType     string                 `json:"check_type,omitempty"`
+	CheckParams   map[string]interface{} `json:"check_params,omitempty"`
+	Steps         []content.CheckStep    `json:"steps,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`
@@ -400,10 +406,13 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			resp.Ref = m.Ref
 			resp.Path = m.Path
 		}
-		// Lab modules expose their target URL to everyone — the frontend
-		// opens it directly in a new tab.
+		// Lab modules expose their URLs to everyone — the frontend
+		// opens lab_url in a new tab (student-facing GitLab link).
 		if m.Type == "lab" && !locked {
 			resp.Src = m.Src
+			resp.Ref = m.Ref
+			resp.Path = m.Path
+			resp.LabURL = m.LabURL
 		}
 		if m.Type == "quiz" {
 			if m.HasQuestions() {
@@ -482,11 +491,34 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
 	resp.Viewed = viewed[m.Slug()]
 
+	// Lab modules with git content support the /check endpoint
+	if m.Type == "lab" && m.HasGitContent() {
+		resp.HasCheck = true
+		resp.LabURL = m.LabURL
+	}
+	// Local check modules (Tauri) expose check meta to the frontend
+	if m.CheckProvider == "local" {
+		resp.HasCheck = true
+		resp.CheckProvider = m.CheckProvider
+		resp.CheckType = m.CheckType
+		resp.CheckParams = m.CheckParams
+		resp.Steps = m.Steps
+	}
+
 	switch m.Type {
 	case "video", "image":
 		resp.Content = content.ReplicatedPath(m, s.Config.UploadsDir)
 	case "lab":
-		resp.Content = m.Src
+		if m.HasGitContent() {
+			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
+			if err != nil {
+				s.Error(w, http.StatusInternalServerError, "Failed to fetch lab content")
+				return
+			}
+			resp.Content = string(data)
+		} else {
+			resp.Content = m.Content()
+		}
 	case "text":
 		if m.HasGitContent() {
 			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))

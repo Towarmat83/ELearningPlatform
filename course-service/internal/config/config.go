@@ -20,6 +20,8 @@ type Config struct {
 	GitToken           string   `yaml:"git_token"`
 	GitCredentialsPath string   `yaml:"git_credentials_path"`
 	GitCacheTTL        int      `yaml:"git_cache_ttl_minutes"`
+	CheckerServiceURL  string   `yaml:"checker_service_url"`
+	DatabaseURL        string   `yaml:"database_url"`
 }
 
 func Load() *Config {
@@ -34,6 +36,7 @@ func Load() *Config {
 		UserServiceURL:     "http://user-service:8081",
 		GitCredentialsPath: "/etc/course-service/git-credentials.yaml",
 		GitCacheTTL:        10,
+		CheckerServiceURL:  "http://checker-service:8083",
 	}
 
 	if path := os.Getenv("CONFIG_PATH"); path != "" {
@@ -80,6 +83,12 @@ func Load() *Config {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			c.GitCacheTTL = n
 		}
+	}
+	if v := os.Getenv("CHECKER_SERVICE_URL"); v != "" {
+		c.CheckerServiceURL = v
+	}
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		c.DatabaseURL = v
 	}
 
 	return c

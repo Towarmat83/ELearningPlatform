@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elearning/course-service/internal/config"
 	"github.com/elearning/course-service/internal/content"
@@ -23,6 +24,7 @@ type State struct {
 	GitCreds        *content.GitCredentialStore
 	CooldownTracker *content.CooldownTracker
 	GitCache        *content.GitCache
+	DB              *pgxpool.Pool
 }
 
 func NewState(cfg *config.Config, store *content.Store) *State {

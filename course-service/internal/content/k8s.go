@@ -236,6 +236,34 @@ func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
 						}
 						return nil
 					}(),
+					Steps: func() []CheckStep {
+						v, ok := m["steps"]
+						if !ok {
+							return nil
+						}
+						raw, ok := v.([]interface{})
+						if !ok {
+							return nil
+						}
+						var steps []CheckStep
+						for _, s := range raw {
+							sm, ok := s.(map[string]interface{})
+							if !ok {
+								continue
+							}
+							step := CheckStep{
+								Title:     getStr(sm, "title"),
+								CheckType: getStr(sm, "check_type"),
+							}
+							if cp, ok := sm["check_params"]; ok {
+								if mp, ok := cp.(map[string]interface{}); ok {
+									step.CheckParams = mp
+								}
+							}
+							steps = append(steps, step)
+						}
+						return steps
+					}(),
 				}
 			if mod.Name == "" {
 				mod.Name = fmt.Sprintf("module-%d", i+1)

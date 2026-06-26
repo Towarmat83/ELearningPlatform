@@ -13,10 +13,16 @@ spec:
   - name: "Lab 3 : Distrobox Creation and Application Export"
     type: lab
     check_provider: local
-    check_type: distrobox_lab3
-    check_params:
-      container_name: lab
-      app: xcowfortune
+    steps:
+    - title: "Distrobox 'lab' créé"
+      check_type: distrobox_lab3_container
+      check_params:
+        container_name: lab
+    - title: "Application xcowfortune exportée"
+      check_type: distrobox_lab3_export
+      check_params:
+        container_name: lab
+        app: xcowfortune
     content: |
       ## Objectifs
 

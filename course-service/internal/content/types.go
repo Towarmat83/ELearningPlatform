@@ -58,6 +58,14 @@ type Module struct {
 	CheckProvider          string                 `json:"check_provider,omitempty"` // "local" | "gitlab"
 	CheckType              string                 `json:"check_type,omitempty"`
 	CheckParams            map[string]interface{} `json:"check_params,omitempty"`
+	Steps                  []CheckStep            `json:"steps,omitempty"`
+}
+
+// CheckStep is one verifiable step inside a lab module.
+type CheckStep struct {
+	Title       string                 `json:"title" yaml:"title"`
+	CheckType   string                 `json:"check_type" yaml:"check_type"`
+	CheckParams map[string]interface{} `json:"check_params,omitempty" yaml:"check_params,omitempty"`
 }
 
 // Slug returns a DNS-compliant slug derived from the module name.
@@ -144,6 +152,7 @@ type ModuleYAML struct {
 	CheckProvider          string                 `yaml:"check_provider,omitempty"`
 	CheckType              string                 `yaml:"check_type,omitempty"`
 	CheckParams            map[string]interface{} `yaml:"check_params,omitempty"`
+	Steps                  []CheckStep            `yaml:"steps,omitempty"`
 }
 
 // ModuleIndexEntry is one entry in a module index YAML file (type: modules).

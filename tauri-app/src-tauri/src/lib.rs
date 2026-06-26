@@ -116,46 +116,80 @@ fn check_podman_lab2(params: PodmanLab2Params) -> Result<LocalCheckResult, Strin
     })
 }
 
-#[tauri::command]
-fn check_distrobox_lab3(params: DistroboxLab3Params) -> Result<LocalCheckResult, String> {
-    let mut violations: Vec<String> = vec![];
+#[derive(Deserialize)]
+pub struct DistroboxContainerParams {
+    pub container_name: String,
+}
 
-    // 1. Vérifier que le container Distrobox existe
-    let exists = Command::new(podman_bin())
-        .args(["container", "exists", &params.container_name])
+fn distrobox_container_exists(container_name: &str) -> bool {
+    Command::new(podman_bin())
+        .args(["container", "exists", container_name])
         .status()
         .map(|s| s.success())
-        .unwrap_or(false);
+        .unwrap_or(false)
+}
 
-    if !exists {
-        violations.push(format!(
-            "Distrobox '{}' introuvable. Avez-vous bien exécuté 'distrobox create --name {}' ?",
-            params.container_name, params.container_name
-        ));
-    }
-
-    // 2. Vérifier que l'application est exportée (~/.local/share/applications/)
+fn distrobox_app_exported(app: &str) -> bool {
     let home = std::env::var("HOME").unwrap_or_default();
     let apps_dir = std::path::Path::new(&home).join(".local/share/applications");
-    let exported = apps_dir.read_dir().ok().map_or(false, |mut entries| {
+    apps_dir.read_dir().ok().map_or(false, |mut entries| {
         entries.any(|e| {
             e.ok()
                 .and_then(|e| e.file_name().into_string().ok())
-                .map_or(false, |name| name.contains(&params.app))
+                .map_or(false, |name| name.contains(app))
         })
-    });
+    })
+}
 
-    if !exported {
+#[tauri::command]
+fn check_distrobox_lab3_container(params: DistroboxContainerParams) -> Result<LocalCheckResult, String> {
+    if distrobox_container_exists(&params.container_name) {
+        Ok(LocalCheckResult { allow: true, violations: vec![] })
+    } else {
+        Ok(LocalCheckResult {
+            allow: false,
+            violations: vec![format!(
+                "Distrobox '{}' introuvable. Avez-vous bien exécuté 'distrobox create --name {}' ?",
+                params.container_name, params.container_name
+            )],
+        })
+    }
+}
+
+#[tauri::command]
+fn check_distrobox_lab3_export(params: DistroboxLab3Params) -> Result<LocalCheckResult, String> {
+    let mut violations = vec![];
+    if !distrobox_container_exists(&params.container_name) {
+        violations.push(format!(
+            "Distrobox '{}' introuvable. Créez-le d'abord avec 'distrobox create --name {}'.",
+            params.container_name, params.container_name
+        ));
+    }
+    if !distrobox_app_exported(&params.app) {
         violations.push(format!(
             "Application '{}' non exportée. Avez-vous bien exécuté 'distrobox-export -a {}' depuis la Distrobox ?",
             params.app, params.app
         ));
     }
+    Ok(LocalCheckResult { allow: violations.is_empty(), violations })
+}
 
-    Ok(LocalCheckResult {
-        allow: violations.is_empty(),
-        violations,
-    })
+#[tauri::command]
+fn check_distrobox_lab3(params: DistroboxLab3Params) -> Result<LocalCheckResult, String> {
+    let mut violations: Vec<String> = vec![];
+    if !distrobox_container_exists(&params.container_name) {
+        violations.push(format!(
+            "Distrobox '{}' introuvable. Avez-vous bien exécuté 'distrobox create --name {}' ?",
+            params.container_name, params.container_name
+        ));
+    }
+    if !distrobox_app_exported(&params.app) {
+        violations.push(format!(
+            "Application '{}' non exportée. Avez-vous bien exécuté 'distrobox-export -a {}' depuis la Distrobox ?",
+            params.app, params.app
+        ));
+    }
+    Ok(LocalCheckResult { allow: violations.is_empty(), violations })
 }
 
 /// Point d'entrée générique pour les checks locaux.
@@ -180,6 +214,16 @@ fn local_check(
                 .map_err(|e| format!("Params invalides : {e}"))?;
             check_distrobox_lab3(p)
         }
+        "distrobox_lab3_container" => {
+            let p: DistroboxContainerParams = serde_json::from_value(params)
+                .map_err(|e| format!("Params invalides : {e}"))?;
+            check_distrobox_lab3_container(p)
+        }
+        "distrobox_lab3_export" => {
+            let p: DistroboxLab3Params = serde_json::from_value(params)
+                .map_err(|e| format!("Params invalides : {e}"))?;
+            check_distrobox_lab3_export(p)
+        }
         _ => Err(format!("check_type inconnu : {check_type}")),
     }
 }
@@ -192,7 +236,9 @@ pub fn run() {
             local_check,
             check_podman_images,
             check_podman_lab2,
-            check_distrobox_lab3
+            check_distrobox_lab3,
+            check_distrobox_lab3_container,
+            check_distrobox_lab3_export
         ])
         .setup(|app| {
             // Lancement frais via pupitre:// : récupère l'URL qui a ouvert l'app

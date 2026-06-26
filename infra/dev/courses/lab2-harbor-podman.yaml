@@ -13,10 +13,16 @@ spec:
   - name: "Lab 2 : Harbor Searching & Podman Running"
     type: lab
     check_provider: local
-    check_type: podman_lab2
-    check_params:
-      image: nginx
-      container_name: my-nginx
+    steps:
+    - title: "Image nginx téléchargée"
+      check_type: podman_images
+      check_params:
+        image: nginx
+    - title: "Conteneur my-nginx démarré"
+      check_type: podman_lab2
+      check_params:
+        image: nginx
+        container_name: my-nginx
     content: |
       ## Objectifs
 

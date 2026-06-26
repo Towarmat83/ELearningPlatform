@@ -92,6 +92,7 @@ type moduleResponse struct {
 	CheckProvider string                 `json:"check_provider,omitempty"`
 	CheckType     string                 `json:"check_type,omitempty"`
 	CheckParams   map[string]interface{} `json:"check_params,omitempty"`
+	Steps         []content.CheckStep    `json:"steps,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`
@@ -501,6 +502,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 		resp.CheckProvider = m.CheckProvider
 		resp.CheckType = m.CheckType
 		resp.CheckParams = m.CheckParams
+		resp.Steps = m.Steps
 	}
 
 	switch m.Type {

@@ -51,6 +51,9 @@ spec:
               name: {{ include "elearning.gitTokenSecretName" . }}
               key: {{ include "elearning.gitTokenSecretKey" . }}
         {{- end }}
+        {{- with .Values.courseService.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         volumeMounts:
         - name: config
           mountPath: /etc/course-service
@@ -60,6 +63,9 @@ spec:
           readOnly: true
         - name: tmp
           mountPath: /tmp
+        {{- with .Values.courseService.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health
@@ -85,6 +91,9 @@ spec:
           optional: true
       - name: tmp
         emptyDir: {}
+      {{- with .Values.courseService.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
       {{- with .Values.courseService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

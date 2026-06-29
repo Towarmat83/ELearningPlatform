@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,27 +15,29 @@ import (
 )
 
 type oidcSettings struct {
-	Enabled        bool
-	ProviderURL    string
-	IssuerURL      string // when set, bypasses issuer check (split-horizon: internal discovery URL ≠ public issuer)
-	ClientID       string
-	ClientSecret   string
-	Scopes         []string
-	GroupClaim     string
-	RedirectBase   string // overrides config.OAuthRedirectBase for redirect_uri sent to the provider
-	BrowserBaseURL string // optional: rewrite internal base URL to this for browser redirects
+	Enabled            bool
+	ProviderURL        string
+	IssuerURL          string // when set, bypasses issuer check (split-horizon: internal discovery URL ≠ public issuer)
+	ClientID           string
+	ClientSecret       string
+	Scopes             []string
+	GroupClaim         string
+	RedirectBase       string // overrides config.OAuthRedirectBase for redirect_uri sent to the provider
+	BrowserBaseURL     string // optional: rewrite internal base URL to this for browser redirects
+	InsecureSkipVerify bool   // skip TLS verification for custom CA / self-signed OIDC provider
 }
 
 func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 	cfg := oidcSettings{
-		Enabled:        ReadSetting(ctx, s.Pool, "oidc_enabled", "false") == "true",
-		ProviderURL:    ReadSetting(ctx, s.Pool, "oidc_provider_url", ""),
-		IssuerURL:      ReadSetting(ctx, s.Pool, "oidc_issuer_url", ""),
-		ClientID:       ReadSetting(ctx, s.Pool, "oidc_client_id", ""),
-		ClientSecret:   ReadSetting(ctx, s.Pool, "oidc_client_secret", ""),
-		GroupClaim:     ReadSetting(ctx, s.Pool, "oidc_group_claim", "groups"),
-		RedirectBase:   ReadSetting(ctx, s.Pool, "oidc_redirect_base", s.Config.OAuthRedirectBase),
-		BrowserBaseURL: ReadSetting(ctx, s.Pool, "oidc_browser_base_url", ""),
+		Enabled:            ReadSetting(ctx, s.Pool, "oidc_enabled", "false") == "true",
+		ProviderURL:        ReadSetting(ctx, s.Pool, "oidc_provider_url", ""),
+		IssuerURL:          ReadSetting(ctx, s.Pool, "oidc_issuer_url", ""),
+		ClientID:           ReadSetting(ctx, s.Pool, "oidc_client_id", ""),
+		ClientSecret:       ReadSetting(ctx, s.Pool, "oidc_client_secret", ""),
+		GroupClaim:         ReadSetting(ctx, s.Pool, "oidc_group_claim", "groups"),
+		RedirectBase:       ReadSetting(ctx, s.Pool, "oidc_redirect_base", s.Config.OAuthRedirectBase),
+		BrowserBaseURL:     ReadSetting(ctx, s.Pool, "oidc_browser_base_url", ""),
+		InsecureSkipVerify: ReadSetting(ctx, s.Pool, "oidc_insecure_skip_verify", "false") == "true",
 	}
 	scopes := ReadSetting(ctx, s.Pool, "oidc_scopes", "openid email profile groups")
 	for _, sc := range strings.Split(scopes, " ") {
@@ -58,6 +61,14 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 // This allows the discovery endpoint (ProviderURL) to differ from the issuer claim in tokens,
 // which is necessary in split-horizon setups (e.g. KinD where the internal DNS ≠ browser URL).
 func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
+	if cfg.InsecureSkipVerify {
+		insecureClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			},
+		}
+		ctx = gooidc.ClientContext(ctx, insecureClient)
+	}
 	if cfg.IssuerURL != "" {
 		return gooidc.InsecureIssuerURLContext(ctx, cfg.IssuerURL)
 	}

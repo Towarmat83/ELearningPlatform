@@ -41,6 +41,9 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		"oidc_redirect_base":    b.RedirectBase,
 		"oidc_browser_base_url": b.BrowserBaseURL,
 	}
+	if b.InsecureSkipVerify {
+		settings["oidc_insecure_skip_verify"] = "true"
+	}
 
 	seeded := make([]string, 0, len(settings))
 	for key, val := range settings {

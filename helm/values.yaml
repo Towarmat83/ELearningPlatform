@@ -93,6 +93,9 @@ courseService:
   gitToken: ""
   gitTokenExistingSecret: ""
   gitTokenExistingSecretKey: "GIT_TOKEN"
+  extraEnv: []
+  extraVolumeMounts: []
+  extraVolumes: []
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -121,6 +124,9 @@ checkerService:
     GITLAB_BASE_URL: "http://gitlab.local:8880"
   # GitLab API token for checker-service (stored in the platform Secret as GITLAB_TOKEN)
   gitLabToken: ""
+  extraEnv: []
+  extraVolumeMounts: []
+  extraVolumes: []
   nodeSelector: {}
 
 userService:
@@ -147,6 +153,9 @@ userService:
       cpu: "500m"
   env:
     JWT_EXPIRY_HOURS: "24"
+  extraEnv: []
+  extraVolumeMounts: []
+  extraVolumes: []
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -177,6 +186,9 @@ frontend:
     limits:
       memory: "256Mi"
       cpu: "200m"
+  extraEnv: []
+  extraVolumeMounts: []
+  extraVolumes: []
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -224,6 +236,10 @@ sso:
     browserBaseURL: ""
     # Optional per-OIDC redirect base override (defaults to sso.redirectBase).
     redirectBase: ""
+    # Set to true to disable TLS certificate verification when connecting to the
+    # OIDC provider. Use when the provider uses a custom CA or a self-signed cert.
+    # WARNING: only use in trusted environments; disables x509 chain validation.
+    insecureSkipVerify: false
     # ── Production secret sourcing (Vault / External Secrets / SOPS) ──
     # Name of an existing Secret holding the client secret. Empty disables it.
     existingSecret: ""

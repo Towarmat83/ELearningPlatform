@@ -24,16 +24,17 @@ type ProviderConfig struct {
 // is sourced from a mounted Kubernetes Secret (file) or env var — never from
 // hardcoded chart values.
 type OIDCBootstrap struct {
-	Enabled          bool
-	ProviderURL      string
-	IssuerURL        string
-	ClientID         string
-	ClientSecret     string // value supplied via OIDC_CLIENT_SECRET
-	ClientSecretFile string // path to a mounted secret file (takes priority)
-	Scopes           string
-	GroupClaim       string
-	RedirectBase     string
-	BrowserBaseURL   string
+	Enabled            bool
+	ProviderURL        string
+	IssuerURL          string
+	ClientID           string
+	ClientSecret       string // value supplied via OIDC_CLIENT_SECRET
+	ClientSecretFile   string // path to a mounted secret file (takes priority)
+	Scopes             string
+	GroupClaim         string
+	RedirectBase       string
+	BrowserBaseURL     string
+	InsecureSkipVerify bool // skip TLS certificate verification (custom CA / self-signed)
 }
 
 // ResolveClientSecret returns the OIDC client secret, preferring the mounted
@@ -155,16 +156,17 @@ func Load() *Config {
 	// The client secret is sourced from a mounted Secret file (preferred) or an
 	// env var, so it never has to be hardcoded in chart values.
 	c.OIDC = OIDCBootstrap{
-		Enabled:          os.Getenv("OIDC_ENABLED") == "true",
-		ProviderURL:      os.Getenv("OIDC_PROVIDER_URL"),
-		IssuerURL:        os.Getenv("OIDC_ISSUER_URL"),
-		ClientID:         os.Getenv("OIDC_CLIENT_ID"),
-		ClientSecret:     os.Getenv("OIDC_CLIENT_SECRET"),
-		ClientSecretFile: os.Getenv("OIDC_CLIENT_SECRET_FILE"),
-		Scopes:           os.Getenv("OIDC_SCOPES"),
-		GroupClaim:       os.Getenv("OIDC_GROUP_CLAIM"),
-		RedirectBase:     os.Getenv("OIDC_REDIRECT_BASE"),
-		BrowserBaseURL:   os.Getenv("OIDC_BROWSER_BASE_URL"),
+		Enabled:            os.Getenv("OIDC_ENABLED") == "true",
+		ProviderURL:        os.Getenv("OIDC_PROVIDER_URL"),
+		IssuerURL:          os.Getenv("OIDC_ISSUER_URL"),
+		ClientID:           os.Getenv("OIDC_CLIENT_ID"),
+		ClientSecret:       os.Getenv("OIDC_CLIENT_SECRET"),
+		ClientSecretFile:   os.Getenv("OIDC_CLIENT_SECRET_FILE"),
+		Scopes:             os.Getenv("OIDC_SCOPES"),
+		GroupClaim:         os.Getenv("OIDC_GROUP_CLAIM"),
+		RedirectBase:       os.Getenv("OIDC_REDIRECT_BASE"),
+		BrowserBaseURL:     os.Getenv("OIDC_BROWSER_BASE_URL"),
+		InsecureSkipVerify: os.Getenv("OIDC_INSECURE_SKIP_VERIFY") == "true",
 	}
 
 	// ── OAuth provider secrets (Helm) ──────────────────────────────────────

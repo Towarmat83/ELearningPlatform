@@ -44,6 +44,13 @@ spec:
               name: {{ include "elearning.fullname" . }}-secrets
               key: GITLAB_TOKEN
               optional: true
+        {{- with .Values.checkerService.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.checkerService.extraVolumeMounts }}
+        volumeMounts:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health
@@ -59,6 +66,10 @@ spec:
         resources:
           {{- toYaml .Values.checkerService.resources | nindent 10 }}
       terminationGracePeriodSeconds: 30
+      {{- with .Values.checkerService.extraVolumes }}
+      volumes:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
       {{- with .Values.checkerService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

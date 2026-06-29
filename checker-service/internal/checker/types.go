@@ -31,7 +31,7 @@ type projectInfo struct {
 }
 
 type openMRInfo struct {
-	IID            int          `json:"iid"`
+	IID            int64        `json:"iid"`
 	Title          string       `json:"title"`
 	SourceBranch   string       `json:"source_branch"`
 	PipelineStatus string       `json:"pipeline_status"`

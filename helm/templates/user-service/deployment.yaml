@@ -73,6 +73,10 @@ spec:
         {{- end }}
         - name: OIDC_CLIENT_SECRET_FILE
           value: /etc/oidc/OIDC_CLIENT_SECRET
+        {{- if .Values.sso.oidc.insecureSkipVerify }}
+        - name: OIDC_INSECURE_SKIP_VERIFY
+          value: "true"
+        {{- end }}
         {{- end }}
         {{- if .Values.sso.enabled }}
         {{- range .Values.sso.providers }}
@@ -103,6 +107,9 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        {{- with .Values.userService.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         volumeMounts:
         - name: config
           mountPath: /etc/user-service
@@ -114,6 +121,9 @@ spec:
         - name: oidc-secret
           mountPath: /etc/oidc
           readOnly: true
+        {{- end }}
+        {{- with .Values.userService.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
         startupProbe:
           httpGet:
@@ -171,6 +181,9 @@ spec:
             - key: OIDC_CLIENT_SECRET
               path: OIDC_CLIENT_SECRET
           {{- end }}
+      {{- end }}
+      {{- with .Values.userService.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
       {{- with .Values.userService.nodeSelector }}
       nodeSelector:

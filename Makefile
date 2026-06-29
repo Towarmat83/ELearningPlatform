@@ -219,9 +219,9 @@ go/test-checker:
 
 # ── Go Lint ─────────────────────────────────────────────────────────────────
 
-.PHONY: go/lint go/lint-course go/lint-user
+.PHONY: go/lint go/lint-course go/lint-user go/lint-checker
 
-go/lint: go/lint-course go/lint-user
+go/lint: go/lint-course go/lint-user go/lint-checker
 
 go/lint-course:
 	@echo "=== Linting course-service ==="

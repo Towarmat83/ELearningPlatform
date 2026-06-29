@@ -87,12 +87,12 @@ type moduleResponse struct {
 	Cooldowns     map[string]cooldownState `json:"cooldowns,omitempty"`
 	Inline        bool                     `json:"inline,omitempty"`
 	InlineQuiz    *inlineQuizResponse      `json:"inline_quiz,omitempty"`
-	HasCheck      bool                   `json:"has_check,omitempty"`
-	LabURL        string                 `json:"lab_url,omitempty"`
-	CheckProvider string                 `json:"check_provider,omitempty"`
-	CheckType     string                 `json:"check_type,omitempty"`
-	CheckParams   map[string]interface{} `json:"check_params,omitempty"`
-	Steps         []content.CheckStep    `json:"steps,omitempty"`
+	HasCheck      bool                     `json:"has_check,omitempty"`
+	LabURL        string                   `json:"lab_url,omitempty"`
+	CheckProvider string                   `json:"check_provider,omitempty"`
+	CheckType     string                   `json:"check_type,omitempty"`
+	CheckParams   map[string]interface{}   `json:"check_params,omitempty"`
+	Steps         []content.CheckStep      `json:"steps,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`

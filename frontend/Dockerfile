@@ -15,21 +15,22 @@ FROM docker.io/library/node:22-alpine
 WORKDIR /app
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json .
-COPY --from=builder /app/package-lock.json .
+COPY --from=builder /app/package.json \
+                    /app/package-lock.json ./
 RUN npm ci --omit=dev
+
+COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
+RUN chown -R node:node /app /docker-entrypoint.sh
+
+USER node
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 ENV FRONTEND_CONFIG=/etc/frontend/config.env
 
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD wget -qO- http://localhost:3000/ || exit 1
+HEALTHCHECK NONE
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

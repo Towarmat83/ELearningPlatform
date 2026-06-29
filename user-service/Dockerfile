@@ -1,19 +1,14 @@
 # Stage 1: Build
 FROM docker.io/library/golang:1.26-alpine AS builder
 
-RUN apk add --no-cache ca-certificates git
-
 WORKDIR /app
 
 # Cache module downloads
 COPY go.mod go.sum ./
-
 RUN go mod download
 
 # Build binary
 COPY . .
-
-# KICS false positive: build command executed in builder stage only
 RUN CGO_ENABLED=0 GOOS=linux \
     go build -ldflags="-s -w" -o user-service .
 
@@ -22,6 +17,7 @@ FROM scratch
 
 WORKDIR /app
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/user-service /app/user-service
 
 # No ENV config defaults here: env vars override the mounted ConfigMap file
@@ -31,5 +27,7 @@ COPY --from=builder /app/user-service /app/user-service
 USER 1000:1000
 
 EXPOSE 8081
+
+HEALTHCHECK NONE
 
 ENTRYPOINT ["/app/user-service"]

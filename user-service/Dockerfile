@@ -20,8 +20,6 @@ RUN apk add --no-cache ca-certificates curl   && \
     addgroup -S appgroup && \
     adduser -S appuser -G appgroup
 
-
-
 WORKDIR /app
 
 COPY --from=builder /app/user-service /app/user-service
@@ -31,8 +29,6 @@ COPY --from=builder /app/user-service /app/user-service
 # internal/config/config.go.
 
 USER appuser
-
-
 
 EXPOSE 8081
 

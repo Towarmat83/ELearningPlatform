@@ -9,7 +9,6 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-
 # Stage 2: Runtime
 FROM docker.io/library/node:22-alpine
 

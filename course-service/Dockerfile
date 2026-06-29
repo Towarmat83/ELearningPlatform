@@ -17,11 +17,8 @@ RUN CGO_ENABLED=0 GOOS=linux \
   go build -ldflags="-s -w" -o course-service .
 
 # Stage 2: Runtime
-FROM docker.io/library/alpine:3.21
-
-RUN apk add --no-cache ca-certificates curl && \
-    addgroup -S appgroup && \
-    adduser -S appuser -G appgroup
+# Stage 2: Runtime
+FROM scratch
 
 WORKDIR /app
 
@@ -31,11 +28,8 @@ COPY --from=builder /app/course-service /app/course-service
 # (precedence: code defaults → CONFIG_PATH file → env). Defaults live in
 # internal/config/config.go.
 
-USER appuser    
+USER 1000:1000
 
 EXPOSE 8082
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8082/health || exit 1
 
 ENTRYPOINT ["/app/course-service"]

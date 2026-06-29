@@ -14,8 +14,8 @@ RUN npm run build
 # Stage 2: Runtime
 FROM docker.io/library/node:22-alpine
 
-RUN addgroup -S appgroup && \
-    adduser -S appuser -G appgroup
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup
 
 WORKDIR /app
 
@@ -28,13 +28,16 @@ RUN npm ci --omit=dev
 
 COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
 
-RUN chown -R appuser:appgroup /app /docker-entrypoint.sh
+RUN chown -R 1000:1000 /app /docker-entrypoint.sh
 
-USER appuser
+USER 1000:1000
 
 ENV NODE_ENV=production
+
 ENV PORT=3000
+
 ENV HOST=0.0.0.0
+
 ENV FRONTEND_CONFIG=/etc/frontend/config.env
 
 EXPOSE 3000

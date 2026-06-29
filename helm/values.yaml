@@ -270,25 +270,11 @@ sso:
   providers: []
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
-# Path order matters — more specific paths must come before broader ones.
 ingress:
   enabled: true
   className: traefik
   annotations: {}
-  hosts:
-    - host: elearning.local
-      paths:
-        - { path: /api/auth,          pathType: Prefix, backend: user-service   }
-        - { path: /api/settings,      pathType: Prefix, backend: user-service   }
-        - { path: /api/my,            pathType: Prefix, backend: user-service   }
-        - { path: /api/admin/courses,     pathType: Prefix, backend: course-service }
-        - { path: /api/admin/lab-checks, pathType: Prefix, backend: course-service }
-        - { path: /api/admin,            pathType: Prefix, backend: user-service   }
-        - { path: /api/courses,       pathType: Prefix, backend: course-service }
-        - { path: /uploads,           pathType: Prefix, backend: course-service }
-        - { path: /health,            pathType: Exact,  backend: course-service }
-        - { path: /metrics,           pathType: Prefix, backend: course-service }
-        - { path: /,                  pathType: Prefix, backend: frontend       }
+  host: elearning.local
   tls: []
 
 # ── Database ──────────────────────────────────────────────────────────────────

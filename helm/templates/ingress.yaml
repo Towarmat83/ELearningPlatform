@@ -18,18 +18,84 @@ spec:
     {{- toYaml .Values.ingress.tls | nindent 4 }}
   {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
+    - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: {{ .pathType }}
+          - path: /api/auth
+            pathType: Prefix
             backend:
               service:
-                name: {{ include "elearning.fullname" $ }}-{{ .backend }}
+                name: {{ include "elearning.fullname" . }}-user-service
                 port:
                   name: http
-          {{- end }}
-    {{- end }}
+          - path: /api/settings
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-user-service
+                port:
+                  name: http
+          - path: /api/my
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-user-service
+                port:
+                  name: http
+          - path: /api/admin/courses
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-course-service
+                port:
+                  name: http
+          - path: /api/admin/lab-checks
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-course-service
+                port:
+                  name: http
+          - path: /api/admin
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-user-service
+                port:
+                  name: http
+          - path: /api/courses
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-course-service
+                port:
+                  name: http
+          - path: /uploads
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-course-service
+                port:
+                  name: http
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-course-service
+                port:
+                  name: http
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-course-service
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "elearning.fullname" . }}-frontend
+                port:
+                  name: http
 {{- end }}

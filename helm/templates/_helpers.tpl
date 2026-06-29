@@ -194,7 +194,7 @@ Ingress scheme (http or https)
 Public base URL of the app (used for CORS, ORIGIN)
 */}}
 {{- define "elearning.publicUrl" -}}
-{{ include "elearning.scheme" . }}://{{ (first .Values.ingress.hosts).host }}
+{{ include "elearning.scheme" . }}://{{ .Values.ingress.host }}
 {{- end }}
 
 {{/*

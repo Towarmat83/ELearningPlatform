@@ -16,7 +16,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o user-service .
 # Stage 2: Runtime
 FROM docker.io/library/alpine:3.21
 
-RUN apk add --no-cache ca-certificates curl
+RUN apk add --no-cache ca-certificates curl   && \
+    addgroup -S appgroup && \
+    adduser -S appuser -G appgroup
+
+
 
 WORKDIR /app
 
@@ -25,6 +29,10 @@ COPY --from=builder /app/user-service /app/user-service
 # No ENV config defaults here: env vars override the mounted ConfigMap file
 # (precedence: code defaults → CONFIG_PATH file → env). Defaults live in
 # internal/config/config.go.
+
+USER appuser
+
+
 
 EXPOSE 8081
 

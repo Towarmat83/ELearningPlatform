@@ -9,23 +9,32 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+
 # Stage 2: Runtime
 FROM docker.io/library/node:22-alpine
+
+RUN addgroup -S appgroup && \
+    adduser -S appuser -G appgroup
 
 WORKDIR /app
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json .
-COPY --from=builder /app/package-lock.json .
+COPY --from=builder /app/package.json \
+                     /app/package-lock.json ./
+
 RUN npm ci --omit=dev
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+RUN chown -R appuser:appgroup /app /docker-entrypoint.sh
+
+USER appuser
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 ENV FRONTEND_CONFIG=/etc/frontend/config.env
-
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 3000
 

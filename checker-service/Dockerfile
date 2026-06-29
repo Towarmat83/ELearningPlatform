@@ -27,5 +27,5 @@ EXPOSE 8083
 
 HEALTHCHECK --interval=30s --timeout=5s \
     CMD pidof checker-service || exit 1
-    
+
 ENTRYPOINT ["./checker-service"]

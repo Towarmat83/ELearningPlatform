@@ -7,17 +7,19 @@ WORKDIR /app
 
 # Cache module downloads
 COPY go.mod go.sum ./
+
 RUN go mod download
 
 # Build binary
 COPY . .
+
 RUN CGO_ENABLED=0 GOOS=linux \
   go build -ldflags="-s -w" -o course-service .
 
 # Stage 2: Runtime
 FROM docker.io/library/alpine:3.21
 
-RUN apk add --no-cache ca-certificates curl  && \
+RUN apk add --no-cache ca-certificates curl && \
     addgroup -S appgroup && \
     adduser -S appuser -G appgroup
 

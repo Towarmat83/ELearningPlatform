@@ -4,9 +4,11 @@ FROM docker.io/library/node:22-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
+
 RUN npm ci
 
 COPY . .
+
 RUN npm run build
 
 # Stage 2: Runtime
@@ -18,13 +20,13 @@ RUN addgroup -S appgroup && \
 WORKDIR /app
 
 COPY --from=builder /app/dist ./dist
+
 COPY --from=builder /app/package.json \
                      /app/package-lock.json ./
 
 RUN npm ci --omit=dev
 
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN chown -R appuser:appgroup /app /docker-entrypoint.sh
 

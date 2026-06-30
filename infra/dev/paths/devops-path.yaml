@@ -1,0 +1,12 @@
+apiVersion: elearning.example.com/v1
+kind: Path
+metadata:
+  name: devops-path
+  namespace: default
+spec:
+  title: "Parcours DevOps"
+  description: "De GitLab CI/CD à Harbor et la conteneurisation avancée."
+  courses:
+    - slug: lab1-gitlab-cicd
+    - slug: lab2-harbor-podman
+    - slug: lab3-distrobox

@@ -69,6 +69,49 @@ func (s *Store) DeleteBySource(source string) {
 	}
 }
 
+// PathStore holds all learning paths in memory, safe for concurrent access.
+type PathStore struct {
+	mu    sync.RWMutex
+	paths map[string]*Path
+}
+
+func NewPathStore() *PathStore {
+	return &PathStore{paths: make(map[string]*Path)}
+}
+
+func (s *PathStore) Get(slug string) *Path {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.paths[slug]
+}
+
+func (s *PathStore) List() []*Path {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Path, 0, len(s.paths))
+	for _, p := range s.paths {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
+	return out
+}
+
+func (s *PathStore) Put(p *Path) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paths[p.Slug] = p
+}
+
+func (s *PathStore) DeleteBySource(source string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for slug, p := range s.paths {
+		if p.Source == source {
+			delete(s.paths, slug)
+		}
+	}
+}
+
 var orderPrefix = regexp.MustCompile(`^(\d+)-`)
 
 // ParseMarkdownLesson parses a markdown file with optional YAML front matter.

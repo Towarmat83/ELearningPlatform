@@ -36,8 +36,9 @@ func main() {
 
 	// Content store — populated from K8s CRD watcher
 	store := content.NewStore()
+	pathStore := content.NewPathStore()
 
-	s := handlers.NewState(cfg, store)
+	s := handlers.NewState(cfg, store, pathStore)
 
 	if cfg.DatabaseURL != "" {
 		pool, err := coursedb.Connect(ctx, cfg.DatabaseURL)
@@ -58,12 +59,18 @@ func main() {
 		slog.Error("failed to create K8s watcher", "err", err)
 		os.Exit(1)
 	}
-
 	if err := watcher.Start(ctx); err != nil {
 		slog.Error("failed to start K8s watcher", "err", err)
 		os.Exit(1)
 	}
-	slog.Info("K8s CRD watcher started", "namespace", cfg.K8sNamespace)
+
+	pathWatcher, err := content.NewPathWatcher(pathStore, cfg.Kubeconfig, cfg.K8sNamespace)
+	if err != nil {
+		slog.Warn("failed to create Path watcher, paths disabled", "err", err)
+	} else if err := pathWatcher.Start(ctx); err != nil {
+		slog.Warn("failed to start Path watcher", "err", err)
+	}
+	slog.Info("K8s CRD watchers started", "namespace", cfg.K8sNamespace)
 
 	r := handlers.BuildRouter(s, cfg, true)
 

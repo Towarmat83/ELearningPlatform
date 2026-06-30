@@ -66,6 +66,7 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 		r.Post("/api/courses/{slug}/lessons/{lesson_slug}/complete", s.MarkLessonComplete)
 
 		r.Get("/api/my/courses", s.MyCourses)
+		r.Get("/api/my/paths", s.MyPaths)
 	})
 
 	// ── Admin ─────────────────────────────────────────────────────────────────────
@@ -92,6 +93,10 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 		r.Post("/api/admin/courses/{slug}/enrollments/groups", s.AdminEnrollGroup)
 		r.Delete("/api/admin/courses/{slug}/enrollments/groups/{group_id}", s.AdminUnenrollGroup)
 		r.Delete("/api/admin/courses/{slug}/enrollments/{user_id}", s.AdminUnenrollUser)
+
+		r.Get("/api/admin/paths/{slug}/enrollments", s.AdminListPathEnrollments)
+		r.Post("/api/admin/paths/{slug}/enrollments", s.AdminEnrollUserInPath)
+		r.Delete("/api/admin/paths/{slug}/enrollments/{user_id}", s.AdminUnenrollUserFromPath)
 
 		r.Post("/api/admin/sync-progress", s.SyncProgress)
 

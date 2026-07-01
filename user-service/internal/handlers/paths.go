@@ -121,8 +121,13 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 		return nil
 	}
 	rows, err := s.Pool.Query(r.Context(),
-		`SELECT DISTINCT course_slug FROM module_progress
-		 WHERE user_id = $1::uuid AND passed = true AND course_slug = ANY($2)`,
+		`SELECT course_slug FROM (
+		     SELECT DISTINCT course_slug FROM module_progress
+		     WHERE user_id = $1::uuid AND passed = true AND course_slug = ANY($2)
+		     UNION
+		     SELECT DISTINCT course_slug FROM lesson_progress
+		     WHERE user_id = $1::uuid AND lesson_slug = '__complete__' AND course_slug = ANY($2)
+		 ) sub`,
 		userID, slugs)
 	if err != nil {
 		return nil
@@ -148,6 +153,9 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 // @Router    /api/admin/paths/{slug}/enrollments [get]
 func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
+
+	detail, _ := s.fetchPathDetail(slug)
+
 	rows, err := s.Pool.Query(r.Context(), `
 		SELECT u.id, u.email, u.role, pe.enrolled_at
 		FROM path_enrollments pe
@@ -160,21 +168,42 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 	}
 	defer rows.Close()
 
-	type row struct {
-		UserID     string    `json:"user_id"`
-		Email      string    `json:"email"`
-		Role       string    `json:"role"`
-		EnrolledAt time.Time `json:"enrolled_at"`
+	type enrolledUser struct {
+		UserID           string         `json:"user_id"`
+		Email            string         `json:"email"`
+		Role             string         `json:"role"`
+		EnrolledAt       time.Time      `json:"enrolled_at"`
+		CompletedCourses int            `json:"completed_courses"`
+		TotalCourses     int            `json:"total_courses"`
+		Courses          []courseStatus `json:"courses,omitempty"`
 	}
-	var users []row
+
+	var users []enrolledUser
 	for rows.Next() {
-		var u row
-		if err := rows.Scan(&u.UserID, &u.Email, &u.Role, &u.EnrolledAt); err == nil {
-			users = append(users, u)
+		var u enrolledUser
+		if err := rows.Scan(&u.UserID, &u.Email, &u.Role, &u.EnrolledAt); err != nil {
+			continue
 		}
+		if detail != nil {
+			completed := s.completedCoursesCtx(r, u.UserID, detail.Courses)
+			u.TotalCourses = len(detail.Courses)
+			courses := make([]courseStatus, len(detail.Courses))
+			for i, cs := range detail.Courses {
+				status := "locked"
+				if completed[cs] {
+					status = "completed"
+					u.CompletedCourses++
+				} else if i == 0 || completed[detail.Courses[i-1]] {
+					status = "available"
+				}
+				courses[i] = courseStatus{Slug: cs, Status: status}
+			}
+			u.Courses = courses
+		}
+		users = append(users, u)
 	}
 	if users == nil {
-		users = []row{}
+		users = []enrolledUser{}
 	}
 	s.JSON(w, http.StatusOK, map[string]any{"users": users})
 }

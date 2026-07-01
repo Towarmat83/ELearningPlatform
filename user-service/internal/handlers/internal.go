@@ -115,6 +115,35 @@ func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// InternalMarkCourseComplete godoc
+// @Summary  Mark a whole course as complete (internal)
+// @Tags     Internal
+// @Accept   json
+// @Produce  json
+// @Param    body  body  object  true  "user_id, course_slug"
+// @Success  200   {object}  map[string]bool
+// @Router   /internal/progress/course-complete [post]
+func (s *State) InternalMarkCourseComplete(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		UserID     string `json:"user_id"`
+		CourseSlug string `json:"course_slug"`
+	}
+	if err := decode(r, &body); err != nil {
+		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	_, err := s.Pool.Exec(r.Context(),
+		`INSERT INTO lesson_progress (user_id, course_slug, lesson_slug, viewed_at)
+		 VALUES ($1::uuid, $2, '__complete__', NOW())
+		 ON CONFLICT (user_id, course_slug, lesson_slug) DO NOTHING`,
+		body.UserID, body.CourseSlug)
+	if err != nil {
+		s.Error(w, http.StatusInternalServerError, "DB error")
+		return
+	}
+	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // InternalRecordModuleProgress godoc
 // @Summary  Record quiz result for a module (internal)
 // @Tags     Internal

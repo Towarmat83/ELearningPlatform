@@ -129,6 +129,7 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 	r.Get("/internal/enrollments/check", s.InternalCheckEnrollment)
 	r.Get("/internal/progress/viewed", s.InternalViewedLessons)
 	r.Post("/internal/progress/complete", s.InternalMarkComplete)
+	r.Post("/internal/progress/course-complete", s.InternalMarkCourseComplete)
 	r.Post("/internal/progress/module", s.InternalRecordModuleProgress)
 	r.Get("/internal/progress/modules", s.InternalGetModuleProgress)
 	r.Get("/internal/progress/course-summary", s.InternalCourseSummary)

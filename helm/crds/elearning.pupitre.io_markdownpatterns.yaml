@@ -1,0 +1,80 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: markdownpatterns.elearning.pupitre.io
+spec:
+  group: elearning.pupitre.io
+  names:
+    kind: MarkdownPattern
+    listKind: MarkdownPatternList
+    plural: markdownpatterns
+    shortNames:
+    - mdpat
+    singular: markdownpattern
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.label
+      name: Label
+      type: string
+    - jsonPath: .spec.scope
+      name: Scope
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: MarkdownPattern is the Schema for the markdownpatterns API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MarkdownPatternSpec defines the desired state of a MarkdownPattern.
+            properties:
+              css:
+                type: string
+              description:
+                type: string
+              html:
+                description: HTML template; use {{content}} as placeholder.
+                type: string
+              js:
+                description: JS executed after rendering (container is the wrapper
+                  element).
+                type: string
+              label:
+                type: string
+              name:
+                description: 'Name is the identifier used in markdown: |||name content|||'
+                type: string
+              scope:
+                default: global
+                type: string
+            required:
+            - html
+            - name
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

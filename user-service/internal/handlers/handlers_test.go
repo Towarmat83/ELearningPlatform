@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	patternv1 "github.com/elearning/user-service/api/v1"
 
 	"github.com/elearning/user-service/fake"
 	"github.com/elearning/user-service/internal/config"
@@ -3147,26 +3147,6 @@ func TestLDAPLogin_LDAPDisabled(t *testing.T) {
 	}
 }
 
-// ── getString (pattern_watcher.go) ────────────────────────────────────────────
-
-func TestGetString_NilMap(t *testing.T) {
-	if v := getString(nil, "key"); v != "" {
-		t.Errorf("expected empty string for nil map, got %q", v)
-	}
-}
-
-func TestGetString_Found(t *testing.T) {
-	if v := getString(map[string]interface{}{"key": "hello"}, "key"); v != "hello" {
-		t.Errorf("expected hello, got %q", v)
-	}
-}
-
-func TestGetString_NonStringValue(t *testing.T) {
-	if v := getString(map[string]interface{}{"key": 42}, "key"); v != "" {
-		t.Errorf("expected empty string for non-string value, got %q", v)
-	}
-}
-
 // ── buildRestConfig (pattern_watcher.go) ─────────────────────────────────────
 
 func TestBuildRestConfig_InvalidKubeconfig(t *testing.T) {
@@ -3188,61 +3168,55 @@ func TestBuildRestConfig_NoKubeconfig(t *testing.T) {
 func TestPatternWatcher_Upsert_NoSpec(t *testing.T) {
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
-	obj := &unstructured.Unstructured{}
-	obj.SetName("test-pattern")
-	w.upsert(context.Background(), obj)
+	cr := &patternv1.MarkdownPattern{}
+	cr.SetName("test-pattern")
+	w.upsert(context.Background(), cr)
 }
 
 func TestPatternWatcher_Upsert_WithSpec(t *testing.T) {
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"spec": map[string]interface{}{
-				"name":  "my-pattern",
-				"label": "My Pattern",
-				"html":  "<div>{{content}}</div>",
-				"scope": "global",
-			},
+	cr := &patternv1.MarkdownPattern{
+		Spec: patternv1.MarkdownPatternSpec{
+			Name:  "my-pattern",
+			Label: "My Pattern",
+			HTML:  "<div>{{content}}</div>",
+			Scope: "global",
 		},
 	}
-	w.upsert(context.Background(), obj)
+	w.upsert(context.Background(), cr)
 }
 
 func TestPatternWatcher_Upsert_DefaultsApplied(t *testing.T) {
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"spec": map[string]interface{}{
-				"html": "<div>test</div>",
-			},
+	cr := &patternv1.MarkdownPattern{
+		Spec: patternv1.MarkdownPatternSpec{
+			HTML: "<div>test</div>",
 		},
 	}
-	obj.SetName("fallback-name")
-	w.upsert(context.Background(), obj)
+	cr.SetName("fallback-name")
+	w.upsert(context.Background(), cr)
 }
 
 func TestPatternWatcher_Delete_WithSpec(t *testing.T) {
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"spec": map[string]interface{}{
-				"name":  "my-pattern",
-				"scope": "course",
-			},
+	cr := &patternv1.MarkdownPattern{
+		Spec: patternv1.MarkdownPatternSpec{
+			Name:  "my-pattern",
+			Scope: "course",
 		},
 	}
-	w.delete(context.Background(), obj)
+	w.delete(context.Background(), cr)
 }
 
 func TestPatternWatcher_Delete_NoSpec(t *testing.T) {
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
-	obj := &unstructured.Unstructured{}
-	obj.SetName("fallback-pattern")
-	w.delete(context.Background(), obj)
+	cr := &patternv1.MarkdownPattern{}
+	cr.SetName("fallback-pattern")
+	w.delete(context.Background(), cr)
 }
 
 // ── InternalCourseSummary additional coverage ─────────────────────────────────

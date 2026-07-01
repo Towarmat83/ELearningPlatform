@@ -61,7 +61,7 @@ graph LR
 
 ## Source of truth
 
-Courses are defined as **Kubernetes CRDs** (`elearning.example.com/v1`, kind `Course`). See [`docs/Course.md`](docs/Course.md) for the full spec.
+Courses are defined as **Kubernetes CRDs** (`elearning.pupitre.io/v1`, kind `Course`). See [`docs/Course.md`](docs/Course.md) for the full spec.
 
 ## Interactive Labs — Lab Checker
 

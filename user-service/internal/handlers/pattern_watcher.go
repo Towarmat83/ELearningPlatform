@@ -4,30 +4,23 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	crcache "sigs.k8s.io/controller-runtime/pkg/cache"
 
+	patternv1 "github.com/elearning/user-service/api/v1"
 	"github.com/elearning/user-service/internal/db"
 )
 
-var patternGVR = schema.GroupVersionResource{
-	Group:    "elearning.example.com",
-	Version:  "v1",
-	Resource: "markdownpatterns",
-}
-
 // PatternWatcher watches MarkdownPattern CRDs and syncs them into the DB.
+// It uses controller-runtime's informer-backed cache, which relists on
+// watch errors/reconnects automatically instead of only once at startup.
 type PatternWatcher struct {
-	pool      db.Pool
-	client    dynamic.NamespaceableResourceInterface
-	namespace string
+	pool  db.Pool
+	cache crcache.Cache
 }
 
 func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatcher, error) {
@@ -35,86 +28,65 @@ func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatc
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)
 	}
-	dyn, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("dynamic client: %w", err)
+
+	scheme := runtime.NewScheme()
+	if err := patternv1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register scheme: %w", err)
 	}
-	return &PatternWatcher{
-		pool:      pool,
-		client:    dyn.Resource(patternGVR),
-		namespace: namespace,
-	}, nil
+
+	c, err := crcache.New(cfg, crcache.Options{
+		Scheme:            scheme,
+		DefaultNamespaces: map[string]crcache.Config{namespace: {}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create cache: %w", err)
+	}
+
+	return &PatternWatcher{pool: pool, cache: c}, nil
 }
 
 func (w *PatternWatcher) Start(ctx context.Context) error {
-	if err := w.syncAll(ctx); err != nil {
-		return fmt.Errorf("initial sync: %w", err)
-	}
-	go w.loop(ctx)
-	return nil
-}
-
-func (w *PatternWatcher) syncAll(ctx context.Context) error {
-	list, err := w.client.Namespace(w.namespace).List(ctx, metav1.ListOptions{})
+	informer, err := w.cache.GetInformer(ctx, &patternv1.MarkdownPattern{})
 	if err != nil {
-		return err
+		return fmt.Errorf("get informer: %w", err)
 	}
-	for i := range list.Items {
-		w.upsert(ctx, &list.Items[i])
+
+	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { w.upsert(context.Background(), obj) },
+		UpdateFunc: func(_, obj interface{}) { w.upsert(context.Background(), obj) },
+		DeleteFunc: func(obj interface{}) { w.delete(context.Background(), obj) },
+	}); err != nil {
+		return fmt.Errorf("add event handler: %w", err)
 	}
-	slog.Info("markdown patterns synced from CRDs", "count", len(list.Items))
+
+	go func() {
+		if err := w.cache.Start(ctx); err != nil {
+			slog.Error("pattern CRD cache stopped", "err", err)
+		}
+	}()
+
+	if !w.cache.WaitForCacheSync(ctx) {
+		return fmt.Errorf("cache sync failed")
+	}
+	slog.Info("markdown patterns synced from CRDs")
 	return nil
 }
 
-func (w *PatternWatcher) loop(ctx context.Context) {
-	backoff := 2 * time.Second
-	const maxBackoff = 60 * time.Second
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		timeout := int64(600)
-		watcher, err := w.client.Namespace(w.namespace).Watch(ctx, metav1.ListOptions{TimeoutSeconds: &timeout})
-		if err != nil {
-			slog.Error("pattern CRD watch error, retrying", "err", err, "backoff", backoff)
-			time.Sleep(backoff)
-			if backoff *= 2; backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-			continue
-		}
-		backoff = 2 * time.Second
-		for event := range watcher.ResultChan() {
-			obj, ok := event.Object.(*unstructured.Unstructured)
-			if !ok {
-				continue
-			}
-			switch event.Type {
-			case watch.Added, watch.Modified:
-				w.upsert(ctx, obj)
-			case watch.Deleted:
-				w.delete(ctx, obj)
-			}
-		}
-	}
-}
-
-func (w *PatternWatcher) upsert(ctx context.Context, obj *unstructured.Unstructured) {
-	spec, ok := obj.UnstructuredContent()["spec"].(map[string]interface{})
+func (w *PatternWatcher) upsert(ctx context.Context, obj interface{}) {
+	cr, ok := obj.(*patternv1.MarkdownPattern)
 	if !ok {
 		return
 	}
-	name := getString(spec, "name")
+	spec := cr.Spec
+	name := spec.Name
 	if name == "" {
-		name = obj.GetName()
+		name = cr.Name
 	}
-	label := getString(spec, "label")
+	label := spec.Label
 	if label == "" {
 		label = name
 	}
-	scope := getString(spec, "scope")
+	scope := spec.Scope
 	if scope == "" {
 		scope = "global"
 	}
@@ -133,10 +105,10 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj *unstructured.Unstructu
 	`,
 		name,
 		label,
-		getString(spec, "description"),
-		getString(spec, "html"),
-		getString(spec, "css"),
-		getString(spec, "js"),
+		spec.Description,
+		spec.HTML,
+		spec.CSS,
+		spec.JS,
 		scope,
 	)
 	if err != nil {
@@ -146,13 +118,19 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj *unstructured.Unstructu
 	slog.Info("pattern upserted from CRD", "name", name, "scope", scope)
 }
 
-func (w *PatternWatcher) delete(ctx context.Context, obj *unstructured.Unstructured) {
-	spec, _ := obj.UnstructuredContent()["spec"].(map[string]interface{})
-	name := getString(spec, "name")
-	if name == "" {
-		name = obj.GetName()
+func (w *PatternWatcher) delete(ctx context.Context, obj interface{}) {
+	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
+		obj = final.Obj
 	}
-	scope := getString(spec, "scope")
+	cr, ok := obj.(*patternv1.MarkdownPattern)
+	if !ok {
+		return
+	}
+	name := cr.Spec.Name
+	if name == "" {
+		name = cr.Name
+	}
+	scope := cr.Spec.Scope
 	if scope == "" {
 		scope = "global"
 	}
@@ -162,14 +140,6 @@ func (w *PatternWatcher) delete(ctx context.Context, obj *unstructured.Unstructu
 		return
 	}
 	slog.Info("pattern deleted from CRD", "name", name)
-}
-
-func getString(m map[string]interface{}, key string) string {
-	if m == nil {
-		return ""
-	}
-	v, _ := m[key].(string)
-	return v
 }
 
 func buildRestConfig(kubeconfig string) (*rest.Config, error) {

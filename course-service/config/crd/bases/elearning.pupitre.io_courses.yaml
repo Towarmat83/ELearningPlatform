@@ -1,0 +1,256 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: courses.elearning.pupitre.io
+spec:
+  group: elearning.pupitre.io
+  names:
+    kind: Course
+    listKind: CourseList
+    plural: courses
+    shortNames:
+    - course
+    singular: course
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.title
+      name: Title
+      type: string
+    - jsonPath: .spec.category
+      name: Category
+      type: string
+    - jsonPath: .spec.public
+      name: Public
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: Course is the Schema for the courses API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: CourseSpec defines the desired state of a Course.
+            properties:
+              category:
+                type: string
+              description:
+                type: string
+              difficulty:
+                type: string
+              hidden:
+                description: 'Hidden: when true, the course is hidden from the catalog.'
+                type: boolean
+              modules:
+                items:
+                  description: Module is a course element as defined in spec.modules[].
+                  properties:
+                    check_params:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    check_provider:
+                      type: string
+                    check_type:
+                      type: string
+                    content:
+                      type: string
+                    cooldown:
+                      description: CooldownSpec configures the retry cooldown for
+                        a quiz-type module.
+                      properties:
+                        base_seconds:
+                          type: integer
+                        max_seconds:
+                          type: integer
+                        multiplier:
+                          type: number
+                        strategy:
+                          type: string
+                      type: object
+                    hidden:
+                      type: boolean
+                    inline:
+                      description: 'Inline: when true (quiz type only), rendered inline
+                        at the bottom of the previous module.'
+                      type: boolean
+                    lab_url:
+                      type: string
+                    lock_on_max_attempts:
+                      type: boolean
+                    max_attempts_per_question:
+                      type: integer
+                    name:
+                      type: string
+                    passing_score:
+                      type: integer
+                    path:
+                      type: string
+                    prerequisites:
+                      items:
+                        type: string
+                      type: array
+                    questions:
+                      items:
+                        description: Question is one inline quiz question of a quiz-type
+                          module.
+                        properties:
+                          answers:
+                            items:
+                              description: Answer is one candidate answer of a single/multiple-choice
+                                question.
+                              properties:
+                                correct:
+                                  type: boolean
+                                id:
+                                  type: string
+                                text:
+                                  type: string
+                              type: object
+                            type: array
+                          correct_answer:
+                            type: boolean
+                          correct_order:
+                            items:
+                              type: string
+                            type: array
+                          difficulty:
+                            type: string
+                          feedback:
+                            description: Feedback holds the messages shown for a right/wrong
+                              answer.
+                            properties:
+                              correct:
+                                type: string
+                              source_refs:
+                                items:
+                                  description: SourceRef points to the course/module/anchor
+                                    backing a feedback message.
+                                  properties:
+                                    anchor:
+                                      type: string
+                                    course:
+                                      type: string
+                                    module:
+                                      type: string
+                                    priority:
+                                      type: integer
+                                  type: object
+                                type: array
+                              wrong:
+                                type: string
+                            type: object
+                          id:
+                            type: string
+                          items:
+                            items:
+                              description: OrderItem is one item of an ordering question.
+                              properties:
+                                id:
+                                  type: string
+                                text:
+                                  type: string
+                              type: object
+                            type: array
+                          partial_scoring:
+                            description: PartialScoring configures partial credit
+                              for a question.
+                            properties:
+                              allow_negative:
+                                type: boolean
+                              enabled:
+                                type: boolean
+                            type: object
+                          points:
+                            type: integer
+                          question:
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                      type: array
+                    quiz_ref:
+                      type: string
+                    ref:
+                      type: string
+                    replication:
+                      type: boolean
+                    src:
+                      type: string
+                    steps:
+                      items:
+                        description: CheckStep is one verifiable step inside a lab
+                          module.
+                        properties:
+                          check_params:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          check_type:
+                            type: string
+                          title:
+                            type: string
+                        type: object
+                      type: array
+                    type:
+                      enum:
+                      - video
+                      - text
+                      - image
+                      - quiz
+                      - lab
+                      - modules
+                      type: string
+                  type: object
+                type: array
+              prerequisites:
+                items:
+                  description: |-
+                    CoursePrerequisite describes one condition that must be met before enrolling.
+                    If only Course is set, enrollment in that course is required.
+                    If MinScore > 0, the user must have earned at least that many total points.
+                    If Modules is non-empty, every listed module slug must have been passed.
+                  properties:
+                    course:
+                      type: string
+                    min_score:
+                      type: integer
+                    modules:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - course
+                  type: object
+                type: array
+              public:
+                description: 'Public: when true, the course is publicly visible and
+                  users are auto-enrolled on first access.'
+                type: boolean
+              title:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

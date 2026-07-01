@@ -1,4 +1,4 @@
-apiVersion: elearning.example.com/v1
+apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
   name: quiz-blockage-test
@@ -15,7 +15,6 @@ spec:
   public: true
 
   modules:
-
     # ── Module 1 : texte d'introduction ────────────────────────────────────────
     - name: "Introduction au blocage"
       type: text

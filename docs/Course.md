@@ -2,10 +2,10 @@ Un cours est un objet constitué d'une liste de modules, d'une description, d'un
 
 ### Définition
 
-Un cours est défini dans une CRD Kubernetes (`elearning.example.com/v1`, kind `Course`) :
+Un cours est défini dans une CRD Kubernetes (`elearning.pupitre.io/v1`, kind `Course`) :
 
 ```yaml
-apiVersion: elearning.example.com/v1
+apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
   name: kubernetes-basics

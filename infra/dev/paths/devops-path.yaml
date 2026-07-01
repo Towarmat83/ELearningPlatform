@@ -5,8 +5,8 @@ metadata:
   namespace: default
 spec:
   title: "Parcours DevOps"
-  description: "De GitLab CI/CD à Harbor et la conteneurisation avancée."
+  description: "Des fondamentaux Linux à l'orchestration de conteneurs — Linux, Docker, Kubernetes."
   courses:
-    - slug: lab1-gitlab-cicd
-    - slug: lab2-harbor-podman
-    - slug: lab3-distrobox
+    - slug: linux-intro
+    - slug: docker-fundamentals
+    - slug: kubernetes-basics

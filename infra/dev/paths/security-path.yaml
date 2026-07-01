@@ -1,0 +1,12 @@
+apiVersion: elearning.example.com/v1
+kind: Path
+metadata:
+  name: security-path
+  namespace: default
+spec:
+  title: "Parcours Sécurité"
+  description: "De Linux aux réseaux jusqu'à la cybersécurité applicative — OWASP, chiffrement, authentification."
+  courses:
+    - slug: linux-intro
+    - slug: networking-basics
+    - slug: cybersecurity-intro

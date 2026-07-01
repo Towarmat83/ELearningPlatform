@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	patternv1 "github.com/elearning/user-service/api/v1"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
-	patternv1 "github.com/elearning/user-service/api/v1"
 
 	"github.com/elearning/user-service/fake"
 	"github.com/elearning/user-service/internal/config"

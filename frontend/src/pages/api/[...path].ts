@@ -13,6 +13,8 @@ function resolveTarget(path: string): string {
   if (
     path === 'courses' ||
     path.startsWith('courses/') ||
+    path === 'paths' ||
+    path.startsWith('paths/') ||
     path.startsWith('uploads/') ||
     path.startsWith('admin/courses') ||
     path.startsWith('admin/cache') ||

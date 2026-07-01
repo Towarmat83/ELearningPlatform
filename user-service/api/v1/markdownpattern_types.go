@@ -7,15 +7,28 @@ import (
 // MarkdownPatternSpec defines the desired state of a MarkdownPattern.
 type MarkdownPatternSpec struct {
 	// Name is the identifier used in markdown: |||name content|||
-	Name        string `json:"name"`
-	Label       string `json:"label,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Label is the human-readable name shown for this pattern in the admin UI;
+	// defaults to Name if omitted.
+	// +kubebuilder:validation:Optional
+	Label string `json:"label,omitempty"`
+	// Description explains what this pattern renders, shown in the admin UI.
+	// +kubebuilder:validation:Optional
 	Description string `json:"description,omitempty"`
 	// HTML template; use {{content}} as placeholder.
+	// +kubebuilder:validation:MinLength=1
 	HTML string `json:"html"`
-	CSS  string `json:"css,omitempty"`
+	// CSS is injected alongside the rendered HTML to style this pattern.
+	// +kubebuilder:validation:Optional
+	CSS string `json:"css,omitempty"`
 	// JS executed after rendering (container is the wrapper element).
+	// +kubebuilder:validation:Optional
 	JS string `json:"js,omitempty"`
+	// Scope limits where this pattern can be used: "global" for all courses,
+	// or a specific course slug to restrict it to that course.
 	// +kubebuilder:default=global
+	// +kubebuilder:validation:Optional
 	Scope string `json:"scope,omitempty"`
 }
 
@@ -30,6 +43,7 @@ type MarkdownPattern struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// Spec defines the desired state of the MarkdownPattern.
 	Spec MarkdownPatternSpec `json:"spec,omitempty"`
 }
 
@@ -39,7 +53,8 @@ type MarkdownPattern struct {
 type MarkdownPatternList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []MarkdownPattern `json:"items"`
+	// Items is the list of MarkdownPatterns.
+	Items []MarkdownPattern `json:"items"`
 }
 
 func init() {

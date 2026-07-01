@@ -49,26 +49,38 @@ spec:
           metadata:
             type: object
           spec:
-            description: MarkdownPatternSpec defines the desired state of a MarkdownPattern.
+            description: Spec defines the desired state of the MarkdownPattern.
             properties:
               css:
+                description: CSS is injected alongside the rendered HTML to style
+                  this pattern.
                 type: string
               description:
+                description: Description explains what this pattern renders, shown
+                  in the admin UI.
                 type: string
               html:
                 description: HTML template; use {{content}} as placeholder.
+                minLength: 1
                 type: string
               js:
                 description: JS executed after rendering (container is the wrapper
                   element).
                 type: string
               label:
+                description: |-
+                  Label is the human-readable name shown for this pattern in the admin UI;
+                  defaults to Name if omitted.
                 type: string
               name:
                 description: 'Name is the identifier used in markdown: |||name content|||'
+                minLength: 1
                 type: string
               scope:
                 default: global
+                description: |-
+                  Scope limits where this pattern can be used: "global" for all courses,
+                  or a specific course slug to restrict it to that course.
                 type: string
             required:
             - html

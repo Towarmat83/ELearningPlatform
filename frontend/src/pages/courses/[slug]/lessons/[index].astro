@@ -670,16 +670,16 @@ import App from '../../../../layouts/App.astro';
 
       const navDiv = document.getElementById('lesson-nav')!;
 
-      const nextLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Module suivant ▸';
+      const nextLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Suivant ▸';
 
       let rightBtn = '';
-      if (!mod.viewed) {
-        const btnLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Terminer le module ▸';
+      if (!mod.viewed || !nextMod) {
+        // Use a button (not a link) so the click handler fires the complete API.
+        // For the last module this is critical even when already viewed, to write the course-complete sentinel.
+        const btnLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : nextMod ? 'Suivant ▸' : 'Terminer le cours ▸';
         rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">${btnLabel}</button>`;
-      } else if (nextMod) {
-        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`;
       } else {
-        rightBtn = `<a href="/courses/${slug}" class="btn btn-primary">Terminer le cours ▸</a>`;
+        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`;
       }
 
       navDiv.innerHTML = `${prevBtn}${rightBtn}`;
@@ -701,9 +701,13 @@ import App from '../../../../layouts/App.astro';
             link.appendChild(check);
           }
 
-          navDiv.innerHTML = nextMod
-            ? `${prevBtn}<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`
-            : `${prevBtn}<a href="/courses/${slug}" class="btn btn-primary">Terminer le cours ▸</a>`;
+          if (nextMod) {
+            window.location.href = modHref(nextMod);
+          } else {
+            const returnTo = localStorage.getItem('courseReturnTo');
+            localStorage.removeItem('courseReturnTo');
+            window.location.href = returnTo ?? `/courses/${slug}`;
+          }
         } catch {
           (window as any).showToast?.('Erreur lors de la mise à jour', 'error');
         }

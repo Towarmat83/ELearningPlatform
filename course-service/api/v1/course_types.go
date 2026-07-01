@@ -294,7 +294,3 @@ type CourseList struct {
 	// Items is the list of Courses.
 	Items []Course `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Course{}, &CourseList{})
-}

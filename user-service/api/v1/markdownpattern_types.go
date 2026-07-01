@@ -56,7 +56,3 @@ type MarkdownPatternList struct {
 	// Items is the list of MarkdownPatterns.
 	Items []MarkdownPattern `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&MarkdownPattern{}, &MarkdownPatternList{})
-}

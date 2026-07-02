@@ -3,7 +3,9 @@ package content
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	coursev1 "github.com/elearning/course-service/api/v1"
 )
 
 // ── PathStore ────────────────────────────────────────────────────────────────
@@ -58,32 +60,27 @@ func TestPathStore_GetMissing(t *testing.T) {
 	}
 }
 
-// ── crdToPath ────────────────────────────────────────────────────────────────
+// ── pathFromCR ───────────────────────────────────────────────────────────────
 
-func makePath(name string, spec map[string]interface{}) *unstructured.Unstructured {
-	obj := &unstructured.Unstructured{}
-	obj.SetUnstructuredContent(map[string]interface{}{
-		"metadata": map[string]interface{}{"name": name},
-		"spec":     spec,
-	})
-	return obj
+func makePathCR(name string, spec coursev1.PathSpec) *coursev1.Path {
+	cr := &coursev1.Path{Spec: spec}
+	cr.Name = name
+	cr.TypeMeta = metav1.TypeMeta{APIVersion: "elearning.pupitre.io/v1", Kind: "Path"}
+	return cr
 }
 
-func TestCrdToPath_Basic(t *testing.T) {
-	obj := makePath("devops-path", map[string]interface{}{
-		"title":       "DevOps Path",
-		"description": "From Linux to Kubernetes",
-		"courses": []interface{}{
-			map[string]interface{}{"slug": "linux-intro"},
-			map[string]interface{}{"slug": "docker-fundamentals"},
-			map[string]interface{}{"slug": "kubernetes-basics"},
+func TestPathFromCR_Basic(t *testing.T) {
+	cr := makePathCR("devops-path", coursev1.PathSpec{
+		Title:       "DevOps Path",
+		Description: "From Linux to Kubernetes",
+		Courses: []coursev1.PathCourseEntry{
+			{Slug: "linux-intro"},
+			{Slug: "docker-fundamentals"},
+			{Slug: "kubernetes-basics"},
 		},
 	})
 
-	p, err := crdToPath(obj)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	p := pathFromCR(cr)
 	if p.Slug != "devops-path" {
 		t.Errorf("slug: want devops-path, got %q", p.Slug)
 	}
@@ -101,57 +98,32 @@ func TestCrdToPath_Basic(t *testing.T) {
 	}
 }
 
-func TestCrdToPath_StringCourses(t *testing.T) {
-	obj := makePath("simple-path", map[string]interface{}{
-		"title": "Simple Path",
-		"courses": []interface{}{
-			"linux-intro",
-			"python-basics",
-		},
-	})
-
-	p, err := crdToPath(obj)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(p.Courses) != 2 {
-		t.Fatalf("expected 2 courses, got %d", len(p.Courses))
-	}
-	if p.Courses[1] != "python-basics" {
-		t.Errorf("courses[1]: want python-basics, got %q", p.Courses[1])
-	}
-}
-
-func TestCrdToPath_MissingSpec(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("bad-path")
-	obj.SetUnstructuredContent(map[string]interface{}{})
-
-	_, err := crdToPath(obj)
-	if err == nil {
-		t.Error("expected error for missing spec")
-	}
-}
-
-func TestCrdToPath_FallbackTitle(t *testing.T) {
-	obj := makePath("my-path", map[string]interface{}{})
-
-	p, err := crdToPath(obj)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func TestPathFromCR_FallbackTitle(t *testing.T) {
+	cr := makePathCR("my-path", coursev1.PathSpec{})
+	p := pathFromCR(cr)
 	if p.Title != "my-path" {
 		t.Errorf("expected title to fallback to slug, got %q", p.Title)
 	}
 }
 
-func TestCrdToPath_Source(t *testing.T) {
-	obj := makePath("devops-path", map[string]interface{}{"title": "DevOps"})
-	p, err := crdToPath(obj)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func TestPathFromCR_Source(t *testing.T) {
+	cr := makePathCR("devops-path", coursev1.PathSpec{Title: "DevOps"})
+	p := pathFromCR(cr)
 	if p.Source != "k8s:devops-path" {
 		t.Errorf("source: want k8s:devops-path, got %q", p.Source)
+	}
+}
+
+func TestPathFromCR_EmptyCourseSlugSkipped(t *testing.T) {
+	cr := makePathCR("test-path", coursev1.PathSpec{
+		Courses: []coursev1.PathCourseEntry{
+			{Slug: "valid-course"},
+			{Slug: ""},
+			{Slug: "another-course"},
+		},
+	})
+	p := pathFromCR(cr)
+	if len(p.Courses) != 2 {
+		t.Errorf("expected 2 courses (empty slug skipped), got %d", len(p.Courses))
 	}
 }

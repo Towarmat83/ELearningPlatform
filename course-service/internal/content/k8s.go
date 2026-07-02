@@ -46,7 +46,8 @@ func NewK8sWatcher(store *Store, kubeconfig, namespace string) (*K8sWatcher, err
 	return &K8sWatcher{store: store, cache: c}, nil
 }
 
-// Start begins watching Course CRDs and blocks until the initial list is synced.
+// Start begins watching Course CRDs. Cache sync happens in the background
+// so the HTTP server can start accepting requests immediately.
 func (w *K8sWatcher) Start(ctx context.Context) error {
 	informer, err := w.cache.GetInformer(ctx, &coursev1.Course{})
 	if err != nil {
@@ -67,10 +68,14 @@ func (w *K8sWatcher) Start(ctx context.Context) error {
 		}
 	}()
 
-	if !w.cache.WaitForCacheSync(ctx) {
-		return fmt.Errorf("cache sync failed")
-	}
-	slog.Info("initial course list synced from K8s")
+	go func() {
+		if !w.cache.WaitForCacheSync(ctx) {
+			slog.Error("course cache sync failed")
+			return
+		}
+		slog.Info("initial course list synced from K8s")
+	}()
+
 	return nil
 }
 
@@ -297,7 +302,8 @@ func NewPathWatcher(store *PathStore, kubeconfig, namespace string) (*PathWatche
 	return &PathWatcher{store: store, cache: c}, nil
 }
 
-// Start begins watching Path CRDs and blocks until the initial list is synced.
+// Start begins watching Path CRDs. Cache sync happens in the background
+// so the HTTP server can start accepting requests immediately.
 func (w *PathWatcher) Start(ctx context.Context) error {
 	informer, err := w.cache.GetInformer(ctx, &coursev1.Path{})
 	if err != nil {
@@ -318,10 +324,14 @@ func (w *PathWatcher) Start(ctx context.Context) error {
 		}
 	}()
 
-	if !w.cache.WaitForCacheSync(ctx) {
-		return fmt.Errorf("path cache sync failed")
-	}
-	slog.Info("initial path list synced from K8s")
+	go func() {
+		if !w.cache.WaitForCacheSync(ctx) {
+			slog.Error("path cache sync failed")
+			return
+		}
+		slog.Info("initial path list synced from K8s")
+	}()
+
 	return nil
 }
 

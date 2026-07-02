@@ -1,16 +1,16 @@
 apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
-  name: lab2-harbor-podman
+  name: harbor-podman
   namespace: default
 spec:
-  title: "Lab 2 : Harbor Searching & Podman Running"
+  title: "Harbor Searching & Podman Running"
   description: Recherche une image sur Harbor et exécute un conteneur nginx avec Podman.
   category: devops
   difficulty: beginner
   public: true
   modules:
-    - name: "Lab 2 : Harbor Searching & Podman Running"
+    - name: "Harbor Searching & Podman Running"
       type: lab
       check_provider: local
       steps:

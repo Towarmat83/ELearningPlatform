@@ -178,33 +178,51 @@ spec:
       - authentification-et-gestion-des-sessions
       - chiffrement-et-cryptographie
     questions:
-      - text: "Quelle attaque consiste à injecter du SQL dans un formulaire ?"
+      - id: q1
+        type: single
+        question: "Quelle attaque consiste à injecter du SQL dans un formulaire ?"
         answers:
-          - text: "SQL Injection"
+          - id: a
+            text: "SQL Injection"
             correct: true
-          - text: "XSS"
+          - id: b
+            text: "XSS"
             correct: false
-          - text: "CSRF"
+          - id: c
+            text: "CSRF"
             correct: false
-          - text: "Buffer Overflow"
+          - id: d
+            text: "Buffer Overflow"
             correct: false
-      - text: "Que signifie HTTPS ?"
+      - id: q2
+        type: single
+        question: "Que signifie HTTPS ?"
         answers:
-          - text: "HyperText Transfer Protocol Secure"
+          - id: a
+            text: "HyperText Transfer Protocol Secure"
             correct: true
-          - text: "High Transfer Protocol Standard"
+          - id: b
+            text: "High Transfer Protocol Standard"
             correct: false
-          - text: "HyperText Transport Protocol Safe"
+          - id: c
+            text: "HyperText Transport Protocol Safe"
             correct: false
-          - text: "Hosted Transfer Protocol Security"
+          - id: d
+            text: "Hosted Transfer Protocol Security"
             correct: false
-      - text: "Quelle méthode de hachage est recommandée pour les mots de passe ?"
+      - id: q3
+        type: single
+        question: "Quelle méthode de hachage est recommandée pour les mots de passe ?"
         answers:
-          - text: "bcrypt"
+          - id: a
+            text: "bcrypt"
             correct: true
-          - text: "MD5"
+          - id: b
+            text: "MD5"
             correct: false
-          - text: "SHA-1"
+          - id: c
+            text: "SHA-1"
             correct: false
-          - text: "Base64"
+          - id: d
+            text: "Base64"
             correct: false

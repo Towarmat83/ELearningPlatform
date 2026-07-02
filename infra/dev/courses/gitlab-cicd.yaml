@@ -1,10 +1,10 @@
 apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
-  name: lab1-gitlab-cicd
+  name: gitlab-cicd
   namespace: default
 spec:
-  title: "Lab 1 : GitLab Branching & CI/CD"
+  title: "GitLab Branching & CI/CD"
   description: Réalise ta première Merge Request GitLab avec un pipeline CI/CD et des commits conventionnels.
   category: devops
   difficulty: beginner
@@ -90,7 +90,7 @@ spec:
 
         Prêt ? 🚀
 
-    - name: "Lab 1 : GitLab Branching & CI/CD with Conventional Commits"
+    - name: "GitLab Branching & CI/CD with Conventional Commits"
       type: lab
       src: http://10.89.0.1:8880/e-learning/devops-course.git
       ref: main
@@ -105,8 +105,8 @@ spec:
         - id: q1
           type: single
           points: 1
-          text: "Qu'est-ce qu'une Merge Request dans GitLab ?"
-          choices:
+          question: "Qu'est-ce qu'une Merge Request dans GitLab ?"
+          answers:
             - id: a
               text: Une demande de fusion de branches
               correct: true

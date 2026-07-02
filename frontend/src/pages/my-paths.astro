@@ -3,25 +3,29 @@ import App from '../layouts/App.astro';
 ---
 <App title="Mes parcours" activePage="paths">
   <style is:global>
-    .mp-page { padding: 28px 36px 80px; max-width: 640px; margin: 0 auto; }
+    .mp-page { padding: 28px 24px 80px; max-width: 100%; }
     .mp-page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 24px; }
 
-    .path-list { display: flex; flex-direction: column; gap: 12px; }
+    .path-list { display: flex; flex-direction: column; gap: 16px; }
     .path-list-card {
-      display: flex; align-items: center; gap: 16px;
-      padding: 18px 20px; border-radius: 14px;
+      padding: 0; border-radius: 16px;
       border: 1.5px solid var(--line); background: var(--paper);
-      cursor: pointer;
+      cursor: pointer; overflow: hidden;
       transition: box-shadow .13s, transform .13s, border-color .13s;
     }
-    .path-list-card:hover { border-color: var(--blue); box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-1px); }
-    .path-list-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--blue-soft); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+    .path-list-card:hover { border-color: var(--blue); box-shadow: 0 6px 24px rgba(0,0,0,.10); transform: translateY(-2px); }
+    .path-list-banner {
+      padding: 20px 24px 16px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .path-list-icon { width: 56px; height: 56px; border-radius: 14px; background: rgba(255,255,255,.25); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; flex-shrink: 0; }
     .path-list-body { flex: 1; min-width: 0; }
-    .path-list-title { font-weight: 700; font-size: 1rem; }
-    .path-list-sub   { font-size: .78rem; color: var(--ink-soft); margin-top: 3px; }
-    .path-list-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-    .path-list-pct   { font-size: 1.15rem; font-weight: 700; }
-    .path-list-chevron { color: var(--ink-soft); font-size: .9rem; }
+    .path-list-title { font-weight: 700; font-size: 1.1rem; color: inherit; }
+    .path-list-sub   { font-size: .82rem; opacity: .75; margin-top: 4px; }
+    .path-list-pct   { font-size: 1.5rem; font-weight: 800; flex-shrink: 0; }
+    .path-list-chevron { color: rgba(0,0,0,.25); font-size: 1.2rem; margin-left: 4px; flex-shrink: 0; }
+    .path-list-progress { height: 8px; background: rgba(0,0,0,.1); }
+    .path-list-progress-fill { height: 100%; transition: width .4s ease; }
 
     .detail-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 20px; background: none; border: none; padding: 0; }
     .detail-back:hover { text-decoration: underline; }
@@ -74,12 +78,17 @@ import App from '../layouts/App.astro';
     }
 
     const PATH_ICONS: Record<string,string> = { 'devops-path':'⚙️','security-path':'🔐' };
+    const PATH_COLORS: Record<string,{bg:string;iconBg:string;accent:string}> = {
+      'security-path': { bg:'#fff7ed', iconBg:'#fed7aa', accent:'#ea8c0a' },
+      'devops-path':   { bg:'#f0fdf4', iconBg:'#bbf7d0', accent:'#16a34a' },
+    };
+    const DEFAULT_COLOR = { bg:'#eff6ff', iconBg:'#bfdbfe', accent:'#1b86f2' };
 
-    // Status theme
+    // Status theme — pastel palette
     const TH: Record<string,{fill:string;text:string;roadFill:string;badge:string;badgeTxt:string;label:string}> = {
-      completed: { fill:'#16a34a', text:'#fff', roadFill:'#4ade80', badge:'#dcfce7', badgeTxt:'#15803d', label:'Terminé'    },
-      available:  { fill:'#2563eb', text:'#fff', roadFill:'#93c5fd', badge:'#dbeafe', badgeTxt:'#1d4ed8', label:'Disponible' },
-      locked:     { fill:'#cbd5e1', text:'#64748b', roadFill:'#e2e8f0', badge:'#f1f5f9', badgeTxt:'#94a3b8', label:'Verrouillé' },
+      completed: { fill:'#bbf7d0', text:'#15803d', roadFill:'#4ade80', badge:'#dcfce7', badgeTxt:'#15803d', label:'Terminé'    },
+      available:  { fill:'#bfdbfe', text:'#1d4ed8', roadFill:'#93c5fd', badge:'#dbeafe', badgeTxt:'#1d4ed8', label:'Disponible' },
+      locked:     { fill:'#f1f5f9', text:'#94a3b8', roadFill:'#e2e8f0', badge:'#f1f5f9', badgeTxt:'#94a3b8', label:'Verrouillé' },
     };
 
     let allPaths: any[] = [];
@@ -92,18 +101,19 @@ import App from '../layouts/App.astro';
         const allDone = pct===100;
         const col = allDone?'var(--good)':pct>0?'var(--blue)':'var(--ink-soft)';
         const sub = `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
-        return `<div class="path-list-card" data-slug="${p.slug}">
-          <div class="path-list-icon">${PATH_ICONS[p.slug]??'🗺️'}</div>
-          <div class="path-list-body">
-            <div class="path-list-title">${p.title||p.slug}</div>
-            <div class="path-list-sub">${sub}</div>
-          </div>
-          <div class="path-list-right">
-            <span class="path-list-pct" style="color:${col}">${pct}%</span>
-            <div class="progress-bar" style="width:60px">
-              <div class="progress-bar-fill" style="width:${pct}%;background:${col}"></div>
+        const colors = PATH_COLORS[p.slug] ?? DEFAULT_COLOR;
+        return `<div class="path-list-card" data-slug="${p.slug}" style="border-color:${colors.accent}40">
+          <div class="path-list-banner" style="background:${colors.bg}">
+            <div class="path-list-icon" style="background:${colors.iconBg}">${PATH_ICONS[p.slug]??'🗺️'}</div>
+            <div class="path-list-body">
+              <div class="path-list-title">${p.title||p.slug}</div>
+              <div class="path-list-sub">${sub}</div>
             </div>
-            <span class="path-list-chevron">›</span>
+            <span class="path-list-pct" style="color:${colors.accent}">${pct}%</span>
+            <span class="path-list-chevron" style="color:${colors.accent}">›</span>
+          </div>
+          <div class="path-list-progress" style="background:${colors.accent}20">
+            <div class="path-list-progress-fill" style="width:${pct}%;background:${colors.accent}"></div>
           </div>
         </div>`;
       }).join('');
@@ -151,23 +161,22 @@ import App from '../layouts/App.astro';
       const COLS  = total <= 3 ? 1 : 2;
       const NR    = 24;   // node radius
       const HG    = 160;  // horizontal gap between columns (COLS=2 only)
-      const VG    = 120;  // vertical gap between rows
+      const VG    = COLS === 1 ? 100 : 120;
       const ROAD  = 8;    // road stroke width
       const CR    = 26;   // corner rounding radius
-      const LABEL = 52;   // space below node for text
+      const LABEL = COLS === 1 ? 0 : 52;
 
-      // Horizontal padding: centre for 1 col, sides for 2 cols
-      const PX = COLS === 1 ? 80 : 46;
-      const PY = 54;
+      // 1-col: node on the left, text on the right
+      const PX = COLS === 1 ? 44 : 46;
+      const PY = 44;
 
       const numRows = COLS === 1 ? total : Math.ceil(total / COLS);
-      const VB_W = COLS === 1 ? PX * 2 : PX * 2 + HG;
+      const VB_W = COLS === 1 ? 280 : PX * 2 + HG;
       const VB_H = PY * 2 + VG * Math.max(numRows - 1, 0) + LABEL;
-      // SVG rendered width (px) — prevents stretch
-      const SVG_W = COLS === 1 ? 200 : 360;
+      const SVG_W = COLS === 1 ? 290 : 360;
 
       function nodePos(i: number): {x:number; y:number} {
-        if (COLS === 1) return { x: VB_W / 2, y: PY + i * VG };
+        if (COLS === 1) return { x: PX, y: PY + i * VG };
         const row = Math.floor(i / COLS);
         const col = i % COLS;
         // Even rows: L→R; odd rows: R→L
@@ -206,21 +215,34 @@ import App from '../layouts/App.astro';
         const icon = c.status === 'completed' ? '✓' : String(num);
         const fontSize = c.status === 'completed' ? 15 : 13;
 
-        // Name below node (word-wrapped)
-        const lines = wrapSVG(sName(c.slug), 13);
-        const nameY0 = y + NR + 12;
-        const nameEls = lines.map((ln:string, li:number) =>
-          `<text x="${x}" y="${nameY0 + li*12}" text-anchor="middle" dominant-baseline="hanging"
-            font-size="10" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
-        ).join('');
-
-        // Status badge pill
+        // Name + badge: right of node (1-col) or below (2-col)
+        const lines = wrapSVG(sName(c.slug), 14);
         const BW = 62, BH = 15;
-        const badgeY = nameY0 + lines.length * 12 + 4;
-        const badgeEl = `
-          <rect x="${x-BW/2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
-          <text x="${x}" y="${badgeY+BH/2}" text-anchor="middle" dominant-baseline="middle"
-            font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+        let nameEls: string;
+        let badgeEl: string;
+        if (COLS === 1) {
+          const tx = x + NR + 16;
+          nameEls = lines.map((ln: string, li: number) =>
+            `<text x="${tx}" y="${y + (li - (lines.length - 1) / 2) * 14}" text-anchor="start" dominant-baseline="middle"
+              font-size="11" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
+          ).join('');
+          const by = y + Math.ceil(lines.length / 2) * 14 + 3;
+          badgeEl = `
+            <rect x="${tx}" y="${by}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
+            <text x="${tx + BW/2}" y="${by + BH/2}" text-anchor="middle" dominant-baseline="middle"
+              font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+        } else {
+          const nameY0 = y + NR + 12;
+          nameEls = lines.map((ln: string, li: number) =>
+            `<text x="${x}" y="${nameY0 + li*12}" text-anchor="middle" dominant-baseline="hanging"
+              font-size="10" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
+          ).join('');
+          const badgeY = nameY0 + lines.length * 12 + 4;
+          badgeEl = `
+            <rect x="${x-BW/2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
+            <text x="${x}" y="${badgeY+BH/2}" text-anchor="middle" dominant-baseline="middle"
+              font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+        }
 
         // Lock badge overlay (top-right of circle) for locked nodes
         const lockBadge = isLocked ? `
@@ -242,11 +264,8 @@ import App from '../layouts/App.astro';
           : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths')" style="cursor:pointer">${inner}</a>`;
       });
 
-      // Trophy on last node if complete
       const lastPt = pts[pts.length - 1];
-      const trophyEl = allDone && lastPt
-        ? `<text x="${lastPt.x}" y="${lastPt.y - NR - 10}" text-anchor="middle" font-size="16">🏆</text>`
-        : '';
+      const trophyEl = '';
 
       const svgEl = `<svg width="${SVG_W}" viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg">
         <path d="${grayD}" fill="none" stroke="#e2e8f0" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>
@@ -269,7 +288,7 @@ import App from '../layouts/App.astro';
           </div>
         </div>
         <div class="snake-wrap">${svgEl}</div>
-        ${allDone?'<div style="text-align:center;padding:6px 0;font-size:.85rem;font-weight:700;color:var(--good)">Parcours terminé !</div>':''}`;
+        ${allDone?'<div style="text-align:center;padding:10px 0;font-size:1rem;font-weight:700;color:var(--good)">🏆 Parcours terminé !</div>':''}`;
     }
 
     function showList() {

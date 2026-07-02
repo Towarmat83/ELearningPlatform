@@ -2,24 +2,21 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	coursev1 "github.com/elearning/course-service/api/v1"
 )
 
-var courseGVR = schema.GroupVersionResource{
-	Group:    "elearning.example.com",
-	Version:  "v1",
-	Resource: "courses",
-}
-
-func k8sDynamic(kubeconfig string) (dynamic.Interface, error) {
+func k8sClient(kubeconfig string) (client.Client, error) {
 	var cfg *rest.Config
 	var err error
 	if kubeconfig != "" {
@@ -30,7 +27,11 @@ func k8sDynamic(kubeconfig string) (dynamic.Interface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)
 	}
-	return dynamic.NewForConfig(cfg)
+	scheme := runtime.NewScheme()
+	if err := coursev1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register scheme: %w", err)
+	}
+	return client.New(cfg, client.Options{Scheme: scheme})
 }
 
 // CreateCourseCRD godoc
@@ -50,50 +51,46 @@ func (s *State) CreateCourseCRD(w http.ResponseWriter, r *http.Request) {
 		s.Error(w, http.StatusBadRequest, "slug is required")
 		return
 	}
-	spec, _ := body["spec"].(map[string]any)
-	if spec == nil {
-		spec = buildCourseSpec(body)
+	spec, err := courseSpecFromBody(body)
+	if err != nil {
+		s.Error(w, http.StatusBadRequest, "Invalid spec: "+err.Error())
+		return
 	}
 
-	dyn, err := k8sDynamic(s.Config.Kubeconfig)
+	c, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	obj := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "elearning.example.com/v1",
-		"kind":       "Course",
-		"metadata":   map[string]any{"name": slug, "namespace": s.Config.K8sNamespace},
-		"spec":       spec,
-	}}
-
-	created, err := dyn.Resource(courseGVR).Namespace(s.Config.K8sNamespace).
-		Create(context.Background(), obj, metav1.CreateOptions{})
-	if err != nil {
+	cr := &coursev1.Course{
+		ObjectMeta: metav1.ObjectMeta{Name: slug, Namespace: s.Config.K8sNamespace},
+		Spec:       spec,
+	}
+	if err := c.Create(context.Background(), cr); err != nil {
 		s.Error(w, http.StatusConflict, "Failed to create CRD: "+err.Error())
 		return
 	}
-	s.JSON(w, http.StatusCreated, map[string]any{"slug": created.GetName()})
+	s.JSON(w, http.StatusCreated, map[string]any{"slug": slug})
 }
 
 // GetCourseCRD returns the raw CRD spec for a course.
 func (s *State) GetCourseCRD(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
-	dyn, err := k8sDynamic(s.Config.Kubeconfig)
+	c, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	obj, err := dyn.Resource(courseGVR).Namespace(s.Config.K8sNamespace).
-		Get(context.Background(), slug, metav1.GetOptions{})
-	if err != nil {
+	var cr coursev1.Course
+	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
+	if err := c.Get(context.Background(), key, &cr); err != nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
 	s.JSON(w, http.StatusOK, map[string]any{
 		"slug": slug,
-		"spec": obj.Object["spec"],
+		"spec": cr.Spec,
 	})
 }
 
@@ -110,29 +107,28 @@ func (s *State) UpdateCourseCRD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spec, _ := body["spec"].(map[string]any)
-	if spec == nil {
-		spec = buildCourseSpec(body)
+	spec, err := courseSpecFromBody(body)
+	if err != nil {
+		s.Error(w, http.StatusBadRequest, "Invalid spec: "+err.Error())
+		return
 	}
 
-	dyn, err := k8sDynamic(s.Config.Kubeconfig)
+	c, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	ctx := context.Background()
-	existing, err := dyn.Resource(courseGVR).Namespace(s.Config.K8sNamespace).
-		Get(ctx, slug, metav1.GetOptions{})
-	if err != nil {
+	var existing coursev1.Course
+	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
+	if err := c.Get(ctx, key, &existing); err != nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
 		return
 	}
-	existing.Object["spec"] = spec
+	existing.Spec = spec
 
-	_, err = dyn.Resource(courseGVR).Namespace(s.Config.K8sNamespace).
-		Update(ctx, existing, metav1.UpdateOptions{})
-	if err != nil {
+	if err := c.Update(ctx, &existing); err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to update CRD: "+err.Error())
 		return
 	}
@@ -146,14 +142,19 @@ func (s *State) UpdateCourseCRD(w http.ResponseWriter, r *http.Request) {
 // @Router   /api/admin/courses/{slug}/crd [delete]
 func (s *State) DeleteCourseCRD(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
-	dyn, err := k8sDynamic(s.Config.Kubeconfig)
+	c, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	err = dyn.Resource(courseGVR).Namespace(s.Config.K8sNamespace).
-		Delete(context.Background(), slug, metav1.DeleteOptions{})
-	if err != nil {
+	cr := &coursev1.Course{
+		ObjectMeta: metav1.ObjectMeta{Name: slug, Namespace: s.Config.K8sNamespace},
+	}
+	if err := c.Delete(context.Background(), cr); err != nil {
+		if apierrors.IsNotFound(err) {
+			s.Error(w, http.StatusNotFound, "Failed to delete CRD: "+err.Error())
+			return
+		}
 		s.Error(w, http.StatusNotFound, "Failed to delete CRD: "+err.Error())
 		return
 	}
@@ -177,4 +178,22 @@ func buildCourseSpec(body map[string]any) map[string]any {
 		spec["prerequisites"] = v
 	}
 	return spec
+}
+
+// courseSpecFromBody builds a typed CourseSpec from a request body, accepting
+// either a nested "spec" object or flat top-level fields (title, modules, ...).
+func courseSpecFromBody(body map[string]any) (coursev1.CourseSpec, error) {
+	rawSpec, _ := body["spec"].(map[string]any)
+	if rawSpec == nil {
+		rawSpec = buildCourseSpec(body)
+	}
+	var spec coursev1.CourseSpec
+	data, err := json.Marshal(rawSpec)
+	if err != nil {
+		return spec, err
+	}
+	if err := json.Unmarshal(data, &spec); err != nil {
+		return spec, err
+	}
+	return spec, nil
 }

@@ -2,449 +2,265 @@ package content
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-)
+	crcache "sigs.k8s.io/controller-runtime/pkg/cache"
 
-const (
-	crdGroup    = "elearning.example.com"
-	crdVersion  = "v1"
-	crdResource = "courses"
+	coursev1 "github.com/elearning/course-service/api/v1"
 )
-
-// CRD GVR used to watch Course resources.
-var courseGVR = schema.GroupVersionResource{
-	Group:    crdGroup,
-	Version:  crdVersion,
-	Resource: crdResource,
-}
 
 // K8sWatcher watches Course CRDs in the cluster and populates a Store.
+// It uses controller-runtime's informer-backed cache, which relists on
+// watch errors/reconnects automatically instead of only once at startup.
 type K8sWatcher struct {
-	store     *Store
-	client    dynamic.NamespaceableResourceInterface
-	namespace string
+	store *Store
+	cache crcache.Cache
 }
 
 // NewK8sWatcher creates a watcher that syncs Course CRDs into the given store.
 func NewK8sWatcher(store *Store, kubeconfig, namespace string) (*K8sWatcher, error) {
-	config, err := restConfig(kubeconfig)
+	cfg, err := restConfig(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)
 	}
 
-	dyn, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("dynamic client: %w", err)
+	scheme := runtime.NewScheme()
+	if err := coursev1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register scheme: %w", err)
 	}
 
-	return &K8sWatcher{
-		store:     store,
-		client:    dyn.Resource(courseGVR),
-		namespace: namespace,
-	}, nil
+	c, err := crcache.New(cfg, crcache.Options{
+		Scheme:            scheme,
+		DefaultNamespaces: map[string]crcache.Config{namespace: {}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create cache: %w", err)
+	}
+
+	return &K8sWatcher{store: store, cache: c}, nil
 }
 
-// Start begins watching Course CRDs and blocks until ctx is cancelled.
+// Start begins watching Course CRDs and blocks until the initial list is synced.
 func (w *K8sWatcher) Start(ctx context.Context) error {
-	if err := w.listAll(ctx); err != nil {
-		return fmt.Errorf("initial list: %w", err)
+	informer, err := w.cache.GetInformer(ctx, &coursev1.Course{})
+	if err != nil {
+		return fmt.Errorf("get informer: %w", err)
 	}
-	go w.watchLoop(ctx)
+
+	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { w.upsert(obj) },
+		UpdateFunc: func(_, obj interface{}) { w.upsert(obj) },
+		DeleteFunc: func(obj interface{}) { w.remove(obj) },
+	}); err != nil {
+		return fmt.Errorf("add event handler: %w", err)
+	}
+
+	go func() {
+		if err := w.cache.Start(ctx); err != nil {
+			slog.Error("k8s cache stopped", "err", err)
+		}
+	}()
+
+	if !w.cache.WaitForCacheSync(ctx) {
+		return fmt.Errorf("cache sync failed")
+	}
+	slog.Info("initial course list synced from K8s")
 	return nil
 }
 
-func (w *K8sWatcher) listAll(ctx context.Context) error {
-	list, err := w.client.Namespace(w.namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("list courses: %w", err)
-	}
-	for i := range list.Items {
-		w.upsert(&list.Items[i])
-	}
-	slog.Info("initial course list synced from K8s", "count", len(list.Items))
-	return nil
-}
-
-func (w *K8sWatcher) watchLoop(ctx context.Context) {
-	backoff := 1 * time.Second
-	const maxBackoff = 30 * time.Second
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		timeout := int64(600)
-		watcher, err := w.client.Namespace(w.namespace).Watch(ctx, metav1.ListOptions{
-			TimeoutSeconds: &timeout,
-		})
-		if err != nil {
-			slog.Error("k8s watch failed, retrying", "err", err, "backoff", backoff)
-			time.Sleep(backoff)
-			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-			continue
-		}
-		backoff = 1 * time.Second
-
-		for event := range watcher.ResultChan() {
-			obj, ok := event.Object.(*unstructured.Unstructured)
-			if !ok {
-				continue
-			}
-			switch event.Type {
-			case watch.Added, watch.Modified:
-				w.upsert(obj)
-			case watch.Deleted:
-				w.remove(obj)
-			}
-		}
-	}
-}
-
-func (w *K8sWatcher) upsert(obj *unstructured.Unstructured) {
-	if obj == nil {
+func (w *K8sWatcher) upsert(obj interface{}) {
+	cr, ok := obj.(*coursev1.Course)
+	if !ok {
 		return
 	}
-	c, err := crdToCourse(obj)
-	if err != nil {
-		slog.Warn("invalid Course CRD, skipping", "name", obj.GetName(), "err", err)
-		return
-	}
-
+	c := courseFromCR(cr)
 	w.store.Put(c)
 	slog.Debug("course upserted from K8s", "slug", c.Slug)
 }
 
-func (w *K8sWatcher) remove(obj *unstructured.Unstructured) {
-	if obj == nil {
+func (w *K8sWatcher) remove(obj interface{}) {
+	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
+		obj = final.Obj
+	}
+	cr, ok := obj.(*coursev1.Course)
+	if !ok {
 		return
 	}
-	slug := obj.GetName()
-	if slug != "" {
-		w.store.DeleteBySource(sourceK8s(slug))
-		slog.Debug("course removed from K8s", "slug", slug)
-	}
+	w.store.DeleteBySource(sourceK8s(cr.Name))
+	slog.Debug("course removed from K8s", "slug", cr.Name)
 }
 
-func crdToCourse(obj *unstructured.Unstructured) (*Course, error) {
-	spec, ok := obj.UnstructuredContent()["spec"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("missing spec")
-	}
+// courseFromCR converts a typed Course custom resource into the in-memory Course.
+func courseFromCR(cr *coursev1.Course) *Course {
+	slug := cr.Name
+	spec := cr.Spec
 
-	slug := obj.GetName()
-	title, _ := spec["title"].(string)
-	description, _ := spec["description"].(string)
-	category, _ := spec["category"].(string)
-	difficulty, _ := spec["difficulty"].(string)
-	public, _ := spec["public"].(bool)
-
+	title := spec.Title
 	if title == "" {
 		title = slug
 	}
 
 	var prerequisites []CoursePrerequisite
-	if rawPrereqs, ok := spec["prerequisites"].([]interface{}); ok {
-		for _, rp := range rawPrereqs {
-			switch v := rp.(type) {
-			case string:
-				// Backward compat: bare string slug → enrollment-only prereq
-				prerequisites = append(prerequisites, CoursePrerequisite{Course: v})
-			case map[string]interface{}:
-				p := CoursePrerequisite{
-					Course:   getStr(v, "course"),
-					MinScore: getInt(v, "min_score"),
-				}
-				if rawMods, ok := v["modules"].([]interface{}); ok {
-					for _, rm := range rawMods {
-						if s, ok := rm.(string); ok {
-							p.Modules = append(p.Modules, s)
-						}
-					}
-				}
-				if p.Course != "" {
-					prerequisites = append(prerequisites, p)
-				}
-			}
+	for _, p := range spec.Prerequisites {
+		if p.Course == "" {
+			continue
 		}
+		prerequisites = append(prerequisites, CoursePrerequisite{
+			Course:   p.Course,
+			MinScore: p.MinScore,
+			Modules:  p.Modules,
+		})
 	}
 
-	var modules []Module
-	if rawModules, ok := spec["modules"].([]interface{}); ok {
-		for i, raw := range rawModules {
-			m, ok := raw.(map[string]interface{})
-			if !ok {
-				slog.Info("module not map", "slug", slug, "index", i, "type", fmt.Sprintf("%T", raw))
-				continue
-			}
-			var modPrereqs []string
-			if rawPrereqs, ok := m["prerequisites"].([]interface{}); ok {
-				for _, rp := range rawPrereqs {
-					if s, ok := rp.(string); ok {
-						modPrereqs = append(modPrereqs, s)
-					}
-				}
-			}
-			mod := Module{
-				Name:          getStr(m, "name"),
-				Type:          getStr(m, "type"),
-				Src:           getStr(m, "src"),
-				Ref:           getStr(m, "ref"),
-				Path:          getStr(m, "path"),
-				LabURL:        getStr(m, "lab_url"),
-				InlineContent: getStr(m, "content"),
-				Replication:   getBool(m, "replication"),
-				Hidden:        getBool(m, "hidden"),
-				Inline:        getBool(m, "inline"),
-				Prerequisites: modPrereqs,
-				PassingScore:  getInt(m, "passing_score"),
-				MaxAttemptsPerQuestion: func() *int {
-					if v, ok := m["max_attempts_per_question"]; ok {
-						switch n := v.(type) {
-						case int:
-							return &n
-						case float64:
-							i := int(n)
-							return &i
-						}
-					}
-					return nil
-				}(),
-				LockOnMaxAttempts: getBool(m, "lock_on_max_attempts"),
-				CheckProvider:     getStr(m, "check_provider"),
-				CheckType:         getStr(m, "check_type"),
-				CheckParams: func() map[string]interface{} {
-					if v, ok := m["check_params"]; ok {
-						if mp, ok := v.(map[string]interface{}); ok {
-							return mp
-						}
-					}
-					return nil
-				}(),
-				Steps: func() []CheckStep {
-					v, ok := m["steps"]
-					if !ok {
-						return nil
-					}
-					raw, ok := v.([]interface{})
-					if !ok {
-						return nil
-					}
-					var steps []CheckStep
-					for _, s := range raw {
-						sm, ok := s.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						step := CheckStep{
-							Title:     getStr(sm, "title"),
-							CheckType: getStr(sm, "check_type"),
-						}
-						if cp, ok := sm["check_params"]; ok {
-							if mp, ok := cp.(map[string]interface{}); ok {
-								step.CheckParams = mp
-							}
-						}
-						steps = append(steps, step)
-					}
-					return steps
-				}(),
-			}
-			if mod.Name == "" {
-				mod.Name = fmt.Sprintf("module-%d", i+1)
-			}
-			if mod.Type == "" {
-				mod.Type = "text"
-			}
-
-			// Parse inline quiz config for quiz-type modules
-			if mod.Type == "quiz" {
-				if rawCD, ok := m["cooldown"].(map[string]interface{}); ok {
-					mod.Cooldown = CooldownSpec{
-						Strategy:    getStr(rawCD, "strategy"),
-						BaseSeconds: getInt(rawCD, "base_seconds"),
-						Multiplier: func() float64 {
-							if v, ok := rawCD["multiplier"]; ok {
-								switch n := v.(type) {
-								case float64:
-									return n
-								case int:
-									return float64(n)
-								}
-							}
-							return 1.0
-						}(),
-						MaxSeconds: getInt(rawCD, "max_seconds"),
-					}
-					if mod.Cooldown.Strategy == "" {
-						mod.Cooldown.Strategy = "exponential"
-					}
-					if mod.Cooldown.BaseSeconds == 0 {
-						mod.Cooldown.BaseSeconds = 30
-					}
-				}
-				// Parse inline questions for quiz-type modules
-				if rawQuestions, ok := m["questions"].([]interface{}); ok {
-					for _, rq := range rawQuestions {
-						q, ok := rq.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						question := Question{
-							ID:         getStr(q, "id"),
-							Type:       getStr(q, "type"),
-							Difficulty: getStr(q, "difficulty"),
-							Points:     getInt(q, "points"),
-							Question:   getStr(q, "question"),
-							CorrectAnswer: func() *bool {
-								if v, ok := q["correct_answer"]; ok {
-									if b, ok := v.(bool); ok {
-										return &b
-									}
-								}
-								return nil
-							}(),
-						}
-						if question.ID == "" {
-							question.ID = fmt.Sprintf("q-%d", i+1)
-						}
-						if question.Difficulty == "" {
-							question.Difficulty = "medium"
-						}
-						if question.Points == 0 {
-							question.Points = 1
-						}
-
-						if rawAnswers, ok := q["answers"].([]interface{}); ok {
-							for _, ra := range rawAnswers {
-								a, ok := ra.(map[string]interface{})
-								if !ok {
-									continue
-								}
-								question.Answers = append(question.Answers, Answer{
-									ID:      getStr(a, "id"),
-									Text:    getStr(a, "text"),
-									Correct: getBool(a, "correct"),
-								})
-							}
-						}
-
-						if rawItems, ok := q["items"].([]interface{}); ok {
-							for _, rit := range rawItems {
-								it, ok := rit.(map[string]interface{})
-								if !ok {
-									continue
-								}
-								question.Items = append(question.Items, OrderItem{
-									ID:   getStr(it, "id"),
-									Text: getStr(it, "text"),
-								})
-							}
-						}
-
-						if rawOrder, ok := q["correct_order"].([]interface{}); ok {
-							for _, ro := range rawOrder {
-								if s, ok := ro.(string); ok {
-									question.CorrectOrder = append(question.CorrectOrder, s)
-								}
-							}
-						}
-
-						if rawPS, ok := q["partial_scoring"].(map[string]interface{}); ok {
-							question.PartialScoring = &PartialScoring{
-								Enabled:       getBool(rawPS, "enabled"),
-								AllowNegative: getBool(rawPS, "allow_negative"),
-							}
-						}
-
-						if rawFb, ok := q["feedback"].(map[string]interface{}); ok {
-							question.Feedback = Feedback{
-								Wrong:   getStr(rawFb, "wrong"),
-								Correct: getStr(rawFb, "correct"),
-							}
-							if rawRefs, ok := rawFb["source_refs"].([]interface{}); ok {
-								for _, rawRef := range rawRefs {
-									sr, ok := rawRef.(map[string]interface{})
-									if !ok {
-										continue
-									}
-									question.Feedback.SourceRefs = append(question.Feedback.SourceRefs, SourceRef{
-										Course:   getStr(sr, "course"),
-										Module:   getStr(sr, "module"),
-										Anchor:   getStr(sr, "anchor"),
-										Priority: getInt(sr, "priority"),
-									})
-								}
-							}
-						}
-
-						mod.Questions = append(mod.Questions, question)
-					}
-				}
-			}
-
-			modules = append(modules, mod)
-		}
+	modules := make([]Module, 0, len(spec.Modules))
+	for i, m := range spec.Modules {
+		modules = append(modules, moduleFromCR(i, m))
 	}
 
 	return &Course{
 		Slug:          slug,
 		Title:         title,
-		Description:   description,
-		Category:      category,
-		Difficulty:    difficulty,
-		IsPublic:      public,
+		Description:   spec.Description,
+		Category:      spec.Category,
+		Difficulty:    spec.Difficulty,
+		IsPublic:      spec.Public,
 		Prerequisites: prerequisites,
 		Modules:       modules,
 		Source:        sourceK8s(slug),
-	}, nil
-}
-
-func getStr(m map[string]interface{}, key string) string {
-	v, _ := m[key].(string)
-	return v
-}
-
-func getInt(m map[string]interface{}, key string) int {
-	switch v := m[key].(type) {
-	case int:
-		return v
-	case int32:
-		return int(v)
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	default:
-		return 0
 	}
 }
 
-func getBool(m map[string]interface{}, key string) bool {
-	v, ok := m[key].(bool)
-	if ok {
-		return v
+func moduleFromCR(index int, m coursev1.Module) Module {
+	mod := Module{
+		Name:                   m.Name,
+		Type:                   m.Type,
+		Src:                    m.Src,
+		Ref:                    m.Ref,
+		Path:                   m.Path,
+		LabURL:                 m.LabURL,
+		InlineContent:          m.InlineContent,
+		Replication:            m.Replication,
+		Hidden:                 m.Hidden,
+		Inline:                 m.Inline,
+		Prerequisites:          m.Prerequisites,
+		PassingScore:           m.PassingScore,
+		MaxAttemptsPerQuestion: m.MaxAttemptsPerQuestion,
+		LockOnMaxAttempts:      m.LockOnMaxAttempts,
+		CheckProvider:          m.CheckProvider,
+		CheckType:              m.CheckType,
+		CheckParams:            rawExtensionToMap(m.CheckParams),
+		Steps:                  stepsFromCR(m.Steps),
 	}
-	s, ok := m[key].(string)
-	if ok {
-		return s == "true" || s == "yes" || s == "1"
+	if mod.Name == "" {
+		mod.Name = fmt.Sprintf("module-%d", index+1)
 	}
-	return false
+	if mod.Type == "" {
+		mod.Type = "text"
+	}
+
+	// Parse inline quiz config for quiz-type modules.
+	if mod.Type == "quiz" {
+		if m.Cooldown != nil {
+			mod.Cooldown = CooldownSpec{
+				Strategy:    m.Cooldown.Strategy,
+				BaseSeconds: m.Cooldown.BaseSeconds,
+				Multiplier:  m.Cooldown.Multiplier,
+				MaxSeconds:  m.Cooldown.MaxSeconds,
+			}
+			if mod.Cooldown.Strategy == "" {
+				mod.Cooldown.Strategy = "exponential"
+			}
+			if mod.Cooldown.BaseSeconds == 0 {
+				mod.Cooldown.BaseSeconds = 30
+			}
+			if mod.Cooldown.Multiplier == 0 {
+				mod.Cooldown.Multiplier = 1.0
+			}
+		}
+		for i, q := range m.Questions {
+			mod.Questions = append(mod.Questions, questionFromCR(i, q))
+		}
+	}
+
+	return mod
+}
+
+func questionFromCR(index int, q coursev1.Question) Question {
+	question := Question{
+		ID:            q.ID,
+		Type:          q.Type,
+		Difficulty:    q.Difficulty,
+		Points:        q.Points,
+		Question:      q.Question,
+		CorrectAnswer: q.CorrectAnswer,
+		CorrectOrder:  q.CorrectOrder,
+	}
+	for _, a := range q.Answers {
+		question.Answers = append(question.Answers, Answer{ID: a.ID, Text: a.Text, Correct: a.Correct})
+	}
+	for _, it := range q.Items {
+		question.Items = append(question.Items, OrderItem{ID: it.ID, Text: it.Text})
+	}
+	if question.ID == "" {
+		question.ID = fmt.Sprintf("q-%d", index+1)
+	}
+	if question.Difficulty == "" {
+		question.Difficulty = "medium"
+	}
+	if question.Points == 0 {
+		question.Points = 1
+	}
+	if q.PartialScoring != nil {
+		question.PartialScoring = &PartialScoring{
+			Enabled:       q.PartialScoring.Enabled,
+			AllowNegative: q.PartialScoring.AllowNegative,
+		}
+	}
+	question.Feedback = Feedback{
+		Wrong:   q.Feedback.Wrong,
+		Correct: q.Feedback.Correct,
+	}
+	for _, sr := range q.Feedback.SourceRefs {
+		question.Feedback.SourceRefs = append(question.Feedback.SourceRefs, SourceRef{
+			Course:   sr.Course,
+			Module:   sr.Module,
+			Anchor:   sr.Anchor,
+			Priority: sr.Priority,
+		})
+	}
+	return question
+}
+
+func stepsFromCR(steps []coursev1.CheckStep) []CheckStep {
+	if len(steps) == 0 {
+		return nil
+	}
+	out := make([]CheckStep, 0, len(steps))
+	for _, s := range steps {
+		out = append(out, CheckStep{
+			Title:       s.Title,
+			CheckType:   s.CheckType,
+			CheckParams: rawExtensionToMap(s.CheckParams),
+		})
+	}
+	return out
+}
+
+func rawExtensionToMap(re *runtime.RawExtension) map[string]interface{} {
+	if re == nil || len(re.Raw) == 0 {
+		return nil
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(re.Raw, &m); err != nil {
+		return nil
+	}
+	return m
 }
 
 func sourceK8s(slug string) string {

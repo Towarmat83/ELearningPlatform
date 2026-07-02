@@ -802,7 +802,7 @@ import Admin from '../../../layouts/Admin.astro';
     async function openCourseYAML(courseId: string, title: string) {
       try {
         const res = await api(`/admin/courses/${courseId}/crd`);
-        const yaml = `# kubectl apply -f course.yaml\napiVersion: elearning.example.com/v1\nkind: Course\nmetadata:\n  name: ${courseId}\n  namespace: default\nspec:\n${JSON.stringify(res.spec, null, 2).split('\n').map((l: string) => '  ' + l).join('\n')}`;
+        const yaml = `# kubectl apply -f course.yaml\napiVersion: elearning.pupitre.io/v1\nkind: Course\nmetadata:\n  name: ${courseId}\n  namespace: default\nspec:\n${JSON.stringify(res.spec, null, 2).split('\n').map((l: string) => '  ' + l).join('\n')}`;
         (document.getElementById('yaml-title') as HTMLElement).textContent = `CRD — ${courseId}`;
         (document.getElementById('yaml-content') as HTMLElement).textContent = yaml;
         document.getElementById('yaml-modal')!.classList.add('open');

@@ -6,12 +6,12 @@ Séparation en **User Service** (PostgreSQL) et **Course Service** (stateless).
 
 ## Source de vérité des cours : CRD Kubernetes
 
-Les cours ne sont plus définis dans des fichiers YAML sur disque ni via l'API backend. La seule source de vérité est le **CRD Kubernetes** `elearning.example.com/v1` (kind `Course`).
+Les cours ne sont plus définis dans des fichiers YAML sur disque ni via l'API backend. La seule source de vérité est le **CRD Kubernetes** `elearning.pupitre.io/v1` (kind `Course`).
 
 Le backend **watche** la K8s API via client-go pour maintenir son store en mémoire.
 
 ```yaml
-apiVersion: elearning.example.com/v1
+apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
   name: kubernetes-basics
@@ -141,6 +141,7 @@ course-repo-secret (type: Opaque)
 Le fichier suit le format YAML avec une liste d'entrées **url → token**. La première entrée qui correspond (via `path.Match`) est utilisée.
 
 **Création :**
+
 ```bash
 kubectl create secret generic course-repo-secret \
   --from-file=git-credentials.yaml=./git-credentials.yaml
@@ -158,9 +159,9 @@ Voir `infra/examples/course-service/course-secret.yaml` pour un exemple complet.
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: courses.elearning.example.com
+  name: courses.elearning.pupitre.io
 spec:
-  group: elearning.example.com
+  group: elearning.pupitre.io
   names:
     kind: Course
     plural: courses

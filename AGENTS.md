@@ -6,7 +6,7 @@ You are strictly forbidden from running `git commit`, `git add`, `git push`, or 
 
 ## Domain model (source of truth: `docs/`)
 
-- **Course** — has a title, description, hidden (boolean publication state), category, difficulty, and a list of modules. Defined as a Kubernetes CRD (`elearning.example.com/v1`, kind `Course`). Modules reference external content by type (`video`, `text`, `image`) and optionally a git repo (`src`, `ref`, `path`).
+- **Course** — has a title, description, hidden (boolean publication state), category, difficulty, and a list of modules. Defined as a Kubernetes CRD (`elearning.pupitre.io/v1`, kind `Course`). Modules reference external content by type (`video`, `text`, `image`) and optionally a git repo (`src`, `ref`, `path`).
 - **Module** — a course element. Video/image: server-hosted URL. Text: markdown file from a git repo.
 - **User management** — database-backed (no further detail yet).
 
@@ -18,6 +18,7 @@ You are strictly forbidden from running `git commit`, `git add`, `git push`, or 
 ## Architecture
 
 Two micro-services (see `docs/ARCHITECTURE.md`):
+
 - **Course Service** (stateless, Port 8082) — K8s CRD watcher, course content, media serving, calls User Service for enrollment/progress
 - **User Service** (PG, Port 8081) — auth, users, enrollments, progress, settings, OAuth, exposes internal API for Course Service
 
@@ -60,10 +61,10 @@ go build -o /dev/null .
 
 ## Course source of truth
 
-Courses are **Kubernetes CRDs** (`elearning.example.com/v1`, kind `Course`). The Course Service watches the K8s API and populates the in-memory store. No filesystem loading. No admin course CRUD.
+Courses are **Kubernetes CRDs** (`elearning.pupitre.io/v1`, kind `Course`). The Course Service watches the K8s API and populates the in-memory store. No filesystem loading. No admin course CRUD.
 
 ```yaml
-apiVersion: elearning.example.com/v1
+apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
   name: kubernetes-basics

@@ -92,13 +92,14 @@ Both replace `{{content}}` in the pattern HTML with the rendered markdown.
 **`course-service/internal/content/patterns.go`** (new file)
 
 - `PatternStore` — thread-safe in-memory cache of `MarkdownPattern` CRs, keyed by `name/scope`.
-- `PatternWatcher` — watches `markdownpatterns.elearning.example.com` CRDs via the K8s watch API, syncs on start and on every ADD / MODIFIED / DELETED event.
+- `PatternWatcher` — watches `markdownpatterns.elearning.pupitre.io` CRDs via the K8s watch API, syncs on start and on every ADD / MODIFIED / DELETED event.
 
 ### Router
 
 **`course-service/internal/handlers/router.go`**
 
 Added routes:
+
 ```
 GET  /api/patterns
 POST /api/admin/patterns
@@ -127,6 +128,7 @@ DELETE /api/admin/courses/{slug}/crd
 **`frontend/src/lib/api.ts`**
 
 Added to `adminApi`:
+
 ```typescript
 createCourse(body, token)       // POST /admin/courses
 getCourseCRD(slug, token)       // GET  /admin/courses/{slug}/crd
@@ -135,6 +137,7 @@ deleteCourseCRD(slug, token)    // DELETE /admin/courses/{slug}/crd
 ```
 
 Added new `patternsApi`:
+
 ```typescript
 patternsApi.list(scope?)
 patternsApi.create(pattern, token)

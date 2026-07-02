@@ -4,7 +4,7 @@ Stateless micro-service that serves course/module content for the e-learning pla
 
 ## Architecture
 
-- **Stateless** — no database. All course data comes from Kubernetes CRDs (`elearning.example.com/v1`, kind `Course`) via an in-cluster watcher.
+- **Stateless** — no database. All course data comes from Kubernetes CRDs (`elearning.pupitre.io/v1`, kind `Course`) via an in-cluster watcher.
 - **Source of truth** — courses are defined as Kubernetes custom resources. The service watches the K8s API and populates an in-memory store.
 - **Module types** — `text` (markdown from git), `video` / `image` (server-hosted URLs with optional replication), `quiz` (inline questions or git-fetched YAML).
 - **User Service calls** — enrollment checks, lesson progress (viewed, complete) are delegated to the User Service via HTTP:
@@ -80,9 +80,9 @@ kubectl create secret generic course-repo-secret \
   --from-file=git-credentials.yaml=./git-credentials.yaml
 ```
 
-The Helm chart mounts this secret at `GIT_CREDENTIALS_PATH` automatically.  
-URL matching uses glob patterns (`path.Match`). The first match wins.  
-If no credential matches, `GIT_TOKEN` is used as a fallback.  
+The Helm chart mounts this secret at `GIT_CREDENTIALS_PATH` automatically.
+URL matching uses glob patterns (`path.Match`). The first match wins.
+If no credential matches, `GIT_TOKEN` is used as a fallback.
 If both are empty, the clone is unauthenticated (public repos only).
 
 ## Resource Replication
@@ -92,6 +92,7 @@ downloads the remote resource and caches it locally in the `UPLOADS_DIR`. The AP
 then returns the local `/uploads/` URL instead of the remote URL.
 
 This is useful for:
+
 - Reducing external dependency (resource served even if remote goes down)
 - Improving load times (no redirect to external CDN)
 - Air-gapped deployments
@@ -152,7 +153,7 @@ Supported question types: `single` (radio), `multiple` (checkbox with optional p
 go run main.go
 ```
 
-Requires a K8s cluster with the `elearning.example.com/v1` Course CRD installed and at least one Course resource.
+Requires a K8s cluster with the `elearning.pupitre.io/v1` Course CRD installed and at least one Course resource.
 
 ### Docker
 
@@ -192,5 +193,5 @@ go run . -kubeconfig ~/.kube/config
 
 ## Dependencies
 
-- **Kubernetes cluster** with `elearning.example.com/v1` Course CRD installed
+- **Kubernetes cluster** with `elearning.pupitre.io/v1` Course CRD installed
 - **User Service** running and accessible via `USER_SERVICE_URL`

@@ -14,7 +14,7 @@ metadata:
   labels:
     {{- include "elearning.courseService.labels" . | nindent 4 }}
 rules:
-  - apiGroups: ["elearning.example.com"]
+  - apiGroups: ["elearning.pupitre.io"]
     resources: ["courses"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 

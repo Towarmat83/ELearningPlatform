@@ -3,91 +3,8 @@ package content
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	coursev1 "github.com/elearning/course-service/api/v1"
 )
-
-func TestGetStr(t *testing.T) {
-	m := map[string]interface{}{
-		"name":  "hello",
-		"empty": "",
-	}
-	if getStr(m, "name") != "hello" {
-		t.Error("expected 'hello'")
-	}
-	if getStr(m, "empty") != "" {
-		t.Error("expected empty string")
-	}
-	if getStr(m, "missing") != "" {
-		t.Error("expected empty string for missing key")
-	}
-	if getStr(nil, "any") != "" {
-		t.Error("expected empty string for nil map")
-	}
-}
-
-func TestGetInt(t *testing.T) {
-	m := map[string]interface{}{
-		"int":     42,
-		"int32":   int32(10),
-		"int64":   int64(20),
-		"float64": float64(3.7),
-		"str":     "not-a-number",
-	}
-	if getInt(m, "int") != 42 {
-		t.Errorf("expected 42, got %d", getInt(m, "int"))
-	}
-	if getInt(m, "int32") != 10 {
-		t.Errorf("expected 10, got %d", getInt(m, "int32"))
-	}
-	if getInt(m, "int64") != 20 {
-		t.Errorf("expected 20, got %d", getInt(m, "int64"))
-	}
-	if getInt(m, "float64") != 3 {
-		t.Errorf("expected 3 (truncated), got %d", getInt(m, "float64"))
-	}
-	if getInt(m, "str") != 0 {
-		t.Errorf("expected 0 for non-number, got %d", getInt(m, "str"))
-	}
-	if getInt(m, "missing") != 0 {
-		t.Errorf("expected 0 for missing key, got %d", getInt(m, "missing"))
-	}
-}
-
-func TestGetBool(t *testing.T) {
-	m := map[string]interface{}{
-		"trueBool":  true,
-		"falseBool": false,
-		"trueStr":   "true",
-		"yesStr":    "yes",
-		"oneStr":    "1",
-		"falseStr":  "false",
-		"other":     42,
-	}
-	if !getBool(m, "trueBool") {
-		t.Error("expected true for bool true")
-	}
-	if getBool(m, "falseBool") {
-		t.Error("expected false for bool false")
-	}
-	if !getBool(m, "trueStr") {
-		t.Error("expected true for string 'true'")
-	}
-	if !getBool(m, "yesStr") {
-		t.Error("expected true for string 'yes'")
-	}
-	if !getBool(m, "oneStr") {
-		t.Error("expected true for string '1'")
-	}
-	if getBool(m, "falseStr") {
-		t.Error("expected false for string 'false'")
-	}
-	if getBool(m, "other") {
-		t.Error("expected false for non-bool/string")
-	}
-	if getBool(m, "missing") {
-		t.Error("expected false for missing key")
-	}
-}
 
 func TestSourceK8s(t *testing.T) {
 	s := sourceK8s("my-course")
@@ -168,28 +85,22 @@ func TestSanitizeGitOutput_WhitespaceOnly(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_BasicCourse(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("my-course")
-	obj.Object = map[string]interface{}{
-		"apiVersion": "elearning.example.com/v1",
-		"kind":       "Course",
-		"metadata": map[string]interface{}{
-			"name": "my-course",
-		},
-		"spec": map[string]interface{}{
-			"title":       "My Course",
-			"description": "A test course",
-			"public":      true,
-			"category":    "testing",
-			"difficulty":  "beginner",
-		},
-	}
+func newCourseCR(name string, spec coursev1.CourseSpec) *coursev1.Course {
+	cr := &coursev1.Course{Spec: spec}
+	cr.Name = name
+	return cr
+}
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+func TestCourseFromCR_BasicCourse(t *testing.T) {
+	cr := newCourseCR("my-course", coursev1.CourseSpec{
+		Title:       "My Course",
+		Description: "A test course",
+		Public:      true,
+		Category:    "testing",
+		Difficulty:  "beginner",
+	})
+
+	course := courseFromCR(cr)
 	if course.Slug != "my-course" {
 		t.Errorf("expected slug=my-course, got %q", course.Slug)
 	}
@@ -207,47 +118,17 @@ func TestCrdToCourse_BasicCourse(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_NoSpec(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("empty-course")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "empty-course"},
-	}
-
-	_, err := crdToCourse(obj)
-	if err == nil {
-		t.Fatal("expected error for object without spec, got nil")
-	}
-}
-
-func TestCrdToCourse_WithModules(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("course-with-modules")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "course-with-modules"},
-		"spec": map[string]interface{}{
-			"title": "Course With Modules",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name": "Module 1",
-					"type": "text",
-					"src":  "https://github.com/org/repo",
-					"ref":  "main",
-					"path": "module1.md",
-				},
-				map[string]interface{}{
-					"name":          "Quiz 1",
-					"type":          "quiz",
-					"passing_score": float64(80),
-				},
-			},
+func TestCourseFromCR_WithModules(t *testing.T) {
+	passing := 80
+	cr := newCourseCR("course-with-modules", coursev1.CourseSpec{
+		Title: "Course With Modules",
+		Modules: []coursev1.Module{
+			{Name: "Module 1", Type: "text", Src: "https://github.com/org/repo", Ref: "main", Path: "module1.md"},
+			{Name: "Quiz 1", Type: "quiz", PassingScore: passing},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	if len(course.Modules) != 2 {
 		t.Errorf("expected 2 modules, got %d", len(course.Modules))
 	}
@@ -262,26 +143,15 @@ func TestCrdToCourse_WithModules(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_WithPrerequisites(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("advanced-course")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "advanced-course"},
-		"spec": map[string]interface{}{
-			"title": "Advanced",
-			"prerequisites": []interface{}{
-				map[string]interface{}{
-					"course":    "basic-course",
-					"min_score": float64(70),
-				},
-			},
+func TestCourseFromCR_WithPrerequisites(t *testing.T) {
+	cr := newCourseCR("advanced-course", coursev1.CourseSpec{
+		Title: "Advanced",
+		Prerequisites: []coursev1.CoursePrerequisite{
+			{Course: "basic-course", MinScore: 70},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	if len(course.Prerequisites) != 1 {
 		t.Errorf("expected 1 prerequisite, got %d", len(course.Prerequisites))
 	}
@@ -293,23 +163,30 @@ func TestCrdToCourse_WithPrerequisites(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_StringPrerequisite(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("course-a")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "course-a"},
-		"spec": map[string]interface{}{
-			"title": "Course A",
-			"prerequisites": []interface{}{
-				"basic-course", // bare string form
-			},
+func TestCourseFromCR_PrerequisiteWithModules(t *testing.T) {
+	cr := newCourseCR("advanced-b", coursev1.CourseSpec{
+		Title: "Advanced B",
+		Prerequisites: []coursev1.CoursePrerequisite{
+			{Course: "intro-course", Modules: []string{"module-1", "module-2"}},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
+	course := courseFromCR(cr)
+	if len(course.Prerequisites[0].Modules) != 2 {
+		t.Errorf("expected 2 modules, got %d", len(course.Prerequisites[0].Modules))
 	}
+}
+
+func TestCourseFromCR_PrerequisiteMissingCourseSkipped(t *testing.T) {
+	cr := newCourseCR("course-a", coursev1.CourseSpec{
+		Title: "Course A",
+		Prerequisites: []coursev1.CoursePrerequisite{
+			{MinScore: 10}, // no course slug → should be skipped
+			{Course: "basic-course"},
+		},
+	})
+
+	course := courseFromCR(cr)
 	if len(course.Prerequisites) != 1 {
 		t.Fatalf("expected 1 prerequisite, got %d", len(course.Prerequisites))
 	}
@@ -318,60 +195,28 @@ func TestCrdToCourse_StringPrerequisite(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_PrerequisiteWithModules(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("advanced-b")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "advanced-b"},
-		"spec": map[string]interface{}{
-			"title": "Advanced B",
-			"prerequisites": []interface{}{
-				map[string]interface{}{
-					"course":  "intro-course",
-					"modules": []interface{}{"module-1", "module-2"},
+func TestCourseFromCR_ModuleWithCooldown(t *testing.T) {
+	maxAttempts := 3
+	cr := newCourseCR("quiz-course", coursev1.CourseSpec{
+		Title: "Quiz Course",
+		Modules: []coursev1.Module{
+			{
+				Name:         "Quiz 1",
+				Type:         "quiz",
+				PassingScore: 80,
+				Cooldown: &coursev1.CooldownSpec{
+					Strategy:    "exponential",
+					BaseSeconds: 30,
+					Multiplier:  2.0,
+					MaxSeconds:  300,
 				},
+				MaxAttemptsPerQuestion: &maxAttempts,
+				LockOnMaxAttempts:      true,
 			},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
-	if len(course.Prerequisites[0].Modules) != 2 {
-		t.Errorf("expected 2 modules, got %d", len(course.Prerequisites[0].Modules))
-	}
-}
-
-func TestCrdToCourse_ModuleWithCooldown(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("quiz-course")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "quiz-course"},
-		"spec": map[string]interface{}{
-			"title": "Quiz Course",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name":          "Quiz 1",
-					"type":          "quiz",
-					"passing_score": float64(80),
-					"cooldown": map[string]interface{}{
-						"strategy":     "exponential",
-						"base_seconds": float64(30),
-						"multiplier":   float64(2.0),
-						"max_seconds":  float64(300),
-					},
-					"max_attempts_per_question": float64(3),
-					"lock_on_max_attempts":      true,
-				},
-			},
-		},
-	}
-
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	if len(course.Modules) != 1 {
 		t.Fatalf("expected 1 module, got %d", len(course.Modules))
 	}
@@ -393,30 +238,20 @@ func TestCrdToCourse_ModuleWithCooldown(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_ModuleWithCooldown_DefaultStrategy(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("quiz-defaults")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "quiz-defaults"},
-		"spec": map[string]interface{}{
-			"title": "Quiz Defaults",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name": "Quiz",
-					"type": "quiz",
-					"cooldown": map[string]interface{}{
-						// strategy and base_seconds intentionally omitted to test defaults
-						"max_seconds": float64(600),
-					},
-				},
+func TestCourseFromCR_ModuleWithCooldown_DefaultStrategy(t *testing.T) {
+	cr := newCourseCR("quiz-defaults", coursev1.CourseSpec{
+		Title: "Quiz Defaults",
+		Modules: []coursev1.Module{
+			{
+				Name: "Quiz",
+				Type: "quiz",
+				// strategy and base_seconds intentionally omitted to test defaults
+				Cooldown: &coursev1.CooldownSpec{MaxSeconds: 600},
 			},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	m := course.Modules[0]
 	if m.Cooldown.Strategy != "exponential" {
 		t.Errorf("expected default Strategy=exponential, got %q", m.Cooldown.Strategy)
@@ -424,49 +259,54 @@ func TestCrdToCourse_ModuleWithCooldown_DefaultStrategy(t *testing.T) {
 	if m.Cooldown.BaseSeconds != 30 {
 		t.Errorf("expected default BaseSeconds=30, got %d", m.Cooldown.BaseSeconds)
 	}
+	if m.Cooldown.Multiplier != 1.0 {
+		t.Errorf("expected default Multiplier=1.0, got %f", m.Cooldown.Multiplier)
+	}
 }
 
-func TestCrdToCourse_ModuleWithInlineQuestions(t *testing.T) {
-	boolTrue := true
-	_ = boolTrue
-	obj := &unstructured.Unstructured{}
-	obj.SetName("quiz-inline")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "quiz-inline"},
-		"spec": map[string]interface{}{
-			"title": "Inline Quiz Course",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name": "Module Quiz",
-					"type": "quiz",
-					"questions": []interface{}{
-						map[string]interface{}{
-							"id":         "q1",
-							"type":       "single",
-							"question":   "What is 2+2?",
-							"difficulty": "easy",
-							"points":     float64(2),
-							"answers": []interface{}{
-								map[string]interface{}{"id": "a1", "text": "3", "correct": false},
-								map[string]interface{}{"id": "a2", "text": "4", "correct": true},
-							},
+func TestCourseFromCR_ModuleWithoutCooldownStaysZero(t *testing.T) {
+	cr := newCourseCR("quiz-no-cooldown", coursev1.CourseSpec{
+		Title: "Quiz No Cooldown",
+		Modules: []coursev1.Module{
+			{Name: "Quiz", Type: "quiz"},
+		},
+	})
+
+	course := courseFromCR(cr)
+	m := course.Modules[0]
+	if m.Cooldown.Strategy != "" || m.Cooldown.BaseSeconds != 0 {
+		t.Errorf("expected zero-value cooldown when omitted, got %+v", m.Cooldown)
+	}
+}
+
+func TestCourseFromCR_ModuleWithInlineQuestions(t *testing.T) {
+	correct := true
+	cr := newCourseCR("quiz-inline", coursev1.CourseSpec{
+		Title: "Inline Quiz Course",
+		Modules: []coursev1.Module{
+			{
+				Name: "Module Quiz",
+				Type: "quiz",
+				Questions: []coursev1.Question{
+					{
+						ID: "q1", Type: "single", Question: "What is 2+2?",
+						Difficulty: "easy", Points: 2,
+						Answers: []coursev1.Answer{
+							{ID: "a1", Text: "3", Correct: false},
+							{ID: "a2", Text: "4", Correct: true},
 						},
-						map[string]interface{}{
-							"type":     "boolean",
-							"question": "Is the sky blue?",
-							// no id → should auto-generate, no difficulty → default "medium", no points → default 1
-							"correct_answer": true,
-						},
+					},
+					{
+						Type: "boolean", Question: "Is the sky blue?",
+						// no id → should auto-generate, no difficulty → default "medium", no points → default 1
+						CorrectAnswer: &correct,
 					},
 				},
 			},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	if len(course.Modules) != 1 {
 		t.Fatalf("expected 1 module, got %d", len(course.Modules))
 	}
@@ -499,52 +339,37 @@ func TestCrdToCourse_ModuleWithInlineQuestions(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_QuestionWithOrderItems(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("order-quiz")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "order-quiz"},
-		"spec": map[string]interface{}{
-			"title": "Order Quiz",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name": "Order Module",
-					"type": "quiz",
-					"questions": []interface{}{
-						map[string]interface{}{
-							"id":   "q1",
-							"type": "order",
-							"items": []interface{}{
-								map[string]interface{}{"id": "i1", "text": "Step 1"},
-								map[string]interface{}{"id": "i2", "text": "Step 2"},
-							},
-							"correct_order": []interface{}{"i1", "i2"},
-							"partial_scoring": map[string]interface{}{
-								"enabled":        true,
-								"allow_negative": false,
-							},
-							"feedback": map[string]interface{}{
-								"wrong":   "Try again",
-								"correct": "Well done!",
-								"source_refs": []interface{}{
-									map[string]interface{}{
-										"course":   "intro",
-										"module":   "basics",
-										"priority": float64(1),
-									},
-								},
+func TestCourseFromCR_QuestionWithOrderItems(t *testing.T) {
+	cr := newCourseCR("order-quiz", coursev1.CourseSpec{
+		Title: "Order Quiz",
+		Modules: []coursev1.Module{
+			{
+				Name: "Order Module",
+				Type: "quiz",
+				Questions: []coursev1.Question{
+					{
+						ID:   "q1",
+						Type: "order",
+						Items: []coursev1.OrderItem{
+							{ID: "i1", Text: "Step 1"},
+							{ID: "i2", Text: "Step 2"},
+						},
+						CorrectOrder:   []string{"i1", "i2"},
+						PartialScoring: &coursev1.PartialScoring{Enabled: true, AllowNegative: false},
+						Feedback: coursev1.Feedback{
+							Wrong:   "Try again",
+							Correct: "Well done!",
+							SourceRefs: []coursev1.SourceRef{
+								{Course: "intro", Module: "basics", Priority: 1},
 							},
 						},
 					},
 				},
 			},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	q := course.Modules[0].Questions[0]
 	if len(q.Items) != 2 {
 		t.Errorf("expected 2 items, got %d", len(q.Items))
@@ -566,23 +391,13 @@ func TestCrdToCourse_QuestionWithOrderItems(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_ModuleDefaultNameAndType(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("defaults-course")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "defaults-course"},
-		"spec": map[string]interface{}{
-			"title": "", // empty title → should use slug
-			"modules": []interface{}{
-				map[string]interface{}{}, // empty module → name and type default
-			},
-		},
-	}
+func TestCourseFromCR_ModuleDefaultNameAndType(t *testing.T) {
+	cr := newCourseCR("defaults-course", coursev1.CourseSpec{
+		Title:   "", // empty title → should use slug
+		Modules: []coursev1.Module{{}},
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	if course.Title != "defaults-course" {
 		t.Errorf("expected title to default to slug, got %q", course.Title)
 	}
@@ -598,55 +413,16 @@ func TestCrdToCourse_ModuleDefaultNameAndType(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_ModuleNotMap(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("bad-module-course")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "bad-module-course"},
-		"spec": map[string]interface{}{
-			"title": "Bad Modules",
-			"modules": []interface{}{
-				"not-a-map", // this should be skipped
-				map[string]interface{}{"name": "Good Module", "type": "text"},
-			},
+func TestCourseFromCR_ModuleWithPrerequisites(t *testing.T) {
+	cr := newCourseCR("prereq-modules", coursev1.CourseSpec{
+		Title: "Prereq Modules",
+		Modules: []coursev1.Module{
+			{Name: "Module A", Type: "text"},
+			{Name: "Module B", Type: "text", Prerequisites: []string{"module-a"}},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
-	// The string entry should be skipped, only the map entry kept
-	if len(course.Modules) != 1 {
-		t.Errorf("expected 1 module (bad entry skipped), got %d", len(course.Modules))
-	}
-}
-
-func TestCrdToCourse_ModuleWithPrerequisites(t *testing.T) {
-	obj := &unstructured.Unstructured{}
-	obj.SetName("prereq-modules")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "prereq-modules"},
-		"spec": map[string]interface{}{
-			"title": "Prereq Modules",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name": "Module A",
-					"type": "text",
-				},
-				map[string]interface{}{
-					"name":          "Module B",
-					"type":          "text",
-					"prerequisites": []interface{}{"module-a"},
-				},
-			},
-		},
-	}
-
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	if len(course.Modules[1].Prerequisites) != 1 {
 		t.Errorf("expected 1 prerequisite for Module B, got %d", len(course.Modules[1].Prerequisites))
 	}
@@ -655,29 +431,16 @@ func TestCrdToCourse_ModuleWithPrerequisites(t *testing.T) {
 	}
 }
 
-func TestCrdToCourse_MaxAttemptsInt(t *testing.T) {
+func TestCourseFromCR_MaxAttemptsInt(t *testing.T) {
 	maxAttempts := 5
-	_ = maxAttempts
-	obj := &unstructured.Unstructured{}
-	obj.SetName("int-attempts")
-	obj.Object = map[string]interface{}{
-		"metadata": map[string]interface{}{"name": "int-attempts"},
-		"spec": map[string]interface{}{
-			"title": "Int Attempts",
-			"modules": []interface{}{
-				map[string]interface{}{
-					"name":                      "Quiz",
-					"type":                      "quiz",
-					"max_attempts_per_question": 5, // int (not float64)
-				},
-			},
+	cr := newCourseCR("int-attempts", coursev1.CourseSpec{
+		Title: "Int Attempts",
+		Modules: []coursev1.Module{
+			{Name: "Quiz", Type: "quiz", MaxAttemptsPerQuestion: &maxAttempts},
 		},
-	}
+	})
 
-	course, err := crdToCourse(obj)
-	if err != nil {
-		t.Fatalf("crdToCourse failed: %v", err)
-	}
+	course := courseFromCR(cr)
 	m := course.Modules[0]
 	if m.MaxAttemptsPerQuestion == nil || *m.MaxAttemptsPerQuestion != 5 {
 		t.Errorf("expected MaxAttemptsPerQuestion=5, got %v", m.MaxAttemptsPerQuestion)

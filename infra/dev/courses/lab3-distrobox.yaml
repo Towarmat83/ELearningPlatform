@@ -1,4 +1,4 @@
-apiVersion: elearning.example.com/v1
+apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
   name: lab3-distrobox
@@ -10,111 +10,111 @@ spec:
   difficulty: beginner
   public: true
   modules:
-  - name: "Lab 3 : Distrobox Creation and Application Export"
-    type: lab
-    check_provider: local
-    steps:
-    - title: "Distrobox 'lab' créé"
-      check_type: distrobox_lab3_container
-      check_params:
-        container_name: lab
-    - title: "Application xcowfortune exportée"
-      check_type: distrobox_lab3_export
-      check_params:
-        container_name: lab
-        app: xcowfortune
-    content: |
-      ## Objectifs
+    - name: "Lab 3 : Distrobox Creation and Application Export"
+      type: lab
+      check_provider: local
+      steps:
+        - title: "Distrobox 'lab' créé"
+          check_type: distrobox_lab3_container
+          check_params:
+            container_name: lab
+        - title: "Application xcowfortune exportée"
+          check_type: distrobox_lab3_export
+          check_params:
+            container_name: lab
+            app: xcowfortune
+      content: |
+        ## Objectifs
 
-      Apprendre à :
+        Apprendre à :
 
-      - Créer un Distrobox à partir d'une image par défaut
-      - Installer une application (`xcowfortune`) à l'intérieur du Distrobox
-      - Exécuter l'application et voir un affichage graphique en dehors du terminal
-      - Exporter l'application pour la rendre directement accessible depuis le menu des applications de votre workstation
+        - Créer un Distrobox à partir d'une image par défaut
+        - Installer une application (`xcowfortune`) à l'intérieur du Distrobox
+        - Exécuter l'application et voir un affichage graphique en dehors du terminal
+        - Exporter l'application pour la rendre directement accessible depuis le menu des applications de votre workstation
 
-      ---
+        ---
 
-      ## Contexte
+        ## Contexte
 
-      Distrobox est un outil qui permet d'exécuter une distribution Linux complète au sein de votre environnement de bureau actuel, sans avoir besoin de virtualisation ou de dual-boot. C'est particulièrement utile pour tester des applications dans un autre environnement Linux ou pour isoler des dépendances logicielles.
+        Distrobox est un outil qui permet d'exécuter une distribution Linux complète au sein de votre environnement de bureau actuel, sans avoir besoin de virtualisation ou de dual-boot. C'est particulièrement utile pour tester des applications dans un autre environnement Linux ou pour isoler des dépendances logicielles.
 
-      Dans ce lab, vous allez créer une Distrobox, installer une application simple, l'exécuter et l'exporter pour qu'elle soit utilisable directement depuis le menu d'applications de votre workstation.
+        Dans ce lab, vous allez créer une Distrobox, installer une application simple, l'exécuter et l'exporter pour qu'elle soit utilisable directement depuis le menu d'applications de votre workstation.
 
-      ---
+        ---
 
-      ## Étapes détaillées
+        ## Étapes détaillées
 
-      ### 1. Créer un Distrobox
+        ### 1. Créer un Distrobox
 
-      Créez une Distrobox à partir de l'image par défaut.
+        Créez une Distrobox à partir de l'image par défaut.
 
-      ```bash
-      distrobox create --name lab
-      ```
+        ```bash
+        distrobox create --name lab
+        ```
 
-      Cette commande créera un Distrobox nommé `lab` à partir de l'image Fedora la plus récente.
+        Cette commande créera un Distrobox nommé `lab` à partir de l'image Fedora la plus récente.
 
-      ### 2. Installer xcowfortune
+        ### 2. Installer xcowfortune
 
-      Une fois la Distrobox créé, démarrez-le et installez le paquet `xcowfortune` à l'aide du gestionnaire de paquets `dnf`.
+        Une fois la Distrobox créé, démarrez-le et installez le paquet `xcowfortune` à l'aide du gestionnaire de paquets `dnf`.
 
-      ```bash
-      distrobox enter lab
-      ```
+        ```bash
+        distrobox enter lab
+        ```
 
-      Ensuite, installez l'application :
+        Ensuite, installez l'application :
 
-      ```bash
-      sudo dnf install xcowfortune
-      ```
+        ```bash
+        sudo dnf install xcowfortune
+        ```
 
-      ### 3. Exécuter l'application
+        ### 3. Exécuter l'application
 
-      Depuis la Distrobox, lancez l'application `xcowfortune` :
+        Depuis la Distrobox, lancez l'application `xcowfortune` :
 
-      ```bash
-      xcowfortune
-      ```
+        ```bash
+        xcowfortune
+        ```
 
-      Une fenêtre graphique doit apparaître avec un message aléatoire et une vache.
+        Une fenêtre graphique doit apparaître avec un message aléatoire et une vache.
 
-      Cela montre comment vous pouvez exécuter des applications graphiques depuis une Distrobox et les voir directement sur votre bureau.
+        Cela montre comment vous pouvez exécuter des applications graphiques depuis une Distrobox et les voir directement sur votre bureau.
 
-      ### 4. Exporter l'application
+        ### 4. Exporter l'application
 
-      Maintenant, exportez l'application `xcowfortune` pour qu'elle devienne accessible directement depuis le menu des applications de votre workstation.
+        Maintenant, exportez l'application `xcowfortune` pour qu'elle devienne accessible directement depuis le menu des applications de votre workstation.
 
-      ```bash
-      distrobox-export -a xcowfortune
-      ```
+        ```bash
+        distrobox-export -a xcowfortune
+        ```
 
-      Cette commande exporte l'application, la rendant accessible depuis votre environnement de bureau comme si elle était installée nativement.
+        Cette commande exporte l'application, la rendant accessible depuis votre environnement de bureau comme si elle était installée nativement.
 
-      ### Nettoyage *(optionnel)*
+        ### Nettoyage *(optionnel)*
 
-      Pour supprimer l'application exportée ultérieurement :
+        Pour supprimer l'application exportée ultérieurement :
 
-      ```bash
-      distrobox-export --delete -a xcowfortune
-      ```
+        ```bash
+        distrobox-export --delete -a xcowfortune
+        ```
 
-      ---
+        ---
 
-      ## Félicitations !
+        ## Félicitations !
 
-      Vous avez :
+        Vous avez :
 
-      - Créé une Distrobox
-      - Installé une application à l'intérieur
-      - Exécuté une application graphique depuis la Distrobox
-      - Exporté l'application vers votre environnement de bureau
+        - Créé une Distrobox
+        - Installé une application à l'intérieur
+        - Exécuté une application graphique depuis la Distrobox
+        - Exporté l'application vers votre environnement de bureau
 
-      ---
+        ---
 
-      ## Ressources
+        ## Ressources
 
-      | Ressource | Lien |
-      |---|---|
-      | Documentation Distrobox | distrobox.it |
-      | GitHub Distrobox | github.com/89luca89/distrobox |
+        | Ressource | Lien |
+        |---|---|
+        | Documentation Distrobox | distrobox.it |
+        | GitHub Distrobox | github.com/89luca89/distrobox |

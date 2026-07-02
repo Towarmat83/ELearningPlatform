@@ -84,11 +84,11 @@ func (m Module) Slug() string {
 }
 
 // Content resolves and returns the module content.
-// For video/image: returns the Src as a direct URL.
+// For video/image/lab: returns the Src as a direct URL.
 // For text/quiz with git: needs FetchModuleContent (returns empty, caller must fetch).
 func (m Module) Content() string {
 	switch m.Type {
-	case "video", "image":
+	case "video", "image", "lab":
 		return m.Src
 	default:
 		return m.InlineContent

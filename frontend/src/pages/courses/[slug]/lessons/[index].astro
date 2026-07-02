@@ -421,6 +421,24 @@ import App from '../../../../layouts/App.astro';
       return marked.parse(processed) as string;
     }
 
+    function addCopyButtons(container: HTMLElement) {
+      container.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.copy-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'copier';
+        btn.addEventListener('click', () => {
+          const text = pre.querySelector('code')?.innerText ?? pre.innerText;
+          navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = '✓ copié';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.textContent = 'copier'; btn.classList.remove('copied'); }, 2000);
+          });
+        });
+        pre.appendChild(btn);
+      });
+    }
+
     // ── Cookie-based cooldown persistence ──────────────────────────────────────
     function saveCooldownsToCookie(moduleIdx: number, cds: Record<string, { remaining: number; locked: boolean }>) {
       const data: Record<string, number> = {};
@@ -578,6 +596,7 @@ import App from '../../../../layouts/App.astro';
           <div id="check-result" style="margin-top:12px"></div>` : '';
 
         contentBody.innerHTML = mdHtml + stepsHtml + checkBar;
+        addCopyButtons(contentBody);
 
         const runCheck = async (checkType: string, checkParams: Record<string,unknown>, resultDiv: HTMLElement) => {
           if (isLocal && !inTauri) {
@@ -634,6 +653,7 @@ import App from '../../../../layouts/App.astro';
       } else if (mod.content) {
         try {
           contentBody.innerHTML = await renderMarkdown(mod.content);
+          addCopyButtons(contentBody);
         } catch {
           contentBody.textContent = mod.content;
         }

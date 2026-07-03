@@ -1,0 +1,96 @@
+apiVersion: elearning.pupitre.io/v1
+kind: Course
+metadata:
+  name: networking-essentials
+  namespace: default
+spec:
+  title: "Réseaux informatiques essentiels"
+  description: "Comprends les fondamentaux des réseaux : modèle OSI, TCP/IP, DNS, HTTP et les protocoles clés. Indispensable pour tout ingénieur DevOps ou développeur."
+  category: networking
+  difficulty: intermediate
+  public: true
+  modules:
+    - name: "Le modèle OSI"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/01-intro.md"
+    - name: "TCP/IP en pratique"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/02-images.md"
+      prerequisites:
+        - "le-modèle-osi"
+    - name: "DNS et résolution de noms"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/03-networking.md"
+      prerequisites:
+        - "tcp-ip-en-pratique"
+    - name: "HTTP et HTTPS"
+      type: "text"
+      src: "https://github.com/paulmascarilla/course-example"
+      ref: "main"
+      path: "lessons/04-compose.md"
+      prerequisites:
+        - "dns-et-résolution-de-noms"
+    - name: "Quiz Réseaux"
+      type: "quiz"
+      inline: true
+      prerequisites:
+        - "le-modèle-osi"
+        - "tcp-ip-en-pratique"
+        - "dns-et-résolution-de-noms"
+        - "http-et-https"
+      passing_score: 70
+      questions:
+        - id: q1
+          type: single
+          question: "Combien de couches compte le modèle OSI ?"
+          answers:
+            - id: a
+              text: "7"
+              correct: true
+            - id: b
+              text: "4"
+              correct: false
+            - id: c
+              text: "5"
+              correct: false
+            - id: d
+              text: "3"
+              correct: false
+        - id: q2
+          type: single
+          question: "Quel protocole est utilisé pour la résolution de noms de domaine ?"
+          answers:
+            - id: a
+              text: "DNS"
+              correct: true
+            - id: b
+              text: "DHCP"
+              correct: false
+            - id: c
+              text: "FTP"
+              correct: false
+            - id: d
+              text: "SMTP"
+              correct: false
+        - id: q3
+          type: single
+          question: "Sur quel port HTTPS écoute-t-il par défaut ?"
+          answers:
+            - id: a
+              text: "443"
+              correct: true
+            - id: b
+              text: "80"
+              correct: false
+            - id: c
+              text: "8080"
+              correct: false
+            - id: d
+              text: "22"
+              correct: false

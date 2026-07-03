@@ -3,11 +3,18 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/url"
 
 	"github.com/elearning/course-service/internal/content"
 )
+
+// courseCompleteBody is the request body sent to the user-service when a course is completed.
+type courseCompleteBody struct {
+	UserID     string `json:"user_id"`
+	CourseSlug string `json:"course_slug"`
+}
 
 type lessonSummary struct {
 	Slug   string `json:"slug"`
@@ -232,6 +239,7 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	found := false
+	moduleIndex := -1
 	for _, l := range c.Lessons {
 		if l.Slug == lessonSlug {
 			found = true
@@ -239,9 +247,10 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !found {
-		for _, m := range c.Modules {
+		for i, m := range c.Modules {
 			if m.Slug() == lessonSlug {
 				found = true
+				moduleIndex = i
 				break
 			}
 		}
@@ -269,6 +278,29 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		s.Error(w, http.StatusInternalServerError, "Failed to mark lesson as complete")
 		return
+	}
+
+	// If this is the last meaningful module (ignoring trailing inline quizzes), record course completion.
+	lastMeaningful := len(c.Modules) - 1
+	for lastMeaningful > 0 && c.Modules[lastMeaningful].Inline && c.Modules[lastMeaningful].Type == "quiz" {
+		lastMeaningful--
+	}
+	isLastModule := moduleIndex >= 0 && moduleIndex == lastMeaningful
+	if isLastModule {
+		// TODO(security): unauthenticated internal call, see TODO in
+		// user-service/internal/handlers/router.go — flagged in PR #74 review.
+		req2 := courseCompleteBody{UserID: claims.Subject, CourseSlug: courseSlug}
+		var buf2 bytes.Buffer
+		_ = json.NewEncoder(&buf2).Encode(req2)
+		resp2, err2 := http.Post(s.Config.UserServiceURL+"/internal/progress/course-complete", "application/json", &buf2)
+		if err2 != nil {
+			slog.Error("failed to mark course complete", "userID", claims.Subject, "courseSlug", courseSlug, "err", err2)
+		} else {
+			defer resp2.Body.Close()
+			if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusCreated {
+				slog.Error("user-service rejected course-complete request", "userID", claims.Subject, "courseSlug", courseSlug, "status", resp2.StatusCode)
+			}
+		}
 	}
 
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})

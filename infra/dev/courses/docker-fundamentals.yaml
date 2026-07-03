@@ -1,0 +1,105 @@
+apiVersion: elearning.pupitre.io/v1
+kind: Course
+metadata:
+  name: docker-fundamentals
+  namespace: default
+spec:
+  title: "Les fondamentaux de Docker"
+  description: Comprendre les conteneurs de A à Z — images, volumes, réseau et Docker Compose.
+  category: devops
+  difficulty: beginner
+  public: true
+  modules:
+  - name: "Images et conteneurs"
+    type: text
+    content: |
+      ## Images et conteneurs
+
+      Un **conteneur** est une instance en cours d'exécution d'une **image**.
+      Une image est un instantané de système de fichiers en lecture seule, construit en couches.
+
+      ```bash
+      docker pull nginx:alpine          # télécharger une image
+      docker images                     # lister les images locales
+      docker run -d -p 8080:80 nginx    # lancer en arrière-plan, mapper le port
+      docker ps                         # lister les conteneurs en cours
+      docker ps -a                      # tous les conteneurs (arrêtés inclus)
+      docker logs <id>                  # afficher les logs
+      docker exec -it <id> sh           # ouvrir un shell dans le conteneur
+      docker stop <id>                  # arrêt propre
+      docker rm <id>                    # supprimer un conteneur arrêté
+      ```
+
+      ### Dockerfile
+
+      ```dockerfile
+      FROM node:22-alpine
+      WORKDIR /app
+      COPY package*.json ./
+      RUN npm ci --omit=dev
+      COPY . .
+      EXPOSE 3000
+      CMD ["node", "server.js"]
+      ```
+
+      ```bash
+      docker build -t monapp:1.0 .
+      docker run -p 3000:3000 monapp:1.0
+      ```
+
+  - name: "Volumes et réseau"
+    type: text
+    content: |
+      ## Volumes et réseau
+
+      ### Volumes (stockage persistant)
+
+      ```bash
+      docker volume create mesdonnees
+      docker run -v mesdonnees:/data postgres
+      docker run -v $(pwd):/app monapp    # montage de répertoire
+      ```
+
+      ### Réseaux
+
+      ```bash
+      docker network create monreseau
+      docker run --network monreseau --name db postgres
+      docker run --network monreseau --name app monapp
+      # le conteneur "app" peut joindre "db" par son nom d'hôte
+      ```
+
+  - name: "Docker Compose"
+    type: text
+    content: |
+      ## Docker Compose
+
+      Définir une application multi-conteneurs dans un seul fichier `compose.yaml` :
+
+      ```yaml
+      services:
+        db:
+          image: postgres:16
+          environment:
+            POSTGRES_PASSWORD: secret
+          volumes:
+            - pgdata:/var/lib/postgresql/data
+
+        app:
+          build: .
+          ports:
+            - "3000:3000"
+          depends_on:
+            - db
+          environment:
+            DATABASE_URL: postgres://postgres:secret@db:5432/app
+
+      volumes:
+        pgdata:
+      ```
+
+      ```bash
+      docker compose up -d      # démarrer en arrière-plan
+      docker compose logs -f    # suivre les logs
+      docker compose down -v    # arrêter et supprimer les volumes
+      ```

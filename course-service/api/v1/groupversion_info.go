@@ -22,7 +22,13 @@ var (
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(GroupVersion, &Course{}, &CourseList{})
+	scheme.AddKnownTypes(
+		GroupVersion,
+		&Course{},
+		&CourseList{},
+		&Path{},
+		&PathList{},
+	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil
 }

@@ -15,5 +15,8 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# Go test coverage
+coverage.out
+
 # Logs
 *.log

@@ -1,0 +1,12 @@
+apiVersion: elearning.pupitre.io/v1
+kind: Path
+metadata:
+  name: security-path
+  namespace: default
+spec:
+  title: "Parcours Sécurité"
+  description: "De Linux aux réseaux jusqu'à la cybersécurité applicative — OWASP, chiffrement, authentification."
+  courses:
+    - linux-intro
+    - networking-basics
+    - cybersecurity-intro

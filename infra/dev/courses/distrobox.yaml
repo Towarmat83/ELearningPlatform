@@ -1,16 +1,16 @@
 apiVersion: elearning.pupitre.io/v1
 kind: Course
 metadata:
-  name: lab3-distrobox
+  name: distrobox
   namespace: default
 spec:
-  title: "Lab 3 : Distrobox Creation and Application Export"
+  title: "Distrobox Creation and Application Export"
   description: Crée une Distrobox, installe xcowfortune et exporte l'application vers ton menu d'applications.
   category: devops
   difficulty: beginner
   public: true
   modules:
-    - name: "Lab 3 : Distrobox Creation and Application Export"
+    - name: "Distrobox Creation and Application Export"
       type: lab
       check_provider: local
       steps:

@@ -66,6 +66,7 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 		r.Post("/api/courses/{slug}/lessons/{lesson_slug}/complete", s.MarkLessonComplete)
 
 		r.Get("/api/my/courses", s.MyCourses)
+		r.Get("/api/my/paths", s.MyPaths)
 	})
 
 	// ── Admin ─────────────────────────────────────────────────────────────────────
@@ -93,6 +94,10 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 		r.Delete("/api/admin/courses/{slug}/enrollments/groups/{group_id}", s.AdminUnenrollGroup)
 		r.Delete("/api/admin/courses/{slug}/enrollments/{user_id}", s.AdminUnenrollUser)
 
+		r.Get("/api/admin/paths/{slug}/enrollments", s.AdminListPathEnrollments)
+		r.Post("/api/admin/paths/{slug}/enrollments", s.AdminEnrollUserInPath)
+		r.Delete("/api/admin/paths/{slug}/enrollments/{user_id}", s.AdminUnenrollUserFromPath)
+
 		r.Post("/api/admin/sync-progress", s.SyncProgress)
 
 		r.Get("/api/admin/groups", s.ListGroups)
@@ -119,11 +124,18 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 	})
 
 	// ── Internal API (for Course Service, no auth — rely on network policy) ──────
+	//
+	// TODO(security): these routes accept no service-to-service authentication.
+	// Any caller that can reach this port can forge enrollment/progress data for
+	// any user_id. Flagged in PR #74 review as requiring a dedicated follow-up
+	// PR (e.g. a shared INTERNAL_SERVICE_SECRET header, mirroring the existing
+	// JWT_SECRET pattern in helm/templates/secret.yaml).
 
 	r.Post("/internal/enrollments/auto", s.InternalAutoEnroll)
 	r.Get("/internal/enrollments/check", s.InternalCheckEnrollment)
 	r.Get("/internal/progress/viewed", s.InternalViewedLessons)
 	r.Post("/internal/progress/complete", s.InternalMarkComplete)
+	r.Post("/internal/progress/course-complete", s.InternalMarkCourseComplete)
 	r.Post("/internal/progress/module", s.InternalRecordModuleProgress)
 	r.Get("/internal/progress/modules", s.InternalGetModuleProgress)
 	r.Get("/internal/progress/course-summary", s.InternalCourseSummary)

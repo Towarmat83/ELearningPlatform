@@ -21,19 +21,21 @@ import (
 type State struct {
 	Config          *config.Config
 	Content         *content.Store
+	Paths           *content.PathStore
 	GitCreds        *content.GitCredentialStore
 	CooldownTracker *content.CooldownTracker
 	GitCache        *content.GitCache
 	DB              *pgxpool.Pool
 }
 
-func NewState(cfg *config.Config, store *content.Store) *State {
+func NewState(cfg *config.Config, store *content.Store, paths *content.PathStore) *State {
 	gc := content.NewGitCache("/tmp/elearning-git-cache", time.Duration(cfg.GitCacheTTL)*time.Minute)
 	content.SetGlobalGitCache(gc)
 
 	s := &State{
 		Config:          cfg,
 		Content:         store,
+		Paths:           paths,
 		CooldownTracker: content.NewCooldownTracker(),
 		GitCache:        gc,
 	}

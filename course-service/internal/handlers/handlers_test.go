@@ -57,7 +57,7 @@ func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 		GitCredentialsPath: "",
 	}
 
-	return NewState(cfg, store)
+	return NewState(cfg, store, content.NewPathStore())
 }
 
 // newUserServiceMock returns a test server with sensible defaults for all
@@ -609,7 +609,7 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 		JWTExpiryH:     24,
 		UserServiceURL: userSrv.URL,
 	}
-	return NewState(cfg, store)
+	return NewState(cfg, store, content.NewPathStore())
 }
 
 // ── Cross-course lock: ListModules ────────────────────────────────────────────
@@ -1579,7 +1579,7 @@ func TestListLessons_FromLessonsList(t *testing.T) {
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("GET", "/api/courses/lesson-course/lessons", nil)
@@ -1636,7 +1636,7 @@ func TestGetLesson_FromLessonList(t *testing.T) {
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("GET", "/api/courses/lesson-course2/lessons/intro", nil)
@@ -1658,7 +1658,7 @@ func TestNewState_InvalidCredentialsPath(t *testing.T) {
 		GitCredentialsPath: "/nonexistent/git-creds.json",
 	}
 	// Should not panic even when credentials file doesn't exist
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	if s == nil {
 		t.Error("expected non-nil State")
 	}
@@ -1691,7 +1691,7 @@ func TestGetModule_PrerequisitesNotMet(t *testing.T) {
 		},
 	})
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24, UserServiceURL: mock.URL}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("GET", "/api/courses/prereq-course/modules/0", nil)
@@ -1922,7 +1922,7 @@ func newTestStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 		UploadsDir:     "./testdata",
 		UserServiceURL: mock.URL,
 	}
-	return NewState(cfg, store)
+	return NewState(cfg, store, content.NewPathStore())
 }
 
 func TestGetModule_TextInline(t *testing.T) {
@@ -2118,7 +2118,7 @@ func TestGetCourse_WithPrerequisites(t *testing.T) {
 		},
 	})
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("GET", "/api/courses/advanced-course", nil)
@@ -2267,7 +2267,7 @@ func TestClearCourseCache_WithGitModules(t *testing.T) {
 		},
 	})
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("POST", "/api/admin/courses/git-course/cache/clear", nil)
@@ -2300,7 +2300,7 @@ func TestClearModuleCache_WithGitModule(t *testing.T) {
 		},
 	})
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("POST", "/api/admin/courses/git-course2/modules/0/cache/clear", nil)
@@ -2333,7 +2333,7 @@ func TestGetLab_LabModuleType(t *testing.T) {
 		},
 	})
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24, UserServiceURL: mock.URL}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequest("GET", "/api/courses/lab-type-course/labs/hands-on-lab", nil)
@@ -2375,7 +2375,7 @@ func TestListModules_AdminSeesHidden(t *testing.T) {
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	s := NewState(cfg, store)
+	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
 	// Admin sees hidden modules
@@ -2548,7 +2548,7 @@ func newStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	return NewState(cfg, store)
+	return NewState(cfg, store, content.NewPathStore())
 }
 
 func TestGetModule_InlineQuiz(t *testing.T) {

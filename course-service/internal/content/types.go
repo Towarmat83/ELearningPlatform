@@ -5,6 +5,15 @@ import (
 	"unicode"
 )
 
+// Path is a sequential learning path composed of ordered course slugs.
+type Path struct {
+	Slug        string   `json:"slug"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Courses     []string `json:"courses"` // ordered — index N+1 unlocks after N is completed
+	Source      string   `json:"source,omitempty"`
+}
+
 // CoursePrerequisite describes one condition that must be met before enrolling.
 // If only Course is set, enrollment in that course is required.
 // If MinScore > 0, the user must have earned at least that many total points.
@@ -84,11 +93,17 @@ func (m Module) Slug() string {
 }
 
 // Content resolves and returns the module content.
-// For video/image/lab: returns the Src as a direct URL.
+// For video/image: returns the Src as a direct URL.
+// For lab without inline content: returns Src as the external lab URL.
 // For text/quiz with git: needs FetchModuleContent (returns empty, caller must fetch).
 func (m Module) Content() string {
 	switch m.Type {
-	case "video", "image", "lab":
+	case "video", "image":
+		return m.Src
+	case "lab":
+		if m.InlineContent != "" {
+			return m.InlineContent
+		}
 		return m.Src
 	default:
 		return m.InlineContent

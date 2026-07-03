@@ -1,0 +1,187 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+<Admin title="Parcours — Inscriptions">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 style="font-size:1.5rem">Parcours — Inscriptions</h1>
+      <p class="text-soft text-sm" style="margin-top:4px">Gérer les utilisateurs inscrits à chaque parcours</p>
+    </div>
+  </div>
+
+  <!-- Path selector -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+    <label class="label" style="margin:0;white-space:nowrap">Parcours :</label>
+    <select id="path-select" class="input" style="width:auto;min-width:220px">
+      <option value="">Chargement…</option>
+    </select>
+    <span class="text-soft text-sm" id="enroll-count"></span>
+  </div>
+
+  <!-- Enroll form -->
+  <div id="enroll-form" class="card" style="display:none;padding:16px 20px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <select id="user-select" class="input" style="flex:1;min-width:200px">
+        <option value="">Sélectionner un utilisateur…</option>
+      </select>
+      <button id="enroll-btn" class="btn btn-primary btn-sm">Inscrire</button>
+    </div>
+  </div>
+
+  <!-- Enrollments table -->
+  <div class="card" style="padding:0;overflow:hidden" id="table-card">
+    <table style="width:100%;border-collapse:collapse;font-size:.875rem" id="enrollments-table">
+      <thead>
+        <tr style="border-bottom:1px solid var(--line);background:var(--fill)">
+          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Utilisateur</th>
+          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Progression</th>
+          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Inscrit le</th>
+          <th style="padding:12px 16px;text-align:right;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="enrollments-body">
+        <tr><td colspan="4" style="padding:32px;text-align:center;color:var(--ink-soft)">Sélectionnez un parcours</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+
+    async function api(path: string, opts: { method?: string; body?: unknown } = {}) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      const res = await fetch('/api' + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as any).error || `HTTP ${res.status}`); }
+      return res.status === 204 ? null : res.json();
+    }
+
+    let allUsers: any[] = [];
+    let currentSlug = '';
+
+    async function loadPaths() {
+      const data = await api('/paths') as { paths: any[] };
+      const paths = data.paths ?? [];
+      const select = document.getElementById('path-select') as HTMLSelectElement;
+      select.innerHTML = paths.length
+        ? `<option value="">— Choisir un parcours —</option>` + paths.map((p: any) => `<option value="${p.slug}">${p.title}</option>`).join('')
+        : `<option value="">Aucun parcours disponible</option>`;
+    }
+
+    async function loadUsers() {
+      const data = await api('/admin/users') as { users: any[] };
+      allUsers = data.users ?? [];
+      const sel = document.getElementById('user-select') as HTMLSelectElement;
+      sel.innerHTML = `<option value="">Sélectionner un utilisateur…</option>` +
+        allUsers.map((u: any) => `<option value="${u.id}">${u.username} (${u.email})</option>`).join('');
+    }
+
+    async function loadEnrollments(slug: string) {
+      const tbody = document.getElementById('enrollments-body')!;
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:32px;text-align:center"><div class="loading-state" style="padding:0"><div class="spinner"></div></div></td></tr>`;
+      try {
+        const data = await api(`/admin/paths/${slug}/enrollments`) as { users: any[] };
+        const users = data.users ?? [];
+        document.getElementById('enroll-count')!.textContent = `${users.length} inscrit${users.length > 1 ? 's' : ''}`;
+
+        if (users.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--ink-soft)">Aucun utilisateur inscrit à ce parcours</td></tr>`;
+          return;
+        }
+
+        const statusColor: Record<string, string> = {
+          completed: 'background:var(--good-soft);color:var(--good)',
+          available:  'background:var(--blue-soft);color:var(--blue)',
+          locked:     'background:var(--fill);color:var(--ink-soft)',
+        };
+        const statusIcon: Record<string, string> = { completed: '✓', available: '▶', locked: '🔒' };
+
+        tbody.innerHTML = users.map((u: any) => {
+          const pct = u.total_courses > 0 ? Math.round(u.completed_courses / u.total_courses * 100) : 0;
+          const courses = (u.courses ?? []).map((c: any) =>
+            `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:600;${statusColor[c.status]}">${statusIcon[c.status]} ${c.slug}</span>`
+          ).join(' ');
+          const bar = u.total_courses > 0 ? `
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+              <div style="flex:1;height:4px;background:var(--line);border-radius:4px;overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:${pct===100?'var(--good)':'var(--blue)'};border-radius:4px"></div>
+              </div>
+              <span style="font-size:.72rem;color:var(--ink-soft);white-space:nowrap">${u.completed_courses}/${u.total_courses}</span>
+            </div>` : '';
+          return `
+          <tr style="border-bottom:1px solid var(--line)" data-uid="${u.user_id}">
+            <td style="padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:var(--blue);flex-shrink:0">${(u.email||'?')[0].toUpperCase()}</div>
+                <div>
+                  <div style="font-weight:500">${u.email.split('@')[0]}</div>
+                  <div style="font-size:.75rem;color:var(--ink-soft)">${u.email}</div>
+                </div>
+              </div>
+            </td>
+            <td style="padding:12px 16px">
+              <div style="display:flex;flex-wrap:wrap;gap:4px">${courses}</div>
+              ${bar}
+            </td>
+            <td style="padding:12px 16px;color:var(--ink-soft);font-size:.78rem;white-space:nowrap">${new Date(u.enrolled_at).toLocaleDateString('fr-FR')}</td>
+            <td style="padding:12px 16px;text-align:right">
+              <button class="btn btn-sm unenroll-btn" style="background:var(--bad-soft);color:var(--bad)" data-uid="${u.user_id}">Désinscrire</button>
+            </td>
+          </tr>`;
+        }).join('');
+
+        tbody.querySelectorAll<HTMLButtonElement>('.unenroll-btn').forEach(btn => {
+          btn.addEventListener('click', () => unenroll(slug, btn.dataset.uid!));
+        });
+      } catch (e: any) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--bad)">Erreur : ${e.message}</td></tr>`;
+      }
+    }
+
+    async function enroll(slug: string, userId: string) {
+      const btn = document.getElementById('enroll-btn') as HTMLButtonElement;
+      btn.disabled = true; btn.textContent = 'Inscription…';
+      try {
+        await api(`/admin/paths/${slug}/enrollments`, { method: 'POST', body: { user_id: userId } });
+        (window as any).showToast?.('Utilisateur inscrit au parcours', 'success');
+        (document.getElementById('user-select') as HTMLSelectElement).value = '';
+        await loadEnrollments(slug);
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Inscrire';
+      }
+    }
+
+    async function unenroll(slug: string, userId: string) {
+      if (!confirm('Désinscrire cet utilisateur du parcours ?')) return;
+      try {
+        await api(`/admin/paths/${slug}/enrollments/${userId}`, { method: 'DELETE' });
+        (window as any).showToast?.('Utilisateur désinscrit', 'success');
+        await loadEnrollments(slug);
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      }
+    }
+
+    document.getElementById('path-select')!.addEventListener('change', async (e) => {
+      currentSlug = (e.target as HTMLSelectElement).value;
+      const form = document.getElementById('enroll-form')!;
+      if (!currentSlug) {
+        form.style.display = 'none';
+        document.getElementById('enroll-count')!.textContent = '';
+        document.getElementById('enrollments-body')!.innerHTML = `<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--ink-soft)">Sélectionnez un parcours</td></tr>`;
+        return;
+      }
+      form.style.display = 'block';
+      await loadEnrollments(currentSlug);
+    });
+
+    document.getElementById('enroll-btn')!.addEventListener('click', () => {
+      const userId = (document.getElementById('user-select') as HTMLSelectElement).value;
+      if (!userId) { (window as any).showToast?.('Sélectionnez un utilisateur', 'error'); return; }
+      enroll(currentSlug, userId);
+    });
+
+    Promise.all([loadPaths(), loadUsers()]);
+  </script>
+</Admin>

@@ -1,0 +1,336 @@
+---
+import App from '../layouts/App.astro';
+---
+<App title="Mes parcours" activePage="paths">
+  <style is:global>
+    .mp-page { padding: 28px 24px 80px; max-width: 100%; }
+    .mp-page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 24px; }
+
+    .path-list { display: flex; flex-direction: column; gap: 16px; }
+    .path-list-card {
+      padding: 0; border-radius: 16px;
+      border: 1.5px solid var(--line); background: var(--paper);
+      cursor: pointer; overflow: hidden;
+      transition: box-shadow .13s, transform .13s, border-color .13s;
+    }
+    .path-list-card:hover { border-color: var(--blue); box-shadow: 0 6px 24px rgba(0,0,0,.10); transform: translateY(-2px); }
+    .path-list-banner {
+      padding: 20px 24px 16px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .path-list-icon { width: 56px; height: 56px; border-radius: 14px; background: rgba(255,255,255,.25); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; flex-shrink: 0; }
+    .path-list-body { flex: 1; min-width: 0; }
+    .path-list-title { font-weight: 700; font-size: 1.1rem; color: inherit; }
+    .path-list-sub   { font-size: .82rem; opacity: .75; margin-top: 4px; }
+    .path-list-pct   { font-size: 1.5rem; font-weight: 800; flex-shrink: 0; }
+    .path-list-chevron { color: rgba(0,0,0,.25); font-size: 1.2rem; margin-left: 4px; flex-shrink: 0; }
+    .path-list-progress { height: 8px; background: rgba(0,0,0,.1); }
+    .path-list-progress-fill { height: 100%; transition: width .4s ease; }
+
+    .detail-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 20px; background: none; border: none; padding: 0; }
+    .detail-back:hover { text-decoration: underline; }
+    .detail-title  { font-size: 1.2rem; font-weight: 700; }
+    .detail-desc   { font-size: .83rem; color: var(--ink-soft); margin-top: 4px; line-height: 1.45; }
+    .detail-prog   { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; background: var(--fill); border-radius: 10px; font-size: .82rem; color: var(--ink-soft); }
+    .detail-prog-pct { font-weight: 700; font-size: 1rem; }
+    .snake-wrap { width: 100%; padding: 8px 0; display: flex; justify-content: center; }
+    .snake-wrap svg { display: block; height: auto; overflow: visible; max-width: 100%; }
+
+    .mp-empty { text-align: center; padding: 80px 24px; }
+    .mp-empty-icon { font-size: 3rem; margin-bottom: 14px; }
+    .mp-empty h2 { font-size: 1.15rem; margin-bottom: 8px; }
+    .mp-empty p  { color: var(--ink-soft); font-size: .88rem; margin-bottom: 20px; }
+  </style>
+
+  <div class="mp-page">
+    <h1 class="mp-page-title">Mes parcours</h1>
+    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+    <div id="mp-content" style="display:none">
+      <div id="view-list">
+        <div id="mp-list" class="path-list"></div>
+        <div id="mp-empty" class="mp-empty" style="display:none">
+          <div class="mp-empty-icon">🗺️</div>
+          <h2>Aucun parcours en cours</h2>
+          <p>Vous n'êtes inscrit à aucun parcours. Contactez un administrateur pour être inscrit.</p>
+          <a href="/courses" class="btn btn-primary">Voir le catalogue</a>
+        </div>
+      </div>
+      <div id="view-detail" style="display:none">
+        <button class="detail-back" id="btn-back">◂ Mes parcours</button>
+        <div id="detail-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) { window.location.href = '/login?redirect=/my-paths'; }
+
+    const SHORT: Record<string,string> = {
+      'linux-intro':         'Linux',
+      'docker-fundamentals': 'Docker',
+      'kubernetes-basics':   'Kubernetes',
+      'networking-basics':   'Réseaux',
+      'cybersecurity-intro': 'Cybersécurité',
+    };
+    function sName(s: string) {
+      return SHORT[s] ?? s.split('-').map((w:string)=>w[0].toUpperCase()+w.slice(1)).join(' ');
+    }
+
+    const PATH_ICONS: Record<string,string> = { 'devops-path':'⚙️','security-path':'🔐' };
+    const PATH_COLORS: Record<string,{bg:string;iconBg:string;accent:string}> = {
+      'security-path': { bg:'#fff7ed', iconBg:'#fed7aa', accent:'#ea8c0a' },
+      'devops-path':   { bg:'#f0fdf4', iconBg:'#bbf7d0', accent:'#16a34a' },
+    };
+    const DEFAULT_COLOR = { bg:'#eff6ff', iconBg:'#bfdbfe', accent:'#1b86f2' };
+
+    // Status theme — pastel palette
+    const TH: Record<string,{fill:string;text:string;roadFill:string;badge:string;badgeTxt:string;label:string}> = {
+      completed: { fill:'#bbf7d0', text:'#15803d', roadFill:'#4ade80', badge:'#dcfce7', badgeTxt:'#15803d', label:'Terminé'    },
+      available:  { fill:'#bfdbfe', text:'#1d4ed8', roadFill:'#93c5fd', badge:'#dbeafe', badgeTxt:'#1d4ed8', label:'Disponible' },
+      locked:     { fill:'#f1f5f9', text:'#94a3b8', roadFill:'#e2e8f0', badge:'#f1f5f9', badgeTxt:'#94a3b8', label:'Verrouillé' },
+    };
+
+    let allPaths: any[] = [];
+
+    function renderList(): string {
+      return allPaths.map((p:any) => {
+        const total = p.courses?.length ?? 0;
+        const done  = (p.courses??[]).filter((c:any)=>c.status==='completed').length;
+        const pct   = total>0 ? Math.round(done/total*100) : 0;
+        const allDone = pct===100;
+        const col = allDone?'var(--good)':pct>0?'var(--blue)':'var(--ink-soft)';
+        const sub = `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
+        const colors = PATH_COLORS[p.slug] ?? DEFAULT_COLOR;
+        return `<div class="path-list-card" data-slug="${p.slug}" style="border-color:${colors.accent}40">
+          <div class="path-list-banner" style="background:${colors.bg}">
+            <div class="path-list-icon" style="background:${colors.iconBg}">${PATH_ICONS[p.slug]??'🗺️'}</div>
+            <div class="path-list-body">
+              <div class="path-list-title">${p.title||p.slug}</div>
+              <div class="path-list-sub">${sub}</div>
+            </div>
+            <span class="path-list-pct" style="color:${colors.accent}">${pct}%</span>
+            <span class="path-list-chevron" style="color:${colors.accent}">›</span>
+          </div>
+          <div class="path-list-progress" style="background:${colors.accent}20">
+            <div class="path-list-progress-fill" style="width:${pct}%;background:${colors.accent}"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Split text at word boundary for SVG
+    function wrapSVG(text: string, maxLen: number): string[] {
+      if (text.length <= maxLen) return [text];
+      const sp = text.lastIndexOf(' ', maxLen);
+      return sp > 0 ? [text.slice(0,sp), text.slice(sp+1)] : [text.slice(0,maxLen), text.slice(maxLen)];
+    }
+
+    // Build SVG path through points with rounded corners using quadratic bezier
+    function buildRoad(pts: {x:number;y:number}[], cr: number): string {
+      if (pts.length < 2) return '';
+      let d = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 1; i < pts.length; i++) {
+        const prev = pts[i-1], curr = pts[i], next = i < pts.length-1 ? pts[i+1] : null;
+        // Detect if there is a direction change at curr
+        const turns = next && !(
+          (prev.x === curr.x && curr.x === next.x) ||
+          (prev.y === curr.y && curr.y === next.y)
+        );
+        if (!turns) { d += ` L ${curr.x} ${curr.y}`; continue; }
+        // Round the corner at curr
+        const dx1 = curr.x-prev.x, dy1 = curr.y-prev.y;
+        const dx2 = next!.x-curr.x, dy2 = next!.y-curr.y;
+        const l1 = Math.hypot(dx1,dy1), l2 = Math.hypot(dx2,dy2);
+        const t = Math.min(cr/l1, 0.42), s = Math.min(cr/l2, 0.42);
+        const ax = curr.x-dx1*t, ay = curr.y-dy1*t;
+        const bx = curr.x+dx2*s, by = curr.y+dy2*s;
+        d += ` L ${ax} ${ay} Q ${curr.x} ${curr.y} ${bx} ${by}`;
+      }
+      return d;
+    }
+
+    function renderDetail(p: any): string {
+      const courses: any[] = p.courses ?? [];
+      const total = courses.length;
+      const done  = courses.filter((c:any)=>c.status==='completed').length;
+      const pct   = total>0 ? Math.round(done/total*100) : 0;
+      const allDone = done===total && total>0;
+
+      // Layout: 1 column when ≤3 courses, 2 columns (snake) when 4+
+      const COLS  = total <= 3 ? 1 : 2;
+      const NR    = 24;   // node radius
+      const HG    = 160;  // horizontal gap between columns (COLS=2 only)
+      const VG    = COLS === 1 ? 100 : 120;
+      const ROAD  = 8;    // road stroke width
+      const CR    = 26;   // corner rounding radius
+      const LABEL = COLS === 1 ? 0 : 52;
+
+      // 1-col: node on the left, text on the right
+      const PX = COLS === 1 ? 44 : 46;
+      const PY = 44;
+
+      const numRows = COLS === 1 ? total : Math.ceil(total / COLS);
+      const VB_W = COLS === 1 ? 280 : PX * 2 + HG;
+      const VB_H = PY * 2 + VG * Math.max(numRows - 1, 0) + LABEL;
+      const SVG_W = COLS === 1 ? 290 : 360;
+
+      function nodePos(i: number): {x:number; y:number} {
+        if (COLS === 1) return { x: PX, y: PY + i * VG };
+        const row = Math.floor(i / COLS);
+        const col = i % COLS;
+        // Even rows: L→R; odd rows: R→L
+        const xIdx = (row % 2 === 0) ? col : (COLS - 1 - col);
+        return { x: PX + xIdx * HG, y: PY + row * VG };
+      }
+
+      const pts = courses.map((_:any, i:number) => nodePos(i));
+
+      // Build road paths
+      const grayD    = buildRoad(pts, CR);
+      // Progress road: nodes 0..done (last completed or available)
+      const progEnd  = Math.min(done < total ? done : done - 1, total - 1);
+      const progPts  = done > 0 || (done === 0 && total > 0 && courses[0]?.status === 'available')
+        ? pts.slice(0, progEnd + 1)
+        : [];
+      const progD    = buildRoad(progPts, CR);
+      const progCol  = allDone ? '#4ade80' : '#93c5fd';
+
+      // Build node SVG elements
+      let nodesSVG = '';
+      courses.forEach((c: any, i: number) => {
+        const { x, y } = pts[i];
+        const th = TH[c.status] ?? TH.locked;
+        const num = i + 1;
+        const isLocked = c.status === 'locked';
+
+        // Pulse ring for available
+        const pulse = c.status === 'available' ? `
+          <circle cx="${x}" cy="${y}" r="${NR+5}" fill="none" stroke="${th.fill}" stroke-width="2.5" opacity="0">
+            <animate attributeName="r" values="${NR+3};${NR+20}" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.35;0" dur="2s" repeatCount="indefinite"/>
+          </circle>` : '';
+
+        // Number label inside circle
+        const icon = c.status === 'completed' ? '✓' : String(num);
+        const fontSize = c.status === 'completed' ? 15 : 13;
+
+        // Name + badge: right of node (1-col) or below (2-col)
+        const lines = wrapSVG(sName(c.slug), 14);
+        const BW = 62, BH = 15;
+        let nameEls: string;
+        let badgeEl: string;
+        if (COLS === 1) {
+          const tx = x + NR + 16;
+          nameEls = lines.map((ln: string, li: number) =>
+            `<text x="${tx}" y="${y + (li - (lines.length - 1) / 2) * 14}" text-anchor="start" dominant-baseline="middle"
+              font-size="11" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
+          ).join('');
+          const by = y + Math.ceil(lines.length / 2) * 14 + 3;
+          badgeEl = `
+            <rect x="${tx}" y="${by}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
+            <text x="${tx + BW/2}" y="${by + BH/2}" text-anchor="middle" dominant-baseline="middle"
+              font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+        } else {
+          const nameY0 = y + NR + 12;
+          nameEls = lines.map((ln: string, li: number) =>
+            `<text x="${x}" y="${nameY0 + li*12}" text-anchor="middle" dominant-baseline="hanging"
+              font-size="10" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
+          ).join('');
+          const badgeY = nameY0 + lines.length * 12 + 4;
+          badgeEl = `
+            <rect x="${x-BW/2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
+            <text x="${x}" y="${badgeY+BH/2}" text-anchor="middle" dominant-baseline="middle"
+              font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+        }
+
+        // Lock badge overlay (top-right of circle) for locked nodes
+        const lockBadge = isLocked ? `
+          <circle cx="${x+NR-5}" cy="${y-NR+5}" r="9" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+          <text x="${x+NR-5}" y="${y-NR+5}" text-anchor="middle" dominant-baseline="middle" font-size="9">🔒</text>` : '';
+
+        const inner = `
+          ${pulse}
+          <circle cx="${x}" cy="${y}" r="${NR+3}" fill="white"/>
+          <circle cx="${x}" cy="${y}" r="${NR}" fill="${th.fill}"/>
+          <text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle"
+            font-size="${fontSize}" font-weight="800" fill="${th.text}" font-family="system-ui,sans-serif">${icon}</text>
+          ${lockBadge}
+          ${nameEls}
+          ${badgeEl}`;
+
+        nodesSVG += isLocked
+          ? `<g>${inner}</g>`
+          : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths')" style="cursor:pointer">${inner}</a>`;
+      });
+
+      const lastPt = pts[pts.length - 1];
+      const trophyEl = '';
+
+      const svgEl = `<svg width="${SVG_W}" viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg">
+        <path d="${grayD}" fill="none" stroke="#e2e8f0" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>
+        ${progD ? `<path d="${progD}" fill="none" stroke="${progCol}" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+        ${trophyEl}
+        ${nodesSVG}
+      </svg>`;
+
+      const pBarCol = allDone ? 'var(--good)' : 'var(--blue)';
+      return `
+        <div class="detail-header">
+          <div class="detail-title">${p.title||p.slug}</div>
+          ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
+          <div class="detail-prog">
+            <div class="progress-bar" style="flex:1">
+              <div class="progress-bar-fill" style="width:${pct}%;background:${pBarCol}"></div>
+            </div>
+            <span class="detail-prog-pct" style="color:${pBarCol}">${pct}%</span>
+            <span>${done}/${total} cours</span>
+          </div>
+        </div>
+        <div class="snake-wrap">${svgEl}</div>
+        ${allDone?'<div style="text-align:center;padding:10px 0;font-size:1rem;font-weight:700;color:var(--good)">🏆 Parcours terminé !</div>':''}`;
+    }
+
+    function showList() {
+      document.getElementById('view-list')!.style.display = 'block';
+      document.getElementById('view-detail')!.style.display = 'none';
+      window.scrollTo({ top:0, behavior:'smooth' });
+    }
+    function showDetail(slug: string) {
+      const p = allPaths.find((x:any)=>x.slug===slug);
+      if (!p) return;
+      document.getElementById('detail-content')!.innerHTML = renderDetail(p);
+      document.getElementById('view-list')!.style.display = 'none';
+      document.getElementById('view-detail')!.style.display = 'block';
+      window.scrollTo({ top:0, behavior:'smooth' });
+    }
+
+    async function init() {
+      if (!token) return;
+      try {
+        const res = await fetch('/api/my/paths', { headers: { Authorization:`Bearer ${token}` } });
+        if (res.status === 401) { localStorage.clear(); window.location.href = '/login'; return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { paths } = await res.json() as { paths: any[] };
+        allPaths = paths ?? [];
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('mp-content')!.style.display = 'block';
+        if (!allPaths.length) {
+          document.getElementById('mp-empty')!.style.display = 'block';
+          return;
+        }
+        const list = document.getElementById('mp-list')!;
+        list.innerHTML = renderList();
+        list.querySelectorAll<HTMLElement>('.path-list-card').forEach(card => {
+          card.addEventListener('click', () => showDetail(card.dataset.slug!));
+        });
+        document.getElementById('btn-back')!.addEventListener('click', showList);
+      } catch {
+        document.getElementById('loading')!.style.display = 'none';
+        (window as any).showToast?.('Erreur lors du chargement des parcours', 'error');
+      }
+    }
+
+    init();
+  </script>
+</App>

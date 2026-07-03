@@ -1,8 +1,42 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 )
+
+// courseBody is the request body for endpoints that identify a user+course pair.
+type courseBody struct {
+	UserID     string `json:"user_id"`
+	CourseSlug string `json:"course_slug"`
+}
+
+// lessonCompleteBody is the request body for marking a single lesson complete.
+type lessonCompleteBody struct {
+	UserID     string `json:"user_id"`
+	CourseSlug string `json:"course_slug"`
+	LessonSlug string `json:"lesson_slug"`
+}
+
+// moduleProgressBody is the request body for recording a quiz module result.
+type moduleProgressBody struct {
+	UserID      string `json:"user_id"`
+	CourseSlug  string `json:"course_slug"`
+	ModuleIndex int    `json:"module_index"`
+	ModuleSlug  string `json:"module_slug"`
+	Score       int    `json:"score"`
+	MaxScore    int    `json:"max_score"`
+	Passed      bool   `json:"passed"`
+}
+
+// moduleProgressRow is a single row returned by InternalGetModuleProgress.
+type moduleProgressRow struct {
+	ModuleIndex int  `json:"module_index"`
+	BestScore   int  `json:"best_score"`
+	MaxScore    int  `json:"max_score"`
+	Passed      bool `json:"passed"`
+	Attempts    int  `json:"attempts"`
+}
 
 // InternalAutoEnroll godoc
 // @Summary  Auto-enroll a user in a public course (internal)
@@ -13,18 +47,16 @@ import (
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/enrollments/auto [post]
 func (s *State) InternalAutoEnroll(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		UserID     string `json:"user_id"`
-		CourseSlug string `json:"course_slug"`
-	}
+	var body courseBody
 	if err := decode(r, &body); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
 		return
 	}
 	_, err := s.Pool.Exec(r.Context(),
 		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		body.UserID, body.CourseSlug)
 	if err != nil {
+		slog.Error("failed to auto-enroll user", "userID", body.UserID, "courseSlug", body.CourseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -47,6 +79,7 @@ func (s *State) InternalCheckEnrollment(w http.ResponseWriter, r *http.Request) 
 		`SELECT COUNT(*) > 0 FROM enrollments WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug).Scan(&enrolled)
 	if err != nil {
+		slog.Error("failed to check enrollment", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -68,6 +101,7 @@ func (s *State) InternalViewedLessons(w http.ResponseWriter, r *http.Request) {
 		`SELECT lesson_slug FROM lesson_progress WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug)
 	if err != nil {
+		slog.Error("failed to query viewed lessons", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -94,13 +128,9 @@ func (s *State) InternalViewedLessons(w http.ResponseWriter, r *http.Request) {
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/progress/complete [post]
 func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		UserID     string `json:"user_id"`
-		CourseSlug string `json:"course_slug"`
-		LessonSlug string `json:"lesson_slug"`
-	}
+	var body lessonCompleteBody
 	if err := decode(r, &body); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
 		return
 	}
 	_, err := s.Pool.Exec(r.Context(),
@@ -109,6 +139,34 @@ func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 		 ON CONFLICT (user_id, course_slug, lesson_slug) DO NOTHING`,
 		body.UserID, body.CourseSlug, body.LessonSlug)
 	if err != nil {
+		slog.Error("failed to mark lesson complete", "userID", body.UserID, "courseSlug", body.CourseSlug, "lessonSlug", body.LessonSlug, "err", err)
+		s.Error(w, http.StatusInternalServerError, "DB error")
+		return
+	}
+	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// InternalMarkCourseComplete godoc
+// @Summary  Mark a whole course as complete (internal)
+// @Tags     Internal
+// @Accept   json
+// @Produce  json
+// @Param    body  body  object  true  "user_id, course_slug"
+// @Success  200   {object}  map[string]bool
+// @Router   /internal/progress/course-complete [post]
+func (s *State) InternalMarkCourseComplete(w http.ResponseWriter, r *http.Request) {
+	var body courseBody
+	if err := decode(r, &body); err != nil {
+		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
+		return
+	}
+	_, err := s.Pool.Exec(r.Context(),
+		`INSERT INTO lesson_progress (user_id, course_slug, lesson_slug, viewed_at)
+		 VALUES ($1::uuid, $2, '__complete__', NOW())
+		 ON CONFLICT (user_id, course_slug, lesson_slug) DO NOTHING`,
+		body.UserID, body.CourseSlug)
+	if err != nil {
+		slog.Error("failed to mark course complete", "userID", body.UserID, "courseSlug", body.CourseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -124,17 +182,9 @@ func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/progress/module [post]
 func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		UserID      string `json:"user_id"`
-		CourseSlug  string `json:"course_slug"`
-		ModuleIndex int    `json:"module_index"`
-		ModuleSlug  string `json:"module_slug"`
-		Score       int    `json:"score"`
-		MaxScore    int    `json:"max_score"`
-		Passed      bool   `json:"passed"`
-	}
+	var body moduleProgressBody
 	if err := decode(r, &body); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
 		return
 	}
 	_, err := s.Pool.Exec(r.Context(), `
@@ -150,6 +200,7 @@ func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Requ
 			updated_at   = NOW()`,
 		body.UserID, body.CourseSlug, body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
 	if err != nil {
+		slog.Error("failed to record module progress", "userID", body.UserID, "courseSlug", body.CourseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -174,6 +225,7 @@ func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 		 WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug).Scan(&totalScore)
 	if err != nil {
+		slog.Error("failed to query course score", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -184,6 +236,7 @@ func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 		   AND passed = true AND module_slug IS NOT NULL`,
 		userID, courseSlug)
 	if err != nil {
+		slog.Error("failed to query passed modules", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
@@ -227,20 +280,14 @@ func (s *State) InternalGetModuleProgress(w http.ResponseWriter, r *http.Request
 		 WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug)
 	if err != nil {
+		slog.Error("failed to query module progress", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
 		return
 	}
 	defer rows.Close()
-	type progressRow struct {
-		ModuleIndex int  `json:"module_index"`
-		BestScore   int  `json:"best_score"`
-		MaxScore    int  `json:"max_score"`
-		Passed      bool `json:"passed"`
-		Attempts    int  `json:"attempts"`
-	}
-	progress := make([]progressRow, 0)
+	progress := make([]moduleProgressRow, 0)
 	for rows.Next() {
-		var p progressRow
+		var p moduleProgressRow
 		if rows.Scan(&p.ModuleIndex, &p.BestScore, &p.MaxScore, &p.Passed, &p.Attempts) == nil {
 			progress = append(progress, p)
 		}

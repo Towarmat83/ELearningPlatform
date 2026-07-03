@@ -46,7 +46,8 @@ func NewK8sWatcher(store *Store, kubeconfig, namespace string) (*K8sWatcher, err
 	return &K8sWatcher{store: store, cache: c}, nil
 }
 
-// Start begins watching Course CRDs and blocks until the initial list is synced.
+// Start begins watching Course CRDs. Cache sync happens in the background
+// so the HTTP server can start accepting requests immediately.
 func (w *K8sWatcher) Start(ctx context.Context) error {
 	informer, err := w.cache.GetInformer(ctx, &coursev1.Course{})
 	if err != nil {
@@ -67,10 +68,14 @@ func (w *K8sWatcher) Start(ctx context.Context) error {
 		}
 	}()
 
-	if !w.cache.WaitForCacheSync(ctx) {
-		return fmt.Errorf("cache sync failed")
-	}
-	slog.Info("initial course list synced from K8s")
+	go func() {
+		if !w.cache.WaitForCacheSync(ctx) {
+			slog.Error("course cache sync failed")
+			return
+		}
+		slog.Info("initial course list synced from K8s")
+	}()
+
 	return nil
 }
 
@@ -265,6 +270,114 @@ func rawExtensionToMap(re *runtime.RawExtension) map[string]interface{} {
 
 func sourceK8s(slug string) string {
 	return "k8s:" + slug
+}
+
+// PathWatcher watches Path CRDs in the cluster and populates a PathStore.
+// It mirrors the K8sWatcher pattern using controller-runtime cache.
+type PathWatcher struct {
+	store *PathStore
+	cache crcache.Cache
+}
+
+// NewPathWatcher creates a watcher that syncs Path CRDs into the given store.
+func NewPathWatcher(store *PathStore, kubeconfig, namespace string) (*PathWatcher, error) {
+	cfg, err := restConfig(kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("k8s config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := coursev1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register scheme: %w", err)
+	}
+
+	c, err := crcache.New(cfg, crcache.Options{
+		Scheme:            scheme,
+		DefaultNamespaces: map[string]crcache.Config{namespace: {}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create cache: %w", err)
+	}
+
+	return &PathWatcher{store: store, cache: c}, nil
+}
+
+// Start begins watching Path CRDs. Cache sync happens in the background
+// so the HTTP server can start accepting requests immediately.
+func (w *PathWatcher) Start(ctx context.Context) error {
+	informer, err := w.cache.GetInformer(ctx, &coursev1.Path{})
+	if err != nil {
+		return fmt.Errorf("get informer: %w", err)
+	}
+
+	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { w.upsert(obj) },
+		UpdateFunc: func(_, obj interface{}) { w.upsert(obj) },
+		DeleteFunc: func(obj interface{}) { w.remove(obj) },
+	}); err != nil {
+		return fmt.Errorf("add event handler: %w", err)
+	}
+
+	go func() {
+		if err := w.cache.Start(ctx); err != nil {
+			slog.Error("k8s path cache stopped", "err", err)
+		}
+	}()
+
+	go func() {
+		if !w.cache.WaitForCacheSync(ctx) {
+			slog.Error("path cache sync failed")
+			return
+		}
+		slog.Info("initial path list synced from K8s")
+	}()
+
+	return nil
+}
+
+func (w *PathWatcher) upsert(obj interface{}) {
+	cr, ok := obj.(*coursev1.Path)
+	if !ok {
+		return
+	}
+	p := pathFromCR(cr)
+	w.store.Put(p)
+	slog.Debug("path upserted from K8s", "slug", p.Slug)
+}
+
+func (w *PathWatcher) remove(obj interface{}) {
+	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
+		obj = final.Obj
+	}
+	cr, ok := obj.(*coursev1.Path)
+	if !ok {
+		return
+	}
+	w.store.DeleteBySource(sourceK8s(cr.Name))
+	slog.Debug("path removed from K8s", "slug", cr.Name)
+}
+
+func pathFromCR(cr *coursev1.Path) *Path {
+	slug := cr.Name
+	title := cr.Spec.Title
+	if title == "" {
+		title = slug
+	}
+
+	courses := make([]string, 0, len(cr.Spec.Courses))
+	for _, slug := range cr.Spec.Courses {
+		if slug != "" {
+			courses = append(courses, slug)
+		}
+	}
+
+	return &Path{
+		Slug:        slug,
+		Title:       title,
+		Description: cr.Spec.Description,
+		Courses:     courses,
+		Source:      sourceK8s(slug),
+	}
 }
 
 func restConfig(kubeconfig string) (*rest.Config, error) {

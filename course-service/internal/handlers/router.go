@@ -36,6 +36,9 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	r.Get("/api/courses", s.ListCourses)
 	r.Get("/api/courses/{slug}", s.GetCourse)
 
+	r.Get("/api/paths", s.ListPaths)
+	r.Get("/api/paths/{slug}", s.GetPath)
+
 	r.Get("/uploads/{filename}", s.ServeUpload)
 
 	r.Group(func(r chi.Router) {

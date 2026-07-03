@@ -87,11 +87,11 @@ func (s *PathStore) Get(slug string) *Path {
 
 func (s *PathStore) List() []*Path {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	out := make([]*Path, 0, len(s.paths))
 	for _, p := range s.paths {
 		out = append(out, p)
 	}
+	s.mu.RUnlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
 	return out
 }
@@ -105,10 +105,14 @@ func (s *PathStore) Put(p *Path) {
 func (s *PathStore) DeleteBySource(source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var toDelete []string
 	for slug, p := range s.paths {
 		if p.Source == source {
-			delete(s.paths, slug)
+			toDelete = append(toDelete, slug)
 		}
+	}
+	for _, slug := range toDelete {
+		delete(s.paths, slug)
 	}
 }
 

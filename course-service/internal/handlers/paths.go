@@ -1,6 +1,11 @@
 package handlers
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/elearning/course-service/internal/content"
+)
 
 // ListPaths godoc
 // @Summary  List all learning paths
@@ -10,7 +15,7 @@ import "net/http"
 // @Router   /api/paths [get]
 func (s *State) ListPaths(w http.ResponseWriter, r *http.Request) {
 	paths := s.Paths.List()
-	s.JSON(w, http.StatusOK, map[string]any{"paths": paths})
+	s.JSON(w, http.StatusOK, map[string][]*content.Path{"paths": paths})
 }
 
 // GetPath godoc
@@ -25,7 +30,7 @@ func (s *State) GetPath(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	p := s.Paths.Get(slug)
 	if p == nil {
-		s.Error(w, http.StatusNotFound, "Path not found")
+		s.Error(w, http.StatusNotFound, fmt.Sprintf("Path %s not found", slug))
 		return
 	}
 	s.JSON(w, http.StatusOK, p)

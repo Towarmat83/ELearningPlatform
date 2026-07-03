@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"time"
 )
 
@@ -28,15 +30,42 @@ type myPath struct {
 	Courses     []courseStatus `json:"courses"`
 }
 
-func (s *State) fetchPathDetail(slug string) (*pathDetail, error) {
+type enrollment struct {
+	slug       string
+	enrolledAt time.Time
+}
+
+// enrolledUser represents a user enrolled in a learning path,
+// along with their progress across the path's courses.
+type enrolledUser struct {
+	UserID           string         `json:"user_id"`
+	Email            string         `json:"email"`
+	Role             string         `json:"role"`
+	EnrolledAt       time.Time      `json:"enrolled_at"`
+	CompletedCourses int            `json:"completed_courses"`
+	TotalCourses     int            `json:"total_courses"`
+	Courses          []courseStatus `json:"courses,omitempty"`
+}
+
+var slugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+func (s *State) fetchPathDetail(r *http.Request, slug string) (*pathDetail, error) {
+	if !slugRE.MatchString(slug) {
+		return nil, fmt.Errorf("invalid path slug: %q", slug)
+	}
 	url := fmt.Sprintf("%s/api/paths/%s", s.Config.CourseServiceURL, slug)
-	resp, err := http.Get(url) //nolint:noctx
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("course-service returned %d for path %s", resp.StatusCode, slug)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("course-service returned %d for path %s: %s", resp.StatusCode, slug, body)
 	}
 	var p pathDetail
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
@@ -60,15 +89,12 @@ func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 		 WHERE user_id = $1::uuid ORDER BY enrolled_at DESC`,
 		claims.Subject)
 	if err != nil {
+		slog.Error("failed to query path enrollments", "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 	defer rows.Close()
 
-	type enrollment struct {
-		slug       string
-		enrolledAt time.Time
-	}
 	var enrollments []enrollment
 	for rows.Next() {
 		var e enrollment
@@ -79,7 +105,7 @@ func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]myPath, 0, len(enrollments))
 	for _, e := range enrollments {
-		detail, err := s.fetchPathDetail(e.slug)
+		detail, err := s.fetchPathDetail(r, e.slug)
 		if err != nil {
 			slog.Warn("failed to fetch path detail", "slug", e.slug, "err", err)
 			result = append(result, myPath{
@@ -113,9 +139,13 @@ func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	s.JSON(w, http.StatusOK, map[string]any{"paths": result})
+	s.JSON(w, http.StatusOK, map[string][]myPath{"paths": result})
 }
 
+// completedCoursesCtx returns the set of course slugs (from the provided list)
+// that userID has completed. Completion is not path-scoped: a course finished in
+// any path counts. Two sources are checked — passed quiz modules (module_progress)
+// and the __complete__ sentinel in lesson_progress.
 func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []string) map[string]bool {
 	if len(slugs) == 0 {
 		return nil
@@ -130,6 +160,7 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 		 ) sub`,
 		userID, slugs)
 	if err != nil {
+		slog.Error("failed to query completed courses", "userID", userID, "err", err)
 		return nil
 	}
 	defer rows.Close()
@@ -154,7 +185,10 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 
-	detail, _ := s.fetchPathDetail(slug)
+	detail, err := s.fetchPathDetail(r, slug)
+	if err != nil {
+		slog.Warn("failed to fetch path detail for enrollments", "slug", slug, "err", err)
+	}
 
 	rows, err := s.Pool.Query(r.Context(), `
 		SELECT u.id, u.email, u.role, pe.enrolled_at
@@ -163,20 +197,11 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 		WHERE pe.path_slug = $1
 		ORDER BY pe.enrolled_at DESC`, slug)
 	if err != nil {
+		slog.Error("failed to query path enrollments", "slug", slug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 	defer rows.Close()
-
-	type enrolledUser struct {
-		UserID           string         `json:"user_id"`
-		Email            string         `json:"email"`
-		Role             string         `json:"role"`
-		EnrolledAt       time.Time      `json:"enrolled_at"`
-		CompletedCourses int            `json:"completed_courses"`
-		TotalCourses     int            `json:"total_courses"`
-		Courses          []courseStatus `json:"courses,omitempty"`
-	}
 
 	var users []enrolledUser
 	for rows.Next() {
@@ -205,7 +230,7 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 	if users == nil {
 		users = []enrolledUser{}
 	}
-	s.JSON(w, http.StatusOK, map[string]any{"users": users})
+	s.JSON(w, http.StatusOK, map[string][]enrolledUser{"users": users})
 }
 
 // AdminEnrollUserInPath godoc
@@ -232,6 +257,7 @@ func (s *State) AdminEnrollUserInPath(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO path_enrollments (user_id, path_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		body.UserID, slug)
 	if err != nil {
+		slog.Error("failed to enroll user in path", "slug", slug, "userID", body.UserID, "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
 		return
 	}
@@ -254,6 +280,7 @@ func (s *State) AdminUnenrollUserFromPath(w http.ResponseWriter, r *http.Request
 		`DELETE FROM path_enrollments WHERE user_id = $1::uuid AND path_slug = $2`,
 		userID, slug)
 	if err != nil {
+		slog.Error("failed to unenroll user from path", "slug", slug, "userID", userID, "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
 		return
 	}

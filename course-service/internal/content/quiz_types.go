@@ -24,6 +24,7 @@ func FetchQuizContent(src, ref, path, token string) (*Quiz, error) {
 	if qy.ID == "" {
 		qy.ID = path
 	}
+
 	if qy.Title == "" {
 		qy.Title = qy.ID
 	}
@@ -187,6 +188,7 @@ func (qy QuizYAML) ToQuiz() *Quiz {
 	for _, c := range qy.Covers {
 		q.Covers = append(q.Covers, CoverEntry(c))
 	}
+
 	for _, qa := range qy.Questions {
 		qq := Question{
 			ID:            qa.ID,
@@ -202,15 +204,18 @@ func (qy QuizYAML) ToQuiz() *Quiz {
 		for i, a := range qa.Answers {
 			qq.Answers[i] = Answer(a)
 		}
+
 		for i, it := range qa.Items {
 			qq.Items[i] = OrderItem(it)
 		}
+
 		if qa.PartialScoring != nil {
 			qq.PartialScoring = &PartialScoring{
 				Enabled:       qa.PartialScoring.Enabled,
 				AllowNegative: qa.PartialScoring.AllowNegative,
 			}
 		}
+
 		qq.Feedback = Feedback{
 			Wrong:   qa.Feedback.Wrong,
 			Correct: qa.Feedback.Correct,
@@ -218,13 +223,17 @@ func (qy QuizYAML) ToQuiz() *Quiz {
 		for _, sr := range qa.Feedback.SourceRefs {
 			qq.Feedback.SourceRefs = append(qq.Feedback.SourceRefs, SourceRef(sr))
 		}
+
 		if qq.Points == 0 {
 			qq.Points = 1
 		}
+
 		if qq.Difficulty == "" {
 			qq.Difficulty = "medium"
 		}
+
 		q.Questions = append(q.Questions, qq)
 	}
+
 	return q
 }

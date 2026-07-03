@@ -12,13 +12,16 @@ func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[str
 		return nil
 	}
 	defer rows.Close()
+
 	m := make(map[string]bool)
+
 	for rows.Next() {
 		var slug string
 		if rows.Scan(&slug) == nil {
 			m[slug] = true
 		}
 	}
+
 	return m
 }
 
@@ -30,7 +33,7 @@ func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[str
 // @Param     slug         path  string  true  "Course slug"
 // @Param     lesson_slug  path  string  true  "Lesson slug"
 // @Success   200   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post]
+// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post].
 func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	lessonSlug := param(r, "lesson_slug")
@@ -43,7 +46,9 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 		claims.Subject, courseSlug, lessonSlug)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})
 }

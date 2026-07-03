@@ -55,15 +55,16 @@ func (w *K8sWatcher) Start(ctx context.Context) error {
 	}
 
 	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.upsert(obj) },
-		UpdateFunc: func(_, obj interface{}) { w.upsert(obj) },
-		DeleteFunc: func(obj interface{}) { w.remove(obj) },
+		AddFunc:    func(obj any) { w.upsert(obj) },
+		UpdateFunc: func(_, obj any) { w.upsert(obj) },
+		DeleteFunc: func(obj any) { w.remove(obj) },
 	}); err != nil {
 		return fmt.Errorf("add event handler: %w", err)
 	}
 
 	go func() {
-		if err := w.cache.Start(ctx); err != nil {
+		err := w.cache.Start(ctx)
+		if err != nil {
 			slog.Error("k8s cache stopped", "err", err)
 		}
 	}()
@@ -71,32 +72,37 @@ func (w *K8sWatcher) Start(ctx context.Context) error {
 	go func() {
 		if !w.cache.WaitForCacheSync(ctx) {
 			slog.Error("course cache sync failed")
+
 			return
 		}
+
 		slog.Info("initial course list synced from K8s")
 	}()
 
 	return nil
 }
 
-func (w *K8sWatcher) upsert(obj interface{}) {
+func (w *K8sWatcher) upsert(obj any) {
 	cr, ok := obj.(*coursev1.Course)
 	if !ok {
 		return
 	}
+
 	c := courseFromCR(cr)
 	w.store.Put(c)
 	slog.Debug("course upserted from K8s", "slug", c.Slug)
 }
 
-func (w *K8sWatcher) remove(obj interface{}) {
+func (w *K8sWatcher) remove(obj any) {
 	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
 		obj = final.Obj
 	}
+
 	cr, ok := obj.(*coursev1.Course)
 	if !ok {
 		return
 	}
+
 	w.store.DeleteBySource(sourceK8s(cr.Name))
 	slog.Debug("course removed from K8s", "slug", cr.Name)
 }
@@ -112,10 +118,12 @@ func courseFromCR(cr *coursev1.Course) *Course {
 	}
 
 	var prerequisites []CoursePrerequisite
+
 	for _, p := range spec.Prerequisites {
 		if p.Course == "" {
 			continue
 		}
+
 		prerequisites = append(prerequisites, CoursePrerequisite{
 			Course:   p.Course,
 			MinScore: p.MinScore,
@@ -165,6 +173,7 @@ func moduleFromCR(index int, m coursev1.Module) Module {
 	if mod.Name == "" {
 		mod.Name = fmt.Sprintf("module-%d", index+1)
 	}
+
 	if mod.Type == "" {
 		mod.Type = "text"
 	}
@@ -181,13 +190,16 @@ func moduleFromCR(index int, m coursev1.Module) Module {
 			if mod.Cooldown.Strategy == "" {
 				mod.Cooldown.Strategy = "exponential"
 			}
+
 			if mod.Cooldown.BaseSeconds == 0 {
 				mod.Cooldown.BaseSeconds = 30
 			}
+
 			if mod.Cooldown.Multiplier == 0 {
 				mod.Cooldown.Multiplier = 1.0
 			}
 		}
+
 		for i, q := range m.Questions {
 			mod.Questions = append(mod.Questions, questionFromCR(i, q))
 		}
@@ -209,24 +221,30 @@ func questionFromCR(index int, q coursev1.Question) Question {
 	for _, a := range q.Answers {
 		question.Answers = append(question.Answers, Answer{ID: a.ID, Text: a.Text, Correct: a.Correct})
 	}
+
 	for _, it := range q.Items {
 		question.Items = append(question.Items, OrderItem{ID: it.ID, Text: it.Text})
 	}
+
 	if question.ID == "" {
 		question.ID = fmt.Sprintf("q-%d", index+1)
 	}
+
 	if question.Difficulty == "" {
 		question.Difficulty = "medium"
 	}
+
 	if question.Points == 0 {
 		question.Points = 1
 	}
+
 	if q.PartialScoring != nil {
 		question.PartialScoring = &PartialScoring{
 			Enabled:       q.PartialScoring.Enabled,
 			AllowNegative: q.PartialScoring.AllowNegative,
 		}
 	}
+
 	question.Feedback = Feedback{
 		Wrong:   q.Feedback.Wrong,
 		Correct: q.Feedback.Correct,
@@ -239,6 +257,7 @@ func questionFromCR(index int, q coursev1.Question) Question {
 			Priority: sr.Priority,
 		})
 	}
+
 	return question
 }
 
@@ -246,6 +265,7 @@ func stepsFromCR(steps []coursev1.CheckStep) []CheckStep {
 	if len(steps) == 0 {
 		return nil
 	}
+
 	out := make([]CheckStep, 0, len(steps))
 	for _, s := range steps {
 		out = append(out, CheckStep{
@@ -254,17 +274,22 @@ func stepsFromCR(steps []coursev1.CheckStep) []CheckStep {
 			CheckParams: rawExtensionToMap(s.CheckParams),
 		})
 	}
+
 	return out
 }
 
-func rawExtensionToMap(re *runtime.RawExtension) map[string]interface{} {
+func rawExtensionToMap(re *runtime.RawExtension) map[string]any {
 	if re == nil || len(re.Raw) == 0 {
 		return nil
 	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(re.Raw, &m); err != nil {
+
+	var m map[string]any
+
+	err := json.Unmarshal(re.Raw, &m)
+	if err != nil {
 		return nil
 	}
+
 	return m
 }
 
@@ -311,15 +336,16 @@ func (w *PathWatcher) Start(ctx context.Context) error {
 	}
 
 	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.upsert(obj) },
-		UpdateFunc: func(_, obj interface{}) { w.upsert(obj) },
-		DeleteFunc: func(obj interface{}) { w.remove(obj) },
+		AddFunc:    func(obj any) { w.upsert(obj) },
+		UpdateFunc: func(_, obj any) { w.upsert(obj) },
+		DeleteFunc: func(obj any) { w.remove(obj) },
 	}); err != nil {
 		return fmt.Errorf("add event handler: %w", err)
 	}
 
 	go func() {
-		if err := w.cache.Start(ctx); err != nil {
+		err := w.cache.Start(ctx)
+		if err != nil {
 			slog.Error("k8s path cache stopped", "err", err)
 		}
 	}()
@@ -327,38 +353,44 @@ func (w *PathWatcher) Start(ctx context.Context) error {
 	go func() {
 		if !w.cache.WaitForCacheSync(ctx) {
 			slog.Error("path cache sync failed")
+
 			return
 		}
+
 		slog.Info("initial path list synced from K8s")
 	}()
 
 	return nil
 }
 
-func (w *PathWatcher) upsert(obj interface{}) {
+func (w *PathWatcher) upsert(obj any) {
 	cr, ok := obj.(*coursev1.Path)
 	if !ok {
 		return
 	}
+
 	p := pathFromCR(cr)
 	w.store.Put(p)
 	slog.Debug("path upserted from K8s", "slug", p.Slug)
 }
 
-func (w *PathWatcher) remove(obj interface{}) {
+func (w *PathWatcher) remove(obj any) {
 	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
 		obj = final.Obj
 	}
+
 	cr, ok := obj.(*coursev1.Path)
 	if !ok {
 		return
 	}
+
 	w.store.DeleteBySource(sourceK8s(cr.Name))
 	slog.Debug("path removed from K8s", "slug", cr.Name)
 }
 
 func pathFromCR(cr *coursev1.Path) *Path {
 	slug := cr.Name
+
 	title := cr.Spec.Title
 	if title == "" {
 		title = slug
@@ -384,5 +416,6 @@ func restConfig(kubeconfig string) (*rest.Config, error) {
 	if kubeconfig != "" {
 		return clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
+
 	return rest.InClusterConfig()
 }

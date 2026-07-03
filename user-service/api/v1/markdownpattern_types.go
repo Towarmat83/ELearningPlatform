@@ -53,6 +53,7 @@ type MarkdownPattern struct {
 type MarkdownPatternList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
+
 	// Items is the list of MarkdownPatterns.
 	Items []MarkdownPattern `json:"items"`
 }

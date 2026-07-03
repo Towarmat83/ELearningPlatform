@@ -48,6 +48,7 @@ func (o OIDCBootstrap) ResolveClientSecret() string {
 			}
 		}
 	}
+
 	return o.ClientSecret
 }
 
@@ -82,6 +83,7 @@ func (c *Config) FindProvider(id string) *ProviderConfig {
 			return &c.Providers[i]
 		}
 	}
+
 	return nil
 }
 
@@ -107,31 +109,39 @@ func Load() *Config {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
 		c.DatabaseURL = v
 	}
+
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		c.JWTSecret = v
 	}
+
 	if v := os.Getenv("JWT_EXPIRY_HOURS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.JWTExpiryH = n
 		}
 	}
+
 	if v := os.Getenv("PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.Port = n
 		}
 	}
+
 	if v := os.Getenv("CORS_ORIGINS"); v != "" {
 		c.CORSOrigins = strings.Split(v, ",")
 	}
+
 	if v := os.Getenv("OAUTH_REDIRECT_BASE"); v != "" {
 		c.OAuthRedirectBase = v
 	}
+
 	if v := os.Getenv("COURSE_SERVICE_URL"); v != "" {
 		c.CourseServiceURL = v
 	}
+
 	if v := os.Getenv("K8S_NAMESPACE"); v != "" {
 		c.K8sNamespace = v
 	}
+
 	if v := os.Getenv("KUBECONFIG"); v != "" {
 		c.Kubeconfig = v
 	}

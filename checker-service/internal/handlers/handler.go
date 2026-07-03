@@ -46,15 +46,19 @@ func (h *Handler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	var req checker.EvaluateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpErr(w, http.StatusBadRequest, "invalid request body")
+
 		return
 	}
+
 	if req.Username == "" || req.Project == "" || req.Policy == "" {
 		httpErr(w, http.StatusBadRequest, "username, project and policy are required")
+
 		return
 	}
 
 	if h.config.GitLabToken == "" {
 		httpErr(w, http.StatusInternalServerError, "GITLAB_TOKEN not configured")
+
 		return
 	}
 
@@ -62,6 +66,7 @@ func (h *Handler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("gitlab client init", "err", err)
 		httpErr(w, http.StatusInternalServerError, "gitlab client error")
+
 		return
 	}
 
@@ -69,6 +74,7 @@ func (h *Handler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("gitlab fetch", "project", req.Project, "err", err)
 		httpErr(w, http.StatusBadGateway, "failed to fetch GitLab state: "+err.Error())
+
 		return
 	}
 
@@ -76,6 +82,7 @@ func (h *Handler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("rego eval", "err", err)
 		httpErr(w, http.StatusInternalServerError, "policy evaluation error: "+err.Error())
+
 		return
 	}
 

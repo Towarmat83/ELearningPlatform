@@ -13,6 +13,7 @@ func TestCreateToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateToken failed: %v", err)
 	}
+
 	if token == "" {
 		t.Error("expected non-empty token")
 	}
@@ -28,12 +29,15 @@ func TestVerifyToken_Valid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyToken failed: %v", err)
 	}
+
 	if claims.Subject != "user-abc" {
 		t.Errorf("expected subject=user-abc, got %q", claims.Subject)
 	}
+
 	if claims.Email != "foo@bar.com" {
 		t.Errorf("expected email=foo@bar.com, got %q", claims.Email)
 	}
+
 	if claims.Role != "admin" {
 		t.Errorf("expected role=admin, got %q", claims.Role)
 	}
@@ -66,7 +70,8 @@ func TestVerifyToken_Empty(t *testing.T) {
 }
 
 func TestGetClaims_WithContext(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
 	claims := GetClaims(req)
 	if claims != nil {
 		t.Error("expected nil claims from request without context")
@@ -78,7 +83,7 @@ func TestAuthMiddleware_NoHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -92,8 +97,9 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer invalid-token")
+
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -106,19 +112,23 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	token, _ := CreateToken("user-1", "a@b.com", "student", testSecret, 24)
 
 	var gotClaims *Claims
+
 	handler := Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotClaims = GetClaims(r)
+
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
+
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
+
 	if gotClaims == nil {
 		t.Error("expected claims in context")
 	} else if gotClaims.Subject != "user-1" {
@@ -133,8 +143,9 @@ func TestAdminMiddleware_StudentRole(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
+
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -150,8 +161,9 @@ func TestAdminMiddleware_AdminRole(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
+
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -165,7 +177,7 @@ func TestAdminMiddleware_NoHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

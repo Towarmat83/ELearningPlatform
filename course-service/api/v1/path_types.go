@@ -26,7 +26,8 @@ type PathSpec struct {
 type Path struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              PathSpec `json:"spec,omitempty"`
+
+	Spec PathSpec `json:"spec,omitempty"`
 }
 
 // PathList contains a list of Path.
@@ -34,5 +35,6 @@ type Path struct {
 type PathList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Path `json:"items"`
+
+	Items []Path `json:"items"`
 }

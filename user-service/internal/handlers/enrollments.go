@@ -19,7 +19,7 @@ import (
 // @Success   200   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Failure   401   {object}  map[string]string
-// @Router    /api/courses/{slug}/enroll [post]
+// @Router    /api/courses/{slug}/enroll [post].
 func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
@@ -29,13 +29,16 @@ func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 		claims.Subject, slug)
 	if err != nil {
 		slog.Error("enroll failed", "user_id", claims.Subject, "course_slug", slug, "err", err)
+
 		if strings.Contains(err.Error(), "foreign key constraint") {
 			s.Error(w, http.StatusUnauthorized, "Session expired, please log in again")
 		} else {
 			s.Error(w, http.StatusInternalServerError, "Database error")
 		}
+
 		return
 	}
+
 	metrics.EnrollmentsTotal.Inc()
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Enrolled successfully"})
 }
@@ -47,17 +50,20 @@ func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200   {object}  map[string]string
-// @Router    /api/courses/{slug}/unenroll [delete]
+// @Router    /api/courses/{slug}/unenroll [delete].
 func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
+
 	_, err := s.Pool.Exec(r.Context(),
 		`DELETE FROM enrollments WHERE user_id = $1::uuid AND course_slug = $2`,
 		claims.Subject, slug)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
+
 	metrics.EnrollmentsTotal.Dec()
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Unenrolled successfully"})
 }
@@ -77,18 +83,22 @@ type courseServiceCourse struct {
 
 func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
 	url := fmt.Sprintf("%s/api/courses/%s", s.Config.CourseServiceURL, slug)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("course-service returned %d", resp.StatusCode)
 	}
+
 	var c courseServiceCourse
 	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
 		return nil, err
 	}
+
 	return &c, nil
 }
 
@@ -98,9 +108,10 @@ func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
 // @Security  BearerAuth
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
-// @Router    /api/my/courses [get]
+// @Router    /api/my/courses [get].
 func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
+
 	rows, err := s.Pool.Query(r.Context(), `
 		SELECT e.course_slug,
 		       COUNT(DISTINCT lp.lesson_slug) + COALESCE(mp.passed_modules, 0) AS completed_labs,
@@ -122,6 +133,7 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		ORDER BY e.enrolled_at DESC`, claims.Subject)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
 	defer rows.Close()
@@ -134,11 +146,15 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rowsData []enrollmentRow
+
 	for rows.Next() {
 		var r enrollmentRow
-		if err := rows.Scan(&r.Slug, &r.CompletedLabs, &r.TotalScore, &r.LastActivity); err != nil {
+
+		err := rows.Scan(&r.Slug, &r.CompletedLabs, &r.TotalScore, &r.LastActivity)
+		if err != nil {
 			continue
 		}
+
 		rowsData = append(rowsData, r)
 	}
 
@@ -170,8 +186,10 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 				TotalScore:    row.TotalScore,
 				LastActivity:  row.LastActivity,
 			})
+
 			continue
 		}
+
 		courses = append(courses, myCourse{
 			Slug:            details.Slug,
 			ID:              details.ID,
@@ -187,8 +205,10 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 			LastActivity:    row.LastActivity,
 		})
 	}
+
 	if courses == nil {
 		courses = make([]myCourse, 0)
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"courses": courses})
 }

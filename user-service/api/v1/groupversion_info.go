@@ -24,5 +24,6 @@ var (
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(GroupVersion, &MarkdownPattern{}, &MarkdownPatternList{})
 	metav1.AddToGroupVersion(scheme, GroupVersion)
+
 	return nil
 }

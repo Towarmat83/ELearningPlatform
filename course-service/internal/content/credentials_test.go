@@ -68,6 +68,7 @@ func TestMatchGitURL(t *testing.T) {
 
 func TestGitCredentialStore_Match_Nil(t *testing.T) {
 	var s *GitCredentialStore
+
 	token := s.Match("https://github.com/any/repo")
 	if token != "" {
 		t.Errorf("expected empty token from nil store, got %q", token)
@@ -99,6 +100,7 @@ func TestGitCredentialStore_Match_NotFound(t *testing.T) {
 			{URL: "github.com/org1/*", Token: "tok1"},
 		},
 	}
+
 	tok := s.Match("https://gitlab.com/org1/repo")
 	if tok != "" {
 		t.Errorf("expected empty token, got %q", tok)
@@ -107,6 +109,7 @@ func TestGitCredentialStore_Match_NotFound(t *testing.T) {
 
 func TestGitCredentialStore_Match_Empty(t *testing.T) {
 	s := &GitCredentialStore{}
+
 	tok := s.Match("https://github.com/any/repo")
 	if tok != "" {
 		t.Errorf("expected empty token from empty store, got %q", tok)
@@ -128,11 +131,13 @@ credentials:
   - url: "gitlab.com/other/*"
     token: "token456"
 `
-	f, err := os.CreateTemp("", "creds-*.yaml")
+
+	f, err := os.CreateTemp(t.TempDir(), "creds-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
+
 	f.WriteString(content)
 	f.Close()
 
@@ -140,6 +145,7 @@ credentials:
 	if err != nil {
 		t.Fatalf("LoadCredentials failed: %v", err)
 	}
+
 	if store == nil {
 		t.Fatal("expected non-nil store")
 	}
@@ -156,24 +162,26 @@ credentials:
 }
 
 func TestLoadCredentials_EmptyFile(t *testing.T) {
-	f, err := os.CreateTemp("", "empty-*.yaml")
+	f, err := os.CreateTemp(t.TempDir(), "empty-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
+
 	f.Close()
 
 	store, err := LoadCredentials(f.Name())
 	if err != nil {
 		t.Fatalf("LoadCredentials on empty file: %v", err)
 	}
+
 	if store == nil {
 		t.Fatal("expected non-nil store even for empty file")
 	}
 }
 
 func TestLoadCredentials_InvalidYAML(t *testing.T) {
-	f, err := os.CreateTemp("", "bad-*.yaml")
+	f, err := os.CreateTemp(t.TempDir(), "bad-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

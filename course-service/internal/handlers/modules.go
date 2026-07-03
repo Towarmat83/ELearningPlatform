@@ -46,10 +46,13 @@ func sanitizeQuestions(qq []content.Question, admin bool) []any {
 			if admin {
 				pa.Correct = a.Correct
 			}
+
 			pq.Answers = append(pq.Answers, pa)
 		}
+
 		out[i] = pq
 	}
+
 	return out
 }
 
@@ -91,7 +94,7 @@ type moduleResponse struct {
 	LabURL        string                   `json:"lab_url,omitempty"`
 	CheckProvider string                   `json:"check_provider,omitempty"`
 	CheckType     string                   `json:"check_type,omitempty"`
-	CheckParams   map[string]interface{}   `json:"check_params,omitempty"`
+	CheckParams   map[string]any           `json:"check_params,omitempty"`
 	Steps         []content.CheckStep      `json:"steps,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
@@ -133,7 +136,7 @@ type questionResultAPI struct {
 	IsCorrect     bool                `json:"is_correct"`
 	PointsEarned  int                 `json:"points_earned"`
 	PointsMax     int                 `json:"points_max"`
-	CorrectAnswer interface{}         `json:"correct_answer,omitempty"`
+	CorrectAnswer any                 `json:"correct_answer,omitempty"`
 	Feedback      string              `json:"feedback,omitempty"`
 	SourceRefs    []content.SourceRef `json:"source_refs,omitempty"`
 }
@@ -143,6 +146,7 @@ func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[st
 	if err != nil {
 		return nil
 	}
+
 	q := u.Query()
 	q.Set("user_id", userID)
 	q.Set("course_slug", courseSlug)
@@ -160,10 +164,12 @@ func (s *State) viewedLessons(r *http.Request, courseSlug, userID string) map[st
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil
 	}
+
 	m := make(map[string]bool, len(result.Viewed))
 	for _, slug := range result.Viewed {
 		m[slug] = true
 	}
+
 	return m
 }
 
@@ -181,6 +187,7 @@ func (s *State) fetchModuleProgress(r *http.Request, courseSlug, userID string) 
 	if err != nil {
 		return nil
 	}
+
 	q := u.Query()
 	q.Set("user_id", userID)
 	q.Set("course_slug", courseSlug)
@@ -204,6 +211,7 @@ func (s *State) fetchModuleProgress(r *http.Request, courseSlug, userID string) 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil
 	}
+
 	m := make(map[int]moduleProgressData, len(result.Progress))
 	for _, p := range result.Progress {
 		m[p.ModuleIndex] = moduleProgressData{
@@ -213,6 +221,7 @@ func (s *State) fetchModuleProgress(r *http.Request, courseSlug, userID string) 
 			Attempts:  p.Attempts,
 		}
 	}
+
 	return m
 }
 
@@ -243,11 +252,13 @@ func completedSlugs(modules []content.Module, viewedMap map[string]bool, progres
 	for slug := range viewedMap {
 		out[slug] = true
 	}
+
 	for idx, p := range progressMap {
 		if p.Passed && idx >= 0 && idx < len(modules) {
 			out[modules[idx].Slug()] = true
 		}
 	}
+
 	return out
 }
 
@@ -258,6 +269,7 @@ func isLocked(prereqs []string, done map[string]bool) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -278,6 +290,7 @@ func (s *State) fetchCoursePrereqSummary(userID, courseSlug string) coursePrereq
 	if err != nil {
 		return coursePrereqSummary{PassedModules: map[string]bool{}}
 	}
+
 	q := u.Query()
 	q.Set("user_id", userID)
 	q.Set("course_slug", courseSlug)
@@ -306,6 +319,7 @@ func (s *State) fetchCoursePrereqSummary(userID, courseSlug string) coursePrereq
 	for _, slug := range result.PassedModules {
 		summary.PassedModules[slug] = true
 	}
+
 	return summary
 }
 
@@ -322,6 +336,7 @@ func (s *State) checkCoursePrerequisites(prereqs []content.CoursePrerequisite, u
 		if p.MinScore > 0 && summary.TotalScore < p.MinScore {
 			return false
 		}
+
 		for _, modSlug := range p.Modules {
 			if !summary.PassedModules[modSlug] {
 				return false
@@ -333,6 +348,7 @@ func (s *State) checkCoursePrerequisites(prereqs []content.CoursePrerequisite, u
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -344,25 +360,30 @@ func (s *State) checkCoursePrerequisites(prereqs []content.CoursePrerequisite, u
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200   {object}  map[string]interface{}
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/modules [get]
+// @Router    /api/courses/{slug}/modules [get].
 func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
+
 	claims := s.claims(r)
 	if claims == nil {
 		s.Error(w, http.StatusUnauthorized, "Unauthorized")
+
 		return
 	}
 
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if claims.Role != "admin" {
 		if c.IsPublic {
 			s.autoEnroll(claims.Subject, courseSlug)
 		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Enroll in this course to access it")
+
 			return
 		}
 	}
@@ -371,6 +392,7 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	if claims.Role != "admin" && len(c.Prerequisites) > 0 {
 		if !s.checkCoursePrerequisites(c.Prerequisites, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Complete prerequisite courses first")
+
 			return
 		}
 	}
@@ -386,6 +408,7 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 	for i, m := range modules {
 		locked := claims.Role != "admin" && isLocked(m.Prerequisites, done)
 		p := progress[i]
+
 		resp := moduleResponse{
 			Index:         i,
 			Name:          m.Name,
@@ -414,6 +437,7 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 			resp.Path = m.Path
 			resp.LabURL = m.LabURL
 		}
+
 		if m.Type == "quiz" {
 			if m.HasQuestions() {
 				resp.QuestionCount = len(m.Questions)
@@ -421,8 +445,10 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 				resp.QuestionCount = 0 // unknown until fetched
 			}
 		}
+
 		out = append(out, resp)
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"modules": out})
 }
 
@@ -435,26 +461,31 @@ func (s *State) ListModules(w http.ResponseWriter, r *http.Request) {
 // @Param     index  path  int     true  "Module index (0-based)"
 // @Success   200    {object}  moduleResponse
 // @Failure   404    {object}  map[string]string
-// @Router    /api/courses/{slug}/modules/{index} [get]
+// @Router    /api/courses/{slug}/modules/{index} [get].
 func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	indexStr := param(r, "index")
+
 	claims := s.claims(r)
 	if claims == nil {
 		s.Error(w, http.StatusUnauthorized, "Unauthorized")
+
 		return
 	}
 
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if claims.Role != "admin" {
 		if c.IsPublic {
 			s.autoEnroll(claims.Subject, courseSlug)
 		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Enroll in this course to access it")
+
 			return
 		}
 	}
@@ -463,6 +494,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	if claims.Role != "admin" && len(c.Prerequisites) > 0 {
 		if !s.checkCoursePrerequisites(c.Prerequisites, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Complete prerequisite courses first")
+
 			return
 		}
 	}
@@ -472,10 +504,12 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 	idx, err := strconv.Atoi(indexStr)
 	if err != nil || idx < 0 || idx >= len(modules) {
 		s.Error(w, http.StatusNotFound, "Module not found")
+
 		return
 	}
 
 	m := modules[idx]
+
 	resp := moduleResponse{
 		Index:  idx,
 		Name:   m.Name,
@@ -513,8 +547,10 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 			if err != nil {
 				s.Error(w, http.StatusInternalServerError, "Failed to fetch lab content")
+
 				return
 			}
+
 			resp.Content = string(data)
 		} else {
 			resp.Content = m.Content()
@@ -524,20 +560,25 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 			data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 			if err != nil {
 				s.Error(w, http.StatusInternalServerError, "Failed to fetch module content")
+
 				return
 			}
+
 			resp.Content = string(data)
 		} else {
 			resp.Content = m.Content()
 		}
 	case "quiz":
 		var quizQuestions []content.Question
+
 		if m.HasGitContent() {
 			quiz, err := content.FetchQuizContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 			if err != nil {
 				s.Error(w, http.StatusInternalServerError, "Failed to fetch quiz content")
+
 				return
 			}
+
 			quizQuestions = quiz.Questions
 			isAdmin := claims != nil && claims.Role == "admin"
 			resp.Questions = sanitizeQuestions(quiz.Questions, isAdmin)
@@ -558,11 +599,13 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 				LockOnMaxAttempts:      m.LockOnMaxAttempts,
 			}
 		}
+
 		resp.Content = ""
 
 		// Include current cooldown state so frontend persists it across refreshes
 		if len(quizQuestions) > 0 && claims != nil {
 			cooldowns := make(map[string]cooldownState)
+
 			for _, qq := range quizQuestions {
 				remaining, attempts := s.CooldownTracker.CheckModule(claims.Subject, courseSlug, idx, qq.ID)
 				if remaining > 0 || attempts > 0 {
@@ -573,6 +616,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+
 			if len(cooldowns) > 0 {
 				resp.Cooldowns = cooldowns
 			}
@@ -590,7 +634,9 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 				PassingScore: next.PassingScore,
 			}
 			isAdmin := claims != nil && claims.Role == "admin"
+
 			var quizQuestions []content.Question
+
 			if next.HasGitContent() {
 				quiz, err := content.FetchQuizContent(next.Src, next.Ref, next.Path, s.tokenForRepo(next.Src))
 				if err == nil {
@@ -614,13 +660,17 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 					LockOnMaxAttempts:      next.LockOnMaxAttempts,
 				}
 			}
+
 			if len(quizQuestions) > 0 {
 				iq.QuestionCount = len(quizQuestions)
+
 				maxScore := 0
 				for _, q := range quizQuestions {
 					maxScore += q.Points
 				}
+
 				iq.MaxScore = maxScore
+
 				if claims != nil {
 					prog := s.fetchModuleProgress(r, courseSlug, claims.Subject)
 					if p, ok := prog[idx+1]; ok {
@@ -629,6 +679,7 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 						iq.Passed = p.Passed
 					}
 				}
+
 				resp.InlineQuiz = iq
 			}
 		}
@@ -645,30 +696,36 @@ func (s *State) GetModule(w http.ResponseWriter, r *http.Request) {
 // @Produce   json
 // @Param     slug   path  string                true  "Course slug"
 // @Param     index  path  int                   true  "Module index (0-based)"
-// @Param     body   body  content.SubmitRequest true  "Quiz answers"
+// @Param     body   content.SubmitRequest true  "Quiz answers"
 // @Success   200    {object}  submitResponse
 // @Failure   400    {object}  map[string]string
 // @Failure   404    {object}  map[string]string
-// @Router    /api/courses/{slug}/modules/{index}/submit [post]
+// @Router    /api/courses/{slug}/modules/{index}/submit [post].
 func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
+
 	claims := s.claims(r)
 	if claims == nil {
 		s.Error(w, http.StatusUnauthorized, "Authentication required")
+
 		return
 	}
+
 	userID := claims.Subject
 
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if claims.Role != "admin" {
 		if c.IsPublic {
 			s.autoEnroll(userID, courseSlug)
 		} else if !s.isEnrolled(r, courseSlug, userID) {
 			s.Error(w, http.StatusForbidden, "Enroll in this course to access it")
+
 			return
 		}
 	}
@@ -677,6 +734,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	if claims.Role != "admin" && len(c.Prerequisites) > 0 {
 		if !s.checkCoursePrerequisites(c.Prerequisites, userID) {
 			s.Error(w, http.StatusForbidden, "Complete prerequisite courses first")
+
 			return
 		}
 	}
@@ -684,28 +742,36 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 	modules := s.visibleModules(c, r)
 
 	indexStr := param(r, "index")
+
 	idx, err := strconv.Atoi(indexStr)
 	if err != nil || idx < 0 || idx >= len(modules) {
 		s.Error(w, http.StatusNotFound, "Module not found")
+
 		return
 	}
 
 	m := modules[idx]
 	if m.Type != "quiz" {
 		s.Error(w, http.StatusBadRequest, "Module is not a quiz")
+
 		return
 	}
 
 	// Resolve questions: fetch from git repo first, then fallback to inline
-	var questions []content.Question
-	var passingScore int
-	var cooldownSpec content.CooldownSpec
+	var (
+		questions    []content.Question
+		passingScore int
+		cooldownSpec content.CooldownSpec
+	)
+
 	if m.HasGitContent() {
 		quiz, err := content.FetchQuizContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 		if err != nil {
 			s.Error(w, http.StatusInternalServerError, "Failed to fetch quiz content")
+
 			return
 		}
+
 		questions = quiz.Questions
 		passingScore = quiz.PassingScore
 		cooldownSpec = quiz.Cooldown
@@ -715,17 +781,20 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 		cooldownSpec = m.Cooldown
 	} else {
 		s.Error(w, http.StatusNotFound, "No questions found for this quiz")
+
 		return
 	}
 
 	var req content.SubmitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.Error(w, http.StatusBadRequest, "Invalid request body")
+
 		return
 	}
 
 	// Check cooldowns for each question before scoring
 	cooldowns := make(map[string]cooldownState)
+
 	for _, qq := range questions {
 		remaining, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, qq.ID)
 		if remaining > 0 {
@@ -735,11 +804,13 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	if len(cooldowns) > 0 {
 		s.JSON(w, http.StatusTooEarly, map[string]any{
 			"error":     "Cooldown active for some questions",
 			"cooldowns": cooldowns,
 		})
+
 		return
 	}
 
@@ -753,6 +824,7 @@ func (s *State) SubmitModule(w http.ResponseWriter, r *http.Request) {
 
 	// Record cooldowns for wrong answers
 	respCooldowns := make(map[string]cooldownState)
+
 	for _, qr := range result.QuestionResults {
 		if !qr.IsCorrect {
 			remaining, locked := s.CooldownTracker.RecordModule(userID, courseSlug, idx, qr.QuestionID, cooldownSpec, m.MaxAttemptsPerQuestion, m.LockOnMaxAttempts)

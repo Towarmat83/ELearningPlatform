@@ -38,6 +38,7 @@ func toCourseResponse(c *content.Course) courseResponse {
 			Modules:  p.Modules,
 		})
 	}
+
 	return courseResponse{
 		Slug:            c.Slug,
 		ID:              c.Slug,
@@ -62,7 +63,7 @@ func toCourseResponse(c *content.Course) courseResponse {
 // @Param    difficulty query  string  false  "Filter by difficulty"
 // @Param    search     query  string  false  "Search by title or description"
 // @Success  200  {object}  map[string]interface{}
-// @Router   /api/courses [get]
+// @Router   /api/courses [get].
 func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	category := strings.ToLower(q.Get("category"))
@@ -70,22 +71,27 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 	search := strings.ToLower(q.Get("search"))
 
 	all := s.Content.List()
+
 	out := make([]courseResponse, 0, len(all))
 	for _, c := range all {
-		if category != "" && strings.ToLower(c.Category) != category {
+		if category != "" && !strings.EqualFold(c.Category, category) {
 			continue
 		}
-		if difficulty != "" && strings.ToLower(c.Difficulty) != difficulty {
+
+		if difficulty != "" && !strings.EqualFold(c.Difficulty, difficulty) {
 			continue
 		}
+
 		if search != "" {
 			if !strings.Contains(strings.ToLower(c.Title), search) &&
 				!strings.Contains(strings.ToLower(c.Description), search) {
 				continue
 			}
 		}
+
 		out = append(out, toCourseResponse(c))
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"courses": out, "total": len(out)})
 }
 
@@ -95,13 +101,15 @@ func (s *State) ListCourses(w http.ResponseWriter, r *http.Request) {
 // @Security  BearerAuth
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
-// @Router    /api/admin/courses [get]
+// @Router    /api/admin/courses [get].
 func (s *State) ListAdminCourses(w http.ResponseWriter, r *http.Request) {
 	all := s.Content.All()
+
 	out := make([]courseResponse, 0, len(all))
 	for _, c := range all {
 		out = append(out, toCourseResponse(c))
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"courses": out, "total": len(out)})
 }
 
@@ -138,15 +146,18 @@ func moduleTypeToLabType(t string) string {
 // @Param     lab_id  path  string  true  "Lab ID"
 // @Success   200  {object}  map[string]interface{}
 // @Failure   404  {object}  map[string]string
-// @Router    /api/courses/{slug}/labs/{lab_id} [get]
+// @Router    /api/courses/{slug}/labs/{lab_id} [get].
 func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	labID := param(r, "lab_id")
+
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	for _, m := range s.visibleModules(c, r) {
 		if m.Slug() == labID {
 			s.JSON(w, http.StatusOK, map[string]any{
@@ -164,9 +175,11 @@ func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 				},
 				"progress": nil,
 			})
+
 			return
 		}
 	}
+
 	s.Error(w, http.StatusNotFound, "Lab not found")
 }
 
@@ -178,16 +191,19 @@ func (s *State) GetLab(w http.ResponseWriter, r *http.Request) {
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200  {object}  map[string]interface{}
 // @Failure   404  {object}  map[string]string
-// @Router    /api/courses/{slug}/labs [get]
+// @Router    /api/courses/{slug}/labs [get].
 func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
+
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
 
 	modules := s.visibleModules(c, r)
+
 	labs := make([]labResponse, 0, len(modules))
 	for i, m := range modules {
 		labs = append(labs, labResponse{
@@ -203,6 +219,7 @@ func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 			Hidden:      m.Hidden,
 		})
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"labs": labs})
 }
 
@@ -213,14 +230,16 @@ func (s *State) ListLabs(w http.ResponseWriter, r *http.Request) {
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200  {object}  map[string]interface{}
-// @Router    /api/courses/{slug}/progress [get]
+// @Router    /api/courses/{slug}/progress [get].
 func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	c := s.Content.Get(courseSlug)
+
 	total := 0
 	if c != nil {
 		total = len(s.visibleModules(c, r))
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{
 		"course_id":             courseSlug,
 		"user_id":               "",
@@ -240,14 +259,17 @@ func (s *State) GetCourseProgress(w http.ResponseWriter, r *http.Request) {
 // @Param    slug  path  string  true  "Course slug"
 // @Success  200   {object}  courseResponse
 // @Failure  404   {object}  map[string]string
-// @Router   /api/courses/{slug} [get]
+// @Router   /api/courses/{slug} [get].
 func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
+
 	c := s.Content.Get(slug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if !c.IsPublic {
 		// Try to extract claims from Authorization header (route has no auth middleware).
 		claims := s.claims(r)
@@ -259,10 +281,13 @@ func (s *State) GetCourse(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+
 		if claims == nil || (claims.Role != "admin" && !s.isEnrolled(r, slug, claims.Subject)) {
 			s.Error(w, http.StatusNotFound, "Course not found")
+
 			return
 		}
 	}
+
 	s.JSON(w, http.StatusOK, toCourseResponse(c))
 }

@@ -73,8 +73,10 @@ func newUserServiceMockWith(overrides map[string]http.HandlerFunc) *httptest.Ser
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fn, ok := overrides[r.URL.Path]; ok {
 			fn(w, r)
+
 			return
 		}
+
 		switch r.URL.Path {
 		case "/internal/enrollments/auto":
 			json.NewEncoder(w).Encode(map[string]bool{"ok": true})
@@ -108,6 +110,7 @@ func authHeader(t *testing.T, secret string) string {
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
+
 	return "Bearer " + token
 }
 
@@ -122,18 +125,20 @@ func adminAuthHeader(t *testing.T, secret string) string {
 	if err != nil {
 		t.Fatalf("create admin token: %v", err)
 	}
+
 	return "Bearer " + token
 }
 
 func TestHealth(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -143,9 +148,11 @@ func TestHealth(t *testing.T) {
 
 	var body map[string]string
 	json.NewDecoder(rec.Body).Decode(&body)
+
 	if body["status"] != "ok" {
 		t.Errorf("expected status=ok, got %s", body["status"])
 	}
+
 	if body["service"] != "course-service" {
 		t.Errorf("expected service=course-service, got %s", body["service"])
 	}
@@ -154,12 +161,13 @@ func TestHealth(t *testing.T) {
 func TestListCourses(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -181,12 +189,15 @@ func TestListCourses(t *testing.T) {
 	for _, c := range resp.Courses {
 		slugs[c.Slug] = true
 	}
+
 	if !slugs["kubernetes-basics"] {
 		t.Error("expected kubernetes-basics in list")
 	}
+
 	if !slugs["advanced-kubernetes"] {
 		t.Error("expected advanced-kubernetes in list")
 	}
+
 	if slugs["docker-fundamentals"] {
 		t.Error("docker-fundamentals is unpublished, should not appear")
 	}
@@ -195,12 +206,13 @@ func TestListCourses(t *testing.T) {
 func TestListCoursesFiltered(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses?category=kubernetes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses?category=kubernetes", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -213,13 +225,16 @@ func TestListCoursesFiltered(t *testing.T) {
 	if resp.Total != 2 {
 		t.Fatalf("expected 2 kubernetes courses, got %d", resp.Total)
 	}
+
 	slugs := make(map[string]bool)
 	for _, c := range resp.Courses {
 		slugs[c.Slug] = true
 	}
+
 	if !slugs["kubernetes-basics"] {
 		t.Error("expected kubernetes-basics in filtered results")
 	}
+
 	if !slugs["advanced-kubernetes"] {
 		t.Error("expected advanced-kubernetes in filtered results")
 	}
@@ -228,12 +243,13 @@ func TestListCoursesFiltered(t *testing.T) {
 func TestGetCourse(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -247,9 +263,11 @@ func TestGetCourse(t *testing.T) {
 	if c.Slug != "kubernetes-basics" {
 		t.Errorf("expected slug=kubernetes-basics, got %s", c.Slug)
 	}
+
 	if c.ModuleCount != 3 {
 		t.Errorf("expected 3 modules, got %d", c.ModuleCount)
 	}
+
 	if c.Category != "kubernetes" {
 		t.Errorf("expected category=kubernetes, got %s", c.Category)
 	}
@@ -258,12 +276,13 @@ func TestGetCourse(t *testing.T) {
 func TestGetCourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/does-not-exist", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/does-not-exist", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -275,12 +294,13 @@ func TestGetCourseNotFound(t *testing.T) {
 func TestGetCourseUnpublished(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -292,13 +312,15 @@ func TestGetCourseUnpublished(t *testing.T) {
 func TestModulesListed(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -327,9 +349,11 @@ func TestModulesListed(t *testing.T) {
 		if resp.Modules[i].Name != e.name {
 			t.Errorf("module %d: expected name %s, got %s", i, e.name, resp.Modules[i].Name)
 		}
+
 		if resp.Modules[i].Type != e.typ {
 			t.Errorf("module %d: expected type %s, got %s", i, e.typ, resp.Modules[i].Type)
 		}
+
 		if resp.Modules[i].Slug == "" {
 			t.Errorf("module %d: expected non-empty slug", i)
 		}
@@ -339,12 +363,13 @@ func TestModulesListed(t *testing.T) {
 func TestModulesAuthRequired(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/modules", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -356,13 +381,15 @@ func TestModulesAuthRequired(t *testing.T) {
 func TestAdminBypassUnpublishedModule(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/modules", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -374,13 +401,15 @@ func TestAdminBypassUnpublishedModule(t *testing.T) {
 func TestGetModuleContent(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/modules/1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/modules/1", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -394,6 +423,7 @@ func TestGetModuleContent(t *testing.T) {
 	if resp.Type != "video" {
 		t.Errorf("expected type video, got %s", resp.Type)
 	}
+
 	if resp.Content != "/uploads/arch.mp4" {
 		t.Errorf("expected content /uploads/arch.mp4, got %s", resp.Content)
 	}
@@ -402,13 +432,15 @@ func TestGetModuleContent(t *testing.T) {
 func TestGetModuleNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/modules/99", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/modules/99", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -420,13 +452,15 @@ func TestGetModuleNotFound(t *testing.T) {
 func TestLessonsListedFromModules(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/lessons", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/lessons", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -454,12 +488,13 @@ func TestLessonsListedFromModules(t *testing.T) {
 func TestLessonsAuthRequired(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/lessons", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/lessons", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -471,13 +506,15 @@ func TestLessonsAuthRequired(t *testing.T) {
 func TestLessonComplete(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/kubernetes-basics/lessons/what-is-k8s/complete", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/kubernetes-basics/lessons/what-is-k8s/complete", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -489,6 +526,7 @@ func TestLessonComplete(t *testing.T) {
 		Message string `json:"message"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Message != "Lesson marked as complete" {
 		t.Errorf("unexpected message: %s", resp.Message)
 	}
@@ -497,31 +535,35 @@ func TestLessonComplete(t *testing.T) {
 func TestMetrics(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
 	var lastBody string
+
 	for _, path := range []string{"/metrics", "/health", "/api/courses"} {
-		req := httptest.NewRequest("GET", path, nil)
+		req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		lastBody = rec.Body.String()
 		_ = lastBody
 	}
 
-	req := httptest.NewRequest("GET", "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for metrics, got %d", rec.Code)
 	}
+
 	body := rec.Body.String()
 	if !strings.Contains(body, "elearning_active_courses_total") {
 		t.Error("expected elearning_active_courses_total metric")
 	}
+
 	if !strings.Contains(body, "go_goroutines") {
 		t.Error("expected go_goroutines metric")
 	}
@@ -547,6 +589,7 @@ func courseSummaryHandler(totalScore int, passedModules []string) http.HandlerFu
 //   - "free-course"      — requires linux-intro with no conditions (any progress)
 func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 	t.Helper()
+
 	store := content.NewStore()
 
 	store.Put(&content.Course{
@@ -609,6 +652,7 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 		JWTExpiryH:     24,
 		UserServiceURL: userSrv.URL,
 	}
+
 	return NewState(cfg, store, content.NewPathStore())
 }
 
@@ -619,11 +663,13 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 func TestCrossCourseLock_ListModules_Blocked(t *testing.T) {
 	mock := newUserServiceMockWith(nil) // course-summary returns 0 score by default
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-adv/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -637,11 +683,13 @@ func TestCrossCourseLock_ListModules_Blocked(t *testing.T) {
 func TestCrossCourseLock_ListModules_AdminBypass(t *testing.T) {
 	mock := newUserServiceMockWith(nil)
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-adv/modules", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -657,11 +705,13 @@ func TestCrossCourseLock_ListModules_MetScoreAndModule(t *testing.T) {
 		"/internal/progress/course-summary": courseSummaryHandler(35, []string{"quiz-bases-linux"}),
 	})
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-adv/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -678,11 +728,13 @@ func TestCrossCourseLock_ScoreMetButModuleMissing(t *testing.T) {
 		"/internal/progress/course-summary": courseSummaryHandler(40, []string{}),
 	})
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-adv/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -698,11 +750,13 @@ func TestCrossCourseLock_MinScoreOnly_Met(t *testing.T) {
 		"/internal/progress/course-summary": courseSummaryHandler(50, []string{}),
 	})
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/network-basics/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/network-basics/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -718,11 +772,13 @@ func TestCrossCourseLock_MinScoreOnly_NotMet(t *testing.T) {
 		"/internal/progress/course-summary": courseSummaryHandler(20, []string{}),
 	})
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/network-basics/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/network-basics/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -738,11 +794,13 @@ func TestCrossCourseLock_AnyProgress_Met(t *testing.T) {
 		"/internal/progress/course-summary": courseSummaryHandler(1, []string{}),
 	})
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/free-course/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/free-course/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -756,11 +814,13 @@ func TestCrossCourseLock_AnyProgress_Met(t *testing.T) {
 func TestCrossCourseLock_AnyProgress_NotMet(t *testing.T) {
 	mock := newUserServiceMockWith(nil) // returns total_score=0 by default
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/free-course/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/free-course/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -776,11 +836,13 @@ func TestCrossCourseLock_AnyProgress_NotMet(t *testing.T) {
 func TestCrossCourseLock_GetModule_Blocked(t *testing.T) {
 	mock := newUserServiceMockWith(nil)
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-adv/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -796,11 +858,13 @@ func TestCrossCourseLock_GetModule_Met(t *testing.T) {
 		"/internal/progress/course-summary": courseSummaryHandler(35, []string{"quiz-bases-linux"}),
 	})
 	defer mock.Close()
+
 	s := newCrossCourseLockState(t, mock)
 
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-adv/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-adv/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -814,19 +878,22 @@ func TestCrossCourseLock_GetModule_Met(t *testing.T) {
 func TestListAdminCourses(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/admin/courses", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/courses", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var resp struct {
 		Courses []courseResponse `json:"courses"`
 		Total   int              `json:"total"`
@@ -841,12 +908,13 @@ func TestListAdminCourses(t *testing.T) {
 func TestListAdminCourses_Unauthorized(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/admin/courses", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/courses", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -860,26 +928,31 @@ func TestListAdminCourses_Unauthorized(t *testing.T) {
 func TestListLabs(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/labs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/labs", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Labs []labResponse `json:"labs"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if len(resp.Labs) != 3 {
 		t.Errorf("expected 3 labs, got %d", len(resp.Labs))
 	}
+
 	if resp.Labs[0].CourseID != "kubernetes-basics" {
 		t.Errorf("expected CourseID=kubernetes-basics, got %q", resp.Labs[0].CourseID)
 	}
@@ -888,13 +961,15 @@ func TestListLabs(t *testing.T) {
 func TestListLabs_CourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/no-such-course/labs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/no-such-course/labs", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -906,27 +981,32 @@ func TestListLabs_CourseNotFound(t *testing.T) {
 func TestGetLab_Found(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// "Architecture" module → slug "architecture"
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/labs/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/labs/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Lab labResponse `json:"lab"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Lab.Title != "Architecture" {
 		t.Errorf("expected title=Architecture, got %q", resp.Lab.Title)
 	}
+
 	if resp.Lab.LabType != "interactive" {
 		t.Errorf("expected lab_type=interactive for video, got %q", resp.Lab.LabType)
 	}
@@ -935,24 +1015,28 @@ func TestGetLab_Found(t *testing.T) {
 func TestGetLab_TextType(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// "What is K8s" text module → slug "what-is-k8s"
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/labs/what-is-k8s", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/labs/what-is-k8s", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for text lab, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Lab labResponse `json:"lab"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Lab.LabType != "form" {
 		t.Errorf("expected lab_type=form for text module, got %q", resp.Lab.LabType)
 	}
@@ -961,13 +1045,15 @@ func TestGetLab_TextType(t *testing.T) {
 func TestGetLab_NotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/labs/no-such-lab", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/labs/no-such-lab", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -979,13 +1065,15 @@ func TestGetLab_NotFound(t *testing.T) {
 func TestGetLab_CourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/no-such-course/labs/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/no-such-course/labs/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -999,24 +1087,29 @@ func TestGetLab_CourseNotFound(t *testing.T) {
 func TestGetCourseProgress(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/progress", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/progress", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-	var resp map[string]interface{}
+
+	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp["course_id"] != "kubernetes-basics" {
 		t.Errorf("expected course_id=kubernetes-basics, got %v", resp["course_id"])
 	}
+
 	if resp["total_labs"] == nil {
 		t.Error("expected total_labs in response")
 	}
@@ -1025,20 +1118,23 @@ func TestGetCourseProgress(t *testing.T) {
 func TestGetCourseProgress_UnknownCourse(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/unknown-course/progress", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/unknown-course/progress", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 (placeholder), got %d", rec.Code)
 	}
-	var resp map[string]interface{}
+
+	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 	// total_labs = 0 for unknown course
 	if resp["total_labs"] != float64(0) {
@@ -1051,13 +1147,15 @@ func TestGetCourseProgress_UnknownCourse(t *testing.T) {
 func TestClearCache(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1069,21 +1167,25 @@ func TestClearCache(t *testing.T) {
 func TestClearCourseCache_Found(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/kubernetes-basics/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/kubernetes-basics/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("ClearCourseCache: expected 200, got %d", rec.Code)
 	}
-	var resp map[string]interface{}
+
+	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp["status"] != "ok" {
 		t.Errorf("expected status=ok, got %v", resp["status"])
 	}
@@ -1092,13 +1194,15 @@ func TestClearCourseCache_Found(t *testing.T) {
 func TestClearCourseCache_NotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/nonexistent/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/nonexistent/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1110,13 +1214,15 @@ func TestClearCourseCache_NotFound(t *testing.T) {
 func TestClearModuleCache_Found(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/kubernetes-basics/modules/0/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/kubernetes-basics/modules/0/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1128,13 +1234,15 @@ func TestClearModuleCache_Found(t *testing.T) {
 func TestClearModuleCache_CourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/nosuchcourse/modules/0/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/nosuchcourse/modules/0/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1146,13 +1254,15 @@ func TestClearModuleCache_CourseNotFound(t *testing.T) {
 func TestClearModuleCache_InvalidIndex(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/kubernetes-basics/modules/99/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/kubernetes-basics/modules/99/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1166,12 +1276,13 @@ func TestClearModuleCache_InvalidIndex(t *testing.T) {
 func TestServeUpload_InvalidFilename(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/uploads/../../etc/passwd", nil)
+	req := httptest.NewRequest(http.MethodGet, "/uploads/../../etc/passwd", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1185,12 +1296,13 @@ func TestServeUpload_InvalidFilename(t *testing.T) {
 func TestServeUpload_ValidFile(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/uploads/sample.txt", nil)
+	req := httptest.NewRequest(http.MethodGet, "/uploads/sample.txt", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1205,24 +1317,28 @@ func TestServeUpload_ValidFile(t *testing.T) {
 func TestGetLesson_Found(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// "Architecture" video module
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/lessons/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/lessons/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GetLesson: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Lesson lessonDetail `json:"lesson"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Lesson.Title != "Architecture" {
 		t.Errorf("GetLesson: expected title=Architecture, got %q", resp.Lesson.Title)
 	}
@@ -1231,13 +1347,15 @@ func TestGetLesson_Found(t *testing.T) {
 func TestGetLesson_NotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/lessons/no-such-lesson", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/lessons/no-such-lesson", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1249,13 +1367,15 @@ func TestGetLesson_NotFound(t *testing.T) {
 func TestGetLesson_CourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/no-course/lessons/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/no-course/lessons/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1271,14 +1391,16 @@ func TestGetLesson_NonPublicEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// docker-fundamentals is non-public, no modules → lesson not found
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/lessons/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/lessons/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1294,13 +1416,15 @@ func TestGetLesson_NonPublicNotEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/lessons/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/lessons/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1321,13 +1445,15 @@ func TestListLessons_NonPublicEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/lessons", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/lessons", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1343,13 +1469,15 @@ func TestListLessons_NonPublicNotEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/lessons", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/lessons", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1363,15 +1491,17 @@ func TestListLessons_NonPublicNotEnrolled(t *testing.T) {
 func TestSubmitModule_NotAQuiz(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// Module 0 is text (not quiz)
-	req := httptest.NewRequest("POST", "/api/courses/kubernetes-basics/modules/0/submit", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/kubernetes-basics/modules/0/submit", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
 	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1383,13 +1513,15 @@ func TestSubmitModule_NotAQuiz(t *testing.T) {
 func TestSubmitModule_CourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/no-such/modules/0/submit", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/no-such/modules/0/submit", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1401,13 +1533,15 @@ func TestSubmitModule_CourseNotFound(t *testing.T) {
 func TestSubmitModule_InvalidIndex(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/kubernetes-basics/modules/99/submit", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/kubernetes-basics/modules/99/submit", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1423,14 +1557,17 @@ func TestSubmitModule_InvalidIndex(t *testing.T) {
 func TestGetModule_CourseNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/nonexistent/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/nonexistent/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec.Code)
 	}
@@ -1443,14 +1580,17 @@ func TestGetModule_PrivateNotEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected 403 for private not enrolled, got %d", rec.Code)
 	}
@@ -1459,20 +1599,25 @@ func TestGetModule_PrivateNotEnrolled(t *testing.T) {
 func TestGetModule_ImageType(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
 	// Module index 2 is image type in kubernetes-basics
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/modules/2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/modules/2", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp moduleResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Type != "image" {
 		t.Errorf("expected type=image, got %q", resp.Type)
 	}
@@ -1487,14 +1632,17 @@ func TestListModules_PrivateNotEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals/modules", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", rec.Code)
 	}
@@ -1509,14 +1657,17 @@ func TestMarkLessonComplete_PrivateNotEnrolled(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/docker-fundamentals/lessons/intro/complete", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/docker-fundamentals/lessons/intro/complete", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", rec.Code)
 	}
@@ -1525,14 +1676,17 @@ func TestMarkLessonComplete_PrivateNotEnrolled(t *testing.T) {
 func TestMarkLessonComplete_LessonNotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/kubernetes-basics/lessons/nonexistent/complete", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/kubernetes-basics/lessons/nonexistent/complete", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec.Code)
 	}
@@ -1545,14 +1699,17 @@ func TestMarkLessonComplete_UserServiceError(t *testing.T) {
 		},
 	})
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/kubernetes-basics/lessons/what-is-k8s/complete", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/kubernetes-basics/lessons/what-is-k8s/complete", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 from user-service error, got %d", rec.Code)
 	}
@@ -1574,6 +1731,7 @@ func TestListLessons_FromLessonsList(t *testing.T) {
 			{Slug: "advanced", Title: "Advanced", Order: 2},
 		},
 	})
+
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
@@ -1582,18 +1740,21 @@ func TestListLessons_FromLessonsList(t *testing.T) {
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/lesson-course/lessons", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/lesson-course/lessons", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Lessons []lessonSummary `json:"lessons"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if len(resp.Lessons) != 2 {
 		t.Errorf("expected 2 lessons, got %d", len(resp.Lessons))
 	}
@@ -1604,15 +1765,18 @@ func TestListLessons_FromLessonsList(t *testing.T) {
 func TestGetLesson_QuizModule(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// Module index 0 of quiz-course is a quiz type - GetLesson should redirect it
-	req := httptest.NewRequest("GET", "/api/courses/quiz-course/lessons/inline-quiz", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/quiz-course/lessons/inline-quiz", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for quiz module via lessons, got %d", rec.Code)
 	}
@@ -1631,6 +1795,7 @@ func TestGetLesson_FromLessonList(t *testing.T) {
 			{Slug: "intro", Title: "Introduction", Order: 1, Content: "## Intro\n\nHello"},
 		},
 	})
+
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
@@ -1639,8 +1804,9 @@ func TestGetLesson_FromLessonList(t *testing.T) {
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/lesson-course2/lessons/intro", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/lesson-course2/lessons/intro", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -1690,14 +1856,17 @@ func TestGetModule_PrerequisitesNotMet(t *testing.T) {
 			{Name: "Advanced Lesson", Type: "text"},
 		},
 	})
+
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24, UserServiceURL: mock.URL}
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/prereq-course/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/prereq-course/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected 403 when prerequisites not met, got %d", rec.Code)
 	}
@@ -1706,6 +1875,7 @@ func TestGetModule_PrerequisitesNotMet(t *testing.T) {
 func TestTokenForRepo_NoCredentials(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	// GitCreds is nil (no credentials path set) → returns config.GitToken
 	tok := s.tokenForRepo("https://github.com/org/repo")
@@ -1717,8 +1887,10 @@ func TestTokenForRepo_NoCredentials(t *testing.T) {
 func TestTokenForRepo_WithConfigToken(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	s.Config.GitToken = "my-git-token"
+
 	tok := s.tokenForRepo("https://github.com/org/repo")
 	if tok != "my-git-token" {
 		t.Errorf("expected my-git-token, got %q", tok)
@@ -1727,10 +1899,14 @@ func TestTokenForRepo_WithConfigToken(t *testing.T) {
 
 func TestDecode_ValidJSON(t *testing.T) {
 	var body struct{ Name string }
-	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"name":"test"}`))
-	if err := decode(req, &body); err != nil {
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"test"}`))
+
+	err := decode(req, &body)
+	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+
 	if body.Name != "test" {
 		t.Errorf("expected name=test, got %q", body.Name)
 	}
@@ -1738,8 +1914,11 @@ func TestDecode_ValidJSON(t *testing.T) {
 
 func TestDecode_InvalidJSON(t *testing.T) {
 	var body struct{ Name string }
-	req := httptest.NewRequest("POST", "/", strings.NewReader("not-json"))
-	if err := decode(req, &body); err == nil {
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not-json"))
+
+	err := decode(req, &body)
+	if err == nil {
 		t.Error("expected error for invalid JSON")
 	}
 }
@@ -1781,10 +1960,12 @@ func TestSanitizeQuestions_NonAdmin(t *testing.T) {
 			},
 		},
 	}
+
 	out := sanitizeQuestions(qq, false)
 	if len(out) != 1 {
 		t.Fatalf("expected 1 question, got %d", len(out))
 	}
+
 	pq := out[0].(publicQuestion)
 	for _, a := range pq.Answers {
 		if a.Correct {
@@ -1807,11 +1988,13 @@ func TestSanitizeQuestions_Admin(t *testing.T) {
 	out := sanitizeQuestions(qq, true)
 	pq := out[0].(publicQuestion)
 	found := false
+
 	for _, a := range pq.Answers {
 		if a.Correct {
 			found = true
 		}
 	}
+
 	if !found {
 		t.Error("admin should see at least one Correct=true answer")
 	}
@@ -1833,10 +2016,12 @@ func TestCompletedSlugs_ViewedAndPassed(t *testing.T) {
 	progressMap := map[int]moduleProgressData{
 		1: {Passed: true, BestScore: 80, MaxScore: 100},
 	}
+
 	result := completedSlugs(modules, viewedMap, progressMap)
 	if !result["intro"] {
 		t.Error("expected 'intro' in completed slugs from viewedMap")
 	}
+
 	if !result["quiz-one"] {
 		t.Error("expected 'quiz-one' in completed slugs from progressMap")
 	}
@@ -1849,6 +2034,7 @@ func TestCompletedSlugs_NotPassed(t *testing.T) {
 	progressMap := map[int]moduleProgressData{
 		0: {Passed: false, BestScore: 40},
 	}
+
 	result := completedSlugs(modules, map[string]bool{}, progressMap)
 	if result["quiz-one"] {
 		t.Error("failed quiz should not appear in completed slugs")
@@ -1916,32 +2102,38 @@ func newTestStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 			{Name: "Empty Quiz", Type: "quiz"}, // no questions, no git
 		},
 	})
+
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
 		UploadsDir:     "./testdata",
 		UserServiceURL: mock.URL,
 	}
+
 	return NewState(cfg, store, content.NewPathStore())
 }
 
 func TestGetModule_TextInline(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/quiz-course/modules/1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/quiz-course/modules/1", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp moduleResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Type != "text" {
 		t.Errorf("expected type=text, got %q", resp.Type)
 	}
@@ -1950,23 +2142,28 @@ func TestGetModule_TextInline(t *testing.T) {
 func TestGetModule_LabType(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/quiz-course/modules/2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/quiz-course/modules/2", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp moduleResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Type != "lab" {
 		t.Errorf("expected type=lab, got %q", resp.Type)
 	}
+
 	if resp.Content != "https://labs.example.com/lab1" {
 		t.Errorf("expected lab URL, got %q", resp.Content)
 	}
@@ -1975,23 +2172,27 @@ func TestGetModule_LabType(t *testing.T) {
 func TestGetModule_QuizInline(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/quiz-course/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/quiz-course/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Type          string `json:"type"`
 		QuestionCount int    `json:"question_count"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Type != "quiz" {
 		t.Errorf("expected type=quiz, got %q", resp.Type)
 	}
@@ -2002,14 +2203,16 @@ func TestGetModule_QuizInline(t *testing.T) {
 func TestSubmitModule_InlineQuiz_Success(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	body := `{"answers":{"q1":{"selected_id":"a1"}}}`
-	req := httptest.NewRequest("POST", "/api/courses/quiz-course/modules/0/submit", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/quiz-course/modules/0/submit", strings.NewReader(body))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
 	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -2021,13 +2224,15 @@ func TestSubmitModule_InlineQuiz_Success(t *testing.T) {
 func TestSubmitModule_InlineQuiz_InvalidJSON(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/quiz-course/modules/0/submit", strings.NewReader("not-json"))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/quiz-course/modules/0/submit", strings.NewReader("not-json"))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
 	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -2039,14 +2244,16 @@ func TestSubmitModule_InlineQuiz_InvalidJSON(t *testing.T) {
 func TestSubmitModule_NoQuestions(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	body := `{"answers":{}}`
-	req := httptest.NewRequest("POST", "/api/courses/quiz-course-no-questions/modules/0/submit", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/quiz-course-no-questions/modules/0/submit", strings.NewReader(body))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
 	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -2058,15 +2265,18 @@ func TestSubmitModule_NoQuestions(t *testing.T) {
 func TestSubmitModule_InvalidBody(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/courses/quiz-course/modules/0/submit", strings.NewReader("not-json"))
+	req := httptest.NewRequest(http.MethodPost, "/api/courses/quiz-course/modules/0/submit", strings.NewReader("not-json"))
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
 	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid JSON body, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -2077,13 +2287,15 @@ func TestSubmitModule_InvalidBody(t *testing.T) {
 func TestGetCourse_PrivateNoAuth(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for private course with no auth, got %d", rec.Code)
 	}
@@ -2092,14 +2304,17 @@ func TestGetCourse_PrivateNoAuth(t *testing.T) {
 func TestGetCourse_PrivateEnrolled(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/docker-fundamentals", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/docker-fundamentals", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200 for private course enrolled, got %d", rec.Code)
 	}
@@ -2108,6 +2323,7 @@ func TestGetCourse_PrivateEnrolled(t *testing.T) {
 func TestGetCourse_WithPrerequisites(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	store := content.NewStore()
 	store.Put(&content.Course{
 		Slug:     "advanced-course",
@@ -2117,18 +2333,22 @@ func TestGetCourse_WithPrerequisites(t *testing.T) {
 			{Course: "basic-course", MinScore: 80, Modules: []string{"intro", "basics"}},
 		},
 	})
+
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/advanced-course", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/advanced-course", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var resp courseResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if len(resp.Prerequisites) != 1 {
 		t.Errorf("expected 1 prereq, got %d", len(resp.Prerequisites))
 	}
@@ -2139,24 +2359,29 @@ func TestGetCourse_WithPrerequisites(t *testing.T) {
 func TestGetLab_VideoType(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
 	// Module "Architecture" → slug "architecture", type "video" → labType "interactive"
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/labs/architecture", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/labs/architecture", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Lab struct {
 			LabType string `json:"lab_type"`
 		} `json:"lab"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Lab.LabType != "interactive" {
 		t.Errorf("expected lab_type=interactive for video module, got %q", resp.Lab.LabType)
 	}
@@ -2165,21 +2390,26 @@ func TestGetLab_VideoType(t *testing.T) {
 func TestListLabs_Success(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/labs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/labs", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var resp struct {
 		Labs []labResponse `json:"labs"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if len(resp.Labs) != 3 {
 		t.Errorf("expected 3 labs, got %d", len(resp.Labs))
 	}
@@ -2190,14 +2420,17 @@ func TestListLabs_Success(t *testing.T) {
 func TestClearCourseCache_Success(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/kubernetes-basics/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/kubernetes-basics/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -2206,14 +2439,17 @@ func TestClearCourseCache_Success(t *testing.T) {
 func TestClearModuleCache_Success(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/kubernetes-basics/modules/0/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/kubernetes-basics/modules/0/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
@@ -2222,14 +2458,17 @@ func TestClearModuleCache_Success(t *testing.T) {
 func TestClearModuleCache_NotFound(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/kubernetes-basics/modules/99/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/kubernetes-basics/modules/99/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec.Code)
 	}
@@ -2240,13 +2479,15 @@ func TestClearModuleCache_NotFound(t *testing.T) {
 func TestServeUpload_PathTraversal(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/uploads/..%2Fetc%2Fpasswd", nil)
+	req := httptest.NewRequest(http.MethodGet, "/uploads/..%2Fetc%2Fpasswd", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for path traversal, got %d", rec.Code)
 	}
@@ -2266,21 +2507,26 @@ func TestClearCourseCache_WithGitModules(t *testing.T) {
 			{Name: "Lesson 2", Type: "text", Src: "https://github.com/org/repo", Ref: "main", Path: "lesson2.md"},
 		},
 	})
+
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/git-course/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/git-course/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		ReposCleared int `json:"repos_cleared"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.ReposCleared != 1 {
 		t.Errorf("expected 1 repo cleared (deduped), got %d", resp.ReposCleared)
 	}
@@ -2299,21 +2545,26 @@ func TestClearModuleCache_WithGitModule(t *testing.T) {
 			{Name: "Lesson 1", Type: "text", Src: "https://github.com/org/repo2", Ref: "main", Path: "l1.md"},
 		},
 	})
+
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("POST", "/api/admin/courses/git-course2/modules/0/cache/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/courses/git-course2/modules/0/cache/clear", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
+
 	var resp struct {
 		ReposCleared int `json:"repos_cleared"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.ReposCleared != 1 {
 		t.Errorf("expected repos_cleared=1, got %d", resp.ReposCleared)
 	}
@@ -2332,23 +2583,28 @@ func TestGetLab_LabModuleType(t *testing.T) {
 			{Name: "Hands-on Lab", Type: "lab", Src: "http://lab.example.com"},
 		},
 	})
+
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24, UserServiceURL: mock.URL}
 	s := NewState(cfg, store, content.NewPathStore())
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/lab-type-course/labs/hands-on-lab", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/lab-type-course/labs/hands-on-lab", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp struct {
 		Lab struct {
 			LabType string `json:"lab_type"`
 		} `json:"lab"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Lab.LabType != "interactive" {
 		t.Errorf("expected lab_type=interactive for lab module, got %q", resp.Lab.LabType)
 	}
@@ -2370,6 +2626,7 @@ func TestListModules_AdminSeesHidden(t *testing.T) {
 			{Name: "Hidden Module", Type: "text", Hidden: true},
 		},
 	})
+
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
@@ -2379,30 +2636,36 @@ func TestListModules_AdminSeesHidden(t *testing.T) {
 	r := BuildRouter(s, cfg, false)
 
 	// Admin sees hidden modules
-	req := httptest.NewRequest("GET", "/api/courses/hidden-course/modules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/hidden-course/modules", http.NoBody)
 	req.Header.Set("Authorization", adminAuthHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var adminResp struct {
 		Modules []moduleResponse `json:"modules"`
 	}
 	json.NewDecoder(rec.Body).Decode(&adminResp)
+
 	if len(adminResp.Modules) != 2 {
 		t.Errorf("admin: expected 2 modules (including hidden), got %d", len(adminResp.Modules))
 	}
 
 	// Student doesn't see hidden modules
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest("GET", "/api/courses/hidden-course/modules", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/courses/hidden-course/modules", http.NoBody)
 	req2.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
 	r.ServeHTTP(rec2, req2)
+
 	var studentResp struct {
 		Modules []moduleResponse `json:"modules"`
 	}
 	json.NewDecoder(rec2.Body).Decode(&studentResp)
+
 	if len(studentResp.Modules) != 1 {
 		t.Errorf("student: expected 1 module (non-hidden), got %d", len(studentResp.Modules))
 	}
@@ -2413,20 +2676,24 @@ func TestListModules_AdminSeesHidden(t *testing.T) {
 func TestListCourses_SearchFilter(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses?search=kubernetes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses?search=kubernetes", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var resp struct {
 		Total int `json:"total"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Total != 2 {
 		t.Errorf("expected 2 kubernetes courses, got %d", resp.Total)
 	}
@@ -2435,20 +2702,24 @@ func TestListCourses_SearchFilter(t *testing.T) {
 func TestListCourses_DifficultyFilter(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses?difficulty=advanced", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses?difficulty=advanced", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var resp struct {
 		Total int `json:"total"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Total != 1 {
 		t.Errorf("expected 1 advanced course, got %d", resp.Total)
 	}
@@ -2459,14 +2730,17 @@ func TestListCourses_DifficultyFilter(t *testing.T) {
 func TestGetCourseProgress_Success(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/kubernetes-basics/progress", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/kubernetes-basics/progress", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -2477,20 +2751,25 @@ func TestGetCourseProgress_Success(t *testing.T) {
 func TestTokenForRepo_WithMatchingCredentials(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newTestState(t, mock)
 
 	var creds *content.GitCredentialStore
-	tmp, err := os.CreateTemp("", "creds-*.yaml")
+
+	tmp, err := os.CreateTemp(t.TempDir(), "creds-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmp.Name())
+
 	tmp.WriteString("credentials:\n  - url: \"github.com/org/*\"\n    token: \"my-credential-token\"\n")
 	tmp.Close()
+
 	creds, err = content.LoadCredentials(tmp.Name())
 	if err != nil {
 		t.Fatalf("LoadCredentials: %v", err)
 	}
+
 	s.GitCreds = creds
 
 	tok := s.tokenForRepo("https://github.com/org/repo")
@@ -2503,6 +2782,7 @@ func TestTokenForRepo_WithMatchingCredentials(t *testing.T) {
 
 func newStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 	t.Helper()
+
 	store := content.NewStore()
 	store.Put(&content.Course{
 		Slug:     "quiz-course",
@@ -2543,36 +2823,45 @@ func newStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 			},
 		},
 	})
+
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
+
 	return NewState(cfg, store, content.NewPathStore())
 }
 
 func TestGetModule_InlineQuiz(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
-	req := httptest.NewRequest("GET", "/api/courses/quiz-course/modules/1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/quiz-course/modules/1", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp moduleResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Type != "quiz" {
 		t.Errorf("expected type=quiz, got %q", resp.Type)
 	}
+
 	if len(resp.Questions) == 0 {
 		t.Error("expected questions in quiz module")
 	}
+
 	if resp.InlineQuiz == nil {
 		t.Error("expected inline quiz in response (next module is inline)")
 	}
@@ -2581,20 +2870,25 @@ func TestGetModule_InlineQuiz(t *testing.T) {
 func TestGetModule_QuizModuleCount(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
+
 	s := newStateWithQuiz(t, mock)
 	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 	r := BuildRouter(s, cfg, false)
 
 	// Module 0 is text with no inline next quiz (next is quiz at index 1, not inline)
-	req := httptest.NewRequest("GET", "/api/courses/quiz-course/modules/0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/quiz-course/modules/0", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+
 	var resp moduleResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
+
 	if resp.Type != "text" {
 		t.Errorf("expected type=text, got %q", resp.Type)
 	}
@@ -2612,6 +2906,7 @@ func TestCooldownTracker_CheckModule_Expired(t *testing.T) {
 	if remaining != 0 {
 		t.Errorf("expected 0 remaining for expired cooldown, got %v", remaining)
 	}
+
 	if attempts != 1 {
 		t.Errorf("expected 1 attempt, got %d", attempts)
 	}

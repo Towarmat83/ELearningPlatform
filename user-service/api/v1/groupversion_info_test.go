@@ -8,12 +8,16 @@ import (
 
 func TestAddToScheme(t *testing.T) {
 	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
+
+	err := AddToScheme(scheme)
+	if err != nil {
 		t.Fatalf("AddToScheme failed: %v", err)
 	}
+
 	if !scheme.Recognizes(GroupVersion.WithKind("MarkdownPattern")) {
 		t.Error("scheme does not recognize MarkdownPattern")
 	}
+
 	if !scheme.Recognizes(GroupVersion.WithKind("MarkdownPatternList")) {
 		t.Error("scheme does not recognize MarkdownPatternList")
 	}
@@ -50,10 +54,12 @@ func TestMarkdownPatternDeepCopy(t *testing.T) {
 func TestMarkdownPatternDeepCopyObject(t *testing.T) {
 	original := newFullMarkdownPattern()
 	obj := original.DeepCopyObject()
+
 	copied, ok := obj.(*MarkdownPattern)
 	if !ok {
 		t.Fatalf("DeepCopyObject returned %T, want *MarkdownPattern", obj)
 	}
+
 	if copied == original {
 		t.Fatal("DeepCopyObject returned the same pointer as the original")
 	}
@@ -76,6 +82,7 @@ func TestMarkdownPatternListDeepCopy(t *testing.T) {
 
 func TestMarkdownPatternSpecDeepCopy(t *testing.T) {
 	spec := &MarkdownPatternSpec{Name: "callout", HTML: "<div>{{content}}</div>"}
+
 	got := spec.DeepCopy()
 	if got == spec || *got != *spec {
 		t.Error("MarkdownPatternSpec.DeepCopy did not produce an equal, distinct copy")
@@ -83,17 +90,21 @@ func TestMarkdownPatternSpecDeepCopy(t *testing.T) {
 }
 
 func TestDeepCopyNilReceiver(t *testing.T) {
-	var nilSpec *MarkdownPatternSpec
-	var nilPattern *MarkdownPattern
-	var nilList *MarkdownPatternList
+	var (
+		nilSpec    *MarkdownPatternSpec
+		nilPattern *MarkdownPattern
+		nilList    *MarkdownPatternList
+	)
 	if nilSpec.DeepCopy() != nil ||
 		nilPattern.DeepCopy() != nil ||
 		nilList.DeepCopy() != nil {
 		t.Error("DeepCopy on a nil receiver should return nil")
 	}
+
 	if nilPattern.DeepCopyObject() != nil {
 		t.Error("MarkdownPattern.DeepCopyObject on a nil receiver should return nil")
 	}
+
 	if nilList.DeepCopyObject() != nil {
 		t.Error("MarkdownPatternList.DeepCopyObject on a nil receiver should return nil")
 	}

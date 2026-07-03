@@ -17,7 +17,7 @@ import (
 // @Param    limit   query  int  false  "Max number of paths to return (<=0 or omitted means unlimited)"
 // @Param    offset  query  int  false  "Number of paths to skip"
 // @Success  200  {object}  map[string]interface{}
-// @Router   /api/paths [get]
+// @Router   /api/paths [get].
 func (s *State) ListPaths(w http.ResponseWriter, r *http.Request) {
 	paths := s.Paths.List()
 
@@ -25,8 +25,10 @@ func (s *State) ListPaths(w http.ResponseWriter, r *http.Request) {
 		if offset > len(paths) {
 			offset = len(paths)
 		}
+
 		paths = paths[offset:]
 	}
+
 	if limit, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && limit > 0 && limit < len(paths) {
 		paths = paths[:limit]
 	}
@@ -41,13 +43,16 @@ func (s *State) ListPaths(w http.ResponseWriter, r *http.Request) {
 // @Param    slug  path  string  true  "Path slug"
 // @Success  200   {object}  content.Path
 // @Failure  404   {object}  map[string]string
-// @Router   /api/paths/{slug} [get]
+// @Router   /api/paths/{slug} [get].
 func (s *State) GetPath(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
+
 	p := s.Paths.Get(slug)
 	if p == nil {
 		s.Error(w, http.StatusNotFound, fmt.Sprintf("Path %s not found", slug))
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, p)
 }

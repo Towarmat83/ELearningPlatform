@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -8,12 +9,14 @@ import (
 
 func TestHandler_ReturnsMetrics(t *testing.T) {
 	h := Handler()
-	req := httptest.NewRequest("GET", "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
 	rec := httptest.NewRecorder()
 	h(rec, req)
+
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
+
 	body := rec.Body.String()
 	if !strings.Contains(body, "elearning_active_users_total") {
 		t.Error("expected elearning_active_users_total in metrics output")

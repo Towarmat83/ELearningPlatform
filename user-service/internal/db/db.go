@@ -17,14 +17,18 @@ func Connect(ctx context.Context, connURL string) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse db url: %w", err)
 	}
+
 	cfg.MaxConns = 20
+
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open pool: %w", err)
 	}
+
 	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
+
 	return pool, nil
 }
 
@@ -38,19 +42,27 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.F
 	}
 
 	applied := make(map[string]bool)
+
 	rows, err := pool.Query(ctx, "SELECT filename FROM _migrations")
 	if err != nil {
 		return fmt.Errorf("query applied migrations: %w", err)
 	}
+
 	for rows.Next() {
 		var f string
-		if err := rows.Scan(&f); err != nil {
+
+		err := rows.Scan(&f)
+		if err != nil {
 			rows.Close()
+
 			return err
 		}
+
 		applied[f] = true
 	}
+
 	rows.Close()
+
 	if err := rows.Err(); err != nil {
 		return err
 	}
@@ -59,6 +71,7 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.F
 	if err != nil {
 		return fmt.Errorf("read migrations dir: %w", err)
 	}
+
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 
 	for _, entry := range entries {
@@ -66,21 +79,27 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.F
 		if entry.IsDir() || !strings.HasSuffix(name, ".sql") {
 			continue
 		}
+
 		if applied[name] {
 			continue
 		}
+
 		content, err := fs.ReadFile(migrationsFS, name)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
+
 		if _, err := pool.Exec(ctx, string(content)); err != nil {
 			return fmt.Errorf("apply %s: %w", name, err)
 		}
+
 		if _, err := pool.Exec(ctx,
 			"INSERT INTO _migrations (filename) VALUES ($1)", name); err != nil {
 			return fmt.Errorf("record %s: %w", name, err)
 		}
+
 		slog.Info("migration applied", "file", name)
 	}
+
 	return nil
 }

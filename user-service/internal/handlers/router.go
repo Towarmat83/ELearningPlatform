@@ -26,9 +26,11 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 	r := chi.NewRouter()
 	r.Use(chiMiddleware.RequestID)
 	r.Use(chiMiddleware.RealIP)
+
 	if withLogger {
 		r.Use(chiMiddleware.Logger)
 	}
+
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(corsOptions.Handler)
 

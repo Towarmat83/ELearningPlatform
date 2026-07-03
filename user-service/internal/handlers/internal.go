@@ -43,23 +43,27 @@ type moduleProgressRow struct {
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  body  object  true  "user_id, course_slug"
+// @Param    body  object  true  "user_id, course_slug"
 // @Success  200   {object}  map[string]bool
-// @Router   /internal/enrollments/auto [post]
+// @Router   /internal/enrollments/auto [post].
 func (s *State) InternalAutoEnroll(w http.ResponseWriter, r *http.Request) {
 	var body courseBody
 	if err := decode(r, &body); err != nil {
 		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
+
 		return
 	}
+
 	_, err := s.Pool.Exec(r.Context(),
 		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		body.UserID, body.CourseSlug)
 	if err != nil {
 		slog.Error("failed to auto-enroll user", "userID", body.UserID, "courseSlug", body.CourseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -70,19 +74,23 @@ func (s *State) InternalAutoEnroll(w http.ResponseWriter, r *http.Request) {
 // @Param    user_id      query  string  true  "User UUID"
 // @Param    course_slug  query  string  true  "Course slug"
 // @Success  200  {object}  map[string]bool
-// @Router   /internal/enrollments/check [get]
+// @Router   /internal/enrollments/check [get].
 func (s *State) InternalCheckEnrollment(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	courseSlug := r.URL.Query().Get("course_slug")
+
 	var enrolled bool
+
 	err := s.Pool.QueryRow(r.Context(),
 		`SELECT COUNT(*) > 0 FROM enrollments WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug).Scan(&enrolled)
 	if err != nil {
 		slog.Error("failed to check enrollment", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]bool{"enrolled": enrolled})
 }
 
@@ -93,29 +101,35 @@ func (s *State) InternalCheckEnrollment(w http.ResponseWriter, r *http.Request) 
 // @Param    user_id      query  string  true  "User UUID"
 // @Param    course_slug  query  string  true  "Course slug"
 // @Success  200  {object}  map[string]interface{}
-// @Router   /internal/progress/viewed [get]
+// @Router   /internal/progress/viewed [get].
 func (s *State) InternalViewedLessons(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	courseSlug := r.URL.Query().Get("course_slug")
+
 	rows, err := s.Pool.Query(r.Context(),
 		`SELECT lesson_slug FROM lesson_progress WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug)
 	if err != nil {
 		slog.Error("failed to query viewed lessons", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
 	defer rows.Close()
+
 	var slugs []string
+
 	for rows.Next() {
 		var slug string
 		if rows.Scan(&slug) == nil {
 			slugs = append(slugs, slug)
 		}
 	}
+
 	if slugs == nil {
 		slugs = []string{}
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"viewed": slugs})
 }
 
@@ -124,15 +138,17 @@ func (s *State) InternalViewedLessons(w http.ResponseWriter, r *http.Request) {
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  body  object  true  "user_id, course_slug, lesson_slug"
+// @Param    body  object  true  "user_id, course_slug, lesson_slug"
 // @Success  200   {object}  map[string]bool
-// @Router   /internal/progress/complete [post]
+// @Router   /internal/progress/complete [post].
 func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 	var body lessonCompleteBody
 	if err := decode(r, &body); err != nil {
 		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
+
 		return
 	}
+
 	_, err := s.Pool.Exec(r.Context(),
 		`		INSERT INTO lesson_progress (user_id, course_slug, lesson_slug, viewed_at)
 		 VALUES ($1::uuid, $2, $3, NOW())
@@ -141,8 +157,10 @@ func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to mark lesson complete", "userID", body.UserID, "courseSlug", body.CourseSlug, "lessonSlug", body.LessonSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -151,15 +169,17 @@ func (s *State) InternalMarkComplete(w http.ResponseWriter, r *http.Request) {
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  body  object  true  "user_id, course_slug"
+// @Param    body  object  true  "user_id, course_slug"
 // @Success  200   {object}  map[string]bool
-// @Router   /internal/progress/course-complete [post]
+// @Router   /internal/progress/course-complete [post].
 func (s *State) InternalMarkCourseComplete(w http.ResponseWriter, r *http.Request) {
 	var body courseBody
 	if err := decode(r, &body); err != nil {
 		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
+
 		return
 	}
+
 	_, err := s.Pool.Exec(r.Context(),
 		`INSERT INTO lesson_progress (user_id, course_slug, lesson_slug, viewed_at)
 		 VALUES ($1::uuid, $2, '__complete__', NOW())
@@ -168,8 +188,10 @@ func (s *State) InternalMarkCourseComplete(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		slog.Error("failed to mark course complete", "userID", body.UserID, "courseSlug", body.CourseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -178,15 +200,17 @@ func (s *State) InternalMarkCourseComplete(w http.ResponseWriter, r *http.Reques
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  body  object  true  "user_id, course_slug, module_index, score, max_score, passed"
+// @Param    body  object  true  "user_id, course_slug, module_index, score, max_score, passed"
 // @Success  200   {object}  map[string]bool
-// @Router   /internal/progress/module [post]
+// @Router   /internal/progress/module [post].
 func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Request) {
 	var body moduleProgressBody
 	if err := decode(r, &body); err != nil {
 		s.Error(w, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
+
 		return
 	}
+
 	_, err := s.Pool.Exec(r.Context(), `
 		INSERT INTO module_progress (user_id, course_slug, module_index, module_slug, best_score, max_score, passed, attempts, completed_at)
 		VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, 1, CASE WHEN $7 THEN NOW() ELSE NULL END)
@@ -202,8 +226,10 @@ func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		slog.Error("failed to record module progress", "userID", body.UserID, "courseSlug", body.CourseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -214,12 +240,13 @@ func (s *State) InternalRecordModuleProgress(w http.ResponseWriter, r *http.Requ
 // @Param    user_id      query  string  true  "User UUID"
 // @Param    course_slug  query  string  true  "Course slug"
 // @Success  200  {object}  map[string]interface{}
-// @Router   /internal/progress/course-summary [get]
+// @Router   /internal/progress/course-summary [get].
 func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	courseSlug := r.URL.Query().Get("course_slug")
 
 	var totalScore int
+
 	err := s.Pool.QueryRow(r.Context(),
 		`SELECT COALESCE(SUM(best_score), 0) FROM module_progress
 		 WHERE user_id = $1::uuid AND course_slug = $2`,
@@ -227,6 +254,7 @@ func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to query course score", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
 
@@ -238,10 +266,13 @@ func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to query passed modules", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
 	defer rows.Close()
+
 	passedModules := []string{}
+
 	for rows.Next() {
 		var slug string
 		if rows.Scan(&slug) == nil {
@@ -252,6 +283,7 @@ func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 	// Also count viewed lessons (text/video/image modules marked complete).
 	// This allows text-only courses to satisfy "any progress" prerequisites.
 	var viewedCount int
+
 	_ = s.Pool.QueryRow(r.Context(),
 		`SELECT COUNT(*) FROM lesson_progress WHERE user_id = $1::uuid AND course_slug = $2`,
 		userID, courseSlug).Scan(&viewedCount)
@@ -270,10 +302,11 @@ func (s *State) InternalCourseSummary(w http.ResponseWriter, r *http.Request) {
 // @Param    user_id      query  string  true  "User UUID"
 // @Param    course_slug  query  string  true  "Course slug"
 // @Success  200  {object}  map[string]interface{}
-// @Router   /internal/progress/modules [get]
+// @Router   /internal/progress/modules [get].
 func (s *State) InternalGetModuleProgress(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	courseSlug := r.URL.Query().Get("course_slug")
+
 	rows, err := s.Pool.Query(r.Context(),
 		`SELECT module_index, best_score, max_score, passed, attempts
 		 FROM module_progress
@@ -282,15 +315,19 @@ func (s *State) InternalGetModuleProgress(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		slog.Error("failed to query module progress", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "DB error")
+
 		return
 	}
 	defer rows.Close()
+
 	progress := make([]moduleProgressRow, 0)
+
 	for rows.Next() {
 		var p moduleProgressRow
 		if rows.Scan(&p.ModuleIndex, &p.BestScore, &p.MaxScore, &p.Passed, &p.Attempts) == nil {
 			progress = append(progress, p)
 		}
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"progress": progress})
 }

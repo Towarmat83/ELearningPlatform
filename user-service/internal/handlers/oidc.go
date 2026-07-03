@@ -3,7 +3,8 @@ package handlers
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
+	"errors"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,21 +40,26 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 		BrowserBaseURL:     ReadSetting(ctx, s.Pool, "oidc_browser_base_url", ""),
 		InsecureSkipVerify: ReadSetting(ctx, s.Pool, "oidc_insecure_skip_verify", "false") == "true",
 	}
+
 	scopes := ReadSetting(ctx, s.Pool, "oidc_scopes", "openid email profile groups")
-	for _, sc := range strings.Split(scopes, " ") {
+	for sc := range strings.SplitSeq(scopes, " ") {
 		if sc = strings.TrimSpace(sc); sc != "" {
 			cfg.Scopes = append(cfg.Scopes, sc)
 		}
 	}
+
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{gooidc.ScopeOpenID, "email", "profile"}
 	}
+
 	if !cfg.Enabled {
-		return cfg, fmt.Errorf("OIDC is not enabled")
+		return cfg, errors.New("OIDC is not enabled")
 	}
+
 	if cfg.ProviderURL == "" || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		return cfg, fmt.Errorf("OIDC not fully configured (provider_url, client_id, client_secret required)")
+		return cfg, errors.New("OIDC not fully configured (provider_url, client_id, client_secret required)")
 	}
+
 	return cfg, nil
 }
 
@@ -69,9 +75,11 @@ func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
 		}
 		ctx = gooidc.ClientContext(ctx, insecureClient)
 	}
+
 	if cfg.IssuerURL != "" {
 		return gooidc.InsecureIssuerURLContext(ctx, cfg.IssuerURL)
 	}
+
 	return ctx
 }
 
@@ -81,6 +89,7 @@ func extractURLBase(rawURL string) string {
 	if err != nil || u.Host == "" {
 		return rawURL
 	}
+
 	return u.Scheme + "://" + u.Host
 }
 
@@ -90,26 +99,30 @@ func extractURLBase(rawURL string) string {
 // @Produce  json
 // @Success  200  {object}  map[string]string
 // @Failure  400  {object}  map[string]string
-// @Router   /api/auth/oidc/authorize [get]
+// @Router   /api/auth/oidc/authorize [get].
 func (s *State) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.loadOIDCSettings(r.Context())
 	if err != nil {
 		s.Error(w, http.StatusBadRequest, err.Error())
+
 		return
 	}
 
 	stateToken, err := makeOAuthState("oidc", s.Config.JWTSecret)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "State token error")
+
 		return
 	}
 
 	redirectURI := strings.TrimRight(cfg.RedirectBase, "/") + "/auth/callback"
 
 	providerCtx := oidcContext(r.Context(), cfg)
+
 	provider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
 		s.Error(w, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
+
 		return
 	}
 
@@ -138,10 +151,10 @@ func (s *State) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 // @Tags     OIDC
 // @Accept   json
 // @Produce  json
-// @Param    body  body  object  true  "code and state"
+// @Param    body  object  true  "code and state"
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
-// @Router   /api/auth/oidc/callback [post]
+// @Router   /api/auth/oidc/callback [post].
 func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code  string `json:"code"`
@@ -149,26 +162,32 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decode(r, &req); err != nil {
 		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+
 		return
 	}
 
 	provider, ok := decodeOAuthState(req.State, s.Config.JWTSecret)
 	if !ok || provider != "oidc" {
 		s.Error(w, http.StatusUnauthorized, "Invalid or expired OIDC state")
+
 		return
 	}
 
 	ctx := r.Context()
+
 	cfg, err := s.loadOIDCSettings(ctx)
 	if err != nil {
 		s.Error(w, http.StatusBadRequest, err.Error())
+
 		return
 	}
 
 	providerCtx := oidcContext(ctx, cfg)
+
 	oidcProvider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
 		s.Error(w, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
+
 		return
 	}
 
@@ -184,25 +203,30 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	token, err := oauth2Cfg.Exchange(ctx, req.Code)
 	if err != nil {
 		s.Error(w, http.StatusUnauthorized, "Token exchange failed: "+err.Error())
+
 		return
 	}
 
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
 		s.Error(w, http.StatusUnauthorized, "No id_token in response")
+
 		return
 	}
 
 	verifier := oidcProvider.Verifier(&gooidc.Config{ClientID: cfg.ClientID})
+
 	idToken, err := verifier.Verify(providerCtx, rawIDToken)
 	if err != nil {
 		s.Error(w, http.StatusUnauthorized, "ID token verification failed: "+err.Error())
+
 		return
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
 		s.Error(w, http.StatusInternalServerError, "Claims extraction failed")
+
 		return
 	}
 
@@ -210,41 +234,49 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	userInfo, uiErr := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(token))
 	if uiErr == nil {
 		var uiClaims map[string]any
-		if uiErr2 := userInfo.Claims(&uiClaims); uiErr2 == nil {
-			for k, v := range uiClaims {
-				claims[k] = v
-			}
+
+		uiErr2 := userInfo.Claims(&uiClaims)
+		if uiErr2 == nil {
+			maps.Copy(claims, uiClaims)
 		}
 	}
 
 	email, _ := claims["email"].(string)
 	if email == "" {
 		s.Error(w, http.StatusUnauthorized, "No email in OIDC token")
+
 		return
 	}
+
 	sub := idToken.Subject
+
 	name, _ := claims["name"].(string)
 	if name == "" {
 		name, _ = claims["preferred_username"].(string)
 	}
+
 	if name == "" {
 		name = email
 	}
+
 	var avatarURL *string
 	if pic, ok := claims["picture"].(string); ok && pic != "" {
 		avatarURL = &pic
 	}
 	// Extract bio from common non-standard OIDC attributes.
 	var bio *string
+
 	for _, key := range []string{"bio", "description", "about", "profile"} {
 		if v, ok := claims[key].(string); ok && v != "" {
 			bio = &v
+
 			break
 		}
 	}
 
 	// Extract group names from configurable claim
 	var groups []string
+
 	if raw, ok := claims[cfg.GroupClaim]; ok {
 		switch v := raw.(type) {
 		case []any:
@@ -254,7 +286,7 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		case string:
-			for _, g := range strings.Split(v, ",") {
+			for g := range strings.SplitSeq(v, ",") {
 				if g = strings.TrimSpace(g); g != "" {
 					groups = append(groups, g)
 				}
@@ -263,9 +295,11 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	providerKey := "oidc"
+
 	user, err := upsertSSOUser(ctx, s.Pool, email, name, avatarURL, bio, providerKey, sub)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
+
 		return
 	}
 
@@ -274,14 +308,17 @@ func (s *State) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		_ = err
 		role = user.Role
 	}
+
 	addToDefaultGroup(ctx, s.Pool, user.ID)
 	syncGroupEnrollments(ctx, s.Pool, user.ID)
 
 	jwtToken, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Token error")
+
 		return
 	}
+
 	user.Role = role
 	s.JSON(w, http.StatusOK, authResponse{Token: jwtToken, User: *user})
 }

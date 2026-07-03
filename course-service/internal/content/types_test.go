@@ -21,6 +21,7 @@ func TestModuleSlug(t *testing.T) {
 
 	for _, tc := range tests {
 		m := Module{Name: tc.name}
+
 		got := m.Slug()
 		if got != tc.want {
 			t.Errorf("Module{Name:%q}.Slug() = %q, want %q", tc.name, got, tc.want)
@@ -43,6 +44,7 @@ func TestModuleContent(t *testing.T) {
 
 	for _, tc := range tests {
 		m := Module{Type: tc.typ, Src: tc.src}
+
 		got := m.Content()
 		if got != tc.want {
 			t.Errorf("Module{Type:%q}.Content() = %q, want %q", tc.typ, got, tc.want)
@@ -107,6 +109,7 @@ func TestModuleHasGitContent(t *testing.T) {
 func TestCourseYAML_MergeSpec_NilSpec(t *testing.T) {
 	c := &CourseYAML{Title: "My Course"}
 	c.MergeSpec()
+
 	if c.Title != "My Course" {
 		t.Errorf("MergeSpec with nil Spec changed title to %q", c.Title)
 	}
@@ -125,24 +128,31 @@ func TestCourseYAML_MergeSpec_FromSpec(t *testing.T) {
 		},
 	}
 	c.MergeSpec()
+
 	if c.Title != "Spec Title" {
 		t.Errorf("expected Title=Spec Title, got %q", c.Title)
 	}
+
 	if c.Description != "Spec Desc" {
 		t.Errorf("expected Description=Spec Desc, got %q", c.Description)
 	}
+
 	if !c.Public {
 		t.Error("expected Public=true")
 	}
+
 	if c.Category != "k8s" {
 		t.Errorf("expected Category=k8s, got %q", c.Category)
 	}
+
 	if c.Difficulty != "hard" {
 		t.Errorf("expected Difficulty=hard, got %q", c.Difficulty)
 	}
+
 	if len(c.Modules) != 1 {
 		t.Errorf("expected 1 module from spec, got %d", len(c.Modules))
 	}
+
 	if len(c.Prerequisites) != 1 {
 		t.Errorf("expected 1 prerequisite from spec, got %d", len(c.Prerequisites))
 	}
@@ -164,12 +174,15 @@ func TestCourseYAML_MergeSpec_TopLevelTakesPrecedence(t *testing.T) {
 		},
 	}
 	c.MergeSpec()
+
 	if c.Title != "Top Title" {
 		t.Errorf("expected top-level Title to take precedence, got %q", c.Title)
 	}
+
 	if c.Category != "docker" {
 		t.Errorf("expected top-level Category, got %q", c.Category)
 	}
+
 	if len(c.Modules) != 1 || c.Modules[0].Name != "top-mod" {
 		t.Error("expected top-level modules to take precedence")
 	}
@@ -180,6 +193,7 @@ func TestCourseYAML_MergeSpec_PublicFallbackFromSpec(t *testing.T) {
 		Spec: &CourseSpec{Public: true},
 	}
 	c.MergeSpec()
+
 	if !c.Public {
 		t.Error("expected Public=true from spec when top-level is false")
 	}

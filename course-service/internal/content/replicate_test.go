@@ -38,6 +38,7 @@ func TestReplicatedPath_NoReplication(t *testing.T) {
 		Src:         "https://example.com/video.mp4",
 		Replication: false,
 	}
+
 	result := ReplicatedPath(m, "/tmp/uploads")
 	if result != "https://example.com/video.mp4" {
 		t.Errorf("expected original Src, got %q", result)
@@ -63,6 +64,7 @@ func TestReplicatedPath_EmptySrc(t *testing.T) {
 		Src:         "",
 		Replication: true,
 	}
+
 	result := ReplicatedPath(m, "/tmp/uploads")
 	if result != "" {
 		t.Errorf("expected empty string for empty Src, got %q", result)
@@ -97,14 +99,17 @@ func TestDownloadFile_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dest := filepath.Join(tmpDir, "downloaded.txt")
+
 	err := downloadFile(srv.URL, dest)
 	if err != nil {
 		t.Fatalf("downloadFile: %v", err)
 	}
+
 	data, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatalf("read downloaded file: %v", err)
 	}
+
 	if string(data) != "file content here" {
 		t.Errorf("expected 'file content here', got %q", string(data))
 	}
@@ -117,6 +122,7 @@ func TestDownloadFile_Non200Status(t *testing.T) {
 	defer srv.Close()
 
 	tmpDir := t.TempDir()
+
 	err := downloadFile(srv.URL, filepath.Join(tmpDir, "file.txt"))
 	if err == nil {
 		t.Error("expected error for 404 response")
@@ -138,10 +144,12 @@ func TestDownloadFile_DestInSubdir(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dest := filepath.Join(tmpDir, "subdir", "nested", "file.txt")
+
 	err := downloadFile(srv.URL, dest)
 	if err != nil {
 		t.Fatalf("downloadFile to nested dest: %v", err)
 	}
+
 	if _, err := os.Stat(dest); err != nil {
 		t.Errorf("expected file to exist at %q", dest)
 	}
@@ -159,6 +167,7 @@ func TestReplicatedPath_AlreadyCached(t *testing.T) {
 		Src:         srv.URL + "/photo.jpg",
 		Replication: true,
 	}
+
 	result1 := ReplicatedPath(m, tmpDir)
 	if result1 == "" {
 		t.Fatal("expected non-empty result from first call")

@@ -19,9 +19,9 @@ type Path struct {
 // If MinScore > 0, the user must have earned at least that many total points.
 // If Modules is non-empty, every listed module slug must be passed.
 type CoursePrerequisite struct {
-	Course   string   `json:"course" yaml:"course"`
+	Course   string   `json:"course"              yaml:"course"`
 	MinScore int      `json:"min_score,omitempty" yaml:"min_score,omitempty"`
-	Modules  []string `json:"modules,omitempty" yaml:"modules,omitempty"`
+	Modules  []string `json:"modules,omitempty"   yaml:"modules,omitempty"`
 }
 
 // Course is the in-memory representation of a course loaded from disk.
@@ -48,38 +48,39 @@ type Lesson struct {
 
 // Module is a course element as defined in the CRD spec.modules[].
 type Module struct {
-	Name                   string                 `json:"name"`
-	Type                   string                 `json:"type"` // video, text, image, quiz, lab
-	Src                    string                 `json:"src,omitempty"`
-	Ref                    string                 `json:"ref,omitempty"`
-	Path                   string                 `json:"path,omitempty"`
-	LabURL                 string                 `json:"lab_url,omitempty"`
-	InlineContent          string                 `json:"content,omitempty"`
-	Replication            bool                   `json:"replication,omitempty"`
-	Hidden                 bool                   `json:"hidden,omitempty"`
-	Inline                 bool                   `json:"inline,omitempty"`        // quiz rendered inside the previous module
-	Prerequisites          []string               `json:"prerequisites,omitempty"` // module slugs that must be completed first
-	Questions              []Question             `json:"questions,omitempty"`
-	PassingScore           int                    `json:"passing_score,omitempty"`
-	Cooldown               CooldownSpec           `json:"cooldown,omitempty"`
-	MaxAttemptsPerQuestion *int                   `json:"max_attempts_per_question,omitempty"`
-	LockOnMaxAttempts      bool                   `json:"lock_on_max_attempts,omitempty"`
-	CheckProvider          string                 `json:"check_provider,omitempty"` // "local" | "gitlab"
-	CheckType              string                 `json:"check_type,omitempty"`
-	CheckParams            map[string]interface{} `json:"check_params,omitempty"`
-	Steps                  []CheckStep            `json:"steps,omitempty"`
+	Name                   string         `json:"name"`
+	Type                   string         `json:"type"` // video, text, image, quiz, lab
+	Src                    string         `json:"src,omitempty"`
+	Ref                    string         `json:"ref,omitempty"`
+	Path                   string         `json:"path,omitempty"`
+	LabURL                 string         `json:"lab_url,omitempty"`
+	InlineContent          string         `json:"content,omitempty"`
+	Replication            bool           `json:"replication,omitempty"`
+	Hidden                 bool           `json:"hidden,omitempty"`
+	Inline                 bool           `json:"inline,omitempty"`        // quiz rendered inside the previous module
+	Prerequisites          []string       `json:"prerequisites,omitempty"` // module slugs that must be completed first
+	Questions              []Question     `json:"questions,omitempty"`
+	PassingScore           int            `json:"passing_score,omitempty"`
+	Cooldown               CooldownSpec   `json:"cooldown,omitempty"`
+	MaxAttemptsPerQuestion *int           `json:"max_attempts_per_question,omitempty"`
+	LockOnMaxAttempts      bool           `json:"lock_on_max_attempts,omitempty"`
+	CheckProvider          string         `json:"check_provider,omitempty"` // "local" | "gitlab"
+	CheckType              string         `json:"check_type,omitempty"`
+	CheckParams            map[string]any `json:"check_params,omitempty"`
+	Steps                  []CheckStep    `json:"steps,omitempty"`
 }
 
 // CheckStep is one verifiable step inside a lab module.
 type CheckStep struct {
-	Title       string                 `json:"title" yaml:"title"`
-	CheckType   string                 `json:"check_type" yaml:"check_type"`
-	CheckParams map[string]interface{} `json:"check_params,omitempty" yaml:"check_params,omitempty"`
+	Title       string         `json:"title"                  yaml:"title"`
+	CheckType   string         `json:"check_type"             yaml:"check_type"`
+	CheckParams map[string]any `json:"check_params,omitempty" yaml:"check_params,omitempty"`
 }
 
 // Slug returns a DNS-compliant slug derived from the module name.
 func (m Module) Slug() string {
 	var b strings.Builder
+
 	for _, c := range m.Name {
 		if unicode.IsLetter(c) || unicode.IsDigit(c) || c == '-' || c == '_' {
 			b.WriteRune(c)
@@ -89,6 +90,7 @@ func (m Module) Slug() string {
 			b.WriteRune('-')
 		}
 	}
+
 	return strings.ToLower(strings.Trim(b.String(), "-"))
 }
 
@@ -104,6 +106,7 @@ func (m Module) Content() string {
 		if m.InlineContent != "" {
 			return m.InlineContent
 		}
+
 		return m.Src
 	default:
 		return m.InlineContent
@@ -148,26 +151,26 @@ type CourseSpec struct {
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
 type ModuleYAML struct {
-	Name                   string                 `yaml:"name"`
-	Type                   string                 `yaml:"type"`
-	Src                    string                 `yaml:"src,omitempty"`
-	Ref                    string                 `yaml:"ref,omitempty"`
-	Path                   string                 `yaml:"path,omitempty"`
-	LabURL                 string                 `yaml:"lab_url,omitempty"`
-	InlineContent          string                 `yaml:"content,omitempty"`
-	Replication            bool                   `yaml:"replication,omitempty"`
-	Hidden                 bool                   `yaml:"hidden,omitempty"`
-	Inline                 bool                   `yaml:"inline,omitempty"`
-	Prerequisites          []string               `yaml:"prerequisites,omitempty"`
-	Questions              []QuestionYAML         `yaml:"questions,omitempty"`
-	PassingScore           int                    `yaml:"passing_score"`
-	Cooldown               CooldownSpecYAML       `yaml:"cooldown"`
-	MaxAttemptsPerQuestion *int                   `yaml:"max_attempts_per_question"`
-	LockOnMaxAttempts      bool                   `yaml:"lock_on_max_attempts"`
-	CheckProvider          string                 `yaml:"check_provider,omitempty"`
-	CheckType              string                 `yaml:"check_type,omitempty"`
-	CheckParams            map[string]interface{} `yaml:"check_params,omitempty"`
-	Steps                  []CheckStep            `yaml:"steps,omitempty"`
+	Name                   string           `yaml:"name"`
+	Type                   string           `yaml:"type"`
+	Src                    string           `yaml:"src,omitempty"`
+	Ref                    string           `yaml:"ref,omitempty"`
+	Path                   string           `yaml:"path,omitempty"`
+	LabURL                 string           `yaml:"lab_url,omitempty"`
+	InlineContent          string           `yaml:"content,omitempty"`
+	Replication            bool             `yaml:"replication,omitempty"`
+	Hidden                 bool             `yaml:"hidden,omitempty"`
+	Inline                 bool             `yaml:"inline,omitempty"`
+	Prerequisites          []string         `yaml:"prerequisites,omitempty"`
+	Questions              []QuestionYAML   `yaml:"questions,omitempty"`
+	PassingScore           int              `yaml:"passing_score"`
+	Cooldown               CooldownSpecYAML `yaml:"cooldown"`
+	MaxAttemptsPerQuestion *int             `yaml:"max_attempts_per_question"`
+	LockOnMaxAttempts      bool             `yaml:"lock_on_max_attempts"`
+	CheckProvider          string           `yaml:"check_provider,omitempty"`
+	CheckType              string           `yaml:"check_type,omitempty"`
+	CheckParams            map[string]any   `yaml:"check_params,omitempty"`
+	Steps                  []CheckStep      `yaml:"steps,omitempty"`
 }
 
 // ModuleIndexEntry is one entry in a module index YAML file (type: modules).
@@ -192,24 +195,31 @@ func (c *CourseYAML) MergeSpec() {
 	if c.Spec == nil {
 		return
 	}
+
 	if c.Title == "" {
 		c.Title = c.Spec.Title
 	}
+
 	if c.Description == "" {
 		c.Description = c.Spec.Description
 	}
+
 	if !c.Public {
 		c.Public = c.Spec.Public
 	}
+
 	if c.Category == "" {
 		c.Category = c.Spec.Category
 	}
+
 	if c.Difficulty == "" {
 		c.Difficulty = c.Spec.Difficulty
 	}
+
 	if len(c.Prerequisites) == 0 && len(c.Spec.Prerequisites) > 0 {
 		c.Prerequisites = c.Spec.Prerequisites
 	}
+
 	if len(c.Modules) == 0 && len(c.Spec.Modules) > 0 {
 		c.Modules = c.Spec.Modules
 	}

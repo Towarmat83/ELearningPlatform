@@ -37,36 +37,41 @@ func intToString(i int) string {
 	if i == 0 {
 		return "0"
 	}
+
 	neg := false
 	if i < 0 {
 		neg = true
 		i = -i
 	}
+
 	var b [20]byte
+
 	bp := len(b) - 1
 	for i > 0 {
 		b[bp] = byte('0' + i%10)
 		i /= 10
 		bp--
 	}
+
 	if neg {
 		b[bp] = '-'
 		bp--
 	}
+
 	return string(b[bp+1:])
 }
 
 func (ct *CooldownTracker) Check(userID, quizID, questionID string) (remaining time.Duration, attempts int) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
+
 	e, ok := ct.entries[key(userID, quizID, questionID)]
 	if !ok {
 		return 0, 0
 	}
-	remaining = time.Until(e.CooldownUntil)
-	if remaining < 0 {
-		remaining = 0
-	}
+
+	remaining = max(time.Until(e.CooldownUntil), 0)
+
 	return remaining, e.Attempts
 }
 
@@ -74,27 +79,31 @@ func (ct *CooldownTracker) Check(userID, quizID, questionID string) (remaining t
 func (ct *CooldownTracker) CheckModule(userID, courseSlug string, moduleIndex int, questionID string) (remaining time.Duration, attempts int) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
+
 	k := keyWithModuleIndex(userID, courseSlug, moduleIndex, questionID)
+
 	e, ok := ct.entries[k]
 	if !ok {
 		return 0, 0
 	}
-	remaining = time.Until(e.CooldownUntil)
-	if remaining < 0 {
-		remaining = 0
-	}
+
+	remaining = max(time.Until(e.CooldownUntil), 0)
+
 	return remaining, e.Attempts
 }
 
 func (ct *CooldownTracker) Record(userID, quizID, questionID string, spec CooldownSpec, maxAttempts *int, lockOnMax bool) (remaining time.Duration, locked bool) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
+
 	k := key(userID, quizID, questionID)
+
 	e, ok := ct.entries[k]
 	if !ok {
 		e = &CooldownEntry{}
 		ct.entries[k] = e
 	}
+
 	e.Attempts++
 
 	if maxAttempts != nil && e.Attempts >= *maxAttempts {
@@ -105,6 +114,7 @@ func (ct *CooldownTracker) Record(userID, quizID, questionID string, spec Cooldo
 
 	secs := computeCooldown(e.Attempts, spec)
 	e.CooldownUntil = time.Now().Add(secs)
+
 	return secs, false
 }
 
@@ -112,12 +122,15 @@ func (ct *CooldownTracker) Record(userID, quizID, questionID string, spec Cooldo
 func (ct *CooldownTracker) RecordModule(userID, courseSlug string, moduleIndex int, questionID string, spec CooldownSpec, maxAttempts *int, lockOnMax bool) (remaining time.Duration, locked bool) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
+
 	k := keyWithModuleIndex(userID, courseSlug, moduleIndex, questionID)
+
 	e, ok := ct.entries[k]
 	if !ok {
 		e = &CooldownEntry{}
 		ct.entries[k] = e
 	}
+
 	e.Attempts++
 
 	if maxAttempts != nil && e.Attempts >= *maxAttempts {
@@ -128,11 +141,13 @@ func (ct *CooldownTracker) RecordModule(userID, courseSlug string, moduleIndex i
 
 	secs := computeCooldown(e.Attempts, spec)
 	e.CooldownUntil = time.Now().Add(secs)
+
 	return secs, false
 }
 
 func computeCooldown(currentAttempts int, spec CooldownSpec) time.Duration {
 	var secs int
+
 	switch spec.Strategy {
 	case "fixed":
 		secs = spec.BaseSeconds
@@ -143,17 +158,20 @@ func computeCooldown(currentAttempts int, spec CooldownSpec) time.Duration {
 		for i := 1; i < currentAttempts; i++ {
 			mult *= spec.Multiplier
 		}
+
 		secs = int(float64(spec.BaseSeconds) * mult)
 		if spec.MaxSeconds > 0 && secs > spec.MaxSeconds {
 			secs = spec.MaxSeconds
 		}
 	}
+
 	return time.Duration(secs) * time.Second
 }
 
 func (ct *CooldownTracker) Clear(userID, quizID, questionID string) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
+
 	delete(ct.entries, key(userID, quizID, questionID))
 }
 
@@ -161,5 +179,6 @@ func (ct *CooldownTracker) Clear(userID, quizID, questionID string) {
 func (ct *CooldownTracker) ClearModule(userID, courseSlug string, moduleIndex int, questionID string) {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
+
 	delete(ct.entries, keyWithModuleIndex(userID, courseSlug, moduleIndex, questionID))
 }

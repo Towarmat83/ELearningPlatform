@@ -24,7 +24,7 @@ import (
 // @BasePath       /
 // @securityDefinitions.apikey BearerAuth
 // @in             header
-// @name           Authorization
+// @name           Authorization.
 func main() {
 	cfg := config.Load()
 
@@ -45,10 +45,12 @@ func main() {
 		if err != nil {
 			slog.Warn("database unavailable, lab result tracking disabled", "err", err)
 		} else {
-			if err := coursedb.RunMigrations(ctx, pool, migrations.FS); err != nil {
+			err := coursedb.RunMigrations(ctx, pool, migrations.FS)
+			if err != nil {
 				slog.Warn("db migration failed", "err", err)
 			} else {
 				s.DB = pool
+
 				slog.Info("database connected, lab tracking enabled")
 			}
 		}
@@ -59,6 +61,7 @@ func main() {
 		slog.Error("failed to create K8s watcher", "err", err)
 		os.Exit(1)
 	}
+
 	if err := watcher.Start(ctx); err != nil {
 		slog.Error("failed to start K8s watcher", "err", err)
 		os.Exit(1)
@@ -67,9 +70,13 @@ func main() {
 	pathWatcher, err := content.NewPathWatcher(pathStore, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
 		slog.Warn("failed to create Path watcher, paths disabled", "err", err)
-	} else if err := pathWatcher.Start(ctx); err != nil {
-		slog.Warn("failed to start Path watcher", "err", err)
+	} else {
+		err := pathWatcher.Start(ctx)
+		if err != nil {
+			slog.Warn("failed to start Path watcher", "err", err)
+		}
 	}
+
 	slog.Info("K8s CRD watchers started", "namespace", cfg.K8sNamespace)
 
 	r := handlers.BuildRouter(s, cfg, true)
@@ -88,7 +95,9 @@ func main() {
 
 	go func() {
 		slog.Info("API listening", "addr", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
 			os.Exit(1)
 		}
@@ -99,8 +108,10 @@ func main() {
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
 	if err := srv.Shutdown(shutCtx); err != nil {
 		slog.Error("forced shutdown", "err", err)
 	}
+
 	slog.Info("server stopped")
 }

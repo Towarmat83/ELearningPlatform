@@ -16,6 +16,7 @@ func TestDeriveKey(t *testing.T) {
 	for i, b := range key {
 		if b != key2[i] {
 			t.Error("DeriveKey not deterministic")
+
 			break
 		}
 	}
@@ -23,12 +24,15 @@ func TestDeriveKey(t *testing.T) {
 	// Different input should produce different key
 	key3 := DeriveKey("other-secret")
 	same := true
+
 	for i, b := range key {
 		if b != key3[i] {
 			same = false
+
 			break
 		}
 	}
+
 	if same {
 		t.Error("DeriveKey returned same key for different inputs")
 	}
@@ -42,9 +46,11 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncryptToken failed: %v", err)
 	}
+
 	if ciphertext == "" {
 		t.Error("expected non-empty ciphertext")
 	}
+
 	if ciphertext == plaintext {
 		t.Error("ciphertext should differ from plaintext")
 	}
@@ -53,6 +59,7 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecryptToken failed: %v", err)
 	}
+
 	if decrypted != plaintext {
 		t.Errorf("expected %q, got %q", plaintext, decrypted)
 	}
@@ -60,14 +67,17 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 
 func TestEncryptDecrypt_EmptyString(t *testing.T) {
 	key := DeriveKey("test-key")
+
 	ciphertext, err := EncryptToken("", key)
 	if err != nil {
 		t.Fatalf("EncryptToken empty: %v", err)
 	}
+
 	decrypted, err := DecryptToken(ciphertext, key)
 	if err != nil {
 		t.Fatalf("DecryptToken empty: %v", err)
 	}
+
 	if decrypted != "" {
 		t.Errorf("expected empty string, got %q", decrypted)
 	}
@@ -87,6 +97,7 @@ func TestEncryptToken_DifferentEachCall(t *testing.T) {
 
 func TestDecryptToken_InvalidHex(t *testing.T) {
 	key := DeriveKey("test-key")
+
 	_, err := DecryptToken("not-hex!!!", key)
 	if err == nil {
 		t.Error("expected error for invalid hex")
@@ -119,6 +130,7 @@ func TestDecryptToken_WrongKey(t *testing.T) {
 
 func TestDecryptToken_CorruptedCiphertext(t *testing.T) {
 	key := DeriveKey("test-key")
+
 	ciphertext, err := EncryptToken("some data", key)
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +138,7 @@ func TestDecryptToken_CorruptedCiphertext(t *testing.T) {
 
 	// Corrupt the last few characters
 	corrupted := ciphertext[:len(ciphertext)-4] + "0000"
+
 	_, err = DecryptToken(corrupted, key)
 	if err == nil {
 		t.Error("expected error for corrupted ciphertext")
@@ -140,10 +153,12 @@ func TestEncryptToken_LongPlaintext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncryptToken long: %v", err)
 	}
+
 	decrypted, err := DecryptToken(ciphertext, key)
 	if err != nil {
 		t.Fatalf("DecryptToken long: %v", err)
 	}
+
 	if decrypted != plaintext {
 		t.Error("round-trip failed for long plaintext")
 	}
@@ -152,6 +167,7 @@ func TestEncryptToken_LongPlaintext(t *testing.T) {
 func TestEncryptToken_InvalidKeySize(t *testing.T) {
 	// AES requires 16, 24, or 32 byte key; bad size should error
 	badKey := []byte("short")
+
 	_, err := EncryptToken("data", badKey)
 	if err == nil {
 		t.Error("expected error for invalid key size")

@@ -43,6 +43,7 @@ func (s *State) CheckModule(w http.ResponseWriter, r *http.Request) {
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
 
@@ -58,19 +59,25 @@ func (s *State) CheckModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	modules := s.visibleModules(c, r)
+
 	idx, err := strconv.Atoi(indexStr)
 	if err != nil || idx < 0 || idx >= len(modules) {
 		s.Error(w, http.StatusNotFound, "Module not found")
+
 		return
 	}
+
 	m := modules[idx]
 
 	if m.Type != "lab" {
 		s.Error(w, http.StatusBadRequest, "Module is not a lab")
+
 		return
 	}
+
 	if !m.HasGitContent() {
 		s.Error(w, http.StatusBadRequest, "Lab module has no git content configured")
+
 		return
 	}
 
@@ -81,12 +88,14 @@ func (s *State) CheckModule(w http.ResponseWriter, r *http.Request) {
 	specData, err := s.GitCache.FetchModuleContent(m.Src, m.Ref, path.Join(checkDir, "check.yaml"), token)
 	if err != nil {
 		s.Error(w, http.StatusNotFound, "No check.yaml found for this lab")
+
 		return
 	}
 
 	var spec checkSpec
 	if err := yaml.Unmarshal(specData, &spec); err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to parse check.yaml")
+
 		return
 	}
 
@@ -94,6 +103,7 @@ func (s *State) CheckModule(w http.ResponseWriter, r *http.Request) {
 	policyData, err := s.GitCache.FetchModuleContent(m.Src, m.Ref, path.Join(checkDir, spec.Policy), token)
 	if err != nil {
 		s.Error(w, http.StatusNotFound, "Policy file not found: "+spec.Policy)
+
 		return
 	}
 
@@ -115,6 +125,7 @@ func (s *State) CheckModule(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		s.Error(w, http.StatusBadGateway, "checker-service unavailable: "+err.Error())
+
 		return
 	}
 	defer resp.Body.Close()
@@ -122,17 +133,21 @@ func (s *State) CheckModule(w http.ResponseWriter, r *http.Request) {
 	if resp.StatusCode != http.StatusOK {
 		var errBody map[string]string
 		json.NewDecoder(resp.Body).Decode(&errBody) //nolint:errcheck
+
 		msg := errBody["error"]
 		if msg == "" {
 			msg = "checker-service error"
 		}
+
 		s.Error(w, http.StatusBadGateway, msg)
+
 		return
 	}
 
 	var result CheckResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to decode checker response")
+
 		return
 	}
 
@@ -145,10 +160,12 @@ func (s *State) storeLabCheck(ctx context.Context, username, courseSlug string, 
 	if s.DB == nil {
 		return
 	}
+
 	violations := result.Violations
 	if violations == nil {
 		violations = []string{}
 	}
+
 	_, err := s.DB.Exec(ctx,
 		`INSERT INTO lab_checks (username, course_slug, module_index, module_name, allow, violations)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -161,7 +178,7 @@ func (s *State) storeLabCheck(ctx context.Context, username, courseSlug string, 
 
 // RecordLocalCheck persists the result of a Tauri-side local check (podman, etc.)
 // without re-running any verification server-side.
-// POST /api/courses/{slug}/modules/{index}/record
+// POST /api/courses/{slug}/modules/{index}/record.
 func (s *State) RecordLocalCheck(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	indexStr := param(r, "index")
@@ -170,19 +187,23 @@ func (s *State) RecordLocalCheck(w http.ResponseWriter, r *http.Request) {
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
 
 	idx, err := strconv.Atoi(indexStr)
 	if err != nil || idx < 0 || idx >= len(c.Modules) {
 		s.Error(w, http.StatusBadRequest, "Invalid module index")
+
 		return
 	}
+
 	m := c.Modules[idx]
 
 	var result CheckResponse
 	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 		s.Error(w, http.StatusBadRequest, "Invalid body")
+
 		return
 	}
 

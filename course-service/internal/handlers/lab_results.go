@@ -19,13 +19,16 @@ type labCheckRow struct {
 func (s *State) GetLabResults(w http.ResponseWriter, r *http.Request) {
 	if s.DB == nil {
 		s.Error(w, http.StatusServiceUnavailable, "database not configured")
+
 		return
 	}
 
 	courseSlug := r.URL.Query().Get("course")
 
-	var query string
-	var args []any
+	var (
+		query string
+		args  []any
+	)
 
 	if courseSlug != "" {
 		query = `SELECT id, username, course_slug, module_index, module_name, allow, violations, checked_at
@@ -39,17 +42,22 @@ func (s *State) GetLabResults(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.DB.Query(r.Context(), query, args...)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "db query failed")
+
 		return
 	}
 	defer rows.Close()
 
 	results := make([]labCheckRow, 0)
+
 	for rows.Next() {
 		var row labCheckRow
-		if err := rows.Scan(&row.ID, &row.Username, &row.CourseSlug, &row.ModuleIndex,
-			&row.ModuleName, &row.Allow, &row.Violations, &row.CheckedAt); err != nil {
+
+		err := rows.Scan(&row.ID, &row.Username, &row.CourseSlug, &row.ModuleIndex,
+			&row.ModuleName, &row.Allow, &row.Violations, &row.CheckedAt)
+		if err != nil {
 			continue
 		}
+
 		results = append(results, row)
 	}
 

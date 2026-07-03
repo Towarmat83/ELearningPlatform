@@ -3,6 +3,7 @@ package checker
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -16,6 +17,7 @@ func NewFetcher(token, baseURL string) (*GitLabFetcher, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &GitLabFetcher{client: git}, nil
 }
 
@@ -27,8 +29,9 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 	if err != nil {
 		return nil, fmt.Errorf("GetProject %q: %w", project, err)
 	}
+
 	state.Project = &projectInfo{
-		ID:            fmt.Sprint(proj.ID),
+		ID:            strconv.FormatInt(proj.ID, 10),
 		Name:          proj.Name,
 		Path:          proj.PathWithNamespace,
 		DefaultBranch: proj.DefaultBranch,
@@ -36,6 +39,7 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 
 	// Merged MRs count
 	merged := "merged"
+
 	mergedMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
 		State: &merged,
 	})
@@ -45,6 +49,7 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 
 	// Open MRs with pipeline status and commits
 	opened := "opened"
+
 	openMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
 		State: &opened,
 	})
@@ -61,12 +66,14 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 			if merr == nil && fullMR.HeadPipeline != nil {
 				info.PipelineStatus = fullMR.HeadPipeline.Status
 			}
+
 			commits, _, cerr := f.client.MergeRequests.GetMergeRequestCommits(project, mr.IID, nil)
 			if cerr == nil {
 				for _, c := range commits {
 					info.Commits = append(info.Commits, commitInfo{Message: c.Message})
 				}
 			}
+
 			state.OpenMRs = append(state.OpenMRs, info)
 		}
 	}
@@ -76,17 +83,20 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 	if len(state.OpenMRs) > 0 {
 		ref = state.OpenMRs[0].SourceBranch
 	}
+
 	for _, filePath := range files {
 		file, _, err := f.client.RepositoryFiles.GetFile(project, filePath, &gitlab.GetFileOptions{
-			Ref: gitlab.Ptr(ref),
+			Ref: new(ref),
 		})
 		if err != nil {
 			continue
 		}
+
 		decoded, err := base64.StdEncoding.DecodeString(file.Content)
 		if err != nil {
 			decoded = []byte(file.Content)
 		}
+
 		state.Files[filePath] = string(decoded)
 	}
 

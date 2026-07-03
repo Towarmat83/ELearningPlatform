@@ -22,12 +22,14 @@ func LoadCredentials(path string) (*GitCredentialStore, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var doc struct {
 		Credentials []Credential `yaml:"credentials"`
 	}
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, err
 	}
+
 	return &GitCredentialStore{entries: doc.Credentials}, nil
 }
 
@@ -36,11 +38,13 @@ func (s *GitCredentialStore) Match(repoURL string) string {
 	if s == nil {
 		return ""
 	}
+
 	for _, c := range s.entries {
 		if matchGitURL(c.URL, repoURL) {
 			return c.Token
 		}
 	}
+
 	return ""
 }
 
@@ -55,5 +59,6 @@ func matchGitURL(pattern, repoURL string) bool {
 	pattern = strings.TrimPrefix(pattern, "git@")
 
 	matched, err := path.Match(pattern, repoURL)
+
 	return err == nil && matched
 }

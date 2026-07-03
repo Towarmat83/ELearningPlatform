@@ -15,6 +15,7 @@ func TestStore_PutAndGet(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected to get course back")
 	}
+
 	if got.Title != "Test" {
 		t.Errorf("expected Title=Test, got %q", got.Title)
 	}
@@ -22,6 +23,7 @@ func TestStore_PutAndGet(t *testing.T) {
 
 func TestStore_Get_Missing(t *testing.T) {
 	s := NewStore()
+
 	got := s.Get("nonexistent")
 	if got != nil {
 		t.Error("expected nil for missing slug")
@@ -70,9 +72,11 @@ func TestStore_DeleteBySource(t *testing.T) {
 	if s.Get("c1") != nil {
 		t.Error("c1 should be deleted")
 	}
+
 	if s.Get("c2") == nil {
 		t.Error("c2 should still exist")
 	}
+
 	if s.Get("c3") == nil {
 		t.Error("c3 should still exist (different source)")
 	}
@@ -105,15 +109,19 @@ Some content here.
 	if err != nil {
 		t.Fatalf("ParseMarkdownLesson failed: %v", err)
 	}
+
 	if lesson.Title != "Introduction to Kubernetes" {
 		t.Errorf("expected title from frontmatter, got %q", lesson.Title)
 	}
+
 	if lesson.Slug != "intro" {
 		t.Errorf("expected slug=intro (stripped 01-), got %q", lesson.Slug)
 	}
+
 	if lesson.Order != 1 {
 		t.Errorf("expected order=1, got %d", lesson.Order)
 	}
+
 	if lesson.Content == "" {
 		t.Error("expected non-empty content")
 	}
@@ -135,9 +143,11 @@ Just content, no frontmatter.`
 	if lesson.Slug != "getting-started" {
 		t.Errorf("expected slug=getting-started, got %q", lesson.Slug)
 	}
+
 	if lesson.Title != "getting-started" {
 		t.Errorf("expected title=getting-started, got %q", lesson.Title)
 	}
+
 	if lesson.Order != 2 {
 		t.Errorf("expected order=2, got %d", lesson.Order)
 	}
@@ -159,6 +169,7 @@ func TestParseMarkdownLesson_NoOrderPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if lesson.Slug != "my-lesson" {
 		t.Errorf("expected slug=my-lesson, got %q", lesson.Slug)
 	}
@@ -166,10 +177,12 @@ func TestParseMarkdownLesson_NoOrderPrefix(t *testing.T) {
 
 func TestExtractFrontmatter_NoFrontmatter(t *testing.T) {
 	data := []byte("# Hello\nContent here")
+
 	title, body := extractFrontmatter(data)
 	if title != "" {
 		t.Errorf("expected no title, got %q", title)
 	}
+
 	if body != "# Hello\nContent here" {
 		t.Errorf("unexpected body: %q", body)
 	}
@@ -177,10 +190,12 @@ func TestExtractFrontmatter_NoFrontmatter(t *testing.T) {
 
 func TestExtractFrontmatter_WithTitle(t *testing.T) {
 	data := []byte("---\ntitle: My Title\n---\nBody content")
+
 	title, body := extractFrontmatter(data)
 	if title != "My Title" {
 		t.Errorf("expected My Title, got %q", title)
 	}
+
 	if body != "Body content" {
 		t.Errorf("expected Body content, got %q", body)
 	}
@@ -188,6 +203,7 @@ func TestExtractFrontmatter_WithTitle(t *testing.T) {
 
 func TestExtractFrontmatter_MissingClosingDelimiter(t *testing.T) {
 	data := []byte("---\ntitle: Incomplete")
+
 	title, body := extractFrontmatter(data)
 	if title != "" {
 		t.Errorf("expected no title for incomplete frontmatter, got %q", title)
@@ -198,6 +214,7 @@ func TestExtractFrontmatter_MissingClosingDelimiter(t *testing.T) {
 
 func TestExtractFrontmatter_EmptyFrontmatter(t *testing.T) {
 	data := []byte("---\n---\nBody here")
+
 	_, body := extractFrontmatter(data)
 	if body != "Body here" {
 		t.Errorf("expected Body here, got %q", body)
@@ -212,6 +229,7 @@ func TestExtractFrontmatter_InvalidYAML(t *testing.T) {
 	if title != "" {
 		t.Errorf("expected empty title on YAML error, got %q", title)
 	}
+
 	if body == "" {
 		t.Error("expected non-empty body even on YAML error")
 	}

@@ -20,6 +20,7 @@ func ReplicatedPath(m Module, uploadsDir string) string {
 	if !m.Replication || m.Type == "text" {
 		return m.Src
 	}
+
 	if m.Src == "" {
 		return ""
 	}
@@ -33,13 +34,16 @@ func ReplicatedPath(m Module, uploadsDir string) string {
 		return replicatedPrefix + filename
 	}
 
-	if err := downloadFile(m.Src, localPath); err != nil {
+	err := downloadFile(m.Src, localPath)
+	if err != nil {
 		slog.Error("replication: download failed — returning local path anyway",
 			"src", m.Src, "dest", localPath, "err", err)
+
 		return replicatedPrefix + filename
 	}
 
 	slog.Info("replication: resource cached", "src", m.Src, "local", filename)
+
 	return replicatedPrefix + filename
 }
 
@@ -66,6 +70,7 @@ func downloadFile(url, dest string) error {
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		_ = os.Remove(dest)
+
 		return fmt.Errorf("write file: %w", err)
 	}
 
@@ -78,9 +83,11 @@ func extension(url string) string {
 		if idx2 := strings.IndexAny(ext, "?#"); idx2 >= 0 {
 			ext = ext[:idx2]
 		}
+
 		if len(ext) <= 5 {
 			return ext
 		}
 	}
+
 	return ""
 }

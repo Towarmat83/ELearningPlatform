@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -31,14 +32,17 @@ func Evaluate(ctx context.Context, policy string, state *gitLabState) (*Evaluate
 	}
 
 	resp := &EvaluateResponse{}
+
 	if len(rs) > 0 && len(rs[0].Expressions) > 0 {
 		res, ok := rs[0].Expressions[0].Value.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("unexpected rego output type")
+			return nil, errors.New("unexpected rego output type")
 		}
+
 		if allow, ok := res["allow"].(bool); ok {
 			resp.Allow = allow
 		}
+
 		if v, ok := res["violations"]; ok {
 			for _, msg := range v.([]any) {
 				if s, ok := msg.(string); ok {

@@ -44,19 +44,25 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 		select {
 		case <-ctx.Done():
 			slog.Info("admin password watcher stopped")
+
 			return
 		case <-ticker.C:
 			current, err := os.ReadFile(filePath)
 			if err != nil {
 				slog.Warn("admin password file unreadable", "path", filePath, "err", err)
+
 				continue
 			}
+
 			if bytes.Equal(current, last) {
 				continue
 			}
+
 			last = current
 			password := strings.TrimSpace(string(current))
+
 			slog.Info("admin password file changed — re-seeding admin account")
+
 			if err := SeedAdmin(ctx, pool, password); err != nil {
 				slog.Error("re-seed admin failed", "err", err)
 			} else {
@@ -85,12 +91,14 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 //     so a previously changed password is not overwritten.
 func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) error {
 	var hash string
+
 	useDefault := false
 
 	switch {
 	case strings.HasPrefix(adminPassword, "$2"):
 		// Pre-computed bcrypt hash — use as-is.
 		hash = adminPassword
+
 		slog.Info("admin seeding: using pre-computed bcrypt hash from ADMIN_PASSWORD")
 
 	case adminPassword != "":
@@ -99,13 +107,16 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 		if err != nil {
 			return err
 		}
+
 		hash = string(h)
+
 		slog.Info("admin seeding: hashed ADMIN_PASSWORD, updating admin account")
 
 	default:
 		// No password configured — fall back to the hardcoded default.
 		hash = defaultAdminHash
 		useDefault = true
+
 		slog.Warn("ADMIN_PASSWORD is not set — using the default password 'Admin@1234'. " +
 			"Set ADMIN_PASSWORD to a strong secret before going to production.")
 	}
@@ -118,6 +129,7 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 			VALUES ($1, $2, $3, 'admin')
 			ON CONFLICT DO NOTHING`,
 			defaultAdminUsername, defaultAdminEmail, hash)
+
 		return err
 	}
 
@@ -131,5 +143,6 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 			password_hash = EXCLUDED.password_hash,
 			updated_at    = NOW()`,
 		defaultAdminUsername, defaultAdminEmail, hash)
+
 	return err
 }

@@ -25,12 +25,15 @@ func Load() *Config {
 			c.Port = n
 		}
 	}
+
 	if v := os.Getenv("CORS_ORIGINS"); v != "" {
 		c.CORSOrigins = strings.Split(v, ",")
 	}
+
 	if v := os.Getenv("GITLAB_TOKEN"); v != "" {
 		c.GitLabToken = v
 	}
+
 	if v := os.Getenv("GITLAB_BASE_URL"); v != "" {
 		c.GitLabBaseURL = v
 	}

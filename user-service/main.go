@@ -23,7 +23,7 @@ import (
 // @BasePath       /
 // @securityDefinitions.apikey BearerAuth
 // @in             header
-// @name           Authorization
+// @name           Authorization.
 func main() {
 	cfg := config.Load()
 
@@ -40,6 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
 	slog.Info("database connected")
 
 	// Migrations
@@ -47,6 +48,7 @@ func main() {
 		slog.Error("failed to run migrations", "err", err)
 		os.Exit(1)
 	}
+
 	slog.Info("migrations applied")
 
 	// Seed default admin (idempotent — safe to run on every startup).
@@ -63,7 +65,8 @@ func main() {
 
 	// Seed mock users and enrollments (dev/demo only).
 	if os.Getenv("SEED_MOCK_DATA") == "true" {
-		if err := db.SeedMockData(ctx, pool); err != nil {
+		err := db.SeedMockData(ctx, pool)
+		if err != nil {
 			slog.Error("failed to seed mock data", "err", err)
 		}
 	}
@@ -72,6 +75,7 @@ func main() {
 	// Active only when ADMIN_PASSWORD_FILE is set (i.e. K8s Secret volume mount).
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
+
 	if cfg.AdminPasswordFile != "" {
 		go db.WatchAdminPassword(watchCtx, pool, cfg.AdminPasswordFile)
 	}
@@ -81,13 +85,17 @@ func main() {
 	if cfg.K8sNamespace != "" {
 		watchCtxPat, watchCancelPat := context.WithCancel(ctx)
 		defer watchCancelPat()
+
 		pw, err := handlers.NewPatternWatcher(db.NewAdapter(pool), cfg.Kubeconfig, cfg.K8sNamespace)
 		if err != nil {
 			slog.Warn("pattern CRD watcher disabled", "reason", err)
-		} else if err := pw.Start(watchCtxPat); err != nil {
-			slog.Warn("pattern CRD watcher failed to start", "err", err)
 		} else {
-			slog.Info("pattern CRD watcher started", "namespace", cfg.K8sNamespace)
+			err := pw.Start(watchCtxPat)
+			if err != nil {
+				slog.Warn("pattern CRD watcher failed to start", "err", err)
+			} else {
+				slog.Info("pattern CRD watcher started", "namespace", cfg.K8sNamespace)
+			}
 		}
 	}
 
@@ -112,7 +120,9 @@ func main() {
 
 	go func() {
 		slog.Info("API listening", "addr", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
 			os.Exit(1)
 		}
@@ -123,8 +133,10 @@ func main() {
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
 	if err := srv.Shutdown(shutCtx); err != nil {
 		slog.Error("forced shutdown", "err", err)
 	}
+
 	slog.Info("server stopped")
 }

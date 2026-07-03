@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -52,40 +53,47 @@ func (w *PatternWatcher) Start(ctx context.Context) error {
 	}
 
 	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.upsert(context.Background(), obj) },
-		UpdateFunc: func(_, obj interface{}) { w.upsert(context.Background(), obj) },
-		DeleteFunc: func(obj interface{}) { w.delete(context.Background(), obj) },
+		AddFunc:    func(obj any) { w.upsert(context.Background(), obj) },
+		UpdateFunc: func(_, obj any) { w.upsert(context.Background(), obj) },
+		DeleteFunc: func(obj any) { w.delete(context.Background(), obj) },
 	}); err != nil {
 		return fmt.Errorf("add event handler: %w", err)
 	}
 
 	go func() {
-		if err := w.cache.Start(ctx); err != nil {
+		err := w.cache.Start(ctx)
+		if err != nil {
 			slog.Error("pattern CRD cache stopped", "err", err)
 		}
 	}()
 
 	if !w.cache.WaitForCacheSync(ctx) {
-		return fmt.Errorf("cache sync failed")
+		return errors.New("cache sync failed")
 	}
+
 	slog.Info("markdown patterns synced from CRDs")
+
 	return nil
 }
 
-func (w *PatternWatcher) upsert(ctx context.Context, obj interface{}) {
+func (w *PatternWatcher) upsert(ctx context.Context, obj any) {
 	cr, ok := obj.(*patternv1.MarkdownPattern)
 	if !ok {
 		return
 	}
+
 	spec := cr.Spec
+
 	name := spec.Name
 	if name == "" {
 		name = cr.Name
 	}
+
 	label := spec.Label
 	if label == "" {
 		label = name
 	}
+
 	scope := spec.Scope
 	if scope == "" {
 		scope = "global"
@@ -113,32 +121,40 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj interface{}) {
 	)
 	if err != nil {
 		slog.Error("failed to upsert pattern from CRD", "name", name, "err", err)
+
 		return
 	}
+
 	slog.Info("pattern upserted from CRD", "name", name, "scope", scope)
 }
 
-func (w *PatternWatcher) delete(ctx context.Context, obj interface{}) {
+func (w *PatternWatcher) delete(ctx context.Context, obj any) {
 	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
 		obj = final.Obj
 	}
+
 	cr, ok := obj.(*patternv1.MarkdownPattern)
 	if !ok {
 		return
 	}
+
 	name := cr.Spec.Name
 	if name == "" {
 		name = cr.Name
 	}
+
 	scope := cr.Spec.Scope
 	if scope == "" {
 		scope = "global"
 	}
+
 	_, err := w.pool.Exec(ctx, `DELETE FROM markdown_patterns WHERE name = $1 AND scope = $2 AND from_config = TRUE`, name, scope)
 	if err != nil {
 		slog.Error("failed to delete pattern from CRD", "name", name, "err", err)
+
 		return
 	}
+
 	slog.Info("pattern deleted from CRD", "name", name)
 }
 
@@ -146,5 +162,6 @@ func buildRestConfig(kubeconfig string) (*rest.Config, error) {
 	if kubeconfig != "" {
 		return clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
+
 	return rest.InClusterConfig()
 }

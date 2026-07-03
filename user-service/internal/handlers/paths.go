@@ -18,9 +18,11 @@ func parsePagination(r *http.Request) (limit *int, offset int) {
 	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
 		limit = &v
 	}
+
 	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v > 0 {
 		offset = v
 	}
+
 	return
 }
 
@@ -81,8 +83,10 @@ func buildCourseStatuses(courses []string, completed map[string]bool) []courseSt
 		} else if i == 0 || completed[courses[i-1]] {
 			status = "available"
 		}
+
 		out[i] = courseStatus{Slug: slug, Status: status}
 	}
+
 	return out
 }
 
@@ -92,24 +96,31 @@ func (s *State) fetchPathDetail(r *http.Request, slug string) (*pathDetail, erro
 	if !slugRE.MatchString(slug) {
 		return nil, fmt.Errorf("invalid path slug: %q", slug)
 	}
+
 	url := fmt.Sprintf("%s/api/paths/%s", s.Config.CourseServiceURL, slug)
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("course-service returned %d for path %s: %s", resp.StatusCode, slug, body)
 	}
+
 	var p pathDetail
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 		return nil, err
 	}
+
 	return &p, nil
 }
 
@@ -124,7 +135,7 @@ func (s *State) fetchPathDetail(r *http.Request, slug string) (*pathDetail, erro
 // @Param     limit   query  int  false  "Max number of paths to return"
 // @Param     offset  query  int  false  "Number of paths to skip"
 // @Success   200  {object}  map[string]interface{}
-// @Router    /api/my/paths [get]
+// @Router    /api/my/paths [get].
 func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
 	limit, offset := parsePagination(r)
@@ -137,14 +148,18 @@ func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to query path enrollments", "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
 	defer rows.Close()
 
 	var enrollments []enrollment
+
 	for rows.Next() {
 		var e enrollment
-		if err := rows.Scan(&e.slug, &e.enrolledAt); err == nil {
+
+		err := rows.Scan(&e.slug, &e.enrolledAt)
+		if err == nil {
 			enrollments = append(enrollments, e)
 		}
 	}
@@ -160,6 +175,7 @@ func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 				EnrolledAt: e.enrolledAt,
 				Courses:    []courseStatus{},
 			})
+
 			continue
 		}
 
@@ -186,6 +202,7 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 	if len(slugs) == 0 {
 		return nil
 	}
+
 	rows, err := s.Pool.Query(r.Context(),
 		`SELECT course_slug FROM (
 		     SELECT DISTINCT course_slug FROM module_progress
@@ -197,16 +214,20 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 		userID, slugs)
 	if err != nil {
 		slog.Error("failed to query completed courses", "userID", userID, "err", err)
+
 		return nil
 	}
 	defer rows.Close()
+
 	result := make(map[string]bool)
+
 	for rows.Next() {
 		var slug string
 		if rows.Scan(&slug) == nil {
 			result[slug] = true
 		}
 	}
+
 	return result
 }
 
@@ -218,7 +239,7 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 // @Produce   json
 // @Param     slug  path  string  true  "Path slug"
 // @Success   200   {object}  map[string]interface{}
-// @Router    /api/admin/paths/{slug}/enrollments [get]
+// @Router    /api/admin/paths/{slug}/enrollments [get].
 func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 
@@ -236,19 +257,25 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		slog.Error("failed to query path enrollments", "slug", slug, "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
 	defer rows.Close()
 
 	var users []enrolledUser
+
 	for rows.Next() {
 		var u enrolledUser
-		if err := rows.Scan(&u.UserID, &u.Email, &u.Role, &u.EnrolledAt); err != nil {
+
+		err := rows.Scan(&u.UserID, &u.Email, &u.Role, &u.EnrolledAt)
+		if err != nil {
 			continue
 		}
+
 		if detail != nil {
 			completed := s.completedCoursesCtx(r, u.UserID, detail.Courses)
 			u.TotalCourses = len(detail.Courses)
+
 			u.Courses = buildCourseStatuses(detail.Courses, completed)
 			for _, cs := range u.Courses {
 				if cs.Status == "completed" {
@@ -256,11 +283,14 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 				}
 			}
 		}
+
 		users = append(users, u)
 	}
+
 	if users == nil {
 		users = []enrolledUser{}
 	}
+
 	s.JSON(w, http.StatusOK, map[string][]enrolledUser{"users": users})
 }
 
@@ -272,27 +302,32 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 // @Accept    json
 // @Produce   json
 // @Param     slug  path  string                   true  "Path slug"
-// @Param     body  body  map[string]string  true  "user_id"
+// @Param     body  map[string]string  true  "user_id"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
-// @Router    /api/admin/paths/{slug}/enrollments [post]
+// @Router    /api/admin/paths/{slug}/enrollments [post].
 func (s *State) AdminEnrollUserInPath(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
+
 	var body struct {
 		UserID string `json:"user_id"`
 	}
 	if err := decode(r, &body); err != nil || body.UserID == "" {
 		s.Error(w, http.StatusBadRequest, "user_id required")
+
 		return
 	}
+
 	_, err := s.Pool.Exec(r.Context(),
 		`INSERT INTO path_enrollments (user_id, path_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		body.UserID, slug)
 	if err != nil {
 		slog.Error("failed to enroll user in path", "slug", slug, "userID", body.UserID, "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Enrolled in path"})
 }
 
@@ -304,17 +339,20 @@ func (s *State) AdminEnrollUserInPath(w http.ResponseWriter, r *http.Request) {
 // @Param     slug     path  string  true  "Path slug"
 // @Param     user_id  path  string  true  "User UUID"
 // @Success   200      {object}  map[string]string
-// @Router    /api/admin/paths/{slug}/enrollments/{user_id} [delete]
+// @Router    /api/admin/paths/{slug}/enrollments/{user_id} [delete].
 func (s *State) AdminUnenrollUserFromPath(w http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	userID := param(r, "user_id")
+
 	_, err := s.Pool.Exec(r.Context(),
 		`DELETE FROM path_enrollments WHERE user_id = $1::uuid AND path_slug = $2`,
 		userID, slug)
 	if err != nil {
 		slog.Error("failed to unenroll user from path", "slug", slug, "userID", userID, "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")
+
 		return
 	}
+
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Unenrolled from path"})
 }

@@ -19,7 +19,7 @@ type QuestionResult struct {
 	IsCorrect     bool        `json:"is_correct"`
 	PointsEarned  int         `json:"points_earned"`
 	PointsMax     int         `json:"points_max"`
-	CorrectAnswer interface{} `json:"correct_answer,omitempty"`
+	CorrectAnswer any         `json:"correct_answer,omitempty"`
 	Feedback      string      `json:"feedback,omitempty"`
 	SourceRefs    []SourceRef `json:"source_refs,omitempty"`
 }
@@ -48,8 +48,10 @@ func ScoreSingle(q Question, answer *string) QuestionResult {
 	if answer == nil {
 		r.Feedback = q.Feedback.Wrong
 		r.SourceRefs = q.Feedback.SourceRefs
+
 		return r
 	}
+
 	for _, a := range q.Answers {
 		if a.ID == *answer {
 			if a.Correct {
@@ -62,12 +64,15 @@ func ScoreSingle(q Question, answer *string) QuestionResult {
 				r.CorrectAnswer = correctAnswerID(q.Answers)
 				r.SourceRefs = q.Feedback.SourceRefs
 			}
+
 			return r
 		}
 	}
+
 	r.Feedback = q.Feedback.Wrong
 	r.CorrectAnswer = correctAnswerID(q.Answers)
 	r.SourceRefs = q.Feedback.SourceRefs
+
 	return r
 }
 
@@ -80,14 +85,18 @@ func ScoreMultiple(q Question, answers []string) QuestionResult {
 	if len(answers) == 0 {
 		r.Feedback = q.Feedback.Wrong
 		r.SourceRefs = q.Feedback.SourceRefs
+
 		return r
 	}
+
 	correctIDs := make(map[string]bool)
+
 	for _, a := range q.Answers {
 		if a.Correct {
 			correctIDs[a.ID] = true
 		}
 	}
+
 	selected := make(map[string]bool)
 	for _, id := range answers {
 		selected[id] = true
@@ -95,6 +104,7 @@ func ScoreMultiple(q Question, answers []string) QuestionResult {
 
 	correctSelected := 0
 	falsePositives := 0
+
 	for id := range selected {
 		if correctIDs[id] {
 			correctSelected++
@@ -102,6 +112,7 @@ func ScoreMultiple(q Question, answers []string) QuestionResult {
 			falsePositives++
 		}
 	}
+
 	allCorrect := correctSelected == len(correctIDs) && falsePositives == 0
 
 	if allCorrect {
@@ -109,6 +120,7 @@ func ScoreMultiple(q Question, answers []string) QuestionResult {
 		r.PointsEarned = q.Points
 		r.Feedback = q.Feedback.Correct
 		r.CorrectAnswer = correctIDs
+
 		return r
 	}
 
@@ -118,13 +130,16 @@ func ScoreMultiple(q Question, answers []string) QuestionResult {
 		if !q.PartialScoring.AllowNegative && raw < 0 {
 			raw = 0
 		}
+
 		r.PointsEarned = int(math.Round(raw))
 	} else {
 		r.PointsEarned = 0
 	}
+
 	r.Feedback = q.Feedback.Wrong
 	r.CorrectAnswer = correctIDs
 	r.SourceRefs = q.Feedback.SourceRefs
+
 	return r
 }
 
@@ -137,8 +152,10 @@ func ScoreBoolean(q Question, answer *bool) QuestionResult {
 	if answer == nil {
 		r.Feedback = q.Feedback.Wrong
 		r.SourceRefs = q.Feedback.SourceRefs
+
 		return r
 	}
+
 	if q.CorrectAnswer != nil && *answer == *q.CorrectAnswer {
 		r.IsCorrect = true
 		r.PointsEarned = q.Points
@@ -149,6 +166,7 @@ func ScoreBoolean(q Question, answer *bool) QuestionResult {
 		r.Feedback = q.Feedback.Wrong
 		r.SourceRefs = q.Feedback.SourceRefs
 	}
+
 	return r
 }
 
@@ -161,15 +179,20 @@ func ScoreOrder(q Question, order []string) QuestionResult {
 	if len(order) == 0 {
 		r.Feedback = q.Feedback.Wrong
 		r.SourceRefs = q.Feedback.SourceRefs
+
 		return r
 	}
+
 	correct := true
+
 	for i, id := range order {
 		if i >= len(q.CorrectOrder) || id != q.CorrectOrder[i] {
 			correct = false
+
 			break
 		}
 	}
+
 	if correct && len(order) == len(q.CorrectOrder) {
 		r.IsCorrect = true
 		r.PointsEarned = q.Points
@@ -180,6 +203,7 @@ func ScoreOrder(q Question, order []string) QuestionResult {
 		r.Feedback = q.Feedback.Wrong
 		r.SourceRefs = q.Feedback.SourceRefs
 	}
+
 	return r
 }
 
@@ -191,15 +215,19 @@ func correctAnswerID(answers []Answer) string {
 			return a.ID
 		}
 	}
+
 	return ""
 }
 
 // ScoreQuiz evaluates all answers and returns the full result.
 func ScoreQuiz(q *Quiz, answers map[string]UserAnswer) QuizResult {
 	r := QuizResult{}
+
 	for _, qq := range q.Questions {
 		ua := answers[qq.ID]
+
 		var qr QuestionResult
+
 		switch qq.Type {
 		case "single":
 			qr = ScoreSingle(qq, ua.Single)
@@ -212,13 +240,16 @@ func ScoreQuiz(q *Quiz, answers map[string]UserAnswer) QuizResult {
 		default:
 			qr = QuestionResult{QuestionID: qq.ID, Type: qq.Type, PointsMax: qq.Points}
 		}
+
 		r.TotalScore += qr.PointsEarned
 		r.MaxScore += qr.PointsMax
 		r.QuestionResults = append(r.QuestionResults, qr)
 	}
+
 	if r.MaxScore > 0 {
 		pct := float64(r.TotalScore) / float64(r.MaxScore) * 100
 		r.Passed = pct >= float64(q.PassingScore)
 	}
+
 	return r
 }

@@ -3,6 +3,7 @@ package content
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -31,6 +32,7 @@ type GitCache struct {
 
 func NewGitCache(cacheDir string, ttl time.Duration) *GitCache {
 	_ = os.MkdirAll(cacheDir, 0755)
+
 	return &GitCache{
 		cacheDir:       cacheDir,
 		ttl:            ttl,
@@ -42,7 +44,8 @@ func NewGitCache(cacheDir string, ttl time.Duration) *GitCache {
 
 func (gc *GitCache) cacheKey(rawURL, branch string) string {
 	h := sha256.Sum256([]byte(rawURL + ":" + branch))
-	return fmt.Sprintf("%x", h[:16])
+
+	return hex.EncodeToString(h[:16])
 }
 
 func (gc *GitCache) FetchModuleContent(rawURL, branch, filePath, token string) ([]byte, error) {
@@ -54,10 +57,12 @@ func (gc *GitCache) FetchModuleContent(rawURL, branch, filePath, token string) (
 	}
 
 	fullPath := filepath.Join(repoDir, filePath)
+
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s from cached repo: %w", filePath, err)
 	}
+
 	return data, nil
 }
 
@@ -68,10 +73,13 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 		if cr.path != "" && time.Since(cr.clonedAt) < gc.ttl {
 			path := cr.path
 			gc.mu.Unlock()
+
 			return path, nil
 		}
+
 		if !cr.failedUntil.IsZero() && time.Now().Before(cr.failedUntil) {
 			gc.mu.Unlock()
+
 			return "", fmt.Errorf("git clone failed recently, retry in %v", time.Until(cr.failedUntil))
 		}
 	}
@@ -84,14 +92,18 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 			if cr.path != "" {
 				path := cr.path
 				gc.mu.Unlock()
+
 				return path, nil
 			}
+
 			if !cr.failedUntil.IsZero() && time.Now().Before(cr.failedUntil) {
 				gc.mu.Unlock()
+
 				return "", fmt.Errorf("git clone failed recently, retry in %v", time.Until(cr.failedUntil))
 			}
 		}
 		gc.mu.Unlock()
+
 		return gc.getOrClone(key, rawURL, branch, token)
 	}
 
@@ -109,9 +121,13 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 	}
 
 	var stderr bytes.Buffer
+
 	cmd := exec.Command("git", "clone", "--depth=1", "--branch="+branch, authURL, repoDir)
+
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+
+	err := cmd.Run()
+	if err != nil {
 		_ = os.RemoveAll(repoDir)
 
 		gc.mu.Lock()
@@ -121,6 +137,7 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 		close(done)
 
 		slog.Error("git clone failed", "stderr", stderr.String())
+
 		return "", fmt.Errorf("git clone failed: %s", sanitizeGitOutput(stderr.String(), token))
 	}
 
@@ -136,11 +153,13 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 func (gc *GitCache) Clear() {
 	gc.mu.Lock()
 	defer gc.mu.Unlock()
+
 	for _, cr := range gc.repos {
 		if cr.path != "" {
 			_ = os.RemoveAll(cr.path)
 		}
 	}
+
 	gc.repos = make(map[string]*cachedRepo)
 }
 
@@ -149,10 +168,12 @@ func (gc *GitCache) ClearRepo(rawURL, branch string) {
 	key := gc.cacheKey(rawURL, branch)
 	gc.mu.Lock()
 	defer gc.mu.Unlock()
+
 	if cr, ok := gc.repos[key]; ok {
 		if cr.path != "" {
 			_ = os.RemoveAll(cr.path)
 		}
+
 		delete(gc.repos, key)
 	}
 }
@@ -161,14 +182,18 @@ func buildAuthURL(rawURL, token string) string {
 	if token == "" {
 		return rawURL
 	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme == "" {
 		return rawURL
 	}
+
 	if !strings.HasPrefix(u.Scheme, "http") {
 		return rawURL
 	}
+
 	u.User = url.UserPassword("oauth2", token)
+
 	return u.String()
 }
 
@@ -177,9 +202,11 @@ func sanitizeGitOutput(output, token string) string {
 	if token != "" && strings.Contains(out, token) {
 		out = strings.ReplaceAll(out, token, "***")
 	}
+
 	if out == "" {
 		return "(no output)"
 	}
+
 	return out
 }
 

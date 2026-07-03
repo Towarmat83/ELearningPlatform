@@ -27,6 +27,7 @@ func TestIntToString(t *testing.T) {
 
 func TestKey(t *testing.T) {
 	k := key("user1", "quiz1", "q1")
+
 	expected := "user1:quiz1:q1"
 	if k != expected {
 		t.Errorf("expected %q, got %q", expected, k)
@@ -35,6 +36,7 @@ func TestKey(t *testing.T) {
 
 func TestKeyWithModuleIndex(t *testing.T) {
 	k := keyWithModuleIndex("user1", "course1", 3, "q1")
+
 	expected := "user1:course1:3:q1"
 	if k != expected {
 		t.Errorf("expected %q, got %q", expected, k)
@@ -46,9 +48,11 @@ func TestNewCooldownTracker(t *testing.T) {
 	if ct == nil {
 		t.Fatal("expected non-nil CooldownTracker")
 	}
+
 	if ct.entries == nil {
 		t.Error("expected non-nil entries map")
 	}
+
 	if ct.ttl != 30*time.Minute {
 		t.Errorf("expected 30m TTL, got %v", ct.ttl)
 	}
@@ -56,10 +60,12 @@ func TestNewCooldownTracker(t *testing.T) {
 
 func TestComputeCooldown_Fixed(t *testing.T) {
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 30}
+
 	d := computeCooldown(1, spec)
 	if d != 30*time.Second {
 		t.Errorf("expected 30s, got %v", d)
 	}
+
 	d2 := computeCooldown(5, spec)
 	if d2 != 30*time.Second {
 		t.Errorf("fixed strategy should return constant 30s, got %v", d2)
@@ -68,10 +74,12 @@ func TestComputeCooldown_Fixed(t *testing.T) {
 
 func TestComputeCooldown_Linear(t *testing.T) {
 	spec := CooldownSpec{Strategy: "linear", BaseSeconds: 10}
+
 	d1 := computeCooldown(1, spec)
 	if d1 != 10*time.Second {
 		t.Errorf("expected 10s for attempt 1, got %v", d1)
 	}
+
 	d3 := computeCooldown(3, spec)
 	if d3 != 30*time.Second {
 		t.Errorf("expected 30s for attempt 3, got %v", d3)
@@ -80,14 +88,17 @@ func TestComputeCooldown_Linear(t *testing.T) {
 
 func TestComputeCooldown_Exponential(t *testing.T) {
 	spec := CooldownSpec{Strategy: "exponential", BaseSeconds: 10, Multiplier: 2.0}
+
 	d1 := computeCooldown(1, spec)
 	if d1 != 10*time.Second {
 		t.Errorf("expected 10s for attempt 1, got %v", d1)
 	}
+
 	d2 := computeCooldown(2, spec)
 	if d2 != 20*time.Second {
 		t.Errorf("expected 20s for attempt 2, got %v", d2)
 	}
+
 	d3 := computeCooldown(3, spec)
 	if d3 != 40*time.Second {
 		t.Errorf("expected 40s for attempt 3, got %v", d3)
@@ -96,6 +107,7 @@ func TestComputeCooldown_Exponential(t *testing.T) {
 
 func TestComputeCooldown_ExponentialMax(t *testing.T) {
 	spec := CooldownSpec{Strategy: "exponential", BaseSeconds: 10, Multiplier: 2.0, MaxSeconds: 25}
+
 	d3 := computeCooldown(3, spec)
 	if d3 != 25*time.Second {
 		t.Errorf("expected capped at 25s, got %v", d3)
@@ -105,6 +117,7 @@ func TestComputeCooldown_ExponentialMax(t *testing.T) {
 func TestComputeCooldown_DefaultExponential(t *testing.T) {
 	// Empty strategy defaults to exponential
 	spec := CooldownSpec{BaseSeconds: 5, Multiplier: 3.0}
+
 	d := computeCooldown(1, spec)
 	if d != 5*time.Second {
 		t.Errorf("expected 5s, got %v", d)
@@ -113,10 +126,12 @@ func TestComputeCooldown_DefaultExponential(t *testing.T) {
 
 func TestCooldownTracker_Check_Initial(t *testing.T) {
 	ct := NewCooldownTracker()
+
 	remaining, attempts := ct.Check("u", "q", "q1")
 	if remaining != 0 {
 		t.Errorf("expected 0 remaining, got %v", remaining)
 	}
+
 	if attempts != 0 {
 		t.Errorf("expected 0 attempts, got %d", attempts)
 	}
@@ -125,10 +140,12 @@ func TestCooldownTracker_Check_Initial(t *testing.T) {
 func TestCooldownTracker_Record_Fixed(t *testing.T) {
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 60}
+
 	remaining, locked := ct.Record("u1", "quiz1", "q1", spec, nil, false)
 	if locked {
 		t.Error("expected not locked")
 	}
+
 	if remaining <= 0 {
 		t.Errorf("expected positive remaining, got %v", remaining)
 	}
@@ -137,6 +154,7 @@ func TestCooldownTracker_Record_Fixed(t *testing.T) {
 	if remaining2 <= 0 {
 		t.Errorf("expected positive remaining after record, got %v", remaining2)
 	}
+
 	if attempts != 1 {
 		t.Errorf("expected 1 attempt, got %d", attempts)
 	}
@@ -148,6 +166,7 @@ func TestCooldownTracker_Record_MaxAttempts_Lock(t *testing.T) {
 	max := 2
 
 	ct.Record("u1", "quiz1", "q1", spec, &max, true)
+
 	_, locked := ct.Record("u1", "quiz1", "q1", spec, &max, true)
 	if !locked {
 		t.Error("expected locked after max attempts")
@@ -160,6 +179,7 @@ func TestCooldownTracker_Record_MaxAttempts_NoLock(t *testing.T) {
 	max := 1
 
 	ct.Record("u1", "quiz1", "q1", spec, &max, false)
+
 	_, locked := ct.Record("u1", "quiz1", "q1", spec, &max, false)
 	if locked {
 		t.Error("expected not locked when lockOnMax=false")
@@ -172,6 +192,7 @@ func TestCooldownTracker_Clear(t *testing.T) {
 	ct.Record("u1", "quiz1", "q1", spec, nil, false)
 
 	ct.Clear("u1", "quiz1", "q1")
+
 	remaining, attempts := ct.Check("u1", "quiz1", "q1")
 	if remaining != 0 || attempts != 0 {
 		t.Errorf("expected cleared entry, got remaining=%v attempts=%d", remaining, attempts)
@@ -184,6 +205,7 @@ func TestCooldownTracker_ClearModule(t *testing.T) {
 	ct.RecordModule("u1", "course1", 2, "q1", spec, nil, false)
 
 	ct.ClearModule("u1", "course1", 2, "q1")
+
 	remaining, attempts := ct.CheckModule("u1", "course1", 2, "q1")
 	if remaining != 0 || attempts != 0 {
 		t.Errorf("expected cleared, got remaining=%v attempts=%d", remaining, attempts)
@@ -192,6 +214,7 @@ func TestCooldownTracker_ClearModule(t *testing.T) {
 
 func TestCooldownTracker_CheckModule_Initial(t *testing.T) {
 	ct := NewCooldownTracker()
+
 	remaining, attempts := ct.CheckModule("u", "course", 0, "q")
 	if remaining != 0 || attempts != 0 {
 		t.Error("expected zero for unknown module entry")
@@ -201,10 +224,12 @@ func TestCooldownTracker_CheckModule_Initial(t *testing.T) {
 func TestCooldownTracker_RecordModule(t *testing.T) {
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 30}
+
 	remaining, locked := ct.RecordModule("u1", "course1", 1, "q1", spec, nil, false)
 	if locked {
 		t.Error("expected not locked")
 	}
+
 	if remaining <= 0 {
 		t.Errorf("expected positive remaining, got %v", remaining)
 	}
@@ -237,6 +262,7 @@ func TestCooldownTracker_CheckModule_Expired(t *testing.T) {
 	if remaining != 0 {
 		t.Errorf("expected 0 remaining for past cooldown, got %v", remaining)
 	}
+
 	if attempts != 1 {
 		t.Errorf("expected 1 attempt, got %d", attempts)
 	}

@@ -50,6 +50,7 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		if val == "" {
 			continue
 		}
+
 		_, err := pool.Exec(ctx,
 			`INSERT INTO platform_settings (key, value, updated_at)
 			 VALUES ($1, $2, NOW())
@@ -58,6 +59,7 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		if err != nil {
 			return err
 		}
+
 		if key != "oidc_client_secret" {
 			seeded = append(seeded, key)
 		} else {
@@ -66,5 +68,6 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 	}
 
 	slog.Info("OIDC settings bootstrapped from deploy-time config", "keys", seeded)
+
 	return nil
 }

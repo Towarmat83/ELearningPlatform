@@ -39,6 +39,7 @@ func (s *State) autoEnroll(userID, courseSlug string) {
 		"user_id":     userID,
 		"course_slug": courseSlug,
 	})
+
 	resp, err := http.Post(s.Config.UserServiceURL+"/internal/enrollments/auto",
 		"application/json", bytes.NewReader(body))
 	if err == nil {
@@ -51,6 +52,7 @@ func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
 	if err != nil {
 		return false
 	}
+
 	q := u.Query()
 	q.Set("user_id", userID)
 	q.Set("course_slug", courseSlug)
@@ -68,6 +70,7 @@ func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return false
 	}
+
 	return result.Enrolled
 }
 
@@ -80,7 +83,7 @@ func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
 // @Success   200   {object}  map[string]interface{}
 // @Failure   403   {object}  map[string]string
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons [get]
+// @Router    /api/courses/{slug}/lessons [get].
 func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	claims := s.claims(r)
@@ -88,13 +91,16 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if claims.Role != "admin" {
 		if c.IsPublic {
 			s.autoEnroll(claims.Subject, courseSlug)
 		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
+
 			return
 		}
 	}
@@ -113,7 +119,9 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 				Viewed: viewed[l.Slug],
 			})
 		}
+
 		s.JSON(w, http.StatusOK, map[string]any{"lessons": out})
+
 		return
 	}
 
@@ -126,6 +134,7 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 			Viewed: viewed[m.Slug()],
 		})
 	}
+
 	s.JSON(w, http.StatusOK, map[string]any{"lessons": out})
 }
 
@@ -139,7 +148,7 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 // @Success   200   {object}  map[string]interface{}
 // @Failure   403   {object}  map[string]string
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons/{lesson_slug} [get]
+// @Router    /api/courses/{slug}/lessons/{lesson_slug} [get].
 func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	lessonSlug := param(r, "lesson_slug")
@@ -148,13 +157,16 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if claims.Role != "admin" {
 		if c.IsPublic {
 			s.autoEnroll(claims.Subject, courseSlug)
 		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
+
 			return
 		}
 	}
@@ -171,6 +183,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 				Content: c.Lessons[i].Content,
 				Viewed:  viewed[c.Lessons[i].Slug],
 			}})
+
 			return
 		}
 	}
@@ -179,12 +192,15 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 		if m.Slug() == lessonSlug {
 			if m.Type == "quiz" {
 				s.Error(w, http.StatusNotFound, "Quiz modules use a separate endpoint")
+
 				return
 			}
+
 			body := m.Content()
 			if m.Type != "text" {
 				body = content.ReplicatedPath(m, s.Config.UploadsDir)
 			}
+
 			if m.HasGitContent() {
 				data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
 				if err != nil {
@@ -193,6 +209,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 					body = string(data)
 				}
 			}
+
 			s.JSON(w, http.StatusOK, map[string]any{"lesson": lessonDetail{
 				Slug:    m.Slug(),
 				Title:   m.Name,
@@ -201,6 +218,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 				Content: body,
 				Viewed:  viewed[m.Slug()],
 			}})
+
 			return
 		}
 	}
@@ -218,7 +236,7 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 // @Success   200   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post]
+// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post].
 func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
 	lessonSlug := param(r, "lesson_slug")
@@ -227,36 +245,45 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	c := s.Content.Get(courseSlug)
 	if c == nil {
 		s.Error(w, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	if claims.Role != "admin" {
 		if c.IsPublic {
 			s.autoEnroll(claims.Subject, courseSlug)
 		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
 			s.Error(w, http.StatusForbidden, "Not enrolled")
+
 			return
 		}
 	}
 
 	found := false
 	moduleIndex := -1
+
 	for _, l := range c.Lessons {
 		if l.Slug == lessonSlug {
 			found = true
+
 			break
 		}
 	}
+
 	if !found {
 		for i, m := range c.Modules {
 			if m.Slug() == lessonSlug {
 				found = true
 				moduleIndex = i
+
 				break
 			}
 		}
 	}
+
 	if !found {
 		s.Error(w, http.StatusNotFound, "Lesson not found")
+
 		return
 	}
 
@@ -265,18 +292,22 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 		"course_slug": courseSlug,
 		"lesson_slug": lessonSlug,
 	}
+
 	var buf bytes.Buffer
+
 	_ = json.NewEncoder(&buf).Encode(body)
 
 	resp, err := http.Post(s.Config.UserServiceURL+"/internal/progress/complete", "application/json", &buf)
 	if err != nil {
 		s.Error(w, http.StatusInternalServerError, "Failed to mark lesson as complete")
+
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		s.Error(w, http.StatusInternalServerError, "Failed to mark lesson as complete")
+
 		return
 	}
 
@@ -285,18 +316,23 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	for lastMeaningful > 0 && c.Modules[lastMeaningful].Inline && c.Modules[lastMeaningful].Type == "quiz" {
 		lastMeaningful--
 	}
+
 	isLastModule := moduleIndex >= 0 && moduleIndex == lastMeaningful
 	if isLastModule {
 		// TODO(security): unauthenticated internal call, see TODO in
 		// user-service/internal/handlers/router.go — flagged in PR #74 review.
 		req2 := courseCompleteBody{UserID: claims.Subject, CourseSlug: courseSlug}
+
 		var buf2 bytes.Buffer
+
 		_ = json.NewEncoder(&buf2).Encode(req2)
+
 		resp2, err2 := http.Post(s.Config.UserServiceURL+"/internal/progress/course-complete", "application/json", &buf2)
 		if err2 != nil {
 			slog.Error("failed to mark course complete", "userID", claims.Subject, "courseSlug", courseSlug, "err", err2)
 		} else {
 			defer resp2.Body.Close()
+
 			if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusCreated {
 				slog.Error("user-service rejected course-complete request", "userID", claims.Subject, "courseSlug", courseSlug, "status", resp2.StatusCode)
 			}

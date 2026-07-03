@@ -82,10 +82,12 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
+
 	passwordHash := string(hash)
 
 	for _, u := range mockUsers {
 		var userID string
+
 		err := pool.QueryRow(ctx, `
 			INSERT INTO users (username, email, password_hash, role)
 			VALUES ($1, $2, $3, 'student')
@@ -95,6 +97,7 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 		).Scan(&userID)
 		if err != nil {
 			slog.Error("mock seed: failed to upsert user", "username", u.username, "err", err)
+
 			continue
 		}
 
@@ -112,5 +115,6 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 
 	slog.Info("mock seed: inserted students and enrollments", "count", len(mockUsers))
+
 	return nil
 }

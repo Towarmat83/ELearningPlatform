@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -286,12 +287,19 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	}
 	isLastModule := moduleIndex >= 0 && moduleIndex == lastMeaningful
 	if isLastModule {
+		// TODO(security): unauthenticated internal call, see TODO in
+		// user-service/internal/handlers/router.go — flagged in PR #74 review.
 		req2 := courseCompleteBody{UserID: claims.Subject, CourseSlug: courseSlug}
 		var buf2 bytes.Buffer
 		_ = json.NewEncoder(&buf2).Encode(req2)
 		resp2, err2 := http.Post(s.Config.UserServiceURL+"/internal/progress/course-complete", "application/json", &buf2)
-		if err2 == nil {
+		if err2 != nil {
+			slog.Error("failed to mark course complete", "userID", claims.Subject, "courseSlug", courseSlug, "err", err2)
+		} else {
 			defer resp2.Body.Close()
+			if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusCreated {
+				slog.Error("user-service rejected course-complete request", "userID", claims.Subject, "courseSlug", courseSlug, "status", resp2.StatusCode)
+			}
 		}
 	}
 

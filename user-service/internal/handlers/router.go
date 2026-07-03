@@ -124,6 +124,12 @@ func BuildRouter(s *State, cfg *config.Config, pool db.Pool, withLogger bool) *c
 	})
 
 	// ── Internal API (for Course Service, no auth — rely on network policy) ──────
+	//
+	// TODO(security): these routes accept no service-to-service authentication.
+	// Any caller that can reach this port can forge enrollment/progress data for
+	// any user_id. Flagged in PR #74 review as requiring a dedicated follow-up
+	// PR (e.g. a shared INTERNAL_SERVICE_SECRET header, mirroring the existing
+	// JWT_SECRET pattern in helm/templates/secret.yaml).
 
 	r.Post("/internal/enrollments/auto", s.InternalAutoEnroll)
 	r.Get("/internal/enrollments/check", s.InternalCheckEnrollment)

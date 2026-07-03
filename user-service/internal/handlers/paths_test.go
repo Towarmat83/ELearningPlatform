@@ -381,3 +381,35 @@ func TestAdminListPathEnrollments_WithDetail(t *testing.T) {
 		t.Errorf("docker-fundamentals: want available, got %q", u.Courses[1].Status)
 	}
 }
+
+// ── parsePagination ──────────────────────────────────────────────────────────
+
+func TestParsePagination(t *testing.T) {
+	cases := []struct {
+		name       string
+		query      string
+		wantLimit  *int
+		wantOffset int
+	}{
+		{"omitted means unlimited", "", nil, 0},
+		{"zero limit means unlimited", "?limit=0", nil, 0},
+		{"negative limit bypasses pagination", "?limit=-1", nil, 0},
+		{"negative offset ignored", "?offset=-5", nil, 0},
+		{"positive limit and offset applied", "?limit=10&offset=5", intPtr(10), 5},
+		{"non-numeric limit ignored", "?limit=abc", nil, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/my/paths"+tc.query, nil)
+			gotLimit, gotOffset := parsePagination(req)
+			if (gotLimit == nil) != (tc.wantLimit == nil) || (gotLimit != nil && *gotLimit != *tc.wantLimit) {
+				t.Errorf("limit: got %v, want %v", gotLimit, tc.wantLimit)
+			}
+			if gotOffset != tc.wantOffset {
+				t.Errorf("offset: got %d, want %d", gotOffset, tc.wantOffset)
+			}
+		})
+	}
+}
+
+func intPtr(v int) *int { return &v }

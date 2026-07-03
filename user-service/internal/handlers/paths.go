@@ -7,8 +7,22 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 )
+
+// parsePagination reads optional limit/offset query params. A zero, negative,
+// or omitted limit maps to a nil *int, passed through to SQL as LIMIT NULL
+// (unbounded) — callers can pass e.g. limit=-1 to explicitly request everything.
+func parsePagination(r *http.Request) (limit *int, offset int) {
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
+		limit = &v
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v > 0 {
+		offset = v
+	}
+	return
+}
 
 type pathDetail struct {
 	Slug        string   `json:"slug"`
@@ -99,21 +113,27 @@ func (s *State) fetchPathDetail(r *http.Request, slug string) (*pathDetail, erro
 	return &p, nil
 }
 
-// MyPaths returns all learning paths the authenticated user is enrolled in,
-// with per-course completion status derived from quiz and lesson progress.
+// MyPaths returns learning paths the authenticated user is enrolled in, with
+// per-course completion status derived from quiz and lesson progress.
+// Supports optional limit/offset pagination; without them, all paths are
+// returned.
 // @Summary   List learning paths the current user is enrolled in
 // @Tags      Paths
 // @Security  BearerAuth
 // @Produce   json
+// @Param     limit   query  int  false  "Max number of paths to return"
+// @Param     offset  query  int  false  "Number of paths to skip"
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/my/paths [get]
 func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 	claims := s.claims(r)
+	limit, offset := parsePagination(r)
 
 	rows, err := s.Pool.Query(r.Context(),
 		`SELECT path_slug, enrolled_at FROM path_enrollments
-		 WHERE user_id = $1::uuid ORDER BY enrolled_at DESC`,
-		claims.Subject)
+		 WHERE user_id = $1::uuid ORDER BY enrolled_at DESC
+		 LIMIT $2 OFFSET $3`,
+		claims.Subject, limit, offset)
 	if err != nil {
 		slog.Error("failed to query path enrollments", "err", err)
 		s.Error(w, http.StatusInternalServerError, "Database error")

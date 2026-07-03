@@ -98,7 +98,10 @@ func TestGetPathNotFound(t *testing.T) {
 	}
 }
 
-func TestListPathsSorted(t *testing.T) {
+// TestListPathsUnordered verifies ListPaths returns every known path without
+// imposing a server-side sort order (sorting was moved to the frontend, since
+// sorting server-side on every request does not scale with the path count).
+func TestListPathsUnordered(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
@@ -113,8 +116,72 @@ func TestListPathsSorted(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	paths := resp["paths"].([]any)
 
-	first := paths[0].(map[string]any)["title"].(string)
-	if first != "DevOps Path" {
-		t.Errorf("expected sorted by title (DevOps Path first), got %q", first)
+	titles := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		titles[p.(map[string]any)["title"].(string)] = true
+	}
+	for _, want := range []string{"DevOps Path", "Python Path"} {
+		if !titles[want] {
+			t.Errorf("expected path titled %q in response, got %v", want, titles)
+		}
+	}
+}
+
+// TestListPathsPagination verifies the limit/offset query params bound and
+// slice the result set.
+func TestListPathsPagination(t *testing.T) {
+	mock := newUserServiceMock()
+	defer mock.Close()
+
+	s := newPathTestState(t)
+	r := BuildRouter(s, s.Config, false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/paths?limit=1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	paths := resp["paths"].([]any)
+	if len(paths) != 1 {
+		t.Fatalf("expected 1 path with limit=1, got %d", len(paths))
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/paths?offset=2", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	resp = nil
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	paths = resp["paths"].([]any)
+	if len(paths) != 0 {
+		t.Errorf("expected 0 paths with offset=2 (only 2 paths exist), got %d", len(paths))
+	}
+}
+
+// TestListPathsPaginationNegativeLimitBypasses verifies a negative limit is
+// treated the same as an omitted one — an explicit escape hatch for callers
+// that always send a numeric limit but sometimes want everything.
+func TestListPathsPaginationNegativeLimitBypasses(t *testing.T) {
+	mock := newUserServiceMock()
+	defer mock.Close()
+
+	s := newPathTestState(t)
+	r := BuildRouter(s, s.Config, false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/paths?limit=-1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	paths := resp["paths"].([]any)
+	if len(paths) != 2 {
+		t.Errorf("expected negative limit to bypass pagination and return all 2 paths, got %d", len(paths))
 	}
 }

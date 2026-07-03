@@ -258,3 +258,126 @@ func TestAdminUnenrollUserFromPath_Success(t *testing.T) {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
 }
+
+func TestAdminUnenrollUserFromPath_RequiresAdmin(t *testing.T) {
+	pool := &fake.Pool{}
+	r := newTestRouter(pool)
+	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/user-uuid-1", "", htAuthHeader(t, "student"))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+// ── fetchPathDetail ───────────────────────────────────────────────────────────
+
+func TestFetchPathDetail_InvalidSlug(t *testing.T) {
+	s := &State{Config: &config.Config{CourseServiceURL: "http://localhost"}}
+	req := httptest.NewRequest("GET", "/", nil)
+
+	cases := []string{"../etc/passwd", "UPPERCASE", "-leading", "with space", "a/b"}
+	for _, slug := range cases {
+		if _, err := s.fetchPathDetail(req, slug); err == nil {
+			t.Errorf("expected error for slug %q, got nil", slug)
+		}
+	}
+}
+
+func TestFetchPathDetail_ValidSlug(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"slug": "my-path", "title": "My Path", "courses": []string{}}) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	s := &State{Config: &config.Config{CourseServiceURL: srv.URL}}
+	req := httptest.NewRequest("GET", "/", nil)
+	detail, err := s.fetchPathDetail(req, "my-path")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if detail.Title != "My Path" {
+		t.Errorf("want title=My Path, got %q", detail.Title)
+	}
+}
+
+// ── completedCoursesCtx ───────────────────────────────────────────────────────
+
+func TestCompletedCoursesCtx_EmptySlugs(t *testing.T) {
+	s := &State{Pool: &fake.Pool{}}
+	req := httptest.NewRequest("GET", "/", nil)
+	if result := s.completedCoursesCtx(req, "user-uuid-1", nil); result != nil {
+		t.Errorf("expected nil for empty slugs, got %v", result)
+	}
+}
+
+func TestCompletedCoursesCtx_DBError(t *testing.T) {
+	pool := &fake.Pool{}
+	pool.PushRows(fmt.Errorf("db down"))
+	s := &State{Pool: pool}
+	req := httptest.NewRequest("GET", "/", nil)
+	if result := s.completedCoursesCtx(req, "user-uuid-1", []string{"course-a"}); result != nil {
+		t.Errorf("expected nil on DB error, got %v", result)
+	}
+}
+
+// ── AdminListPathEnrollments with path detail ─────────────────────────────────
+
+func TestAdminListPathEnrollments_WithDetail(t *testing.T) {
+	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+			"slug":    "devops-path",
+			"title":   "DevOps Path",
+			"courses": []string{"linux-intro", "docker-fundamentals"},
+		})
+	}))
+	defer courseSvc.Close()
+
+	pool := &fake.Pool{}
+	pool.PushRows(nil, []any{"user-uuid-1", "user@test.com", "student", time.Now()})
+	pool.PushRows(nil, []any{"linux-intro"}) // completedCoursesCtx → linux-intro done
+
+	s := &State{
+		Pool:   pool,
+		Config: &config.Config{JWTSecret: htSecret, JWTExpiryH: htExpiry, CourseServiceURL: courseSvc.URL},
+	}
+	r := BuildRouter(s, s.Config, pool, false)
+
+	req := httptest.NewRequest("GET", "/api/admin/paths/devops-path/enrollments", nil)
+	req.Header.Set("Authorization", htAuthHeader(t, "admin"))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Users []struct {
+			Email            string `json:"email"`
+			TotalCourses     int    `json:"total_courses"`
+			CompletedCourses int    `json:"completed_courses"`
+			Courses          []struct {
+				Slug   string `json:"slug"`
+				Status string `json:"status"`
+			} `json:"courses"`
+		} `json:"users"`
+	}
+	json.NewDecoder(rec.Body).Decode(&resp) //nolint:errcheck
+	if len(resp.Users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(resp.Users))
+	}
+	u := resp.Users[0]
+	if u.TotalCourses != 2 {
+		t.Errorf("want total_courses=2, got %d", u.TotalCourses)
+	}
+	if u.CompletedCourses != 1 {
+		t.Errorf("want completed_courses=1, got %d", u.CompletedCourses)
+	}
+	if len(u.Courses) != 2 {
+		t.Fatalf("want 2 courses, got %d", len(u.Courses))
+	}
+	if u.Courses[0].Status != "completed" {
+		t.Errorf("linux-intro: want completed, got %q", u.Courses[0].Status)
+	}
+	if u.Courses[1].Status != "available" {
+		t.Errorf("docker-fundamentals: want available, got %q", u.Courses[1].Status)
+	}
+}

@@ -74,7 +74,8 @@ func (s *State) fetchPathDetail(r *http.Request, slug string) (*pathDetail, erro
 	return &p, nil
 }
 
-// MyPaths godoc
+// MyPaths returns all learning paths the authenticated user is enrolled in,
+// with per-course completion status derived from quiz and lesson progress.
 // @Summary   List learning paths the current user is enrolled in
 // @Tags      Paths
 // @Security  BearerAuth
@@ -174,7 +175,8 @@ func (s *State) completedCoursesCtx(r *http.Request, userID string, slugs []stri
 	return result
 }
 
-// AdminListPathEnrollments godoc
+// AdminListPathEnrollments lists all users enrolled in a learning path, including
+// each user's per-course completion status when the path detail is reachable.
 // @Summary   List users enrolled in a path (admin)
 // @Tags      Admin - Paths
 // @Security  BearerAuth
@@ -233,7 +235,8 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 	s.JSON(w, http.StatusOK, map[string][]enrolledUser{"users": users})
 }
 
-// AdminEnrollUserInPath godoc
+// AdminEnrollUserInPath enrolls a user in a learning path. Idempotent: enrolling
+// an already-enrolled user is a no-op.
 // @Summary   Enroll a user in a learning path (admin)
 // @Tags      Admin - Paths
 // @Security  BearerAuth
@@ -264,7 +267,7 @@ func (s *State) AdminEnrollUserInPath(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{"message": "Enrolled in path"})
 }
 
-// AdminUnenrollUserFromPath godoc
+// AdminUnenrollUserFromPath removes a user from a learning path.
 // @Summary   Remove a user from a learning path (admin)
 // @Tags      Admin - Paths
 // @Security  BearerAuth

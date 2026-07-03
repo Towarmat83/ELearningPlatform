@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	toolscache "k8s.io/client-go/tools/cache"
 
 	coursev1 "github.com/elearning/course-service/api/v1"
 )
@@ -125,5 +126,72 @@ func TestPathFromCR_EmptyCourseSlugSkipped(t *testing.T) {
 	p := pathFromCR(cr)
 	if len(p.Courses) != 2 {
 		t.Errorf("expected 2 courses (empty slug skipped), got %d", len(p.Courses))
+	}
+}
+
+// ── PathWatcher event handlers ────────────────────────────────────────────────
+
+func TestPathWatcher_Upsert_HappyPath(t *testing.T) {
+	store := NewPathStore()
+	w := &PathWatcher{store: store}
+
+	cr := makePathCR("devops-path", coursev1.PathSpec{Title: "DevOps"})
+	w.upsert(cr)
+
+	if store.Get("devops-path") == nil {
+		t.Error("expected path to be stored after upsert")
+	}
+}
+
+func TestPathWatcher_Upsert_TypeAssertFailure(t *testing.T) {
+	store := NewPathStore()
+	w := &PathWatcher{store: store}
+
+	// Should be a no-op and not panic
+	w.upsert("not-a-path-cr")
+	w.upsert(42)
+
+	list := store.List()
+	if len(list) != 0 {
+		t.Errorf("expected empty store after bad upsert, got %d entries", len(list))
+	}
+}
+
+func TestPathWatcher_Remove_HappyPath(t *testing.T) {
+	store := NewPathStore()
+	store.Put(&Path{Slug: "to-remove", Source: "k8s:to-remove"})
+	w := &PathWatcher{store: store}
+
+	cr := makePathCR("to-remove", coursev1.PathSpec{})
+	w.remove(cr)
+
+	if store.Get("to-remove") != nil {
+		t.Error("expected path to be removed")
+	}
+}
+
+func TestPathWatcher_Remove_DeletedFinalStateUnknown(t *testing.T) {
+	store := NewPathStore()
+	store.Put(&Path{Slug: "wrapped-path", Source: "k8s:wrapped-path"})
+	w := &PathWatcher{store: store}
+
+	cr := makePathCR("wrapped-path", coursev1.PathSpec{})
+	w.remove(toolscache.DeletedFinalStateUnknown{Key: "default/wrapped-path", Obj: cr})
+
+	if store.Get("wrapped-path") != nil {
+		t.Error("expected path to be removed via DeletedFinalStateUnknown")
+	}
+}
+
+func TestPathWatcher_Remove_TypeAssertFailure(t *testing.T) {
+	store := NewPathStore()
+	store.Put(&Path{Slug: "safe", Source: "k8s:safe"})
+	w := &PathWatcher{store: store}
+
+	// Should be a no-op and not panic
+	w.remove("not-a-cr")
+
+	if store.Get("safe") == nil {
+		t.Error("expected path to be untouched after bad remove")
 	}
 }

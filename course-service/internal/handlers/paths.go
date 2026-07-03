@@ -7,7 +7,7 @@ import (
 	"github.com/elearning/course-service/internal/content"
 )
 
-// ListPaths godoc
+// ListPaths returns all learning paths known to the service.
 // @Summary  List all learning paths
 // @Tags     Paths
 // @Produce  json
@@ -18,7 +18,7 @@ func (s *State) ListPaths(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string][]*content.Path{"paths": paths})
 }
 
-// GetPath godoc
+// GetPath returns a single learning path by its slug.
 // @Summary  Get a learning path by slug
 // @Tags     Paths
 // @Produce  json

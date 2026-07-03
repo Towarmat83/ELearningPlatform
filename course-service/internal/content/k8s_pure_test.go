@@ -3,6 +3,8 @@ package content
 import (
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	coursev1 "github.com/elearning/course-service/api/v1"
 )
 
@@ -444,5 +446,70 @@ func TestCourseFromCR_MaxAttemptsInt(t *testing.T) {
 	m := course.Modules[0]
 	if m.MaxAttemptsPerQuestion == nil || *m.MaxAttemptsPerQuestion != 5 {
 		t.Errorf("expected MaxAttemptsPerQuestion=5, got %v", m.MaxAttemptsPerQuestion)
+	}
+}
+
+// ── stepsFromCR ──────────────────────────────────────────────────────────────
+
+func TestStepsFromCR_Empty(t *testing.T) {
+	if got := stepsFromCR(nil); got != nil {
+		t.Errorf("expected nil for empty steps, got %v", got)
+	}
+}
+
+func TestStepsFromCR_WithSteps(t *testing.T) {
+	steps := []coursev1.CheckStep{
+		{Title: "Step 1", CheckType: "podman_images"},
+		{
+			Title:       "Step 2",
+			CheckType:   "podman_run",
+			CheckParams: &runtime.RawExtension{Raw: []byte(`{"image":"nginx"}`)},
+		},
+	}
+	got := stepsFromCR(steps)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(got))
+	}
+	if got[0].Title != "Step 1" || got[0].CheckType != "podman_images" {
+		t.Errorf("step[0]: unexpected values %+v", got[0])
+	}
+	if got[1].CheckParams == nil || got[1].CheckParams["image"] != "nginx" {
+		t.Errorf("step[1] CheckParams: expected {image:nginx}, got %v", got[1].CheckParams)
+	}
+}
+
+// ── rawExtensionToMap ────────────────────────────────────────────────────────
+
+func TestRawExtensionToMap_Nil(t *testing.T) {
+	if got := rawExtensionToMap(nil); got != nil {
+		t.Errorf("expected nil for nil extension, got %v", got)
+	}
+}
+
+func TestRawExtensionToMap_EmptyRaw(t *testing.T) {
+	re := &runtime.RawExtension{Raw: nil}
+	if got := rawExtensionToMap(re); got != nil {
+		t.Errorf("expected nil for empty raw, got %v", got)
+	}
+}
+
+func TestRawExtensionToMap_Valid(t *testing.T) {
+	re := &runtime.RawExtension{Raw: []byte(`{"url":"http://gitlab.example.com","project_id":42}`)}
+	got := rawExtensionToMap(re)
+	if got == nil {
+		t.Fatal("expected non-nil map")
+	}
+	if got["url"] != "http://gitlab.example.com" {
+		t.Errorf("url: want http://gitlab.example.com, got %v", got["url"])
+	}
+	if got["project_id"].(float64) != 42 {
+		t.Errorf("project_id: want 42, got %v", got["project_id"])
+	}
+}
+
+func TestRawExtensionToMap_InvalidJSON(t *testing.T) {
+	re := &runtime.RawExtension{Raw: []byte(`not-json`)}
+	if got := rawExtensionToMap(re); got != nil {
+		t.Errorf("expected nil for invalid JSON, got %v", got)
 	}
 }

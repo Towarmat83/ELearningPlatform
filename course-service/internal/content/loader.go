@@ -19,16 +19,19 @@ type Store struct {
 	courses map[string]*Course
 }
 
+// NewStore returns an empty, ready-to-use in-memory course store.
 func NewStore() *Store {
 	return &Store{courses: make(map[string]*Course)}
 }
 
+// Get returns the course with the given slug, or nil if not found.
 func (s *Store) Get(slug string) *Course {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.courses[slug]
 }
 
+// List returns all public courses sorted alphabetically by title.
 func (s *Store) List() []*Course {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -42,6 +45,7 @@ func (s *Store) List() []*Course {
 	return out
 }
 
+// All returns every course (public and private) sorted alphabetically by title.
 func (s *Store) All() []*Course {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -53,12 +57,14 @@ func (s *Store) All() []*Course {
 	return out
 }
 
+// Put adds or replaces a course in the store.
 func (s *Store) Put(c *Course) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.courses[c.Slug] = c
 }
 
+// DeleteBySource removes all courses whose Source field equals source.
 func (s *Store) DeleteBySource(source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -75,16 +81,19 @@ type PathStore struct {
 	paths map[string]*Path
 }
 
+// NewPathStore returns an empty, ready-to-use in-memory path store.
 func NewPathStore() *PathStore {
 	return &PathStore{paths: make(map[string]*Path)}
 }
 
+// Get returns the path with the given slug, or nil if not found.
 func (s *PathStore) Get(slug string) *Path {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.paths[slug]
 }
 
+// List returns all paths sorted alphabetically by title.
 func (s *PathStore) List() []*Path {
 	s.mu.RLock()
 	out := make([]*Path, 0, len(s.paths))
@@ -96,12 +105,14 @@ func (s *PathStore) List() []*Path {
 	return out
 }
 
+// Put adds or replaces a path in the store.
 func (s *PathStore) Put(p *Path) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.paths[p.Slug] = p
 }
 
+// DeleteBySource removes all paths whose Source field equals source.
 func (s *PathStore) DeleteBySource(source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

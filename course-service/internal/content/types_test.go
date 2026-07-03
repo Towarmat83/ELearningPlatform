@@ -48,6 +48,18 @@ func TestModuleContent(t *testing.T) {
 			t.Errorf("Module{Type:%q}.Content() = %q, want %q", tc.typ, got, tc.want)
 		}
 	}
+
+	// lab with InlineContent set → returns InlineContent
+	labInline := Module{Type: "lab", Src: "http://external.lab", InlineContent: "## Lab intro"}
+	if got := labInline.Content(); got != "## Lab intro" {
+		t.Errorf("lab with InlineContent: want %q, got %q", "## Lab intro", got)
+	}
+
+	// lab without InlineContent → falls back to Src
+	labSrc := Module{Type: "lab", Src: "http://external.lab"}
+	if got := labSrc.Content(); got != "http://external.lab" {
+		t.Errorf("lab without InlineContent: want %q, got %q", "http://external.lab", got)
+	}
 }
 
 func TestModuleHasQuestions(t *testing.T) {

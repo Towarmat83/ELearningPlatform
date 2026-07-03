@@ -232,19 +232,19 @@ crd-merge:
 
 .PHONY: go/test go/test-course go/test-user
 
-go/test: go/test-course go/test-user
+go/test: go/test-course go/test-user go/test-checker
 
 go/test-course:
 	@echo "=== course-service tests ==="
-	@cd course-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+	@cd course-service && CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
 
 go/test-user:
 	@echo "=== user-service tests ==="
-	@cd user-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+	@cd user-service && CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
 
 go/test-checker:
 	@echo "=== checker-service tests ==="
-	@cd checker-service && go test ./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+	@cd checker-service && CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
 
 # ── Go Lint ─────────────────────────────────────────────────────────────────
 

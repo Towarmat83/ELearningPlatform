@@ -69,6 +69,8 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.service }}
+    env:
+      CGO_ENABLED: "1"
     steps:
       - uses: actions/checkout@v4
 

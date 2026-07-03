@@ -2,20 +2,20 @@ package v1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// PathCourseEntry references one course within a learning path.
-type PathCourseEntry struct {
-	// +kubebuilder:validation:MinLength=1
-	Slug string `json:"slug"`
-}
-
 // PathSpec defines the desired state of a Path.
 type PathSpec struct {
+	// Title is the human-readable name of this learning path.
 	// +kubebuilder:validation:Optional
 	Title string `json:"title,omitempty"`
+	// Description provides a brief overview of the path's goals and content.
 	// +kubebuilder:validation:Optional
 	Description string `json:"description,omitempty"`
+	// Courses is the ordered list of course slugs that compose this path.
+	// Each slug must match an existing Course resource in the same namespace.
 	// +kubebuilder:validation:Optional
-	Courses []PathCourseEntry `json:"courses,omitempty"`
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9][a-z0-9-]*$`
+	Courses []string `json:"courses,omitempty"`
 }
 
 // Path is the Schema for the paths API.

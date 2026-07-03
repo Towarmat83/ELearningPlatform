@@ -9,6 +9,12 @@ import (
 	"github.com/elearning/course-service/internal/content"
 )
 
+// courseCompleteBody is the request body sent to the user-service when a course is completed.
+type courseCompleteBody struct {
+	UserID     string `json:"user_id"`
+	CourseSlug string `json:"course_slug"`
+}
+
 type lessonSummary struct {
 	Slug   string `json:"slug"`
 	Title  string `json:"title"`
@@ -280,9 +286,9 @@ func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
 	}
 	isLastModule := moduleIndex >= 0 && moduleIndex == lastMeaningful
 	if isLastModule {
-		body2 := map[string]string{"user_id": claims.Subject, "course_slug": courseSlug}
+		req2 := courseCompleteBody{UserID: claims.Subject, CourseSlug: courseSlug}
 		var buf2 bytes.Buffer
-		_ = json.NewEncoder(&buf2).Encode(body2)
+		_ = json.NewEncoder(&buf2).Encode(req2)
 		resp2, err2 := http.Post(s.Config.UserServiceURL+"/internal/progress/course-complete", "application/json", &buf2)
 		if err2 == nil {
 			defer resp2.Body.Close()

@@ -93,15 +93,14 @@ func (s *PathStore) Get(slug string) *Path {
 	return s.paths[slug]
 }
 
-// List returns all paths sorted alphabetically by title.
+// List returns all paths. Order is undefined; sorting is the caller's responsibility.
 func (s *PathStore) List() []*Path {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	out := make([]*Path, 0, len(s.paths))
 	for _, p := range s.paths {
 		out = append(out, p)
 	}
-	s.mu.RUnlock()
-	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
 	return out
 }
 

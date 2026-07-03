@@ -7,6 +7,6 @@ spec:
   title: "Parcours DevOps"
   description: "Des fondamentaux Linux à l'orchestration de conteneurs — Linux, Docker, Kubernetes."
   courses:
-    - slug: linux-intro
-    - slug: docker-fundamentals
-    - slug: kubernetes-basics
+    - linux-intro
+    - docker-fundamentals
+    - kubernetes-basics

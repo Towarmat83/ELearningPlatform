@@ -7,6 +7,6 @@ spec:
   title: "Parcours Sécurité"
   description: "De Linux aux réseaux jusqu'à la cybersécurité applicative — OWASP, chiffrement, authentification."
   courses:
-    - slug: linux-intro
-    - slug: networking-basics
-    - slug: cybersecurity-intro
+    - linux-intro
+    - networking-basics
+    - cybersecurity-intro

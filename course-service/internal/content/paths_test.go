@@ -34,8 +34,10 @@ func TestPathStore_List(t *testing.T) {
 	if len(list) != 2 {
 		t.Fatalf("expected 2 paths, got %d", len(list))
 	}
-	if list[0].Title != "A Path" {
-		t.Errorf("expected sorted order, got %q first", list[0].Title)
+	// Order is undefined — sorting is the caller's responsibility.
+	slugs := map[string]bool{list[0].Slug: true, list[1].Slug: true}
+	if !slugs["path-a"] || !slugs["path-b"] {
+		t.Errorf("expected both paths in list, got %v", list)
 	}
 }
 
@@ -74,11 +76,7 @@ func TestPathFromCR_Basic(t *testing.T) {
 	cr := makePathCR("devops-path", coursev1.PathSpec{
 		Title:       "DevOps Path",
 		Description: "From Linux to Kubernetes",
-		Courses: []coursev1.PathCourseEntry{
-			{Slug: "linux-intro"},
-			{Slug: "docker-fundamentals"},
-			{Slug: "kubernetes-basics"},
-		},
+		Courses:     []string{"linux-intro", "docker-fundamentals", "kubernetes-basics"},
 	})
 
 	p := pathFromCR(cr)
@@ -117,11 +115,7 @@ func TestPathFromCR_Source(t *testing.T) {
 
 func TestPathFromCR_EmptyCourseSlugSkipped(t *testing.T) {
 	cr := makePathCR("test-path", coursev1.PathSpec{
-		Courses: []coursev1.PathCourseEntry{
-			{Slug: "valid-course"},
-			{Slug: ""},
-			{Slug: "another-course"},
-		},
+		Courses: []string{"valid-course", "", "another-course"},
 	})
 	p := pathFromCR(cr)
 	if len(p.Courses) != 2 {

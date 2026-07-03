@@ -38,13 +38,38 @@ type enrollment struct {
 // enrolledUser represents a user enrolled in a learning path,
 // along with their progress across the path's courses.
 type enrolledUser struct {
-	UserID           string         `json:"user_id"`
-	Email            string         `json:"email"`
-	Role             string         `json:"role"`
-	EnrolledAt       time.Time      `json:"enrolled_at"`
-	CompletedCourses int            `json:"completed_courses"`
-	TotalCourses     int            `json:"total_courses"`
-	Courses          []courseStatus `json:"courses,omitempty"`
+	// UserID is the UUID of the enrolled user.
+	UserID string `json:"user_id"`
+	// Email is the user's email address.
+	Email string `json:"email"`
+	// Role is the user's platform role (e.g. "student", "admin").
+	Role string `json:"role"`
+	// EnrolledAt is the timestamp when the user was enrolled in this path.
+	EnrolledAt time.Time `json:"enrolled_at"`
+	// CompletedCourses is the count of courses this user has completed in the path.
+	CompletedCourses int `json:"completed_courses"`
+	// TotalCourses is the total number of courses in the path.
+	TotalCourses int `json:"total_courses"`
+	// Courses holds per-course completion status, populated when path detail is available.
+	Courses []courseStatus `json:"courses,omitempty"`
+}
+
+// buildCourseStatuses derives the completion status of each course in an ordered
+// path, given the set of courses the user has already completed.
+// Status is "completed" if done, "available" if the previous course is done (or it
+// is the first course), and "locked" otherwise.
+func buildCourseStatuses(courses []string, completed map[string]bool) []courseStatus {
+	out := make([]courseStatus, len(courses))
+	for i, slug := range courses {
+		status := "locked"
+		if completed[slug] {
+			status = "completed"
+		} else if i == 0 || completed[courses[i-1]] {
+			status = "available"
+		}
+		out[i] = courseStatus{Slug: slug, Status: status}
+	}
+	return out
 }
 
 var slugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -119,17 +144,7 @@ func (s *State) MyPaths(w http.ResponseWriter, r *http.Request) {
 		}
 
 		completed := s.completedCoursesCtx(r, claims.Subject, detail.Courses)
-
-		courses := make([]courseStatus, len(detail.Courses))
-		for i, slug := range detail.Courses {
-			status := "locked"
-			if completed[slug] {
-				status = "completed"
-			} else if i == 0 || completed[detail.Courses[i-1]] {
-				status = "available"
-			}
-			courses[i] = courseStatus{Slug: slug, Status: status}
-		}
+		courses := buildCourseStatuses(detail.Courses, completed)
 
 		result = append(result, myPath{
 			Slug:        detail.Slug,
@@ -214,18 +229,12 @@ func (s *State) AdminListPathEnrollments(w http.ResponseWriter, r *http.Request)
 		if detail != nil {
 			completed := s.completedCoursesCtx(r, u.UserID, detail.Courses)
 			u.TotalCourses = len(detail.Courses)
-			courses := make([]courseStatus, len(detail.Courses))
-			for i, cs := range detail.Courses {
-				status := "locked"
-				if completed[cs] {
-					status = "completed"
+			u.Courses = buildCourseStatuses(detail.Courses, completed)
+			for _, cs := range u.Courses {
+				if cs.Status == "completed" {
 					u.CompletedCourses++
-				} else if i == 0 || completed[detail.Courses[i-1]] {
-					status = "available"
 				}
-				courses[i] = courseStatus{Slug: cs, Status: status}
 			}
-			u.Courses = courses
 		}
 		users = append(users, u)
 	}

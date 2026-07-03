@@ -365,9 +365,9 @@ func pathFromCR(cr *coursev1.Path) *Path {
 	}
 
 	courses := make([]string, 0, len(cr.Spec.Courses))
-	for _, c := range cr.Spec.Courses {
-		if c.Slug != "" {
-			courses = append(courses, c.Slug)
+	for _, slug := range cr.Spec.Courses {
+		if slug != "" {
+			courses = append(courses, slug)
 		}
 	}
 

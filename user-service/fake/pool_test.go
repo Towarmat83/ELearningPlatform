@@ -1,14 +1,17 @@
 package fake
 
 import (
-	"context"
 	"errors"
 	"testing"
 )
 
-var ctx = context.Background()
-
+// TestPushRow_And_QueryRow_Scan verifies that a queued row is returned by
+// QueryRow and scanned into the destination pointers.
 func TestPushRow_And_QueryRow_Scan(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRow(nil, "hello", int64(42))
 
@@ -33,7 +36,12 @@ func TestPushRow_And_QueryRow_Scan(t *testing.T) {
 	}
 }
 
+// TestPushRow_Error verifies that a queued error is returned from Scan.
 func TestPushRow_Error(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRow(errors.New("scan error"))
 
@@ -45,7 +53,13 @@ func TestPushRow_Error(t *testing.T) {
 	}
 }
 
+// TestQueryRow_EmptyQueue verifies that QueryRow returns an error when no
+// response has been queued.
 func TestQueryRow_EmptyQueue(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 
 	row := p.QueryRow(ctx, "SELECT 1")
@@ -56,7 +70,13 @@ func TestQueryRow_EmptyQueue(t *testing.T) {
 	}
 }
 
+// TestPushRows_And_Query verifies that queued rows are iterated and scanned
+// correctly via the returned pgx.Rows.
 func TestPushRows_And_Query(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(nil,
 		[]any{"row1", int64(1)},
@@ -94,26 +114,51 @@ func TestPushRows_And_Query(t *testing.T) {
 	}
 }
 
+// TestPushRows_Error verifies that a queued error is returned from Query.
 func TestPushRows_Error(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(errors.New("query error"))
 
-	_, err := p.Query(ctx, "SELECT 1")
+	rows, err := p.Query(ctx, "SELECT 1")
+	if rows != nil {
+		defer rows.Close()
+	}
+
 	if err == nil {
 		t.Error("expected query error, got nil")
 	}
 }
 
+// TestQuery_EmptyQueue verifies that Query returns an error when no response
+// has been queued.
 func TestQuery_EmptyQueue(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 
-	_, err := p.Query(ctx, "SELECT 1")
+	rows, err := p.Query(ctx, "SELECT 1")
+	if rows != nil {
+		defer rows.Close()
+	}
+
 	if err == nil {
 		t.Error("expected error from empty queue")
 	}
 }
 
+// TestPushExec_RowsAffected verifies that a queued exec result reports the
+// expected number of affected rows.
 func TestPushExec_RowsAffected(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushExec(5, nil)
 
@@ -127,7 +172,12 @@ func TestPushExec_RowsAffected(t *testing.T) {
 	}
 }
 
+// TestPushExec_Error verifies that a queued error is returned from Exec.
 func TestPushExec_Error(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushExec(0, errors.New("exec error"))
 
@@ -137,7 +187,13 @@ func TestPushExec_Error(t *testing.T) {
 	}
 }
 
+// TestExec_EmptyQueue_ReturnsOK verifies that Exec returns a zero-affected
+// OK tag when no response has been queued.
 func TestExec_EmptyQueue_ReturnsOK(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 
 	tag, err := p.Exec(ctx, "INSERT INTO foo VALUES (1)")
@@ -150,7 +206,11 @@ func TestExec_EmptyQueue_ReturnsOK(t *testing.T) {
 	}
 }
 
+// TestAssignOne_PointerToString verifies that a string source can be
+// assigned into a pointer-to-string destination.
 func TestAssignOne_PointerToString(t *testing.T) {
+	t.Parallel()
+
 	var dst *string
 
 	err := assignOne(&dst, "hello")
@@ -163,7 +223,11 @@ func TestAssignOne_PointerToString(t *testing.T) {
 	}
 }
 
+// TestAssignOne_NilSource verifies that a nil source leaves the destination
+// at its zero value.
 func TestAssignOne_NilSource(t *testing.T) {
+	t.Parallel()
+
 	var dst string
 
 	err := assignOne(&dst, nil)
@@ -176,7 +240,11 @@ func TestAssignOne_NilSource(t *testing.T) {
 	}
 }
 
+// TestAssignOne_IntToInt64 verifies that an int64 source is assigned as-is
+// into an int64 destination.
 func TestAssignOne_IntToInt64(t *testing.T) {
+	t.Parallel()
+
 	var dst int64
 
 	err := assignOne(&dst, int64(100))
@@ -189,7 +257,11 @@ func TestAssignOne_IntToInt64(t *testing.T) {
 	}
 }
 
+// TestAssignOne_IntConversion verifies that an int source is converted into
+// an int64 destination.
 func TestAssignOne_IntConversion(t *testing.T) {
+	t.Parallel()
+
 	var dst int64
 
 	err := assignOne(&dst, 42)
@@ -202,7 +274,11 @@ func TestAssignOne_IntConversion(t *testing.T) {
 	}
 }
 
+// TestAssignAll_MismatchedLengths verifies that extra destinations beyond
+// the number of provided values are left untouched.
 func TestAssignAll_MismatchedLengths(t *testing.T) {
+	t.Parallel()
+
 	dests := make([]any, 3)
 
 	var s1, s2, s3 string
@@ -223,12 +299,26 @@ func TestAssignAll_MismatchedLengths(t *testing.T) {
 	}
 }
 
+// TestRows_InterfaceMethods verifies the default return values of the
+// pgx.Rows interface methods that carry no meaningful data in the fake.
 func TestRows_InterfaceMethods(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(nil, []any{"test"})
 
-	rows, _ := p.Query(ctx, "SELECT 1")
-	fakeRows := rows.(*Rows)
+	rows, err := p.Query(ctx, "SELECT 1")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	defer rows.Close()
+
+	fakeRows, ok := rows.(*Rows)
+	if !ok {
+		t.Fatal("expected rows to be *Rows")
+	}
 
 	// Test interface methods that return defaults.
 	if fakeRows.CommandTag().String() != "" {
@@ -239,7 +329,8 @@ func TestRows_InterfaceMethods(t *testing.T) {
 		t.Error("FieldDescriptions should be nil")
 	}
 
-	if _, err := fakeRows.Values(); err != nil {
+	_, err = fakeRows.Values()
+	if err != nil {
 		t.Errorf("Values: %v", err)
 	}
 
@@ -252,7 +343,12 @@ func TestRows_InterfaceMethods(t *testing.T) {
 	}
 }
 
+// TestRows_Close verifies that Close on the fake Rows does not panic.
 func TestRows_Close(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(nil, []any{"test"})
 
@@ -264,11 +360,23 @@ func TestRows_Close(t *testing.T) {
 	rows.Close() // should not panic
 }
 
+// TestRows_ScanNoCurrentRow verifies that Scan fails when Next has not been
+// called yet.
 func TestRows_ScanNoCurrentRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(nil, []any{"test"})
+
 	rows, _ := p.Query(ctx, "SELECT 1")
-	fakeRows := rows.(*Rows)
+	defer rows.Close()
+
+	fakeRows, ok := rows.(*Rows)
+	if !ok {
+		t.Fatal("expected rows to be *Rows")
+	}
 	// Scan without calling Next first
 	var s string
 
@@ -278,7 +386,11 @@ func TestRows_ScanNoCurrentRow(t *testing.T) {
 	}
 }
 
+// TestAssignOne_FloatConversion verifies that a float64 source is converted
+// into a float32 destination.
 func TestAssignOne_FloatConversion(t *testing.T) {
+	t.Parallel()
+
 	var dst float32
 
 	err := assignOne(&dst, float64(3.14))
@@ -291,7 +403,11 @@ func TestAssignOne_FloatConversion(t *testing.T) {
 	}
 }
 
+// TestAssignOne_TypeConversion verifies that a convertible source type is
+// converted into the destination type.
 func TestAssignOne_TypeConversion(t *testing.T) {
+	t.Parallel()
+
 	// int32 → int64 via CanConvert
 	var dst int64
 
@@ -305,7 +421,11 @@ func TestAssignOne_TypeConversion(t *testing.T) {
 	}
 }
 
+// TestAssignOne_IncompatibleTypes verifies that an error is returned when the
+// source cannot be assigned or converted into the destination type.
 func TestAssignOne_IncompatibleTypes(t *testing.T) {
+	t.Parallel()
+
 	var dst bool
 	// string cannot be assigned to bool and CanConvert returns false
 	err := assignOne(&dst, []byte("cannot convert"))
@@ -314,7 +434,11 @@ func TestAssignOne_IncompatibleTypes(t *testing.T) {
 	}
 }
 
+// TestAssignOne_NonPointerDst verifies that an error is returned when the
+// destination is not a pointer.
 func TestAssignOne_NonPointerDst(t *testing.T) {
+	t.Parallel()
+
 	var dst string
 	// Pass dst by value (not pointer) — should error
 	err := assignOne(dst, "value")
@@ -323,7 +447,13 @@ func TestAssignOne_NonPointerDst(t *testing.T) {
 	}
 }
 
+// TestRows_CloseIsIdempotent verifies that calling Close more than once does
+// not panic.
 func TestRows_CloseIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(nil, []any{"a"}, []any{"b"})
 	rows, _ := p.Query(ctx, "SELECT 1")
@@ -332,11 +462,24 @@ func TestRows_CloseIsIdempotent(t *testing.T) {
 	rows.Close() // calling Close again should not panic
 }
 
+// TestRows_Values_WithCurrentRow verifies that Values returns nil even when
+// positioned on a current row, matching the fake's documented behaviour.
 func TestRows_Values_WithCurrentRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
 	p := &Pool{}
 	p.PushRows(nil, []any{"hello", int64(42)})
+
 	rows, _ := p.Query(ctx, "SELECT 1")
-	fakeRows := rows.(*Rows)
+	defer rows.Close()
+
+	fakeRows, ok := rows.(*Rows)
+	if !ok {
+		t.Fatal("expected rows to be *Rows")
+	}
+
 	fakeRows.Next()
 
 	vals, err := fakeRows.Values()

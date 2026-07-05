@@ -12,15 +12,19 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects.
+	//nolint:gochecknoglobals // kubebuilder scaffolding convention, required by controller-runtime scheme registration
 	GroupVersion = schema.GroupVersion{Group: "elearning.pupitre.io", Version: "v1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme.
+	//nolint:gochecknoglobals // kubebuilder scaffolding convention, required by controller-runtime scheme registration
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 
 	// AddToScheme adds the types in this group-version to the given scheme.
+	//nolint:gochecknoglobals // kubebuilder scaffolding convention, required by controller-runtime scheme registration
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 
+// addKnownTypes registers this package's API types with the given scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		GroupVersion,

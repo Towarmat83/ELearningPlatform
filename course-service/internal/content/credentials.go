@@ -1,39 +1,49 @@
 package content
 
 import (
+	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
+// Credential is a single git URL-to-token mapping loaded from the
+// credentials file.
 type Credential struct {
 	URL   string `yaml:"url"`
 	Token string `yaml:"token"`
 }
 
+// GitCredentialStore holds the set of git credentials available for
+// matching against repository URLs.
 type GitCredentialStore struct {
 	entries []Credential
 }
 
-func LoadCredentials(path string) (*GitCredentialStore, error) {
-	data, err := os.ReadFile(path)
+// LoadCredentials reads and parses the YAML credentials file at credsPath.
+func LoadCredentials(credsPath string) (*GitCredentialStore, error) {
+	data, err := os.ReadFile(filepath.Clean(credsPath))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading credentials file: %w", err)
 	}
 
 	var doc struct {
 		Credentials []Credential `yaml:"credentials"`
 	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
+
+	err = yaml.Unmarshal(data, &doc)
+	if err != nil {
+		return nil, fmt.Errorf("parsing credentials file: %w", err)
 	}
 
 	return &GitCredentialStore{entries: doc.Credentials}, nil
 }
 
-// Match returns the token for the first credential whose URL pattern matches repoURL.
+// Match returns the token for the first credential whose URL pattern
+// matches repoURL.
 func (s *GitCredentialStore) Match(repoURL string) string {
 	if s == nil {
 		return ""

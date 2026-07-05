@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -9,17 +10,31 @@ import (
 	"github.com/elearning/user-service/internal/db"
 )
 
+// defaultGroupName is the platform-wide group every user is added to.
 const defaultGroupName = "everyone"
+
+// Platform role names used when deriving a user's role from group
+// membership synced from an IdP.
+const (
+	groupsRoleAdmin   = "admin"
+	groupsRoleStudent = "student"
+)
+
+// JSON response field/message literals reused across this file's handlers.
+const (
+	groupsRespKeyMessage = "message"
+	groupsRespKeyGroups  = "groups"
+)
 
 // syncGroupEnrollments ensures the user is enrolled in every course
 // that any of their groups are enrolled in. Called after every login.
 func syncGroupEnrollments(ctx context.Context, pool db.Pool, userID string) {
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO enrollments (user_id, course_slug)
-		 SELECT $1::uuid, ge.course_slug
+		`INSERT INTO enrollments (userId, courseSlug)
+		 SELECT $1::uuid, ge.courseSlug
 		 FROM group_enrollments ge
-		 JOIN user_groups ug ON ug.group_id = ge.group_id
-		 WHERE ug.user_id = $1::uuid
+		 JOIN user_groups ug ON ug.groupId = ge.groupId
+		 WHERE ug.userId = $1::uuid
 		 ON CONFLICT DO NOTHING`,
 		userID)
 }
@@ -32,34 +47,37 @@ func addToDefaultGroup(ctx context.Context, pool db.Pool, userID string) {
 	_ = pool.QueryRow(ctx,
 		`INSERT INTO groups (name, source, description)
 		 VALUES ($1, 'local', 'Default group — all users are members automatically')
-		 ON CONFLICT (name) DO UPDATE SET updated_at = NOW()
+		 ON CONFLICT (name) DO UPDATE SET updatedAt = NOW()
 		 RETURNING id::text`, defaultGroupName).Scan(&groupID)
 	if groupID == "" {
 		return
 	}
 
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO user_groups (user_id, group_id)
+		`INSERT INTO user_groups (userId, groupId)
 		 VALUES ($1::uuid, $2::uuid)
 		 ON CONFLICT DO NOTHING`, userID, groupID)
 }
 
 // syncGroupsAndDeriveRole upserts groups from an IdP into the groups table,
-// updates the user's group memberships, and returns the highest platform role
-// found in group_role_mappings ('admin' beats 'student'). Defaults to 'student'.
+// updates the user's group memberships, and returns the highest platform
+// role found in group_role_mappings ('admin' beats 'student'). Defaults to
+// 'student'.
 func syncGroupsAndDeriveRole(ctx context.Context, pool db.Pool, userID string, groupNames []string, source string) (string, error) {
 	// Start from the user's current role so SSO logins without group mappings
 	// never silently downgrade an existing admin.
 	var role string
-	if err := pool.QueryRow(ctx, `SELECT role FROM users WHERE id = $1::uuid`, userID).Scan(&role); err != nil {
-		role = "student"
+
+	err := pool.QueryRow(ctx, `SELECT role FROM users WHERE id = $1::uuid`, userID).Scan(&role)
+	if err != nil {
+		role = groupsRoleStudent
 	}
 
 	// Clear current memberships for this user
-	_, err := pool.Exec(ctx,
-		`DELETE FROM user_groups WHERE user_id = $1::uuid`, userID)
+	_, err = pool.Exec(ctx,
+		`DELETE FROM user_groups WHERE userId = $1::uuid`, userID)
 	if err != nil {
-		return role, err
+		return role, fmt.Errorf("clear group memberships: %w", err)
 	}
 
 	roleMapped := false
@@ -68,43 +86,16 @@ func syncGroupsAndDeriveRole(ctx context.Context, pool db.Pool, userID string, g
 		if name == "" {
 			continue
 		}
-		// Upsert group
-		var groupID string
 
-		err := pool.QueryRow(ctx,
-			`INSERT INTO groups (name, source, updated_at)
-			 VALUES ($1, $2, NOW())
-			 ON CONFLICT (name) DO UPDATE SET source = $2, updated_at = NOW()
-			 RETURNING id::text`,
-			name, source).Scan(&groupID)
-		if err != nil {
-			return role, err
+		updatedRole, mapped, membershipErr := groupsSyncMembership(ctx, pool, userID, name, source, role)
+		if membershipErr != nil {
+			return role, membershipErr
 		}
 
-		// Link user → group
-		_, err = pool.Exec(ctx,
-			`INSERT INTO user_groups (user_id, group_id)
-			 VALUES ($1::uuid, $2::uuid)
-			 ON CONFLICT DO NOTHING`,
-			userID, groupID)
-		if err != nil {
-			return role, err
-		}
+		role = updatedRole
 
-		// Check if this group maps to a role
-		var mappedRole string
-
-		err = pool.QueryRow(ctx,
-			`SELECT platform_role FROM group_role_mappings WHERE group_name = $1`, name).
-			Scan(&mappedRole)
-		if err == nil {
+		if mapped {
 			roleMapped = true
-
-			if mappedRole == "admin" {
-				role = "admin"
-			} else if role != "admin" {
-				role = mappedRole
-			}
 		}
 	}
 
@@ -112,14 +103,65 @@ func syncGroupsAndDeriveRole(ctx context.Context, pool db.Pool, userID string, g
 	// Without mappings, keep the existing role unchanged.
 	if roleMapped {
 		_, err = pool.Exec(ctx,
-			`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2::uuid`,
+			`UPDATE users SET role = $1, updatedAt = NOW() WHERE id = $2::uuid`,
 			role, userID)
 		if err != nil {
-			return role, err
+			return role, fmt.Errorf("persist derived role: %w", err)
 		}
 	}
 
 	return role, nil
+}
+
+// groupsSyncMembership upserts a single group, links userID to it, and
+// derives the platform role implied by that group's role mapping (if any).
+// currentRole is returned unchanged when the group has no mapping. Results
+// are (derivedRole, wasMapped, err).
+//
+//nolint:gocritic // unnamedResult: named returns are disallowed repo-wide by nonamedreturns
+func groupsSyncMembership(
+	ctx context.Context, pool db.Pool, userID, name, source, currentRole string,
+) (string, bool, error) {
+	var groupID string
+
+	err := pool.QueryRow(ctx,
+		`INSERT INTO groups (name, source, updatedAt)
+		 VALUES ($1, $2, NOW())
+		 ON CONFLICT (name) DO UPDATE SET source = $2, updatedAt = NOW()
+		 RETURNING id::text`,
+		name, source).Scan(&groupID)
+	if err != nil {
+		return currentRole, false, fmt.Errorf("upsert group %q: %w", name, err)
+	}
+
+	_, err = pool.Exec(ctx,
+		`INSERT INTO user_groups (userId, groupId)
+		 VALUES ($1::uuid, $2::uuid)
+		 ON CONFLICT DO NOTHING`,
+		userID, groupID)
+	if err != nil {
+		return currentRole, false, fmt.Errorf("link user to group %q: %w", name, err)
+	}
+
+	var mappedRole string
+
+	scanErr := pool.QueryRow(ctx,
+		`SELECT platformRole FROM group_role_mappings WHERE groupName = $1`, name).
+		Scan(&mappedRole)
+	if scanErr != nil {
+		//nolint:nilerr // no group_role_mappings row is the expected outcome for
+		// an unmapped group, not a query failure that should propagate.
+		return currentRole, false, nil
+	}
+
+	updatedRole := currentRole
+	if mappedRole == groupsRoleAdmin {
+		updatedRole = groupsRoleAdmin
+	} else if updatedRole != groupsRoleAdmin {
+		updatedRole = mappedRole
+	}
+
+	return updatedRole, true, nil
 }
 
 // ── Admin group handlers ───────────────────────────────────────────────────────
@@ -135,31 +177,33 @@ func syncGroupsAndDeriveRole(ctx context.Context, pool db.Pool, userID string, g
 // @Failure   400  {object}  map[string]string
 // @Failure   409  {object}  map[string]string
 // @Router    /api/admin/groups [post].
-func (s *State) CreateGroup(w http.ResponseWriter, r *http.Request) {
+func (s *State) CreateGroup(writer http.ResponseWriter, req *http.Request) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := decode(r, &body); err != nil || body.Name == "" {
-		s.Error(w, http.StatusBadRequest, "name required")
+
+	err := decode(req, &body)
+	if err != nil || body.Name == "" {
+		s.Error(writer, http.StatusBadRequest, "name required")
 
 		return
 	}
 
 	var groupID string
 
-	err := s.Pool.QueryRow(r.Context(),
+	err = s.Pool.QueryRow(req.Context(),
 		`INSERT INTO groups (name, source)
 		 VALUES ($1, 'local')
 		 ON CONFLICT (name) DO NOTHING
 		 RETURNING id::text`,
 		body.Name).Scan(&groupID)
 	if err != nil || groupID == "" {
-		s.Error(w, http.StatusConflict, "A group with this name already exists")
+		s.Error(writer, http.StatusConflict, "A group with this name already exists")
 
 		return
 	}
 
-	s.JSON(w, http.StatusCreated, map[string]string{"id": groupID, "message": "Group created"})
+	s.JSON(writer, http.StatusCreated, map[string]string{"id": groupID, groupsRespKeyMessage: "Group created"})
 }
 
 // DeleteGroup godoc
@@ -167,28 +211,28 @@ func (s *State) CreateGroup(w http.ResponseWriter, r *http.Request) {
 // @Tags      Admin - Groups
 // @Security  BearerAuth
 // @Produce   json
-// @Param     group_id  path  string  true  "Group UUID"
+// @Param     groupId  path  string  true  "Group UUID"
 // @Success   200  {object}  map[string]string
 // @Failure   404  {object}  map[string]string
-// @Router    /api/admin/groups/{group_id} [delete].
-func (s *State) DeleteGroup(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "group_id")
+// @Router    /api/admin/groups/{groupId} [delete].
+func (s *State) DeleteGroup(writer http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "groupId")
 
 	tag, err := s.Pool.Exec(r.Context(),
 		`DELETE FROM groups WHERE id = $1::uuid AND source = 'local'`, id)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
 	if tag.RowsAffected() == 0 {
-		s.Error(w, http.StatusNotFound, "Group not found or not a local group")
+		s.Error(writer, http.StatusNotFound, "Group not found or not a local group")
 
 		return
 	}
 
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Group deleted"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Group deleted"})
 }
 
 // ListGroups godoc
@@ -198,18 +242,18 @@ func (s *State) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/groups [get].
-func (s *State) ListGroups(w http.ResponseWriter, r *http.Request) {
+func (s *State) ListGroups(writer http.ResponseWriter, r *http.Request) {
 	rows, err := s.Pool.Query(r.Context(),
-		`SELECT g.id::text, g.name, g.source, g.created_at::text,
-		        COUNT(ug.user_id) AS member_count,
-		        COALESCE(grm.platform_role, '') AS mapped_role
+		`SELECT g.id::text, g.name, g.source, g.createdAt::text,
+		        COUNT(ug.userId) AS memberCount,
+		        COALESCE(grm.platformRole, '') AS mappedRole
 		 FROM groups g
-		 LEFT JOIN user_groups ug ON ug.group_id = g.id
-		 LEFT JOIN group_role_mappings grm ON grm.group_name = g.name
-		 GROUP BY g.id, g.name, g.source, g.created_at, grm.platform_role
+		 LEFT JOIN user_groups ug ON ug.groupId = g.id
+		 LEFT JOIN group_role_mappings grm ON grm.groupName = g.name
+		 GROUP BY g.id, g.name, g.source, g.createdAt, grm.platformRole
 		 ORDER BY g.name`)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
@@ -219,31 +263,32 @@ func (s *State) ListGroups(w http.ResponseWriter, r *http.Request) {
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Source      string `json:"source"`
-		CreatedAt   string `json:"created_at"`
-		MemberCount int64  `json:"member_count"`
-		MappedRole  string `json:"mapped_role"`
+		CreatedAt   string `json:"createdAt"`
+		MemberCount int64  `json:"memberCount"`
+		MappedRole  string `json:"mappedRole"`
 	}
 
 	var groups []groupRow
 
 	for rows.Next() {
-		var g groupRow
+		var groupItem groupRow
 
-		err := rows.Scan(&g.ID, &g.Name, &g.Source, &g.CreatedAt, &g.MemberCount, &g.MappedRole)
+		err := rows.Scan(&groupItem.ID, &groupItem.Name, &groupItem.Source, &groupItem.CreatedAt,
+			&groupItem.MemberCount, &groupItem.MappedRole)
 		if err != nil {
-			s.Error(w, http.StatusInternalServerError, "Scan error")
+			s.Error(writer, http.StatusInternalServerError, "Scan error")
 
 			return
 		}
 
-		groups = append(groups, g)
+		groups = append(groups, groupItem)
 	}
 
 	if groups == nil {
 		groups = []groupRow{}
 	}
 
-	s.JSON(w, http.StatusOK, map[string]any{"groups": groups})
+	s.JSON(writer, http.StatusOK, map[string]any{groupsRespKeyGroups: groups})
 }
 
 // ListGroupMappings godoc
@@ -253,41 +298,41 @@ func (s *State) ListGroups(w http.ResponseWriter, r *http.Request) {
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/groups/mappings [get].
-func (s *State) ListGroupMappings(w http.ResponseWriter, r *http.Request) {
+func (s *State) ListGroupMappings(writer http.ResponseWriter, r *http.Request) {
 	rows, err := s.Pool.Query(r.Context(),
-		`SELECT group_name, platform_role FROM group_role_mappings ORDER BY group_name`)
+		`SELECT groupName, platformRole FROM group_role_mappings ORDER BY groupName`)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 	defer rows.Close()
 
 	type mapping struct {
-		GroupName    string `json:"group_name"`
-		PlatformRole string `json:"platform_role"`
+		GroupName    string `json:"groupName"`
+		PlatformRole string `json:"platformRole"`
 	}
 
 	var mappings []mapping
 
 	for rows.Next() {
-		var m mapping
+		var mappingItem mapping
 
-		err := rows.Scan(&m.GroupName, &m.PlatformRole)
+		err := rows.Scan(&mappingItem.GroupName, &mappingItem.PlatformRole)
 		if err != nil {
-			s.Error(w, http.StatusInternalServerError, "Scan error")
+			s.Error(writer, http.StatusInternalServerError, "Scan error")
 
 			return
 		}
 
-		mappings = append(mappings, m)
+		mappings = append(mappings, mappingItem)
 	}
 
 	if mappings == nil {
 		mappings = []mapping{}
 	}
 
-	s.JSON(w, http.StatusOK, map[string]any{"mappings": mappings})
+	s.JSON(writer, http.StatusOK, map[string]any{"mappings": mappings})
 }
 
 // UpsertGroupMapping godoc
@@ -296,45 +341,47 @@ func (s *State) ListGroupMappings(w http.ResponseWriter, r *http.Request) {
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "group_name and platform_role"
+// @Param     body  object  true  "groupName and platformRole"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/groups/mappings [post].
-func (s *State) UpsertGroupMapping(w http.ResponseWriter, r *http.Request) {
+func (s *State) UpsertGroupMapping(writer http.ResponseWriter, req *http.Request) {
 	var body struct {
-		GroupName    string `json:"group_name"`
-		PlatformRole string `json:"platform_role"`
+		GroupName    string `json:"groupName"`
+		PlatformRole string `json:"platformRole"`
 	}
-	if err := decode(r, &body); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+
+	err := decode(req, &body)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
 
 		return
 	}
 
 	if body.GroupName == "" {
-		s.Error(w, http.StatusBadRequest, "group_name required")
+		s.Error(writer, http.StatusBadRequest, "groupName required")
 
 		return
 	}
 
-	if body.PlatformRole != "admin" && body.PlatformRole != "student" {
-		s.Error(w, http.StatusBadRequest, "platform_role must be 'admin' or 'student'")
+	if body.PlatformRole != groupsRoleAdmin && body.PlatformRole != groupsRoleStudent {
+		s.Error(writer, http.StatusBadRequest, "platformRole must be 'admin' or 'student'")
 
 		return
 	}
 
-	_, err := s.Pool.Exec(r.Context(),
-		`INSERT INTO group_role_mappings (group_name, platform_role)
+	_, err = s.Pool.Exec(req.Context(),
+		`INSERT INTO group_role_mappings (groupName, platformRole)
 		 VALUES ($1, $2)
-		 ON CONFLICT (group_name) DO UPDATE SET platform_role = $2`,
+		 ON CONFLICT (groupName) DO UPDATE SET platformRole = $2`,
 		body.GroupName, body.PlatformRole)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Mapping saved"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Mapping saved"})
 }
 
 // DeleteGroupMapping godoc
@@ -342,26 +389,26 @@ func (s *State) UpsertGroupMapping(w http.ResponseWriter, r *http.Request) {
 // @Tags      Admin - Groups
 // @Security  BearerAuth
 // @Produce   json
-// @Param     group_name  path  string  true  "Group name"
+// @Param     groupName  path  string  true  "Group name"
 // @Success   200  {object}  map[string]string
 // @Failure   404  {object}  map[string]string
-// @Router    /api/admin/groups/mappings/{group_name} [delete].
-func (s *State) DeleteGroupMapping(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "group_name")
+// @Router    /api/admin/groups/mappings/{groupName} [delete].
+func (s *State) DeleteGroupMapping(writer http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "groupName")
 
 	tag, err := s.Pool.Exec(r.Context(),
-		`DELETE FROM group_role_mappings WHERE group_name = $1`, name)
+		`DELETE FROM group_role_mappings WHERE groupName = $1`, name)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
 	if tag.RowsAffected() == 0 {
-		s.Error(w, http.StatusNotFound, "Mapping not found")
+		s.Error(writer, http.StatusNotFound, "Mapping not found")
 
 		return
 	}
 
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Mapping deleted"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Mapping deleted"})
 }

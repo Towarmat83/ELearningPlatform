@@ -5,25 +5,36 @@ import (
 	"time"
 )
 
+// labCheckRow is a single row of the admin lab-checks report, returned
+// as-is to the frontend admin dashboard.
 type labCheckRow struct {
 	ID          int64     `json:"id"`
 	Username    string    `json:"username"`
-	CourseSlug  string    `json:"course_slug"`
-	ModuleIndex int       `json:"module_index"`
-	ModuleName  string    `json:"module_name"`
+	CourseSlug  string    `json:"courseSlug"`
+	ModuleIndex int       `json:"moduleIndex"`
+	ModuleName  string    `json:"moduleName"`
 	Allow       bool      `json:"allow"`
 	Violations  []string  `json:"violations"`
-	CheckedAt   time.Time `json:"checked_at"`
+	CheckedAt   time.Time `json:"checkedAt"`
 }
 
-func (s *State) GetLabResults(w http.ResponseWriter, r *http.Request) {
+// GetLabResults godoc
+// @Summary   List recorded lab checks (admin)
+// @Tags      Admin
+// @Security  BearerAuth
+// @Produce   json
+// @Param     course  query  string  false  "Filter by course slug"
+// @Success   200  {array}  labCheckRow
+// @Failure   503  {object}  map[string]string
+// @Router    /api/admin/lab-checks [get].
+func (s *State) GetLabResults(writer http.ResponseWriter, req *http.Request) {
 	if s.DB == nil {
-		s.Error(w, http.StatusServiceUnavailable, "database not configured")
+		s.Error(writer, http.StatusServiceUnavailable, "database not configured")
 
 		return
 	}
 
-	courseSlug := r.URL.Query().Get("course")
+	courseSlug := req.URL.Query().Get("course")
 
 	var (
 		query string
@@ -31,17 +42,17 @@ func (s *State) GetLabResults(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if courseSlug != "" {
-		query = `SELECT id, username, course_slug, module_index, module_name, allow, violations, checked_at
-		          FROM lab_checks WHERE course_slug = $1 ORDER BY checked_at DESC LIMIT 500`
+		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, checkedAt
+		          FROM lab_checks WHERE courseSlug = $1 ORDER BY checkedAt DESC LIMIT 500`
 		args = []any{courseSlug}
 	} else {
-		query = `SELECT id, username, course_slug, module_index, module_name, allow, violations, checked_at
-		          FROM lab_checks ORDER BY checked_at DESC LIMIT 500`
+		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, checkedAt
+		          FROM lab_checks ORDER BY checkedAt DESC LIMIT 500`
 	}
 
-	rows, err := s.DB.Query(r.Context(), query, args...)
+	rows, err := s.DB.Query(req.Context(), query, args...)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "db query failed")
+		s.Error(writer, http.StatusInternalServerError, "db query failed")
 
 		return
 	}
@@ -61,5 +72,5 @@ func (s *State) GetLabResults(w http.ResponseWriter, r *http.Request) {
 		results = append(results, row)
 	}
 
-	s.JSON(w, http.StatusOK, results)
+	s.JSON(writer, http.StatusOK, results)
 }

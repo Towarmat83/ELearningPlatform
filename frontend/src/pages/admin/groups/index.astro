@@ -73,9 +73,9 @@ import Admin from '../../../layouts/Admin.astro';
           <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
             <div style="flex:1;min-width:0">
               <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${g.member_count} membre${g.member_count !== 1 ? 's' : ''} · ${g.source}</div>
+              <div style="font-size:.75rem;color:var(--ink-soft)">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''} · ${g.source}</div>
             </div>
-            ${g.mapped_role ? `<span class="badge ${g.mapped_role === 'admin' ? 'badge-red' : 'badge-blue'}">${g.mapped_role}</span>` : '<span class="badge badge-gray">Non mappé</span>'}
+            ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : 'badge-blue'}">${g.mappedRole}</span>` : '<span class="badge badge-gray">Non mappé</span>'}
           </div>
         `).join('');
       } catch (e: any) {
@@ -90,10 +90,10 @@ import Admin from '../../../layouts/Admin.astro';
         if (!mappings.length) { el.innerHTML = '<p class="text-soft text-sm" style="padding:16px">Aucun mapping défini.</p>'; return; }
         el.innerHTML = mappings.map((m: any) => `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
-            <code style="flex:1;font-size:.82rem;background:var(--fill);padding:3px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.group_name}</code>
+            <code style="flex:1;font-size:.82rem;background:var(--fill);padding:3px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.groupName}</code>
             <span style="color:var(--ink-soft);flex-shrink:0">→</span>
-            <span class="badge ${m.platform_role === 'admin' ? 'badge-red' : 'badge-blue'}" style="flex-shrink:0">${m.platform_role}</span>
-            <button class="btn btn-sm del-mapping-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-group="${m.group_name}">✕</button>
+            <span class="badge ${m.platformRole === 'admin' ? 'badge-red' : 'badge-blue'}" style="flex-shrink:0">${m.platformRole}</span>
+            <button class="btn btn-sm del-mapping-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-group="${m.groupName}">✕</button>
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.del-mapping-btn').forEach(btn => {
@@ -116,7 +116,7 @@ import Admin from '../../../layouts/Admin.astro';
       const role = (document.getElementById('new-group-role') as HTMLSelectElement).value;
       if (!groupName) { (window as any).showToast?.('Nom du groupe requis', 'error'); return; }
       try {
-        await api('/admin/groups/mappings', { method: 'POST', body: { group_name: groupName, platform_role: role } });
+        await api('/admin/groups/mappings', { method: 'POST', body: { groupName: groupName, platformRole: role } });
         (document.getElementById('new-group-name') as HTMLInputElement).value = '';
         loadMappings();
         loadGroups();

@@ -2,12 +2,16 @@ package content
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 )
 
+// TestK8sWatcher_CRDToCourse checks k8s watcher CRD to course.
 func TestK8sWatcher_CRDToCourse(t *testing.T) {
+	t.Parallel()
+
 	store := NewStore()
 
 	kubeconfig, err := findKubeconfig()
@@ -23,7 +27,8 @@ func TestK8sWatcher_CRDToCourse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := watcher.Start(ctx); err != nil {
+	err = watcher.Start(ctx)
+	if err != nil {
 		t.Fatalf("failed to start watcher: %v", err)
 	}
 
@@ -37,33 +42,35 @@ func TestK8sWatcher_CRDToCourse(t *testing.T) {
 	var found bool
 
 	for _, c := range courses {
-		if c.Slug == "kubernetes-basics" {
-			found = true
-
-			if c.Title != "Kubernetes Basics" {
-				t.Errorf("expected title 'Kubernetes Basics', got '%s'", c.Title)
-			}
-
-			if c.Category != "kubernetes" {
-				t.Errorf("expected category 'kubernetes', got '%s'", c.Category)
-			}
-
-			if c.Difficulty != "beginner" {
-				t.Errorf("expected difficulty 'beginner', got '%s'", c.Difficulty)
-			}
-
-			if !c.IsPublic {
-				t.Error("expected course to be published (hidden=false)")
-			}
-
-			if len(c.Modules) == 0 {
-				t.Error("expected at least one module")
-			} else if c.Modules[0].Name != "What is Kubernetes" {
-				t.Errorf("expected first module name 'What is Kubernetes', got '%s'", c.Modules[0].Name)
-			}
-
-			break
+		if c.Slug != "kubernetes-basics" {
+			continue
 		}
+
+		found = true
+
+		if c.Title != "Kubernetes Basics" {
+			t.Errorf("expected title 'Kubernetes Basics', got '%s'", c.Title)
+		}
+
+		if c.Category != "kubernetes" {
+			t.Errorf("expected category 'kubernetes', got '%s'", c.Category)
+		}
+
+		if c.Difficulty != "beginner" {
+			t.Errorf("expected difficulty 'beginner', got '%s'", c.Difficulty)
+		}
+
+		if !c.IsPublic {
+			t.Error("expected course to be published (hidden=false)")
+		}
+
+		if len(c.Modules) == 0 {
+			t.Error("expected at least one module")
+		} else if c.Modules[0].Name != "What is Kubernetes" {
+			t.Errorf("expected first module name 'What is Kubernetes', got '%s'", c.Modules[0].Name)
+		}
+
+		break
 	}
 
 	if !found {
@@ -71,7 +78,10 @@ func TestK8sWatcher_CRDToCourse(t *testing.T) {
 	}
 }
 
+// TestK8sWatcher_UpsertDelete checks k8s watcher upsert delete.
 func TestK8sWatcher_UpsertDelete(t *testing.T) {
+	t.Parallel()
+
 	store := NewStore()
 
 	kubeconfig, err := findKubeconfig()
@@ -87,7 +97,8 @@ func TestK8sWatcher_UpsertDelete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	if err := watcher.Start(ctx); err != nil {
+	err = watcher.Start(ctx)
+	if err != nil {
 		t.Fatalf("failed to start watcher: %v", err)
 	}
 
@@ -115,7 +126,10 @@ func TestK8sWatcher_UpsertDelete(t *testing.T) {
 	}
 }
 
+// TestStore_Operations checks store operations.
 func TestStore_Operations(t *testing.T) {
+	t.Parallel()
+
 	store := NewStore()
 
 	store.Put(&Course{
@@ -157,7 +171,10 @@ func TestStore_Operations(t *testing.T) {
 	}
 }
 
+// TestCRDToCourse checks CRD to course.
 func TestCRDToCourse(t *testing.T) {
+	t.Parallel()
+
 	store := NewStore()
 
 	kubeconfig, err := findKubeconfig()
@@ -180,14 +197,18 @@ func TestCRDToCourse(t *testing.T) {
 	}
 }
 
+// findKubeconfig locates a kubeconfig usable for the integration tests.
 func findKubeconfig() (string, error) {
 	return getKindKubeconfig()
 }
 
+// getKindKubeconfig returns the path to the local kind cluster kubeconfig.
 func getKindKubeconfig() (string, error) {
 	path := "/home/paulm/Projects/elearning/.opencode/ELearningPlatform/api-go/kind-kubeconfig.yaml"
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return "", err
+
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf("stat kubeconfig %s: %w", path, err)
 	}
 
 	return path, nil

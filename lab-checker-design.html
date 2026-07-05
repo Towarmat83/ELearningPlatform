@@ -201,7 +201,7 @@ actually performed a hands-on lab against a real backend (GitLab, Harbor, Nexus,
 feedback rather than a bare pass/fail.</p>
         <div class="hero-rule"></div>
       </header>
-      
+
 <hr />
 <h2 id="1-core-insight-the-check-is-the-quiz">1. Core insight: the check <em>is</em> the quiz</h2>
 <p>The platform already contains the entire machine. A quiz module:</p>
@@ -473,7 +473,7 @@ under us — it only changes on a deliberate upgrade.</p>
 <tr>
 <td>Open a merge request</td>
 <td><code>gitlab_project_merge_requests</code></td>
-<td>list; server-side <code>target_branch</code>, <code>source_branch</code>, <code>state</code>, <code>author_username</code> filters</td>
+<td>list; server-side <code>target_branch</code>, <code>sourceBranch</code>, <code>state</code>, <code>author_username</code> filters</td>
 </tr>
 <tr>
 <td>Push a commit / branch</td>
@@ -505,10 +505,10 @@ under us — it only changes on a deliberate upgrade.</p>
 <p><code>gitlab_project_merge_requests</code> schema (abridged, real):</p>
 <ul>
 <li><strong>Required:</strong> <code>project</code> (ID or path) — <em>the injected scope arg</em>.</li>
-<li><strong>Optional filters (server-side):</strong> <code>target_branch</code>, <code>source_branch</code>,
+<li><strong>Optional filters (server-side):</strong> <code>target_branch</code>, <code>sourceBranch</code>,
   <code>state</code>, <code>author_username</code>, <code>author_id</code>, <code>wip</code>, <code>search</code>, <code>scope</code>, …</li>
-<li><strong>Per-MR (read-only):</strong> <code>iid</code>, <code>created_at</code>, <code>author{ username, id, … }</code>,
-  <code>assignee</code>, <code>target_branch</code>, <code>source_branch</code>, <code>state</code>, <code>title</code>, … and more.</li>
+<li><strong>Per-MR (read-only):</strong> <code>iid</code>, <code>createdAt</code>, <code>author{ username, id, … }</code>,
+  <code>assignee</code>, <code>target_branch</code>, <code>sourceBranch</code>, <code>state</code>, <code>title</code>, … and more.</li>
 </ul>
 <p>This is list-then-filter shaped — exactly right for "did the learner create <em>an</em>
 MR matching X". <code>author_username</code> being a <strong>server-side</strong> filter is what lets us
@@ -524,7 +524,7 @@ cannot use a typed GitLab data source.</p>
   <code>request_body</code>;</li>
 <li>returns <code>response_body</code> (string), <code>response_headers</code>, <code>status_code</code>.</li>
 </ul>
-<p>So "create a PAT" → <code>GET {gitlab}/api/v4/personal_access_tokens?user_id=…</code>,
+<p>So "create a PAT" → <code>GET {gitlab}/api/v4/personal_access_tokens?userId=…</code>,
 parse <code>response_body</code> in the policy with <code>json.unmarshal</code>.</p>
 <p>Two conditions on the http fallback:</p>
 <ol>
@@ -682,7 +682,7 @@ check is a normal PR alongside the content it verifies.</p>
       &quot;id&quot;: &quot;mr-targets-main&quot;,
       &quot;passed&quot;: true,
       &quot;message&quot;: &quot;Merge request targeting `main` found.&quot;,
-      &quot;evidence&quot;: { &quot;iid&quot;: 1, &quot;source_branch&quot;: &quot;feature/login&quot; }
+      &quot;evidence&quot;: { &quot;iid&quot;: 1, &quot;sourceBranch&quot;: &quot;feature/login&quot; }
     },
     {
       &quot;id&quot;: &quot;mr-has-approval&quot;,
@@ -751,7 +751,7 @@ cannot pass by pointing at learner A's MR.</p>
 
 # input.objects.pats = parsed response_body (array of PAT objects)
 own_active_pat(p) {
-    p.user_id == input.learner.id        # or filter the API call by user_id
+    p.userId == input.learner.id        # or filter the API call by userId
     p.active == true
     p.revoked == false
 }

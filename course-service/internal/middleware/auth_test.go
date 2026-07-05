@@ -6,9 +6,14 @@ import (
 	"testing"
 )
 
+// testSecret is the JWT signing secret used across this file's tests.
 const testSecret = "test-jwt-secret-key"
 
+// TestCreateToken verifies that CreateToken returns a non-empty token
+// without error.
 func TestCreateToken(t *testing.T) {
+	t.Parallel()
+
 	token, err := CreateToken("user-123", "test@example.com", "student", testSecret, 24)
 	if err != nil {
 		t.Fatalf("CreateToken failed: %v", err)
@@ -19,8 +24,12 @@ func TestCreateToken(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_Valid verifies that VerifyToken returns claims matching
+// what was passed to CreateToken.
 func TestVerifyToken_Valid(t *testing.T) {
-	token, err := CreateToken("user-abc", "foo@bar.com", "admin", testSecret, 24)
+	t.Parallel()
+
+	token, err := CreateToken("user-abc", "foo@bar.com", roleAdmin, testSecret, 24)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,12 +47,16 @@ func TestVerifyToken_Valid(t *testing.T) {
 		t.Errorf("expected email=foo@bar.com, got %q", claims.Email)
 	}
 
-	if claims.Role != "admin" {
+	if claims.Role != roleAdmin {
 		t.Errorf("expected role=admin, got %q", claims.Role)
 	}
 }
 
+// TestVerifyToken_WrongSecret verifies that VerifyToken rejects a token
+// signed with a different secret.
 func TestVerifyToken_WrongSecret(t *testing.T) {
+	t.Parallel()
+
 	token, err := CreateToken("u1", "a@b.com", "student", testSecret, 24)
 	if err != nil {
 		t.Fatal(err)
@@ -55,22 +68,34 @@ func TestVerifyToken_WrongSecret(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_Malformed verifies that VerifyToken rejects a malformed
+// token string.
 func TestVerifyToken_Malformed(t *testing.T) {
+	t.Parallel()
+
 	_, err := VerifyToken("not.a.token", testSecret)
 	if err == nil {
 		t.Error("expected error for malformed token")
 	}
 }
 
+// TestVerifyToken_Empty verifies that VerifyToken rejects an empty token
+// string.
 func TestVerifyToken_Empty(t *testing.T) {
+	t.Parallel()
+
 	_, err := VerifyToken("", testSecret)
 	if err == nil {
 		t.Error("expected error for empty token")
 	}
 }
 
+// TestGetClaims_WithContext verifies that GetClaims returns nil when the
+// request context has no claims set.
 func TestGetClaims_WithContext(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	t.Parallel()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	claims := GetClaims(req)
 	if claims != nil {
@@ -78,12 +103,16 @@ func TestGetClaims_WithContext(t *testing.T) {
 	}
 }
 
+// TestAuthMiddleware_NoHeader verifies that Auth rejects requests without an
+// Authorization header.
 func TestAuthMiddleware_NoHeader(t *testing.T) {
+	t.Parallel()
+
 	handler := Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -92,12 +121,16 @@ func TestAuthMiddleware_NoHeader(t *testing.T) {
 	}
 }
 
+// TestAuthMiddleware_InvalidToken verifies that Auth rejects requests
+// bearing an invalid token.
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
+	t.Parallel()
+
 	handler := Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 
 	rr := httptest.NewRecorder()
@@ -108,7 +141,11 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	}
 }
 
+// TestAuthMiddleware_ValidToken verifies that Auth accepts a valid token and
+// stores its claims in the request context passed to the next handler.
 func TestAuthMiddleware_ValidToken(t *testing.T) {
+	t.Parallel()
+
 	token, _ := CreateToken("user-1", "a@b.com", "student", testSecret, 24)
 
 	var gotClaims *Claims
@@ -119,7 +156,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -136,14 +173,18 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	}
 }
 
+// TestAdminMiddleware_StudentRole verifies that Admin rejects a valid token
+// belonging to a non-admin role.
 func TestAdminMiddleware_StudentRole(t *testing.T) {
+	t.Parallel()
+
 	token, _ := CreateToken("user-2", "a@b.com", "student", testSecret, 24)
 
 	handler := Admin(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -154,14 +195,18 @@ func TestAdminMiddleware_StudentRole(t *testing.T) {
 	}
 }
 
+// TestAdminMiddleware_AdminRole verifies that Admin accepts a valid token
+// belonging to the admin role.
 func TestAdminMiddleware_AdminRole(t *testing.T) {
-	token, _ := CreateToken("user-3", "admin@b.com", "admin", testSecret, 24)
+	t.Parallel()
+
+	token, _ := CreateToken("user-3", "admin@b.com", roleAdmin, testSecret, 24)
 
 	handler := Admin(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -172,12 +217,16 @@ func TestAdminMiddleware_AdminRole(t *testing.T) {
 	}
 }
 
+// TestAdminMiddleware_NoHeader verifies that Admin rejects requests without
+// an Authorization header.
 func TestAdminMiddleware_NoHeader(t *testing.T) {
+	t.Parallel()
+
 	handler := Admin(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

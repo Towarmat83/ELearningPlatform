@@ -4,25 +4,27 @@ import (
 	"net/http"
 )
 
+// viewedLessons returns the set of lesson slugs the user has completed in a
+// course, keyed by lesson slug with value true.
 func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[string]bool {
 	rows, err := s.Pool.Query(r.Context(),
-		`SELECT lesson_slug FROM lesson_progress WHERE user_id = $1::uuid AND course_slug = $2`,
+		`SELECT lessonSlug FROM lesson_progress WHERE userId = $1::uuid AND courseSlug = $2`,
 		userID, courseSlug)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
 
-	m := make(map[string]bool)
+	lessonsViewed := make(map[string]bool)
 
 	for rows.Next() {
 		var slug string
 		if rows.Scan(&slug) == nil {
-			m[slug] = true
+			lessonsViewed[slug] = true
 		}
 	}
 
-	return m
+	return lessonsViewed
 }
 
 // MarkLessonComplete godoc
@@ -31,24 +33,24 @@ func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[str
 // @Security  BearerAuth
 // @Produce   json
 // @Param     slug         path  string  true  "Course slug"
-// @Param     lesson_slug  path  string  true  "Lesson slug"
+// @Param     lessonSlug  path  string  true  "Lesson slug"
 // @Success   200   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post].
-func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
+// @Router    /api/courses/{slug}/lessons/{lessonSlug}/complete [post].
+func (s *State) MarkLessonComplete(writer http.ResponseWriter, r *http.Request) {
 	courseSlug := param(r, "slug")
-	lessonSlug := param(r, "lesson_slug")
+	lessonSlug := param(r, "lessonSlug")
 	claims := s.claims(r)
 
 	_, err := s.Pool.Exec(r.Context(), `
-		INSERT INTO lesson_progress (user_id, course_slug, lesson_slug)
+		INSERT INTO lesson_progress (userId, courseSlug, lessonSlug)
 		VALUES ($1::uuid, $2, $3)
-		ON CONFLICT (user_id, course_slug, lesson_slug) DO NOTHING`,
+		ON CONFLICT (userId, courseSlug, lessonSlug) DO NOTHING`,
 		claims.Subject, courseSlug, lessonSlug)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})
+	s.JSON(writer, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})
 }

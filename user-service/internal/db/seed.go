@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -22,6 +23,9 @@ const (
 	defaultAdminHash = "$2y$12$U6BVYjCKzHaIu2VrJNHDhuBUNTiOrcP0xoovwKbGSvOMd29qwZz.y"
 	// bcryptCost is the work factor used when hashing a cleartext password.
 	bcryptCost = 12
+	// adminPasswordPollInterval is how often WatchAdminPassword rereads the
+	// admin password file for changes.
+	adminPasswordPollInterval = 30 * time.Second
 )
 
 // WatchAdminPassword polls filePath every 30 s and calls SeedAdmin whenever
@@ -30,13 +34,13 @@ const (
 // when the Secret is updated, so no pod restart is needed to rotate the
 // admin password.
 //
-// The goroutine exits cleanly when ctx is cancelled (i.e. on graceful shutdown).
+// The goroutine exits cleanly when ctx is cancelled (graceful shutdown).
 func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(adminPasswordPollInterval)
 	defer ticker.Stop()
 
 	// Capture the current file content so we only act on real changes.
-	last, _ := os.ReadFile(filePath)
+	last, _ := os.ReadFile(filePath) //nolint:gosec // path is operator-controlled via ADMIN_PASSWORD_FILE, not user input
 
 	slog.Info("admin password watcher started", "file", filePath)
 
@@ -47,7 +51,7 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 
 			return
 		case <-ticker.C:
-			current, err := os.ReadFile(filePath)
+			current, err := os.ReadFile(filePath) //nolint:gosec // path is operator-controlled via ADMIN_PASSWORD_FILE, not user input
 			if err != nil {
 				slog.Warn("admin password file unreadable", "path", filePath, "err", err)
 
@@ -63,7 +67,8 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 
 			slog.Info("admin password file changed — re-seeding admin account")
 
-			if err := SeedAdmin(ctx, pool, password); err != nil {
+			err = SeedAdmin(ctx, pool, password)
+			if err != nil {
 				slog.Error("re-seed admin failed", "err", err)
 			} else {
 				slog.Info("admin password updated successfully (no restart required)")
@@ -105,7 +110,7 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 		// Cleartext password — hash it now.
 		h, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcryptCost)
 		if err != nil {
-			return err
+			return fmt.Errorf("hash admin password: %w", err)
 		}
 
 		hash = string(h)
@@ -129,8 +134,11 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 			VALUES ($1, $2, $3, 'admin')
 			ON CONFLICT DO NOTHING`,
 			defaultAdminUsername, defaultAdminEmail, hash)
+		if err != nil {
+			return fmt.Errorf("insert default admin: %w", err)
+		}
 
-		return err
+		return nil
 	}
 
 	// Custom password: upsert so the hash is refreshed on every restart.
@@ -141,8 +149,11 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 		VALUES ($1, $2, $3, 'admin')
 		ON CONFLICT (email) DO UPDATE SET
 			password_hash = EXCLUDED.password_hash,
-			updated_at    = NOW()`,
+			updatedAt    = NOW()`,
 		defaultAdminUsername, defaultAdminEmail, hash)
+	if err != nil {
+		return fmt.Errorf("upsert admin password: %w", err)
+	}
 
-	return err
+	return nil
 }

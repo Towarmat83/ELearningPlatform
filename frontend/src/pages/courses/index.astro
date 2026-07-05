@@ -295,8 +295,8 @@ import App from '../../layouts/App.astro';
     // ── Render continue hero ───────────────────────────────────────────
     function renderContinueHero(course: any): string {
       const thumb = course.thumbnail ? `<img src="${course.thumbnail}" alt="${course.title}" />` : '📖';
-      const labsDone = course.completed_labs ?? 0;
-      const labsTotal = course.lab_count ?? 0;
+      const labsDone = course.completedLabs ?? 0;
+      const labsTotal = course.labCount ?? 0;
       const pct = labsTotal > 0 ? Math.round(labsDone / labsTotal * 100) : 0;
       return `
         <div class="continue-hero" onclick="goToCourse('${course.id}')">
@@ -423,7 +423,7 @@ import App from '../../layouts/App.astro';
         // Continue hero: in-progress first, then most recent enrolled
         const heroContainer = document.getElementById('continue-hero')!;
         const inProgress = enrolledCourses.filter((c: any) => {
-          const p = c.lab_count > 0 ? c.completed_labs / c.lab_count : 0;
+          const p = c.labCount > 0 ? c.completedLabs / c.labCount : 0;
           return p > 0 && p < 1;
         });
         const heroTarget = inProgress[0] ?? enrolledCourses[0] ?? null;

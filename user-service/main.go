@@ -1,7 +1,10 @@
+// Package main is the entry point for user-service, the authentication,
+// profile, enrollment, lesson-progress, and platform-settings HTTP API.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,17 +17,50 @@ import (
 	"github.com/elearning/user-service/internal/db"
 	"github.com/elearning/user-service/internal/handlers"
 	"github.com/elearning/user-service/migrations"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	// readTimeout bounds how long the server waits to read an entire request.
+	readTimeout = 30 * time.Second
+	// writeTimeout bounds how long the server waits to write a response.
+	writeTimeout = 60 * time.Second
+	// idleTimeout bounds how long the server keeps idle keep-alive connections.
+	idleTimeout = 120 * time.Second
+	// shutdownTimeout bounds how long graceful shutdown waits for requests.
+	shutdownTimeout = 15 * time.Second
+	// seedMockDataValue is the SEED_MOCK_DATA env var value that enables
+	// seeding mock users and enrollments (dev/demo only).
+	seedMockDataValue = "true"
+)
+
+// main is the entry point: it delegates to run and, on failure, logs the
+// error and exits with a non-zero status.
+//
 // @title          User Service API
 // @version        1.0.0
-// @description    User Service — auth, profiles, enrollments, lesson progress, platform settings, and admin user management. Internal API endpoints for the Course Service are under `/internal/`.
+// @description    User Service — auth, profiles, enrollments, lesson
+// @description    progress, platform settings, and admin user management.
+// @description    Internal API endpoints for the Course Service are under
+// @description    `/internal/`.
 // @host           localhost:8081
 // @BasePath       /
 // @securityDefinitions.apikey BearerAuth
 // @in             header
 // @name           Authorization.
 func main() {
+	err := run()
+	if err != nil {
+		slog.Error("fatal startup error", "err", err)
+		os.Exit(1)
+	}
+}
+
+// run wires up the database, background watchers, and HTTP server, then
+// blocks until a shutdown signal is received. Keeping this logic separate
+// from main lets deferred cleanup (e.g. closing the database pool) run to
+// completion instead of being skipped by a direct [os.Exit] call.
+func run() error {
 	cfg := config.Load()
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -33,42 +69,17 @@ func main() {
 
 	ctx := context.Background()
 
-	// Database
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("failed to connect to database", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("connect to database: %w", err)
 	}
 	defer pool.Close()
 
 	slog.Info("database connected")
 
-	// Migrations
-	if err := db.RunMigrations(ctx, pool, migrations.FS); err != nil {
-		slog.Error("failed to run migrations", "err", err)
-		os.Exit(1)
-	}
-
-	slog.Info("migrations applied")
-
-	// Seed default admin (idempotent — safe to run on every startup).
-	if err := db.SeedAdmin(ctx, pool, cfg.AdminPassword); err != nil {
-		slog.Error("failed to seed admin user", "err", err)
-		os.Exit(1)
-	}
-
-	// Bootstrap OIDC settings from deploy-time config (no-op unless OIDC_ENABLED).
-	if err := db.SeedOIDC(ctx, pool, cfg); err != nil {
-		slog.Error("failed to seed OIDC settings", "err", err)
-		os.Exit(1)
-	}
-
-	// Seed mock users and enrollments (dev/demo only).
-	if os.Getenv("SEED_MOCK_DATA") == "true" {
-		err := db.SeedMockData(ctx, pool)
-		if err != nil {
-			slog.Error("failed to seed mock data", "err", err)
-		}
+	err = seedDatabase(ctx, pool, cfg)
+	if err != nil {
+		return err
 	}
 
 	// Watch the admin password file for live rotation (no pod restart needed).
@@ -80,63 +91,131 @@ func main() {
 		go db.WatchAdminPassword(watchCtx, pool, cfg.AdminPasswordFile)
 	}
 
-	// MarkdownPattern CRD watcher — syncs CRDs into the markdown_patterns table.
-	// Disabled when K8S_NAMESPACE is empty (local dev without cluster).
-	if cfg.K8sNamespace != "" {
-		watchCtxPat, watchCancelPat := context.WithCancel(ctx)
-		defer watchCancelPat()
+	// MarkdownPattern CRD watcher — syncs CRDs into the markdown_patterns
+	// table. Disabled when K8sNamespace is empty (local dev without cluster).
+	defer startPatternWatcher(ctx, cfg, pool)()
 
-		pw, err := handlers.NewPatternWatcher(db.NewAdapter(pool), cfg.Kubeconfig, cfg.K8sNamespace)
-		if err != nil {
-			slog.Warn("pattern CRD watcher disabled", "reason", err)
-		} else {
-			err := pw.Start(watchCtxPat)
-			if err != nil {
-				slog.Warn("pattern CRD watcher failed to start", "err", err)
-			} else {
-				slog.Info("pattern CRD watcher started", "namespace", cfg.K8sNamespace)
-			}
-		}
-	}
-
-	s := &handlers.State{
+	state := &handlers.State{
 		Pool:   db.NewAdapter(pool),
 		Config: cfg,
 	}
 
-	r := handlers.BuildRouter(s, cfg, db.NewAdapter(pool), true)
+	r := handlers.BuildRouter(state, cfg, db.NewAdapter(pool), true)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
 	}
 
+	return serve(srv)
+}
+
+// seedDatabase runs migrations and seeds the default admin user, OIDC
+// settings, and (if enabled) mock demo data.
+func seedDatabase(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
+	err := db.RunMigrations(ctx, pool, migrations.FS)
+	if err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	slog.Info("migrations applied")
+
+	// Seed default admin (idempotent — safe to run on every startup).
+	err = db.SeedAdmin(ctx, pool, cfg.AdminPassword)
+	if err != nil {
+		return fmt.Errorf("seed admin user: %w", err)
+	}
+
+	// Bootstrap OIDC settings from deploy-time config (no-op unless OIDC_ENABLED).
+	err = db.SeedOIDC(ctx, pool, cfg)
+	if err != nil {
+		return fmt.Errorf("seed OIDC settings: %w", err)
+	}
+
+	// Seed mock users and enrollments (dev/demo only).
+	if os.Getenv("SEED_MOCK_DATA") == seedMockDataValue {
+		err := db.SeedMockData(ctx, pool)
+		if err != nil {
+			slog.Error("failed to seed mock data", "err", err)
+		}
+	}
+
+	return nil
+}
+
+// startPatternWatcher starts the MarkdownPattern CRD watcher when
+// cfg.K8sNamespace is configured. It returns a cancel function that the
+// caller must defer to stop the watcher on shutdown; when the watcher is
+// disabled or fails to start, the returned function is still safe to call.
+func startPatternWatcher(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool) context.CancelFunc {
+	if cfg.K8sNamespace == "" {
+		return func() {}
+	}
+
+	watchCtx, cancel := context.WithCancel(ctx)
+
+	patternWatcher, err := handlers.NewPatternWatcher(db.NewAdapter(pool), cfg.Kubeconfig, cfg.K8sNamespace)
+	if err != nil {
+		slog.Warn("pattern CRD watcher disabled", "reason", err)
+
+		return cancel
+	}
+
+	err = patternWatcher.Start(watchCtx)
+	if err != nil {
+		slog.Warn("pattern CRD watcher failed to start", "err", err)
+
+		return cancel
+	}
+
+	slog.Info("pattern CRD watcher started", "namespace", cfg.K8sNamespace)
+
+	return cancel
+}
+
+// serve starts srv in the background, blocks until an interrupt/terminate
+// signal is received or the server exits unexpectedly, then gracefully
+// shuts srv down.
+func serve(srv *http.Server) error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	serveErr := make(chan error, 1)
+
 	go func() {
-		slog.Info("API listening", "addr", addr)
+		slog.Info("API listening", "addr", srv.Addr)
 
 		err := srv.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
-			os.Exit(1)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- fmt.Errorf("server error: %w", err)
+
+			return
 		}
+
+		serveErr <- nil
 	}()
 
-	<-quit
+	select {
+	case err := <-serveErr:
+		return err
+	case <-quit:
+	}
+
 	slog.Info("shutting down...")
 
-	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	if err := srv.Shutdown(shutCtx); err != nil {
-		slog.Error("forced shutdown", "err", err)
+	err := srv.Shutdown(shutCtx)
+	if err != nil {
+		return fmt.Errorf("forced shutdown: %w", err)
 	}
 
 	slog.Info("server stopped")
+
+	return nil
 }

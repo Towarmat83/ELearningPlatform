@@ -7,17 +7,32 @@ import (
 	"github.com/elearning/user-service/internal/db"
 )
 
+// Platform setting keys read from more than one file; pulled out to satisfy
+// goconst.
+const (
+	settingKeyRegistrationEnabled      = "registration_enabled"
+	settingKeySSOLocalLoginEnabled     = "sso_local_login_enabled"
+	settingKeyPasswordMinLength        = "password_min_length"
+	settingKeyPasswordRequireUppercase = "password_require_uppercase"
+	settingKeyPasswordRequireNumber    = "password_require_number"
+	settingKeyOIDCEnabled              = "oidc_enabled"
+	settingKeyLDAPEnabled              = "ldap_enabled"
+)
+
+// allowedSettingKeys is the set of platform setting keys clients may write.
+//
+//nolint:gochecknoglobals // static allow-list of settings keys, read-only
 var allowedSettingKeys = map[string]bool{
-	"gitlab_url":                    true,
-	"registration_enabled":          true,
-	"registration_email_whitelist":  true,
-	"password_min_length":           true,
-	"password_require_uppercase":    true,
-	"password_require_number":       true,
-	"profile_allow_username_change": true,
-	"sso_local_login_enabled":       true,
+	"gitlab_url":                       true,
+	settingKeyRegistrationEnabled:      true,
+	"registration_email_whitelist":     true,
+	settingKeyPasswordMinLength:        true,
+	settingKeyPasswordRequireUppercase: true,
+	settingKeyPasswordRequireNumber:    true,
+	"profile_allow_username_change":    true,
+	settingKeySSOLocalLoginEnabled:     true,
 	// OIDC
-	"oidc_enabled":              true,
+	settingKeyOIDCEnabled:       true,
 	"oidc_provider_url":         true,
 	"oidc_issuer_url":           true,
 	"oidc_redirect_base":        true,
@@ -28,16 +43,18 @@ var allowedSettingKeys = map[string]bool{
 	"oidc_group_claim":          true,
 	"oidc_insecure_skip_verify": true,
 	// LDAP
-	"ldap_enabled":       true,
-	"ldap_server_url":    true,
-	"ldap_bind_dn":       true,
-	"ldap_bind_password": true,
-	"ldap_user_base_dn":  true,
-	"ldap_user_filter":   true,
-	"ldap_group_base_dn": true,
-	"ldap_group_filter":  true,
+	settingKeyLDAPEnabled: true,
+	"ldap_server_url":     true,
+	"ldap_bind_dn":        true,
+	"ldap_bind_password":  true,
+	"ldap_user_base_dn":   true,
+	"ldap_user_filter":    true,
+	"ldap_group_base_dn":  true,
+	"ldap_group_filter":   true,
 }
 
+// ReadSetting reads a platform setting value by key, returning fallback when
+// the key is unset or the query fails.
 func ReadSetting(ctx context.Context, pool db.Pool, key, fallback string) string {
 	var val string
 
@@ -55,19 +72,19 @@ func ReadSetting(ctx context.Context, pool db.Pool, key, fallback string) string
 // @Produce  json
 // @Success  200  {object}  map[string]string
 // @Router   /api/settings/public [get].
-func (s *State) PublicSettings(w http.ResponseWriter, r *http.Request) {
+func (s *State) PublicSettings(writer http.ResponseWriter, request *http.Request) {
 	keys := []string{
-		"registration_enabled", "sso_local_login_enabled",
-		"password_min_length", "password_require_uppercase", "password_require_number",
-		"oidc_enabled", "ldap_enabled",
+		settingKeyRegistrationEnabled, settingKeySSOLocalLoginEnabled,
+		settingKeyPasswordMinLength, settingKeyPasswordRequireUppercase, settingKeyPasswordRequireNumber,
+		settingKeyOIDCEnabled, settingKeyLDAPEnabled,
 	}
 
 	out := make(map[string]string, len(keys))
-	for _, k := range keys {
-		out[k] = ReadSetting(r.Context(), s.Pool, k, "")
+	for _, key := range keys {
+		out[key] = ReadSetting(request.Context(), s.Pool, key, "")
 	}
 
-	s.JSON(w, http.StatusOK, out)
+	s.JSON(writer, http.StatusOK, out)
 }
 
 // GetSettings godoc
@@ -77,11 +94,11 @@ func (s *State) PublicSettings(w http.ResponseWriter, r *http.Request) {
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/settings [get].
-func (s *State) GetSettings(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.Pool.Query(r.Context(),
+func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
+	rows, err := s.Pool.Query(request.Context(),
 		"SELECT key, value, description FROM platform_settings ORDER BY key")
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
@@ -96,19 +113,19 @@ func (s *State) GetSettings(w http.ResponseWriter, r *http.Request) {
 	var settings []setting
 
 	for rows.Next() {
-		var se setting
+		var current setting
 
-		err := rows.Scan(&se.Key, &se.Value, &se.Description)
+		err := rows.Scan(&current.Key, &current.Value, &current.Description)
 		if err != nil {
-			s.Error(w, http.StatusInternalServerError, "Scan error")
+			s.Error(writer, http.StatusInternalServerError, "Scan error")
 
 			return
 		}
 
-		settings = append(settings, se)
+		settings = append(settings, current)
 	}
 
-	s.JSON(w, http.StatusOK, map[string]any{"settings": settings})
+	s.JSON(writer, http.StatusOK, map[string]any{"settings": settings})
 }
 
 // UpdateSettings godoc
@@ -121,47 +138,47 @@ func (s *State) GetSettings(w http.ResponseWriter, r *http.Request) {
 // @Success   200   {object}  map[string]interface{}
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/settings [put].
-func (s *State) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+func (s *State) UpdateSettings(writer http.ResponseWriter, request *http.Request) {
 	var body map[string]any
 
-	err := decode(r, &body)
+	err := decode(request, &body)
 	if err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
 
 		return
 	}
 
 	if len(body) == 0 {
-		s.Error(w, http.StatusBadRequest, "No settings provided")
+		s.Error(writer, http.StatusBadRequest, "No settings provided")
 
 		return
 	}
 
-	for k, v := range body {
-		if !allowedSettingKeys[k] {
-			s.Error(w, http.StatusBadRequest, "Unknown setting key: '"+k+"'")
+	for key, value := range body {
+		if !allowedSettingKeys[key] {
+			s.Error(writer, http.StatusBadRequest, "Unknown setting key: '"+key+"'")
 
 			return
 		}
 
-		val, ok := v.(string)
+		val, ok := value.(string)
 		if !ok {
-			s.Error(w, http.StatusBadRequest, "Setting '"+k+"' must be a string")
+			s.Error(writer, http.StatusBadRequest, "Setting '"+key+"' must be a string")
 
 			return
 		}
 
-		_, err := s.Pool.Exec(r.Context(),
-			`INSERT INTO platform_settings (key, value, updated_at)
+		_, err := s.Pool.Exec(request.Context(),
+			`INSERT INTO platform_settings (key, value, updatedAt)
 			 VALUES ($1, $2, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-			k, val)
+			 ON CONFLICT (key) DO UPDATE SET value = $2, updatedAt = NOW()`,
+			key, val)
 		if err != nil {
-			s.Error(w, http.StatusInternalServerError, "Database error")
+			s.Error(writer, http.StatusInternalServerError, "Database error")
 
 			return
 		}
 	}
 
-	s.GetSettings(w, r)
+	s.GetSettings(writer, request)
 }

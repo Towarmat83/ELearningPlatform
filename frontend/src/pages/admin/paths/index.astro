@@ -96,19 +96,19 @@ import Admin from '../../../layouts/Admin.astro';
         const statusIcon: Record<string, string> = { completed: '✓', available: '▶', locked: '🔒' };
 
         tbody.innerHTML = users.map((u: any) => {
-          const pct = u.total_courses > 0 ? Math.round(u.completed_courses / u.total_courses * 100) : 0;
+          const pct = u.totalCourses > 0 ? Math.round(u.completedCourses / u.totalCourses * 100) : 0;
           const courses = (u.courses ?? []).map((c: any) =>
             `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:600;${statusColor[c.status]}">${statusIcon[c.status]} ${c.slug}</span>`
           ).join(' ');
-          const bar = u.total_courses > 0 ? `
+          const bar = u.totalCourses > 0 ? `
             <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
               <div style="flex:1;height:4px;background:var(--line);border-radius:4px;overflow:hidden">
                 <div style="width:${pct}%;height:100%;background:${pct===100?'var(--good)':'var(--blue)'};border-radius:4px"></div>
               </div>
-              <span style="font-size:.72rem;color:var(--ink-soft);white-space:nowrap">${u.completed_courses}/${u.total_courses}</span>
+              <span style="font-size:.72rem;color:var(--ink-soft);white-space:nowrap">${u.completedCourses}/${u.totalCourses}</span>
             </div>` : '';
           return `
-          <tr style="border-bottom:1px solid var(--line)" data-uid="${u.user_id}">
+          <tr style="border-bottom:1px solid var(--line)" data-uid="${u.userId}">
             <td style="padding:12px 16px">
               <div style="display:flex;align-items:center;gap:10px">
                 <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:var(--blue);flex-shrink:0">${(u.email||'?')[0].toUpperCase()}</div>
@@ -122,9 +122,9 @@ import Admin from '../../../layouts/Admin.astro';
               <div style="display:flex;flex-wrap:wrap;gap:4px">${courses}</div>
               ${bar}
             </td>
-            <td style="padding:12px 16px;color:var(--ink-soft);font-size:.78rem;white-space:nowrap">${new Date(u.enrolled_at).toLocaleDateString('fr-FR')}</td>
+            <td style="padding:12px 16px;color:var(--ink-soft);font-size:.78rem;white-space:nowrap">${new Date(u.enrolledAt).toLocaleDateString('fr-FR')}</td>
             <td style="padding:12px 16px;text-align:right">
-              <button class="btn btn-sm unenroll-btn" style="background:var(--bad-soft);color:var(--bad)" data-uid="${u.user_id}">Désinscrire</button>
+              <button class="btn btn-sm unenroll-btn" style="background:var(--bad-soft);color:var(--bad)" data-uid="${u.userId}">Désinscrire</button>
             </td>
           </tr>`;
         }).join('');
@@ -141,7 +141,7 @@ import Admin from '../../../layouts/Admin.astro';
       const btn = document.getElementById('enroll-btn') as HTMLButtonElement;
       btn.disabled = true; btn.textContent = 'Inscription…';
       try {
-        await api(`/admin/paths/${slug}/enrollments`, { method: 'POST', body: { user_id: userId } });
+        await api(`/admin/paths/${slug}/enrollments`, { method: 'POST', body: { userId: userId } });
         (window as any).showToast?.('Utilisateur inscrit au parcours', 'success');
         (document.getElementById('user-select') as HTMLSelectElement).value = '';
         await loadEnrollments(slug);

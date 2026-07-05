@@ -10,6 +10,8 @@ import (
 	"github.com/elearning/course-service/internal/content"
 )
 
+// newPathTestState builds a State pre-populated with two fixture learning
+// paths, for use by the path-listing and path-detail handler tests.
 func newPathTestState(t *testing.T) *State {
 	t.Helper()
 
@@ -32,14 +34,17 @@ func newPathTestState(t *testing.T) *State {
 	return NewState(cfg, store, paths)
 }
 
+// TestListPaths verifies the paths list endpoint returns all known paths.
 func TestListPaths(t *testing.T) {
+	t.Parallel()
+
 	mock := newUserServiceMock()
 	defer mock.Close()
 
 	s := newPathTestState(t)
 	r := BuildRouter(s, s.Config, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/paths", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -64,14 +69,17 @@ func TestListPaths(t *testing.T) {
 	}
 }
 
+// TestGetPath verifies the path-detail endpoint returns the requested path.
 func TestGetPath(t *testing.T) {
+	t.Parallel()
+
 	mock := newUserServiceMock()
 	defer mock.Close()
 
 	s := newPathTestState(t)
 	r := BuildRouter(s, s.Config, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/paths/devops-path", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths/devops-path", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -95,14 +103,17 @@ func TestGetPath(t *testing.T) {
 	}
 }
 
+// TestGetPathNotFound verifies an unknown path slug yields a 404 response.
 func TestGetPathNotFound(t *testing.T) {
+	t.Parallel()
+
 	mock := newUserServiceMock()
 	defer mock.Close()
 
 	s := newPathTestState(t)
 	r := BuildRouter(s, s.Config, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/paths/nonexistent", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths/nonexistent", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -115,23 +126,43 @@ func TestGetPathNotFound(t *testing.T) {
 // imposing a server-side sort order (sorting was moved to the frontend, since
 // sorting server-side on every request does not scale with the path count).
 func TestListPathsUnordered(t *testing.T) {
+	t.Parallel()
+
 	mock := newUserServiceMock()
 	defer mock.Close()
 
 	s := newPathTestState(t)
 	r := BuildRouter(s, s.Config, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/paths", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
-	paths := resp["paths"].([]any)
+
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	paths, ok := resp["paths"].([]any)
+	if !ok {
+		t.Fatal("expected paths array")
+	}
 
 	titles := make(map[string]bool, len(paths))
 	for _, p := range paths {
-		titles[p.(map[string]any)["title"].(string)] = true
+		pm, ok := p.(map[string]any)
+		if !ok {
+			t.Fatal("expected path object")
+		}
+
+		title, ok := pm["title"].(string)
+		if !ok {
+			t.Fatal("expected string title")
+		}
+
+		titles[title] = true
 	}
 
 	for _, want := range []string{"DevOps Path", "Python Path"} {
@@ -144,13 +175,15 @@ func TestListPathsUnordered(t *testing.T) {
 // TestListPathsPagination verifies the limit/offset query params bound and
 // slice the result set.
 func TestListPathsPagination(t *testing.T) {
+	t.Parallel()
+
 	mock := newUserServiceMock()
 	defer mock.Close()
 
 	s := newPathTestState(t)
 	r := BuildRouter(s, s.Config, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/paths?limit=1", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths?limit=1", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -161,12 +194,16 @@ func TestListPathsPagination(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	paths := resp["paths"].([]any)
+	paths, ok := resp["paths"].([]any)
+	if !ok {
+		t.Fatal("expected paths array")
+	}
+
 	if len(paths) != 1 {
 		t.Fatalf("expected 1 path with limit=1, got %d", len(paths))
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/paths?offset=2", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths?offset=2", http.NoBody)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -177,7 +214,11 @@ func TestListPathsPagination(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	paths = resp["paths"].([]any)
+	paths, ok = resp["paths"].([]any)
+	if !ok {
+		t.Fatal("expected paths array")
+	}
+
 	if len(paths) != 0 {
 		t.Errorf("expected 0 paths with offset=2 (only 2 paths exist), got %d", len(paths))
 	}
@@ -187,13 +228,15 @@ func TestListPathsPagination(t *testing.T) {
 // treated the same as an omitted one — an explicit escape hatch for callers
 // that always send a numeric limit but sometimes want everything.
 func TestListPathsPaginationNegativeLimitBypasses(t *testing.T) {
+	t.Parallel()
+
 	mock := newUserServiceMock()
 	defer mock.Close()
 
 	s := newPathTestState(t)
 	r := BuildRouter(s, s.Config, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/paths?limit=-1", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/paths?limit=-1", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -204,7 +247,11 @@ func TestListPathsPaginationNegativeLimitBypasses(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	paths := resp["paths"].([]any)
+	paths, ok := resp["paths"].([]any)
+	if !ok {
+		t.Fatal("expected paths array")
+	}
+
 	if len(paths) != 2 {
 		t.Errorf("expected negative limit to bypass pagination and return all 2 paths, got %d", len(paths))
 	}

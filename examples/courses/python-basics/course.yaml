@@ -51,35 +51,50 @@ spec:
         - "structures-de-contrôle"
         - "fonctions-et-modules"
         - "listes,-tuples-et-dictionnaires"
-      passing_score: 75
+      passingScore: 75
       questions:
-        - text: "Quelle est la syntaxe correcte pour afficher 'Hello World' en Python ?"
+        - question: "Quelle est la syntaxe correcte pour afficher 'Hello World' en Python ?"
+          type: "single"
           answers:
-            - text: "print('Hello World')"
+            - id: "a"
+              text: "print('Hello World')"
               correct: true
-            - text: "echo 'Hello World'"
+            - id: "b"
+              text: "echo 'Hello World'"
               correct: false
-            - text: "console.log('Hello World')"
+            - id: "c"
+              text: "console.log('Hello World')"
               correct: false
-            - text: "printf('Hello World')"
+            - id: "d"
+              text: "printf('Hello World')"
               correct: false
-        - text: "Comment définit-on une fonction en Python ?"
+        - question: "Comment définit-on une fonction en Python ?"
+          type: "single"
           answers:
-            - text: "def ma_fonction():"
+            - id: "a"
+              text: "def ma_fonction():"
               correct: true
-            - text: "function ma_fonction():"
+            - id: "b"
+              text: "function ma_fonction():"
               correct: false
-            - text: "fun ma_fonction():"
+            - id: "c"
+              text: "fun ma_fonction():"
               correct: false
-            - text: "void ma_fonction():"
+            - id: "d"
+              text: "void ma_fonction():"
               correct: false
-        - text: "Quel est le type de données pour une séquence ordonnée et modifiable en Python ?"
+        - question: "Quel est le type de données pour une séquence ordonnée et modifiable en Python ?"
+          type: "single"
           answers:
-            - text: "list"
+            - id: "a"
+              text: "list"
               correct: true
-            - text: "tuple"
+            - id: "b"
+              text: "tuple"
               correct: false
-            - text: "set"
+            - id: "c"
+              text: "set"
               correct: false
-            - text: "dict"
+            - id: "d"
+              text: "dict"
               correct: false

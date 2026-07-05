@@ -56,26 +56,26 @@ commit_re := `^(feat|fix|chore|docs|style|refactor|test|perf|ci|build|revert)(\(
 default allow := false
 allow if { count(violations) == 0 }
 
-violations contains "Aucune Merge Request ouverte trouvée..." if { count(input.open_mrs) == 0 }
+violations contains "Aucune Merge Request ouverte trouvée..." if { count(input.openMrs) == 0 }
 violations contains "Nom de branche non conventionnel..." if {
-    count(input.open_mrs) > 0
+    count(input.openMrs) > 0
     count(mrs_with_conventional_branch) == 0
 }
 violations contains msg if {
     some mr in mrs_with_conventional_branch
-    mr.pipeline_status != "success"
-    msg := sprintf("Pipeline CI/CD non validée sur '%v' (statut : '%v').", [mr.source_branch, mr.pipeline_status])
+    mr.pipelineStatus != "success"
+    msg := sprintf("Pipeline CI/CD non validée sur '%v' (statut : '%v').", [mr.sourceBranch, mr.pipelineStatus])
 }
 violations contains msg if {
     some mr in mrs_with_conventional_branch
     not mr_has_conventional_commit(mr)
-    msg := sprintf("Aucun commit conventionnel sur '%v'.", [mr.source_branch])
+    msg := sprintf("Aucun commit conventionnel sur '%v'.", [mr.sourceBranch])
 }
 violations contains "Fichier lab.py introuvable sur main." if { not input.files["lab.py"] }
 
 mrs_with_conventional_branch contains mr if {
-    some mr in input.open_mrs
-    regex.match(branch_re, mr.source_branch)
+    some mr in input.openMrs
+    regex.match(branch_re, mr.sourceBranch)
 }
 mr_has_conventional_commit(mr) if {
     some commit in mr.commits
@@ -87,17 +87,17 @@ mr_has_conventional_commit(mr) if {
 
 ```json
 {
-  "project": { "id": "1", "name": "bellinil", "path": "e-learning/bellinil", "default_branch": "main" },
-  "open_mrs": [
+  "project": { "id": "1", "name": "bellinil", "path": "e-learning/bellinil", "defaultBranch": "main" },
+  "openMrs": [
     {
       "iid": 3,
       "title": "feat: add user greeting",
-      "source_branch": "feature/bellinil-greeting",
-      "pipeline_status": "success",
+      "sourceBranch": "feature/bellinil-greeting",
+      "pipelineStatus": "success",
       "commits": [{ "message": "feat: add user greeting\n" }]
     }
   ],
-  "merged_mr_count": 0,
+  "mergedMrCount": 0,
   "files": { "lab.py": "print(\"Hello, bellinil!\")\n" }
 }
 ```
@@ -111,11 +111,11 @@ modules:
     src: "http://10.89.0.1:8880/e-learning/devops-course.git"   # URL interne (pod → host)
     ref: "main"
     path: "modules/lab1/content.md"
-    lab_url: "http://localhost:8880/e-learning/devops-course"    # URL navigateur (optionnel)
+    labUrl: "http://localhost:8880/e-learning/devops-course"    # URL navigateur (optionnel)
 ```
 
 > **Note :** `src` utilise l'IP hôte accessible depuis les pods (`10.89.0.1:8880`).
-> `lab_url` est l'URL affichée dans le navigateur si besoin de lien direct.
+> `labUrl` est l'URL affichée dans le navigateur si besoin de lien direct.
 
 ## Credentials git pour les repos privés
 
@@ -154,16 +154,17 @@ Chaque vérification est enregistrée en base de données :
 CREATE TABLE lab_checks (
     id           BIGSERIAL PRIMARY KEY,
     username     TEXT        NOT NULL,   -- email de l'apprenant
-    course_slug  TEXT        NOT NULL,
-    module_index INT         NOT NULL,
-    module_name  TEXT        NOT NULL,
+    courseSlug  TEXT        NOT NULL,
+    moduleIndex INT         NOT NULL,
+    moduleName  TEXT        NOT NULL,
     allow        BOOLEAN     NOT NULL,
     violations   TEXT[]      NOT NULL DEFAULT '{}',
-    checked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    checkedAt   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 La page `/admin/labs` affiche :
+
 - Stats globales (total vérifications, validés, échoués, apprenants actifs)
 - Tableau filtrable par cours avec violations détaillées
 - Endpoint : `GET /api/admin/lab-checks?course=<slug>`

@@ -23,17 +23,19 @@ func DeriveKey(secret string) []byte {
 func EncryptToken(plaintext string, key []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating AES cipher: %w", err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating GCM mode: %w", err)
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
+
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
+		return "", fmt.Errorf("generating nonce: %w", err)
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
@@ -41,7 +43,8 @@ func EncryptToken(plaintext string, key []byte) (string, error) {
 	return hex.EncodeToString(ciphertext), nil
 }
 
-// DecryptToken decrypts a hex-encoded token previously encrypted with EncryptToken.
+// DecryptToken decrypts a hex-encoded token previously encrypted with
+// EncryptToken.
 func DecryptToken(ciphertextHex string, key []byte) (string, error) {
 	ciphertext, err := hex.DecodeString(ciphertextHex)
 	if err != nil {
@@ -50,12 +53,12 @@ func DecryptToken(ciphertextHex string, key []byte) (string, error) {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating AES cipher: %w", err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating GCM mode: %w", err)
 	}
 
 	nonceSize := gcm.NonceSize()

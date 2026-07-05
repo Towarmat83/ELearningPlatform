@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/elearning/user-service/internal/metrics"
 )
+
+// myCoursesRespKeyCourses is the JSON response field holding the course list.
+const myCoursesRespKeyCourses = "courses"
 
 // Enroll godoc
 // @Summary   Enroll in a course
@@ -20,27 +24,27 @@ import (
 // @Failure   403   {object}  map[string]string
 // @Failure   401   {object}  map[string]string
 // @Router    /api/courses/{slug}/enroll [post].
-func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
+func (s *State) Enroll(writer http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
 
 	_, err := s.Pool.Exec(r.Context(),
-		`INSERT INTO enrollments (user_id, course_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
+		`INSERT INTO enrollments (userId, courseSlug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		claims.Subject, slug)
 	if err != nil {
-		slog.Error("enroll failed", "user_id", claims.Subject, "course_slug", slug, "err", err)
+		slog.Error("enroll failed", "userId", claims.Subject, "courseSlug", slug, "err", err)
 
 		if strings.Contains(err.Error(), "foreign key constraint") {
-			s.Error(w, http.StatusUnauthorized, "Session expired, please log in again")
+			s.Error(writer, http.StatusUnauthorized, "Session expired, please log in again")
 		} else {
-			s.Error(w, http.StatusInternalServerError, "Database error")
+			s.Error(writer, http.StatusInternalServerError, "Database error")
 		}
 
 		return
 	}
 
 	metrics.EnrollmentsTotal.Inc()
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Enrolled successfully"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Enrolled successfully"})
 }
 
 // Unenroll godoc
@@ -51,23 +55,25 @@ func (s *State) Enroll(w http.ResponseWriter, r *http.Request) {
 // @Param     slug  path  string  true  "Course slug"
 // @Success   200   {object}  map[string]string
 // @Router    /api/courses/{slug}/unenroll [delete].
-func (s *State) Unenroll(w http.ResponseWriter, r *http.Request) {
+func (s *State) Unenroll(writer http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
 
 	_, err := s.Pool.Exec(r.Context(),
-		`DELETE FROM enrollments WHERE user_id = $1::uuid AND course_slug = $2`,
+		`DELETE FROM enrollments WHERE userId = $1::uuid AND courseSlug = $2`,
 		claims.Subject, slug)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
 	metrics.EnrollmentsTotal.Dec()
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Unenrolled successfully"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Unenrolled successfully"})
 }
 
+// courseServiceCourse is the course payload returned by course-service's
+// GET /api/courses/{slug} endpoint.
 type courseServiceCourse struct {
 	Slug            string `json:"slug"`
 	ID              string `json:"id"`
@@ -75,31 +81,55 @@ type courseServiceCourse struct {
 	Description     string `json:"description"`
 	Category        string `json:"category"`
 	Difficulty      string `json:"difficulty"`
-	IsPublic        bool   `json:"is_public"`
-	LabCount        int    `json:"lab_count"`
-	EnrollmentCount int    `json:"enrollment_count"`
+	IsPublic        bool   `json:"isPublic"`
+	LabCount        int    `json:"labCount"`
+	EnrollmentCount int    `json:"enrollmentCount"`
 	Source          string `json:"source,omitempty"`
 }
 
-func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
-	url := fmt.Sprintf("%s/api/courses/%s", s.Config.CourseServiceURL, slug)
+// fetchCourseDetails fetches a single course's metadata from course-service.
+func (s *State) fetchCourseDetails(ctx context.Context, slug string) (*courseServiceCourse, error) {
+	courseURL := fmt.Sprintf("%s/api/courses/%s", s.Config.CourseServiceURL, slug)
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, courseURL, http.NoBody)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("building course-service request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("calling course-service: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("course-service returned %d", resp.StatusCode)
 	}
 
-	var c courseServiceCourse
-	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
-		return nil, err
+	var course courseServiceCourse
+
+	err = json.NewDecoder(resp.Body).Decode(&course)
+	if err != nil {
+		return nil, fmt.Errorf("decoding course-service response: %w", err)
 	}
 
-	return &c, nil
+	return &course, nil
+}
+
+// myCourse is a course enriched with the current user's progress.
+type myCourse struct {
+	Slug            string  `json:"slug"`
+	ID              string  `json:"id"`
+	Title           string  `json:"title"`
+	Description     string  `json:"description"`
+	Category        string  `json:"category"`
+	Difficulty      string  `json:"difficulty"`
+	IsPublic        bool    `json:"isPublic"`
+	LabCount        int     `json:"labCount"`
+	EnrollmentCount int     `json:"enrollmentCount"`
+	CompletedLabs   int64   `json:"completedLabs"`
+	TotalScore      int64   `json:"totalScore"`
+	LastActivity    *string `json:"lastActivity"`
 }
 
 // MyCourses godoc
@@ -109,73 +139,78 @@ func (s *State) fetchCourseDetails(slug string) (*courseServiceCourse, error) {
 // @Produce   json
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/my/courses [get].
-func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
-	claims := s.claims(r)
+func (s *State) MyCourses(writer http.ResponseWriter, req *http.Request) {
+	claims := s.claims(req)
 
-	rows, err := s.Pool.Query(r.Context(), `
-		SELECT e.course_slug,
-		       COUNT(DISTINCT lp.lesson_slug) + COALESCE(mp.passed_modules, 0) AS completed_labs,
-		       COALESCE(mp.total_score, 0) AS total_score,
-		       GREATEST(MAX(lp.viewed_at), mp.last_activity)::text AS last_activity
-		FROM enrollments e
-		LEFT JOIN lesson_progress lp ON lp.user_id = e.user_id AND lp.course_slug = e.course_slug
-		LEFT JOIN (
-			SELECT course_slug,
-			       SUM(best_score)                         AS total_score,
-			       COUNT(*) FILTER (WHERE passed)          AS passed_modules,
-			       MAX(updated_at)                         AS last_activity
-			FROM module_progress
-			WHERE user_id = $1::uuid
-			GROUP BY course_slug
-		) mp ON mp.course_slug = e.course_slug
-		WHERE e.user_id = $1::uuid
-		GROUP BY e.course_slug, mp.total_score, mp.passed_modules, mp.last_activity, e.enrolled_at
-		ORDER BY e.enrolled_at DESC`, claims.Subject)
+	enrolled, err := s.queryMyEnrollments(req.Context(), claims.Subject)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
+
+	courses := s.buildMyCourses(req.Context(), enrolled)
+
+	s.JSON(writer, http.StatusOK, map[string]any{myCoursesRespKeyCourses: courses})
+}
+
+// enrollmentRow is a single enrollment joined with its progress aggregates.
+type enrollmentRow struct {
+	Slug          string
+	CompletedLabs int64
+	TotalScore    int64
+	LastActivity  *string
+}
+
+// queryMyEnrollments loads the user's enrollments with progress aggregates.
+func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]enrollmentRow, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT e.courseSlug,
+		       COUNT(DISTINCT lp.lessonSlug) + COALESCE(mp.passedModules, 0) AS completedLabs,
+		       COALESCE(mp.totalScore, 0) AS totalScore,
+		       GREATEST(MAX(lp.viewed_at), mp.lastActivity)::text AS lastActivity
+		FROM enrollments e
+		LEFT JOIN lesson_progress lp ON lp.userId = e.userId AND lp.courseSlug = e.courseSlug
+		LEFT JOIN (
+			SELECT courseSlug,
+			       SUM(bestScore)                         AS totalScore,
+			       COUNT(*) FILTER (WHERE passed)          AS passedModules,
+			       MAX(updatedAt)                         AS lastActivity
+			FROM module_progress
+			WHERE userId = $1::uuid
+			GROUP BY courseSlug
+		) mp ON mp.courseSlug = e.courseSlug
+		WHERE e.userId = $1::uuid
+		GROUP BY e.courseSlug, mp.totalScore, mp.passedModules, mp.lastActivity, e.enrolledAt
+		ORDER BY e.enrolledAt DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("querying enrollments: %w", err)
+	}
 	defer rows.Close()
 
-	type enrollmentRow struct {
-		Slug          string
-		CompletedLabs int64
-		TotalScore    int64
-		LastActivity  *string
-	}
-
-	var rowsData []enrollmentRow
+	var enrolled []enrollmentRow
 
 	for rows.Next() {
-		var r enrollmentRow
+		var enrollment enrollmentRow
 
-		err := rows.Scan(&r.Slug, &r.CompletedLabs, &r.TotalScore, &r.LastActivity)
+		err := rows.Scan(&enrollment.Slug, &enrollment.CompletedLabs, &enrollment.TotalScore, &enrollment.LastActivity)
 		if err != nil {
 			continue
 		}
 
-		rowsData = append(rowsData, r)
+		enrolled = append(enrolled, enrollment)
 	}
 
-	type myCourse struct {
-		Slug            string  `json:"slug"`
-		ID              string  `json:"id"`
-		Title           string  `json:"title"`
-		Description     string  `json:"description"`
-		Category        string  `json:"category"`
-		Difficulty      string  `json:"difficulty"`
-		IsPublic        bool    `json:"is_public"`
-		LabCount        int     `json:"lab_count"`
-		EnrollmentCount int     `json:"enrollment_count"`
-		CompletedLabs   int64   `json:"completed_labs"`
-		TotalScore      int64   `json:"total_score"`
-		LastActivity    *string `json:"last_activity"`
-	}
+	return enrolled, nil
+}
 
-	courses := make([]myCourse, 0, len(rowsData))
-	for _, row := range rowsData {
-		details, err := s.fetchCourseDetails(row.Slug)
+// buildMyCourses enriches each enrollment with course-service metadata, falling
+// back to the bare slug when course-service is unreachable.
+func (s *State) buildMyCourses(ctx context.Context, enrolled []enrollmentRow) []myCourse {
+	courses := make([]myCourse, 0, len(enrolled))
+
+	for _, row := range enrolled {
+		details, err := s.fetchCourseDetails(ctx, row.Slug)
 		if err != nil {
 			slog.Warn("failed to fetch course details", "slug", row.Slug, "err", err)
 			courses = append(courses, myCourse{
@@ -206,9 +241,5 @@ func (s *State) MyCourses(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if courses == nil {
-		courses = make([]myCourse, 0)
-	}
-
-	s.JSON(w, http.StatusOK, map[string]any{"courses": courses})
+	return courses
 }

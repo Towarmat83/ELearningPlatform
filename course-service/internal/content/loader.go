@@ -103,7 +103,8 @@ func (s *PathStore) Get(slug string) *Path {
 	return s.paths[slug]
 }
 
-// List returns all paths. Order is undefined; sorting is the caller's responsibility.
+// List returns all paths. Order is undefined; sorting is the caller's
+// responsibility.
 func (s *PathStore) List() []*Path {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -142,13 +143,14 @@ func (s *PathStore) DeleteBySource(source string) {
 	}
 }
 
+// orderPrefix matches the leading "NN-" order prefix on lesson filenames.
 var orderPrefix = regexp.MustCompile(`^(\d+)-`)
 
 // ParseMarkdownLesson parses a markdown file with optional YAML front matter.
 func ParseMarkdownLesson(path string, order int) (Lesson, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return Lesson{}, err
+		return Lesson{}, fmt.Errorf("reading lesson file %s: %w", path, err)
 	}
 
 	title, body := extractFrontmatter(data)
@@ -180,13 +182,15 @@ func FetchModuleIndex(gc *GitCache, parent Module, token string) ([]Module, erro
 	}
 
 	var entries []ModuleIndexEntry
-	if err := yaml.Unmarshal(data, &entries); err != nil {
+
+	err = yaml.Unmarshal(data, &entries)
+	if err != nil {
 		return nil, fmt.Errorf("parse module index: %w", err)
 	}
 
 	modules := make([]Module, 0, len(entries))
-	for _, e := range entries {
-		src, ref, typ := e.Src, e.Ref, e.Type
+	for _, entry := range entries {
+		src, ref, typ := entry.Src, entry.Ref, entry.Type
 		if src == "" {
 			src = parent.Src
 		}
@@ -196,23 +200,27 @@ func FetchModuleIndex(gc *GitCache, parent Module, token string) ([]Module, erro
 		}
 
 		if typ == "" {
-			typ = "text"
+			typ = moduleTypeText
 		}
 
 		modules = append(modules, Module{
-			Name:          e.Name,
+			Name:          entry.Name,
 			Type:          typ,
 			Src:           src,
 			Ref:           ref,
-			Path:          e.Path,
-			Hidden:        e.Hidden,
-			Prerequisites: e.Prerequisites,
+			Path:          entry.Path,
+			Hidden:        entry.Hidden,
+			Prerequisites: entry.Prerequisites,
 		})
 	}
 
 	return modules, nil
 }
 
+// extractFrontmatter splits data into an optional YAML front matter title
+// and the remaining markdown body.
+//
+//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
 func extractFrontmatter(data []byte) (title, body string) {
 	data = bytes.TrimSpace(data)
 	if !bytes.HasPrefix(data, []byte("---")) {

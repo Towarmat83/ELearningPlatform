@@ -10,14 +10,14 @@ metadata:
 data:
   config.yaml: |
     port: 8082
-    jwt_secret: "change-me-in-production-use-a-long-random-string"
-    jwt_expiry_hours: 24
-    cors_origins:
+    jwtSecret: "change-me-in-production-use-a-long-random-string"
+    jwtExpiryHours: 24
+    corsOrigins:
       - "http://localhost:3000"
       - "http://localhost:5173"
-    uploads_dir: "/data/uploads"
-    k8s_namespace: "default"
-    user_service_url: "http://user-service:8081"
-    git_cache_ttl_minutes: 10
-    git_credentials_path: "/etc/git-credentials/git-credentials.yaml"
-    git_token: ""
+    uploadsDir: "/data/uploads"
+    k8sNamespace: "default"
+    userServiceUrl: "http://user-service:8081"
+    gitCacheTtlMinutes: 10
+    gitCredentialsPath: "/etc/git-credentials/git-credentials.yaml"
+    gitToken: ""

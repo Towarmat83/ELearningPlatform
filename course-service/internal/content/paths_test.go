@@ -11,7 +11,10 @@ import (
 
 // ── PathStore ────────────────────────────────────────────────────────────────
 
+// TestPathStore_PutAndGet checks path store put and get.
 func TestPathStore_PutAndGet(t *testing.T) {
+	t.Parallel()
+
 	s := NewPathStore()
 	p := &Path{Slug: "devops-path", Title: "DevOps Path", Courses: []string{"linux-intro", "docker-fundamentals"}}
 	s.Put(p)
@@ -26,7 +29,10 @@ func TestPathStore_PutAndGet(t *testing.T) {
 	}
 }
 
+// TestPathStore_List checks path store list.
 func TestPathStore_List(t *testing.T) {
+	t.Parallel()
+
 	s := NewPathStore()
 	s.Put(&Path{Slug: "path-b", Title: "B Path"})
 	s.Put(&Path{Slug: "path-a", Title: "A Path"})
@@ -42,7 +48,10 @@ func TestPathStore_List(t *testing.T) {
 	}
 }
 
+// TestPathStore_DeleteBySource checks path store delete by source.
 func TestPathStore_DeleteBySource(t *testing.T) {
+	t.Parallel()
+
 	s := NewPathStore()
 	s.Put(&Path{Slug: "to-delete", Source: "k8s:to-delete"})
 	s.Put(&Path{Slug: "to-keep", Source: "k8s:to-keep"})
@@ -58,7 +67,10 @@ func TestPathStore_DeleteBySource(t *testing.T) {
 	}
 }
 
+// TestPathStore_GetMissing checks path store get missing.
 func TestPathStore_GetMissing(t *testing.T) {
+	t.Parallel()
+
 	s := NewPathStore()
 	if s.Get("nonexistent") != nil {
 		t.Error("expected nil for missing path")
@@ -67,6 +79,7 @@ func TestPathStore_GetMissing(t *testing.T) {
 
 // ── pathFromCR ───────────────────────────────────────────────────────────────
 
+// makePathCR builds a Path CRD instance with the given name and spec.
 func makePathCR(name string, spec coursev1.PathSpec) *coursev1.Path {
 	cr := &coursev1.Path{Spec: spec}
 	cr.Name = name
@@ -75,7 +88,10 @@ func makePathCR(name string, spec coursev1.PathSpec) *coursev1.Path {
 	return cr
 }
 
+// TestPathFromCR_Basic checks path from CR basic.
 func TestPathFromCR_Basic(t *testing.T) {
+	t.Parallel()
+
 	cr := makePathCR("devops-path", coursev1.PathSpec{
 		Title:       "DevOps Path",
 		Description: "From Linux to Kubernetes",
@@ -104,7 +120,10 @@ func TestPathFromCR_Basic(t *testing.T) {
 	}
 }
 
+// TestPathFromCR_FallbackTitle checks path from CR fallback title.
 func TestPathFromCR_FallbackTitle(t *testing.T) {
+	t.Parallel()
+
 	cr := makePathCR("my-path", coursev1.PathSpec{})
 
 	p := pathFromCR(cr)
@@ -113,7 +132,10 @@ func TestPathFromCR_FallbackTitle(t *testing.T) {
 	}
 }
 
+// TestPathFromCR_Source checks path from CR source.
 func TestPathFromCR_Source(t *testing.T) {
+	t.Parallel()
+
 	cr := makePathCR("devops-path", coursev1.PathSpec{Title: "DevOps"})
 
 	p := pathFromCR(cr)
@@ -122,7 +144,10 @@ func TestPathFromCR_Source(t *testing.T) {
 	}
 }
 
+// TestPathFromCR_EmptyCourseSlugSkipped checks empty course slug is skipped.
 func TestPathFromCR_EmptyCourseSlugSkipped(t *testing.T) {
+	t.Parallel()
+
 	cr := makePathCR("test-path", coursev1.PathSpec{
 		Courses: []string{"valid-course", "", "another-course"},
 	})
@@ -135,7 +160,10 @@ func TestPathFromCR_EmptyCourseSlugSkipped(t *testing.T) {
 
 // ── PathWatcher event handlers ────────────────────────────────────────────────
 
+// TestPathWatcher_Upsert_HappyPath checks path watcher upsert happy path.
 func TestPathWatcher_Upsert_HappyPath(t *testing.T) {
+	t.Parallel()
+
 	store := NewPathStore()
 	w := &PathWatcher{store: store}
 
@@ -147,7 +175,10 @@ func TestPathWatcher_Upsert_HappyPath(t *testing.T) {
 	}
 }
 
+// TestPathWatcher_Upsert_TypeAssertFailure checks upsert type assert failure.
 func TestPathWatcher_Upsert_TypeAssertFailure(t *testing.T) {
+	t.Parallel()
+
 	store := NewPathStore()
 	w := &PathWatcher{store: store}
 
@@ -161,7 +192,10 @@ func TestPathWatcher_Upsert_TypeAssertFailure(t *testing.T) {
 	}
 }
 
+// TestPathWatcher_Remove_HappyPath checks path watcher remove happy path.
 func TestPathWatcher_Remove_HappyPath(t *testing.T) {
+	t.Parallel()
+
 	store := NewPathStore()
 	store.Put(&Path{Slug: "to-remove", Source: "k8s:to-remove"})
 	w := &PathWatcher{store: store}
@@ -174,7 +208,10 @@ func TestPathWatcher_Remove_HappyPath(t *testing.T) {
 	}
 }
 
+// TestPathWatcher_Remove_DeletedFinalStateUnknown checks tombstone removal.
 func TestPathWatcher_Remove_DeletedFinalStateUnknown(t *testing.T) {
+	t.Parallel()
+
 	store := NewPathStore()
 	store.Put(&Path{Slug: "wrapped-path", Source: "k8s:wrapped-path"})
 	w := &PathWatcher{store: store}
@@ -187,7 +224,10 @@ func TestPathWatcher_Remove_DeletedFinalStateUnknown(t *testing.T) {
 	}
 }
 
+// TestPathWatcher_Remove_TypeAssertFailure checks remove type assert failure.
 func TestPathWatcher_Remove_TypeAssertFailure(t *testing.T) {
+	t.Parallel()
+
 	store := NewPathStore()
 	store.Put(&Path{Slug: "safe", Source: "k8s:safe"})
 	w := &PathWatcher{store: store}

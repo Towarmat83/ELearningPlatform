@@ -6,7 +6,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// TestAddToScheme verifies Course, CourseList get registered with scheme.
 func TestAddToScheme(t *testing.T) {
+	t.Parallel()
+
 	scheme := runtime.NewScheme()
 
 	err := AddToScheme(scheme)
@@ -23,6 +26,7 @@ func TestAddToScheme(t *testing.T) {
 	}
 }
 
+// newFullCourse builds a Course populating every nested field, for DeepCopy.
 func newFullCourse() *Course {
 	maxAttempts := 3
 	correctAnswer := true
@@ -89,7 +93,10 @@ func newFullCourse() *Course {
 	}
 }
 
+// TestCourseDeepCopy verifies Course.DeepCopy produces an independent copy.
 func TestCourseDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	original := newFullCourse()
 	copied := original.DeepCopy()
 
@@ -135,7 +142,10 @@ func TestCourseDeepCopy(t *testing.T) {
 	}
 }
 
+// TestCourseDeepCopyObject verifies DeepCopyObject returns distinct *Course.
 func TestCourseDeepCopyObject(t *testing.T) {
+	t.Parallel()
+
 	original := newFullCourse()
 	obj := original.DeepCopyObject()
 
@@ -149,7 +159,10 @@ func TestCourseDeepCopyObject(t *testing.T) {
 	}
 }
 
+// TestLeafTypesDeepCopy verifies DeepCopy for every leaf type, incl. nils.
 func TestLeafTypesDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	correctAnswer := true
 
 	answer := &Answer{ID: "a1", Text: "4", Correct: true}
@@ -249,7 +262,10 @@ func TestLeafTypesDeepCopy(t *testing.T) {
 	}
 }
 
+// TestCourseListDeepCopy verifies CourseList.DeepCopy makes indep. copy.
 func TestCourseListDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	original := &CourseList{Items: []Course{*newFullCourse()}}
 	copied := original.DeepCopy()
 

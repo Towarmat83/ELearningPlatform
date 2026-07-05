@@ -9,14 +9,14 @@ CREATE TABLE IF NOT EXISTS users (
     email            VARCHAR(255) UNIQUE NOT NULL,
     password_hash    TEXT,                          -- nullable: SSO users have no password
     role             VARCHAR(16) NOT NULL DEFAULT 'student' CHECK (role IN ('admin', 'student')),
-    avatar_url       TEXT,
+    avatarUrl       TEXT,
     bio              TEXT,
-    is_active        BOOLEAN     NOT NULL DEFAULT TRUE,
-    auth_provider    VARCHAR(32) NOT NULL DEFAULT 'local',
+    isActive        BOOLEAN     NOT NULL DEFAULT TRUE,
+    authProvider    VARCHAR(32) NOT NULL DEFAULT 'local',
     provider_user_id VARCHAR(255),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT users_provider_uid_key UNIQUE (auth_provider, provider_user_id)
+    createdAt       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updatedAt       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT users_provider_uid_key UNIQUE (authProvider, provider_user_id)
 );
 
 -- ── Platform settings ─────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS platform_settings (
     key        VARCHAR(64) PRIMARY KEY,
     value      TEXT        NOT NULL,
     description TEXT,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO platform_settings (key, value, description) VALUES
@@ -44,21 +44,21 @@ ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS enrollments (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    course_slug TEXT        NOT NULL,
-    enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, course_slug)
+    userId     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    courseSlug TEXT        NOT NULL,
+    enrolledAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(userId, courseSlug)
 );
 
 -- ── Lesson progress ───────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS lesson_progress (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    course_slug TEXT        NOT NULL,
-    lesson_slug TEXT        NOT NULL,
+    userId     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    courseSlug TEXT        NOT NULL,
+    lessonSlug TEXT        NOT NULL,
     viewed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, course_slug, lesson_slug)
+    UNIQUE(userId, courseSlug, lessonSlug)
 );
 
 -- ── Git repositories ──────────────────────────────────────────────────────────
@@ -66,24 +66,24 @@ CREATE TABLE IF NOT EXISTS lesson_progress (
 
 CREATE TABLE IF NOT EXISTS git_repos (
     id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    userId        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     url            TEXT        NOT NULL,
     branch         TEXT        NOT NULL DEFAULT 'main',
     token_enc      TEXT,                              -- AES-256-GCM encrypted PAT, nullable
     status         TEXT        NOT NULL DEFAULT 'pending', -- pending|syncing|synced|error
     error_message  TEXT,
     last_synced_at TIMESTAMPTZ,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, url)
+    createdAt     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(userId, url)
 );
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 
-CREATE INDEX IF NOT EXISTS idx_enrollments_user     ON enrollments(user_id);
-CREATE INDEX IF NOT EXISTS idx_enrollments_slug     ON enrollments(course_slug);
-CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(user_id);
-CREATE INDEX IF NOT EXISTS idx_lesson_progress_key  ON lesson_progress(course_slug, lesson_slug);
-CREATE INDEX IF NOT EXISTS idx_git_repos_user       ON git_repos(user_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_user     ON enrollments(userId);
+CREATE INDEX IF NOT EXISTS idx_enrollments_slug     ON enrollments(courseSlug);
+CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(userId);
+CREATE INDEX IF NOT EXISTS idx_lesson_progress_key  ON lesson_progress(courseSlug, lessonSlug);
+CREATE INDEX IF NOT EXISTS idx_git_repos_user       ON git_repos(userId);
 
 -- ── Default admin ─────────────────────────────────────────────────────────────
 -- Seeded at startup by the application using the ADMIN_PASSWORD env var.

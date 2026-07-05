@@ -466,10 +466,10 @@ import App from '../../../../layouts/App.astro';
         let hasActive = false;
         for (const [qid, exp] of Object.entries(data)) {
           if (exp === -1) {
-            out[qid] = { remaining_seconds: 0, locked: true }; hasActive = true;
+            out[qid] = { remainingSeconds: 0, locked: true }; hasActive = true;
           } else {
             const r = Math.max(0, Math.round((exp - now) / 1000));
-            if (r > 0) { out[qid] = { remaining_seconds: r, locked: false }; hasActive = true; }
+            if (r > 0) { out[qid] = { remainingSeconds: r, locked: false }; hasActive = true; }
           }
         }
         return hasActive ? out : null;
@@ -558,11 +558,11 @@ import App from '../../../../layouts/App.astro';
         if (mod.content) {
           try { mdHtml = await renderMarkdown(mod.content); } catch { mdHtml = mod.content; }
         }
-        const isLocal = mod.check_provider === 'local';
+        const isLocal = mod.checkProvider === 'local';
         const inTauri = typeof window !== 'undefined' && ('__TAURI__' in window || '__TAURI_INTERNALS__' in window);
         const deepLinkUrl = `pupitre://courses/${slug}/modules/${mod.index}`;
 
-        const steps: {title: string; check_type: string; check_params: Record<string,unknown>}[] = mod.steps ?? [];
+        const steps: {title: string; checkType: string; checkParams: Record<string,unknown>}[] = mod.steps ?? [];
         const hasSteps = steps.length > 0;
 
         const renderStepResult = (result: any) => {
@@ -588,7 +588,7 @@ import App from '../../../../layouts/App.astro';
               </div>`).join('')}
           </div>` : '';
 
-        const checkBar = !hasSteps && mod.has_check ? `
+        const checkBar = !hasSteps && mod.hasCheck ? `
           <div style="margin-top:32px;padding:20px 24px;background:var(--blue-soft);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
             <span style="color:var(--ink-soft);font-size:0.95rem">Une fois le lab terminé, revenez ici pour valider votre travail.</span>
             <button id="check-btn" class="btn btn-primary">Vérifier mon travail</button>
@@ -611,7 +611,7 @@ import App from '../../../../layouts/App.astro';
             const { modulesApi } = await import('/src/lib/api');
             const checkToken = localStorage.getItem('token') || '';
             const result = await resolveCheck(
-              { check_provider: mod.check_provider, check_type: checkType, check_params: checkParams },
+              { checkProvider: mod.checkProvider, checkType: checkType, checkParams: checkParams },
               () => modulesApi.check(slug, mod.index, checkToken),
               `/api/courses/${slug}/modules/${mod.index}/record`,
               checkToken,
@@ -630,18 +630,18 @@ import App from '../../../../layouts/App.astro';
             btn.addEventListener('click', async () => {
               btn.disabled = true;
               btn.textContent = '…';
-              await runCheck(s.check_type, s.check_params ?? {}, resultDiv);
+              await runCheck(s.checkType, s.checkParams ?? {}, resultDiv);
               btn.disabled = false;
               btn.textContent = 'Vérifier';
             });
           });
-        } else if (mod.has_check) {
+        } else if (mod.hasCheck) {
           document.getElementById('check-btn')!.addEventListener('click', async () => {
             const btn = document.getElementById('check-btn') as HTMLButtonElement;
             const resultDiv = document.getElementById('check-result')!;
             btn.disabled = true;
             btn.textContent = 'Vérification…';
-            await runCheck(mod.check_type, mod.check_params ?? {}, resultDiv);
+            await runCheck(mod.checkType, mod.checkParams ?? {}, resultDiv);
             btn.disabled = false;
             btn.textContent = 'Vérifier mon travail';
           });
@@ -733,9 +733,9 @@ import App from '../../../../layouts/App.astro';
         }
       });
 
-      // Mini-quiz: use inline_quiz data already embedded in the module response
-      if (mod.inline_quiz?.questions?.length > 0) {
-        renderMiniQuiz(mod.inline_quiz, mod.inline_quiz.index);
+      // Mini-quiz: use inlineQuiz data already embedded in the module response
+      if (mod.inlineQuiz?.questions?.length > 0) {
+        renderMiniQuiz(mod.inlineQuiz, mod.inlineQuiz.index);
       }
 
       document.getElementById('loading')!.style.display = 'none';
@@ -767,7 +767,7 @@ import App from '../../../../layouts/App.astro';
       function startCooldowns(cds: Record<string, any>) {
         cooldowns = {};
         for (const [k, cd] of Object.entries(cds)) {
-          cooldowns[k] = { remaining: (cd as any).remaining_seconds, locked: (cd as any).locked };
+          cooldowns[k] = { remaining: (cd as any).remainingSeconds, locked: (cd as any).locked };
         }
         saveCooldownsToCookie(quizIndex, cooldowns);
         if (cooldownTimer) clearInterval(cooldownTimer);
@@ -1017,20 +1017,20 @@ import App from '../../../../layouts/App.astro';
       function showResult() {
         const body = document.getElementById('mini-quiz-body')!;
         const passed = result.passed;
-        const pct = result.max_score > 0 ? Math.round(result.total_score / result.max_score * 100) : 0;
+        const pct = result.maxScore > 0 ? Math.round(result.totalScore / result.maxScore * 100) : 0;
 
         let reviewHtml = '';
-        if (result.question_results?.length > 0) {
+        if (result.questionResults?.length > 0) {
           reviewHtml = `<div style="margin-top:16px">
             <p style="font-weight:700;font-size:.875rem;margin-bottom:10px">Correction</p>
-            ${result.question_results.map((qr: any, i: number) => {
-              const q = questions.find((qq: any) => qq.id === qr.question_id);
-              return `<div style="border:1.5px solid ${qr.is_correct ? 'var(--good)' : 'var(--bad)'};border-radius:10px;padding:12px 14px;margin-bottom:8px">
+            ${result.questionResults.map((qr: any, i: number) => {
+              const q = questions.find((qq: any) => qq.id === qr.questionId);
+              return `<div style="border:1.5px solid ${qr.isCorrect ? 'var(--good)' : 'var(--bad)'};border-radius:10px;padding:12px 14px;margin-bottom:8px">
                 <div style="display:flex;align-items:flex-start;gap:8px">
-                  <span style="flex-shrink:0;color:${qr.is_correct ? 'var(--good)' : 'var(--bad)'}">${qr.is_correct ? '✓' : '✗'}</span>
+                  <span style="flex-shrink:0;color:${qr.isCorrect ? 'var(--good)' : 'var(--bad)'}">${qr.isCorrect ? '✓' : '✗'}</span>
                   <div style="flex:1">
                     <p style="font-weight:600;font-size:.8rem;margin-bottom:2px">${i+1}. ${q?.question || ''}</p>
-                    <p style="font-size:.75rem;color:var(--ink-soft)">${qr.points_earned}/${qr.points_max} pt${qr.points_max > 1 ? 's' : ''}</p>
+                    <p style="font-size:.75rem;color:var(--ink-soft)">${qr.pointsEarned}/${qr.pointsMax} pt${qr.pointsMax > 1 ? 's' : ''}</p>
                     ${qr.feedback ? `<p style="font-size:.75rem;margin-top:4px;color:var(--ink-soft)">${qr.feedback}</p>` : ''}
                   </div>
                 </div>
@@ -1043,11 +1043,11 @@ import App from '../../../../layouts/App.astro';
           <div style="display:flex;align-items:center;gap:20px;background:${passed ? 'var(--good-soft)' : 'var(--bad-soft)'};border:1.5px solid ${passed ? 'var(--good)' : 'var(--bad)'};border-radius:12px;padding:20px;margin-bottom:12px;flex-wrap:wrap">
             <div style="width:70px;height:70px;border-radius:50%;border:6px solid ${passed ? 'var(--good)' : 'var(--bad)'};background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 auto">
               <div style="font-size:1.2rem;font-weight:700;color:${passed ? 'var(--good)' : 'var(--bad)'}">${pct}%</div>
-              <div style="font-size:.65rem;color:var(--ink-soft)">${result.total_score}/${result.max_score}</div>
+              <div style="font-size:.65rem;color:var(--ink-soft)">${result.totalScore}/${result.maxScore}</div>
             </div>
             <div style="flex:1;min-width:160px">
               <h3 style="font-size:.95rem;font-weight:700;margin-bottom:4px;color:${passed ? 'var(--good)' : 'var(--bad)'}">${passed ? '✓ Quiz réussi !' : '✗ Quiz échoué'}</h3>
-              <p style="font-size:.8rem;color:var(--ink-soft)">${passed ? `Félicitations — ${result.total_score} pts sur ${result.max_score}.` : `Score insuffisant (${pct}%). Réessayez !`}</p>
+              <p style="font-size:.8rem;color:var(--ink-soft)">${passed ? `Félicitations — ${result.totalScore} pts sur ${result.maxScore}.` : `Score insuffisant (${pct}%). Réessayez !`}</p>
             </div>
           </div>
           ${!passed ? `<div style="margin-bottom:12px"><button class="btn btn-primary" id="mini-retry-btn">Recommencer</button></div>` : ''}

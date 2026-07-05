@@ -5,37 +5,43 @@ import (
 	"testing"
 )
 
+// TestLoad_Defaults verifies that Load returns the built-in default
+// configuration when no environment variables or config file are set.
+//
+//nolint:paralleltest // t.Setenv is called in a loop below; Go forbids t.Setenv with t.Parallel(), so this test cannot run in parallel
 func TestLoad_Defaults(t *testing.T) {
-	// Clear env vars that might affect defaults
+	// Clear env vars that might affect defaults. t.Setenv (rather than
+	// os.Unsetenv) keeps this test's env mutation properly scoped and
+	// automatically restored, matching the other tests in this file.
 	for _, k := range []string{"JWT_SECRET", "PORT", "CORS_ORIGINS", "GIT_CACHE_TTL",
 		"UPLOADS_DIR", "K8S_NAMESPACE", "USER_SERVICE_URL", "GIT_TOKEN",
 		"GIT_CREDENTIALS_PATH", "JWT_EXPIRY_HOURS", "KUBECONFIG", "CONFIG_PATH"} {
-		os.Unsetenv(k)
+		t.Setenv(k, "")
 	}
 
 	c := Load()
 
-	if c.JWTSecret != "change-me-in-production-use-a-long-random-string" {
+	if c.JWTSecret != defaultJWTSecret {
 		t.Errorf("unexpected default JWTSecret: %q", c.JWTSecret)
 	}
 
-	if c.Port != 8082 {
+	if c.Port != defaultPort {
 		t.Errorf("unexpected default Port: %d", c.Port)
 	}
 
-	if c.JWTExpiryH != 24 {
+	if c.JWTExpiryH != defaultJWTExpiryHours {
 		t.Errorf("unexpected default JWTExpiryH: %d", c.JWTExpiryH)
 	}
 
-	if c.UploadsDir != "./uploads" {
+	if c.UploadsDir != defaultUploadsDir {
 		t.Errorf("unexpected default UploadsDir: %q", c.UploadsDir)
 	}
 
-	if c.K8sNamespace != "default" {
+	if c.K8sNamespace != defaultK8sNamespace {
 		t.Errorf("unexpected default K8sNamespace: %q", c.K8sNamespace)
 	}
 
-	if c.GitCacheTTL != 10 {
+	if c.GitCacheTTL != defaultGitCacheTTLMinutes {
 		t.Errorf("unexpected default GitCacheTTL: %d", c.GitCacheTTL)
 	}
 
@@ -44,25 +50,19 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 }
 
+// TestLoad_EnvOverrides verifies that Load prefers environment variable
+// values over the built-in defaults.
 func TestLoad_EnvOverrides(t *testing.T) {
-	os.Setenv("JWT_SECRET", "my-secret")
-	os.Setenv("PORT", "9090")
-	os.Setenv("JWT_EXPIRY_HOURS", "48")
-	os.Setenv("CORS_ORIGINS", "http://a.com,http://b.com")
-	os.Setenv("UPLOADS_DIR", "/tmp/uploads")
-	os.Setenv("K8S_NAMESPACE", "prod")
-	os.Setenv("USER_SERVICE_URL", "http://user:9000")
-	os.Setenv("GIT_TOKEN", "tok123")
-	os.Setenv("GIT_CREDENTIALS_PATH", "/etc/creds.yaml")
-	os.Setenv("GIT_CACHE_TTL", "30")
-
-	defer func() {
-		for _, k := range []string{"JWT_SECRET", "PORT", "JWT_EXPIRY_HOURS", "CORS_ORIGINS",
-			"UPLOADS_DIR", "K8S_NAMESPACE", "USER_SERVICE_URL", "GIT_TOKEN",
-			"GIT_CREDENTIALS_PATH", "GIT_CACHE_TTL"} {
-			os.Unsetenv(k)
-		}
-	}()
+	t.Setenv("JWT_SECRET", "my-secret")
+	t.Setenv("PORT", "9090")
+	t.Setenv("JWT_EXPIRY_HOURS", "48")
+	t.Setenv("CORS_ORIGINS", "http://a.com,http://b.com")
+	t.Setenv("UPLOADS_DIR", "/tmp/uploads")
+	t.Setenv("K8S_NAMESPACE", "prod")
+	t.Setenv("USER_SERVICE_URL", "http://user:9000")
+	t.Setenv("GIT_TOKEN", "tok123")
+	t.Setenv("GIT_CREDENTIALS_PATH", "/etc/creds.yaml")
+	t.Setenv("GIT_CACHE_TTL", "30")
 
 	c := Load()
 
@@ -107,46 +107,52 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 }
 
+// TestLoad_InvalidPort_Ignored verifies that Load falls back to the default
+// port when PORT holds a non-numeric value.
 func TestLoad_InvalidPort_Ignored(t *testing.T) {
-	os.Setenv("PORT", "notanumber")
-
-	defer os.Unsetenv("PORT")
+	t.Setenv("PORT", "notanumber")
 
 	c := Load()
-	if c.Port != 8082 {
-		t.Errorf("expected default port 8082 on invalid PORT env, got %d", c.Port)
+	if c.Port != defaultPort {
+		t.Errorf("expected default port %d on invalid PORT env, got %d", defaultPort, c.Port)
 	}
 }
 
+// TestLoad_InvalidGitCacheTTL_Ignored verifies that Load falls back to the
+// default git cache TTL when GIT_CACHE_TTL holds a non-positive value.
 func TestLoad_InvalidGitCacheTTL_Ignored(t *testing.T) {
-	os.Setenv("GIT_CACHE_TTL", "0")
-
-	defer os.Unsetenv("GIT_CACHE_TTL")
+	t.Setenv("GIT_CACHE_TTL", "0")
 
 	c := Load()
-	if c.GitCacheTTL != 10 {
-		t.Errorf("expected default GitCacheTTL=10 when 0 provided, got %d", c.GitCacheTTL)
+	if c.GitCacheTTL != defaultGitCacheTTLMinutes {
+		t.Errorf("expected default GitCacheTTL=%d when 0 provided, got %d", defaultGitCacheTTLMinutes, c.GitCacheTTL)
 	}
 }
 
+// TestLoad_ConfigFile verifies that Load applies values from a YAML file
+// referenced by the CONFIG_PATH environment variable.
 func TestLoad_ConfigFile(t *testing.T) {
 	f, err := os.CreateTemp(t.TempDir(), "config-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
 
-	f.WriteString(`
-jwt_secret: from-file
+	_, err = f.WriteString(`
+jwtSecret: from-file
 port: 7777
-cors_origins:
+corsOrigins:
   - http://file.com
 `)
-	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	os.Setenv("CONFIG_PATH", f.Name())
+	err = f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	defer os.Unsetenv("CONFIG_PATH")
+	t.Setenv("CONFIG_PATH", f.Name())
 
 	c := Load()
 	if c.JWTSecret != "from-file" {
@@ -158,10 +164,10 @@ cors_origins:
 	}
 }
 
+// TestLoad_Kubeconfig verifies that Load applies the KUBECONFIG environment
+// variable override.
 func TestLoad_Kubeconfig(t *testing.T) {
-	os.Setenv("KUBECONFIG", "/home/user/.kube/config")
-
-	defer os.Unsetenv("KUBECONFIG")
+	t.Setenv("KUBECONFIG", "/home/user/.kube/config")
 
 	c := Load()
 	if c.Kubeconfig != "/home/user/.kube/config" {

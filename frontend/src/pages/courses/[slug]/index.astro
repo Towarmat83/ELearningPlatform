@@ -253,7 +253,7 @@ import App from '../../../layouts/App.astro';
       if (m.locked) {
         parts.push(`<span class="badge badge-gray" style="font-size:.7rem">Verrouillé</span>`);
       } else if (m.type === 'quiz') {
-        if (m.passed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ ${m.best_score}/${m.max_score} pts</span>`);
+        if (m.passed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ ${m.bestScore}/${m.maxScore} pts</span>`);
         else if (m.attempts > 0) parts.push(`<span class="badge badge-orange" style="font-size:.7rem">${m.attempts} tentative${m.attempts > 1 ? 's' : ''}</span>`);
         else parts.push(`<span class="badge badge-orange" style="font-size:.7rem">★ quiz</span>`);
       } else {
@@ -337,7 +337,7 @@ import App from '../../../layouts/App.astro';
         const pct = totalCount > 0 ? Math.round(completedCount / totalCount * 100) : 0;
 
         if (!enrolled) {
-          if (course.is_public) {
+          if (course.isPublic) {
             enrollArea.innerHTML = `<button class="btn btn-primary w-full" id="enroll-btn">S'inscrire au cours</button>`;
             document.getElementById('enroll-btn')!.addEventListener('click', async () => {
               if (!token) { window.location.href = `/login?redirect=/courses/${slug}`; return; }

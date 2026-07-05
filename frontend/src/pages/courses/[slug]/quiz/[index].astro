@@ -441,10 +441,10 @@ import App from '../../../../layouts/App.astro';
         let hasActive = false;
         for (const [qid, exp] of Object.entries(data)) {
           if (exp === -1) {
-            out[qid] = { remaining_seconds: 0, locked: true }; hasActive = true;
+            out[qid] = { remainingSeconds: 0, locked: true }; hasActive = true;
           } else {
             const r = Math.max(0, Math.round((exp - now) / 1000));
-            if (r > 0) { out[qid] = { remaining_seconds: r, locked: false }; hasActive = true; }
+            if (r > 0) { out[qid] = { remainingSeconds: r, locked: false }; hasActive = true; }
           }
         }
         return hasActive ? out : null;
@@ -521,7 +521,7 @@ import App from '../../../../layouts/App.astro';
     function startCooldowns(cds: Record<string, any>) {
       cooldowns = {};
       for (const [k, cd] of Object.entries(cds)) {
-        cooldowns[k] = { remaining: (cd as any).remaining_seconds, locked: (cd as any).locked };
+        cooldowns[k] = { remaining: (cd as any).remainingSeconds, locked: (cd as any).locked };
       }
       saveCooldownsToCookie(moduleIndex, cooldowns);
       if (cooldownTimer) clearInterval(cooldownTimer);
@@ -760,7 +760,7 @@ import App from '../../../../layouts/App.astro';
       window.scrollTo({ top: 0 });
 
       const passed = result.passed;
-      const pct = result.max_score > 0 ? Math.round(result.total_score / result.max_score * 100) : 0;
+      const pct = result.maxScore > 0 ? Math.round(result.totalScore / result.maxScore * 100) : 0;
 
       const hero = document.getElementById('result-hero')!;
       hero.classList.toggle('fail', !passed);
@@ -768,24 +768,24 @@ import App from '../../../../layouts/App.astro';
       const circle = document.getElementById('score-circle')!;
       circle.classList.toggle('fail', !passed);
       document.getElementById('score-num')!.textContent = pct + '%';
-      document.getElementById('score-den')!.textContent = `${result.total_score}/${result.max_score}`;
+      document.getElementById('score-den')!.textContent = `${result.totalScore}/${result.maxScore}`;
 
       document.getElementById('result-title')!.textContent = passed ? 'Quiz réussi !' : 'Quiz échoué';
 
       let subtitle = '';
       if (passed) {
-        subtitle = `Félicitations — ${result.total_score} pts sur ${result.max_score}.`;
-      } else if (quiz.quiz_config?.passing_score) {
-        subtitle = `Score insuffisant (${pct}% < ${quiz.quiz_config.passing_score}%). Réessayez !`;
+        subtitle = `Félicitations — ${result.totalScore} pts sur ${result.maxScore}.`;
+      } else if (quiz.quizConfig?.passingScore) {
+        subtitle = `Score insuffisant (${pct}% < ${quiz.quizConfig.passingScore}%). Réessayez !`;
       } else {
-        subtitle = `Score : ${result.total_score}/${result.max_score}`;
+        subtitle = `Score : ${result.totalScore}/${result.maxScore}`;
       }
       document.getElementById('result-subtitle')!.textContent = subtitle;
 
       const badges = document.getElementById('result-badges')!;
       badges.innerHTML = `
         <span class="badge ${passed ? 'badge-green' : 'badge-red'}">${passed ? 'Réussi' : 'Échoué'}</span>
-        <span class="badge badge-blue">${result.total_score}/${result.max_score} pts</span>
+        <span class="badge badge-blue">${result.totalScore}/${result.maxScore} pts</span>
       `;
 
       // Actions
@@ -819,16 +819,16 @@ import App from '../../../../layouts/App.astro';
 
       // Per-question review
       const reviewDiv = document.getElementById('question-review')!;
-      if (result.question_results?.length > 0) {
-        reviewDiv.innerHTML = `<h3 style="font-size:1rem;margin-bottom:12px">Correction</h3>` + result.question_results.map((qr: any, i: number) => {
-          const q = questions.find((q: any) => q.id === qr.question_id);
+      if (result.questionResults?.length > 0) {
+        reviewDiv.innerHTML = `<h3 style="font-size:1rem;margin-bottom:12px">Correction</h3>` + result.questionResults.map((qr: any, i: number) => {
+          const q = questions.find((q: any) => q.id === qr.questionId);
           return `
-            <div style="border:1.5px solid ${qr.is_correct ? 'var(--good)' : 'var(--bad)'};border-radius:10px;padding:14px 16px">
+            <div style="border:1.5px solid ${qr.isCorrect ? 'var(--good)' : 'var(--bad)'};border-radius:10px;padding:14px 16px">
               <div style="display:flex;align-items:flex-start;gap:10px">
-                <span style="font-size:1rem;flex-shrink:0;color:${qr.is_correct ? 'var(--good)' : 'var(--bad)'}">${qr.is_correct ? '✓' : '✗'}</span>
+                <span style="font-size:1rem;flex-shrink:0;color:${qr.isCorrect ? 'var(--good)' : 'var(--bad)'}">${qr.isCorrect ? '✓' : '✗'}</span>
                 <div style="flex:1">
                   <p style="font-weight:600;font-size:.875rem;margin-bottom:4px">${i + 1}. ${q?.question || ''}</p>
-                  <p style="font-size:.8rem;color:var(--ink-soft)">${qr.points_earned}/${qr.points_max} pt${qr.points_max > 1 ? 's' : ''}</p>
+                  <p style="font-size:.8rem;color:var(--ink-soft)">${qr.pointsEarned}/${qr.pointsMax} pt${qr.pointsMax > 1 ? 's' : ''}</p>
                   ${qr.feedback ? `<p style="font-size:.8rem;margin-top:4px;color:var(--ink-soft)">${qr.feedback}</p>` : ''}
                 </div>
               </div>

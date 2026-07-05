@@ -5,7 +5,10 @@ import (
 	"testing"
 )
 
+// TestDeriveKey checks key derivation from a passphrase.
 func TestDeriveKey(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("my-secret")
 	if len(key) != 32 {
 		t.Errorf("expected 32-byte key, got %d", len(key))
@@ -38,7 +41,10 @@ func TestDeriveKey(t *testing.T) {
 	}
 }
 
+// TestEncryptDecryptRoundTrip checks encrypt then decrypt returns input.
 func TestEncryptDecryptRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 	plaintext := "hello, world!"
 
@@ -65,7 +71,10 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	}
 }
 
+// TestEncryptDecrypt_EmptyString checks round-tripping an empty string.
 func TestEncryptDecrypt_EmptyString(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 
 	ciphertext, err := EncryptToken("", key)
@@ -83,7 +92,10 @@ func TestEncryptDecrypt_EmptyString(t *testing.T) {
 	}
 }
 
+// TestEncryptToken_DifferentEachCall checks ciphertext non-determinism.
 func TestEncryptToken_DifferentEachCall(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 	plaintext := "same plaintext"
 
@@ -95,7 +107,10 @@ func TestEncryptToken_DifferentEachCall(t *testing.T) {
 	}
 }
 
+// TestDecryptToken_InvalidHex checks the error for non-hex input.
 func TestDecryptToken_InvalidHex(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 
 	_, err := DecryptToken("not-hex!!!", key)
@@ -104,7 +119,10 @@ func TestDecryptToken_InvalidHex(t *testing.T) {
 	}
 }
 
+// TestDecryptToken_TooShort checks the error for truncated ciphertext.
 func TestDecryptToken_TooShort(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 	// valid hex but too short to contain nonce
 	_, err := DecryptToken("aabb", key)
@@ -113,7 +131,10 @@ func TestDecryptToken_TooShort(t *testing.T) {
 	}
 }
 
+// TestDecryptToken_WrongKey checks decryption fails with the wrong key.
 func TestDecryptToken_WrongKey(t *testing.T) {
+	t.Parallel()
+
 	key1 := DeriveKey("key1")
 	key2 := DeriveKey("key2")
 
@@ -128,7 +149,10 @@ func TestDecryptToken_WrongKey(t *testing.T) {
 	}
 }
 
+// TestDecryptToken_CorruptedCiphertext checks tampered data is rejected.
 func TestDecryptToken_CorruptedCiphertext(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 
 	ciphertext, err := EncryptToken("some data", key)
@@ -145,7 +169,10 @@ func TestDecryptToken_CorruptedCiphertext(t *testing.T) {
 	}
 }
 
+// TestEncryptToken_LongPlaintext checks encrypting a long plaintext.
 func TestEncryptToken_LongPlaintext(t *testing.T) {
+	t.Parallel()
+
 	key := DeriveKey("test-key")
 	plaintext := strings.Repeat("a", 10000)
 
@@ -164,7 +191,10 @@ func TestEncryptToken_LongPlaintext(t *testing.T) {
 	}
 }
 
+// TestEncryptToken_InvalidKeySize checks the error for a bad key size.
 func TestEncryptToken_InvalidKeySize(t *testing.T) {
+	t.Parallel()
+
 	// AES requires 16, 24, or 32 byte key; bad size should error
 	badKey := []byte("short")
 

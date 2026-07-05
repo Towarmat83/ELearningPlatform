@@ -11,9 +11,13 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// testSecret is the HMAC signing secret shared by tests in this file.
 const testSecret = "test-signing-secret-32bytes-long!!"
 
+// TestCreateToken verifies CreateToken issues a non-empty signed token.
 func TestCreateToken(t *testing.T) {
+	t.Parallel()
+
 	token, err := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
@@ -24,7 +28,10 @@ func TestCreateToken(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_Valid verifies VerifyToken accepts a valid token.
 func TestVerifyToken_Valid(t *testing.T) {
+	t.Parallel()
+
 	token, err := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
@@ -48,7 +55,11 @@ func TestVerifyToken_Valid(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_WrongSecret verifies VerifyToken rejects a token
+// signed with a different secret.
 func TestVerifyToken_WrongSecret(t *testing.T) {
+	t.Parallel()
+
 	token, _ := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
 
 	_, err := VerifyToken(token, "wrong-secret")
@@ -57,14 +68,21 @@ func TestVerifyToken_WrongSecret(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_Malformed verifies VerifyToken rejects malformed
+// token strings.
 func TestVerifyToken_Malformed(t *testing.T) {
+	t.Parallel()
+
 	_, err := VerifyToken("not.a.valid.token", testSecret)
 	if err == nil {
 		t.Error("expected error for malformed token")
 	}
 }
 
+// TestVerifyToken_Expired verifies VerifyToken rejects expired tokens.
 func TestVerifyToken_Expired(t *testing.T) {
+	t.Parallel()
+
 	// Create token with -1 hour expiry (already expired).
 	claims := Claims{
 		Email: "user@example.com",
@@ -87,7 +105,11 @@ func TestVerifyToken_Expired(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_WrongSigningMethod verifies VerifyToken rejects
+// tokens using a non-HMAC signing method.
 func TestVerifyToken_WrongSigningMethod(t *testing.T) {
+	t.Parallel()
+
 	// Create a token signed with RS256 (not HMAC) — should be rejected.
 	_, err := VerifyToken("header.payload.sig", testSecret)
 	if err == nil {
@@ -95,12 +117,16 @@ func TestVerifyToken_WrongSigningMethod(t *testing.T) {
 	}
 }
 
+// TestGetClaims_Set verifies GetClaims returns claims stored in the
+// request context.
 func TestGetClaims_Set(t *testing.T) {
+	t.Parallel()
+
 	claims := &Claims{Email: "a@b.com", Role: "admin"}
 	claims.Subject = "uid-123"
 
 	ctx := context.WithValue(context.Background(), ClaimsKey, claims)
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody).WithContext(ctx)
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", http.NoBody)
 
 	got := GetClaims(req)
 	if got == nil {
@@ -112,14 +138,21 @@ func TestGetClaims_Set(t *testing.T) {
 	}
 }
 
+// TestGetClaims_Missing verifies GetClaims returns nil when no claims
+// are set on the request context.
 func TestGetClaims_Missing(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	t.Parallel()
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	if got := GetClaims(req); got != nil {
 		t.Errorf("GetClaims with no claims: want nil, got %+v", got)
 	}
 }
 
+// TestAuth_Valid verifies Auth lets a valid bearer token through.
 func TestAuth_Valid(t *testing.T) {
+	t.Parallel()
+
 	token, _ := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
 
 	mw := Auth(nil, testSecret)
@@ -132,7 +165,7 @@ func TestAuth_Valid(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rec := httptest.NewRecorder()
@@ -148,13 +181,17 @@ func TestAuth_Valid(t *testing.T) {
 	}
 }
 
+// TestAuth_MissingHeader verifies Auth rejects requests without an
+// Authorization header.
 func TestAuth_MissingHeader(t *testing.T) {
+	t.Parallel()
+
 	mw := Auth(nil, testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 
@@ -163,13 +200,16 @@ func TestAuth_MissingHeader(t *testing.T) {
 	}
 }
 
+// TestAuth_InvalidToken verifies Auth rejects an unparsable token.
 func TestAuth_InvalidToken(t *testing.T) {
+	t.Parallel()
+
 	mw := Auth(nil, testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer bad-token")
 
 	rec := httptest.NewRecorder()
@@ -180,7 +220,11 @@ func TestAuth_InvalidToken(t *testing.T) {
 	}
 }
 
+// TestAuth_MissingSubject verifies Auth rejects tokens without a
+// subject claim.
 func TestAuth_MissingSubject(t *testing.T) {
+	t.Parallel()
+
 	// Token without subject.
 	claims := Claims{
 		Email: "user@example.com",
@@ -197,7 +241,7 @@ func TestAuth_MissingSubject(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+tok)
 
 	rec := httptest.NewRecorder()
@@ -208,7 +252,11 @@ func TestAuth_MissingSubject(t *testing.T) {
 	}
 }
 
+// TestAdmin_ValidAdminToken verifies Admin lets a valid admin token
+// through.
 func TestAdmin_ValidAdminToken(t *testing.T) {
+	t.Parallel()
+
 	token, _ := CreateToken("admin-1", "admin@example.com", "admin", testSecret, 24)
 
 	mw := Admin(nil, testSecret)
@@ -221,7 +269,7 @@ func TestAdmin_ValidAdminToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rec := httptest.NewRecorder()
@@ -236,7 +284,10 @@ func TestAdmin_ValidAdminToken(t *testing.T) {
 	}
 }
 
+// TestAdmin_StudentForbidden verifies Admin rejects a non-admin role.
 func TestAdmin_StudentForbidden(t *testing.T) {
+	t.Parallel()
+
 	token, _ := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
 
 	mw := Admin(nil, testSecret)
@@ -244,7 +295,7 @@ func TestAdmin_StudentForbidden(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rec := httptest.NewRecorder()
@@ -255,13 +306,17 @@ func TestAdmin_StudentForbidden(t *testing.T) {
 	}
 }
 
+// TestAdmin_MissingHeader verifies Admin rejects requests without an
+// Authorization header.
 func TestAdmin_MissingHeader(t *testing.T) {
+	t.Parallel()
+
 	mw := Admin(nil, testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 
@@ -270,7 +325,11 @@ func TestAdmin_MissingHeader(t *testing.T) {
 	}
 }
 
+// TestVerifyToken_NonHMACMethod verifies VerifyToken rejects a token
+// with a forged RS256 header.
 func TestVerifyToken_NonHMACMethod(t *testing.T) {
+	t.Parallel()
+
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
 	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"user-1","email":"u@test.com","role":"student"}`))
 	fake := header + "." + payload + ".invalidsig"
@@ -281,10 +340,13 @@ func TestVerifyToken_NonHMACMethod(t *testing.T) {
 	}
 }
 
+// TestAdmin_InvalidToken verifies Admin rejects an unparsable token.
 func TestAdmin_InvalidToken(t *testing.T) {
+	t.Parallel()
+
 	mw := Admin(nil, testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 
 	rec := httptest.NewRecorder()
@@ -295,7 +357,11 @@ func TestAdmin_InvalidToken(t *testing.T) {
 	}
 }
 
+// TestAdmin_MissingSubject verifies Admin rejects tokens without a
+// subject claim.
 func TestAdmin_MissingSubject(t *testing.T) {
+	t.Parallel()
+
 	claims := Claims{
 		Email: "user@example.com",
 		Role:  "admin",
@@ -307,7 +373,7 @@ func TestAdmin_MissingSubject(t *testing.T) {
 	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
 	mw := Admin(nil, testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+tok)
 
 	rec := httptest.NewRecorder()

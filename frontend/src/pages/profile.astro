@@ -116,13 +116,13 @@ import App from '../layouts/App.astro';
       document.getElementById('loading')!.style.display = 'none';
       document.getElementById('profile-content')!.style.display = 'block';
 
-      const isSso = user.auth_provider && user.auth_provider !== 'local' && user.auth_provider !== '';
+      const isSso = user.authProvider && user.authProvider !== 'local' && user.authProvider !== '';
       const initial = (user.username || '?')[0].toUpperCase();
 
       // Sidebar mini-profile
       const avatarArea = document.getElementById('avatar-area')!;
-      if (user.avatar_url) {
-        avatarArea.innerHTML = `<img src="${user.avatar_url}" alt="${user.username}" class="avatar-circle" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="avatar-initial" style="display:none">${initial}</div>`;
+      if (user.avatarUrl) {
+        avatarArea.innerHTML = `<img src="${user.avatarUrl}" alt="${user.username}" class="avatar-circle" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="avatar-initial" style="display:none">${initial}</div>`;
       } else {
         avatarArea.innerHTML = `<div class="avatar-initial">${initial}</div>`;
       }
@@ -132,34 +132,34 @@ import App from '../layouts/App.astro';
       const roleDiv = document.getElementById('profile-role')!;
       roleDiv.innerHTML = '';
       if (user.role === 'admin') roleDiv.innerHTML += '<span class="badge badge-red">Admin</span> ';
-      if (isSso) roleDiv.innerHTML += `<span class="badge badge-blue">${providerLabels[user.auth_provider] || user.auth_provider}</span>`;
+      if (isSso) roleDiv.innerHTML += `<span class="badge badge-blue">${providerLabels[user.authProvider] || user.authProvider}</span>`;
 
       // View mode
       document.getElementById('view-username')!.textContent = user.username;
       document.getElementById('view-email')!.textContent = user.email;
       document.getElementById('view-bio')!.textContent = user.bio || '—';
 
-      if (!isSso && user.avatar_url) {
+      if (!isSso && user.avatarUrl) {
         const row = document.getElementById('view-avatar-row')!;
         row.style.display = 'grid';
-        document.getElementById('view-avatar')!.textContent = user.avatar_url;
+        document.getElementById('view-avatar')!.textContent = user.avatarUrl;
       }
 
       // Edit mode setup
       if (!isSso) {
         document.getElementById('avatar-field')!.style.display = 'block';
-        (document.getElementById('edit-avatar') as HTMLInputElement).value = user.avatar_url || '';
+        (document.getElementById('edit-avatar') as HTMLInputElement).value = user.avatarUrl || '';
       } else {
         const notice = document.getElementById('sso-avatar-notice')!;
         notice.style.display = 'block';
-        notice.textContent = `Votre avatar est synchronisé automatiquement depuis ${providerLabels[user.auth_provider] || user.auth_provider} à chaque connexion.`;
+        notice.textContent = `Votre avatar est synchronisé automatiquement depuis ${providerLabels[user.authProvider] || user.authProvider} à chaque connexion.`;
       }
       (document.getElementById('edit-bio') as HTMLTextAreaElement).value = user.bio || '';
 
       // Security section
       const secContent = document.getElementById('security-content')!;
       if (isSso) {
-        secContent.innerHTML = `<p class="text-soft text-sm">Votre compte est géré par <strong>${providerLabels[user.auth_provider] || user.auth_provider}</strong>. La gestion du mot de passe est assurée par votre fournisseur d'identité.</p>`;
+        secContent.innerHTML = `<p class="text-soft text-sm">Votre compte est géré par <strong>${providerLabels[user.authProvider] || user.authProvider}</strong>. La gestion du mot de passe est assurée par votre fournisseur d'identité.</p>`;
       } else {
         secContent.innerHTML = `
           <div id="pw-view">
@@ -207,7 +207,7 @@ import App from '../layouts/App.astro';
           const btn = document.getElementById('pw-save-btn') as HTMLButtonElement;
           btn.disabled = true; btn.textContent = 'Enregistrement…';
           try {
-            await apiFetch('/auth/password', { method: 'PUT', body: { old_password: old, new_password: nw }, token: token! });
+            await apiFetch('/auth/password', { method: 'PUT', body: { oldPassword: old, newPassword: nw }, token: token! });
             (window as any).showToast?.('Mot de passe mis à jour', 'success');
             document.getElementById('pw-view')!.style.display = 'block';
             document.getElementById('pw-form')!.style.display = 'none';
@@ -246,7 +246,7 @@ import App from '../layouts/App.astro';
       const bio = (document.getElementById('edit-bio') as HTMLTextAreaElement).value;
       const avatarInput = document.getElementById('edit-avatar') as HTMLInputElement;
       const body: Record<string, string> = { bio };
-      if (avatarInput && avatarInput.value) body.avatar_url = avatarInput.value;
+      if (avatarInput && avatarInput.value) body.avatarUrl = avatarInput.value;
 
       try {
         const updated = await apiFetch('/auth/profile', { method: 'PUT', body, token: token! }) as any;

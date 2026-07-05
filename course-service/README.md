@@ -27,8 +27,8 @@ Stateless micro-service that serves course/module content for the e-learning pla
 | GET | `/api/courses/{slug}/labs/{lab_id}` | JWT | Get lab detail with progress |
 | GET | `/api/courses/{slug}/progress` | JWT | Get course progress |
 | GET | `/api/courses/{slug}/lessons` | JWT | List lessons with viewed status |
-| GET | `/api/courses/{slug}/lessons/{lesson_slug}` | JWT | Get lesson content |
-| POST | `/api/courses/{slug}/lessons/{lesson_slug}/complete` | JWT | Mark lesson complete |
+| GET | `/api/courses/{slug}/lessons/{lessonSlug}` | JWT | Get lesson content |
+| POST | `/api/courses/{slug}/lessons/{lessonSlug}/complete` | JWT | Mark lesson complete |
 | POST | `/api/admin/cache/clear` | JWT+Admin | Clear git cache (force re-clone on next access) |
 | GET | `/api/admin/courses` | JWT+Admin | List all courses including private ones |
 | GET | `/uploads/{filename}` | No | Serve uploaded media |
@@ -117,7 +117,7 @@ Modules with `type: "quiz"` support inline questions or git-fetched quiz YAML.
 modules:
   - name: "K8s Basics Quiz"
     type: "quiz"
-    passing_score: 80
+    passingScore: 80
     questions:
       - id: "q1"
         type: "single"

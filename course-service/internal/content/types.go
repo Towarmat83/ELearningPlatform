@@ -5,33 +5,48 @@ import (
 	"unicode"
 )
 
+// Module type identifiers used across course content, quiz, and Kubernetes
+// CRD handling.
+const (
+	moduleTypeVideo = "video"
+	moduleTypeImage = "image"
+	moduleTypeLab   = "lab"
+	moduleTypeText  = "text"
+	moduleTypeQuiz  = "quiz"
+)
+
+// difficultyMedium is the default question/course difficulty.
+const difficultyMedium = "medium"
+
 // Path is a sequential learning path composed of ordered course slugs.
 type Path struct {
 	Slug        string   `json:"slug"`
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
-	Courses     []string `json:"courses"` // ordered — index N+1 unlocks after N is completed
+	Courses     []string `json:"courses"` // ordered — index N+1 unlocks after N completed
 	Source      string   `json:"source,omitempty"`
 }
 
-// CoursePrerequisite describes one condition that must be met before enrolling.
+// CoursePrerequisite describes one condition to be met before enrolling.
 // If only Course is set, enrollment in that course is required.
-// If MinScore > 0, the user must have earned at least that many total points.
+// If MinScore > 0, the user must have earned at least that many points.
 // If Modules is non-empty, every listed module slug must be passed.
 type CoursePrerequisite struct {
-	Course   string   `json:"course"              yaml:"course"`
-	MinScore int      `json:"min_score,omitempty" yaml:"min_score,omitempty"`
-	Modules  []string `json:"modules,omitempty"   yaml:"modules,omitempty"`
+	Course string `json:"course" yaml:"course"`
+
+	MinScore int      `json:"minScore,omitempty" yaml:"minScore,omitempty"`
+	Modules  []string `json:"modules,omitempty"  yaml:"modules,omitempty"`
 }
 
 // Course is the in-memory representation of a course loaded from disk.
 type Course struct {
-	Slug          string               `json:"slug"`
-	Title         string               `json:"title"`
-	Description   string               `json:"description"`
-	Category      string               `json:"category"`
-	Difficulty    string               `json:"difficulty"`
-	IsPublic      bool                 `json:"is_public"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	Difficulty  string `json:"difficulty"`
+
+	IsPublic      bool                 `json:"isPublic"`
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
 	Lessons       []Lesson             `json:"lessons"`
 	Modules       []Module             `json:"modules,omitempty"`
@@ -48,61 +63,70 @@ type Lesson struct {
 
 // Module is a course element as defined in the CRD spec.modules[].
 type Module struct {
-	Name                   string         `json:"name"`
-	Type                   string         `json:"type"` // video, text, image, quiz, lab
-	Src                    string         `json:"src,omitempty"`
-	Ref                    string         `json:"ref,omitempty"`
-	Path                   string         `json:"path,omitempty"`
-	LabURL                 string         `json:"lab_url,omitempty"`
-	InlineContent          string         `json:"content,omitempty"`
-	Replication            bool           `json:"replication,omitempty"`
-	Hidden                 bool           `json:"hidden,omitempty"`
-	Inline                 bool           `json:"inline,omitempty"`        // quiz rendered inside the previous module
-	Prerequisites          []string       `json:"prerequisites,omitempty"` // module slugs that must be completed first
-	Questions              []Question     `json:"questions,omitempty"`
-	PassingScore           int            `json:"passing_score,omitempty"`
-	Cooldown               CooldownSpec   `json:"cooldown,omitempty"`
-	MaxAttemptsPerQuestion *int           `json:"max_attempts_per_question,omitempty"`
-	LockOnMaxAttempts      bool           `json:"lock_on_max_attempts,omitempty"`
-	CheckProvider          string         `json:"check_provider,omitempty"` // "local" | "gitlab"
-	CheckType              string         `json:"check_type,omitempty"`
-	CheckParams            map[string]any `json:"check_params,omitempty"`
-	Steps                  []CheckStep    `json:"steps,omitempty"`
+	Name string `json:"name"`
+	Type string `json:"type"` // video, text, image, quiz, lab
+	Src  string `json:"src,omitempty"`
+	Ref  string `json:"ref,omitempty"`
+	Path string `json:"path,omitempty"`
+
+	LabURL        string     `json:"labUrl,omitempty"`
+	InlineContent string     `json:"content,omitempty"`
+	Replication   bool       `json:"replication,omitempty"`
+	Hidden        bool       `json:"hidden,omitempty"`
+	Inline        bool       `json:"inline,omitempty"`        // quiz rendered inside the previous module
+	Prerequisites []string   `json:"prerequisites,omitempty"` // module slugs that must be completed first
+	Questions     []Question `json:"questions,omitempty"`
+
+	PassingScore int          `json:"passingScore,omitempty"`
+	Cooldown     CooldownSpec `json:"cooldown,omitempty"`
+
+	MaxAttemptsPerQuestion *int `json:"maxAttemptsPerQuestion,omitempty"`
+
+	LockOnMaxAttempts bool `json:"lockOnMaxAttempts,omitempty"`
+
+	CheckProvider string `json:"checkProvider,omitempty"` // "local" | "gitlab"
+
+	CheckType string `json:"checkType,omitempty"`
+
+	CheckParams map[string]any `json:"checkParams,omitempty"`
+	Steps       []CheckStep    `json:"steps,omitempty"`
 }
 
 // CheckStep is one verifiable step inside a lab module.
 type CheckStep struct {
-	Title       string         `json:"title"                  yaml:"title"`
-	CheckType   string         `json:"check_type"             yaml:"check_type"`
-	CheckParams map[string]any `json:"check_params,omitempty" yaml:"check_params,omitempty"`
+	Title string `json:"title" yaml:"title"`
+
+	CheckType string `json:"checkType" yaml:"checkType"`
+
+	CheckParams map[string]any `json:"checkParams,omitempty" yaml:"checkParams,omitempty"`
 }
 
 // Slug returns a DNS-compliant slug derived from the module name.
 func (m Module) Slug() string {
-	var b strings.Builder
+	var builder strings.Builder
 
 	for _, c := range m.Name {
-		if unicode.IsLetter(c) || unicode.IsDigit(c) || c == '-' || c == '_' {
-			b.WriteRune(c)
-		} else if unicode.IsSpace(c) {
-			b.WriteRune('-')
-		} else {
-			b.WriteRune('-')
+		switch {
+		case unicode.IsLetter(c) || unicode.IsDigit(c) || c == '-' || c == '_':
+			builder.WriteRune(c)
+		default:
+			builder.WriteRune('-')
 		}
 	}
 
-	return strings.ToLower(strings.Trim(b.String(), "-"))
+	return strings.ToLower(strings.Trim(builder.String(), "-"))
 }
 
 // Content resolves and returns the module content.
-// For video/image: returns the Src as a direct URL.
-// For lab without inline content: returns Src as the external lab URL.
-// For text/quiz with git: needs FetchModuleContent (returns empty, caller must fetch).
+// video/image: returns Src, a direct URL.
+// lab without inline content: returns Src, an external lab URL.
+// text/quiz with git: needs FetchModuleContent (returns empty here, caller
+// must fetch it separately).
 func (m Module) Content() string {
 	switch m.Type {
-	case "video", "image":
+	case moduleTypeVideo, moduleTypeImage:
 		return m.Src
-	case "lab":
+	case moduleTypeLab:
 		if m.InlineContent != "" {
 			return m.InlineContent
 		}
@@ -113,12 +137,12 @@ func (m Module) Content() string {
 	}
 }
 
-// HasQuestions returns true if this module has inline quiz questions.
+// HasQuestions returns true if the module has inline quiz questions.
 func (m Module) HasQuestions() bool {
-	return m.Type == "quiz" && len(m.Questions) > 0
+	return m.Type == moduleTypeQuiz && len(m.Questions) > 0
 }
 
-// HasGitContent returns true if this module references a git repo for content.
+// HasGitContent returns true if the module references git repo content.
 func (m Module) HasGitContent() bool {
 	return m.Src != "" && m.Ref != "" && m.Path != ""
 }
@@ -151,26 +175,33 @@ type CourseSpec struct {
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
 type ModuleYAML struct {
-	Name                   string           `yaml:"name"`
-	Type                   string           `yaml:"type"`
-	Src                    string           `yaml:"src,omitempty"`
-	Ref                    string           `yaml:"ref,omitempty"`
-	Path                   string           `yaml:"path,omitempty"`
-	LabURL                 string           `yaml:"lab_url,omitempty"`
-	InlineContent          string           `yaml:"content,omitempty"`
-	Replication            bool             `yaml:"replication,omitempty"`
-	Hidden                 bool             `yaml:"hidden,omitempty"`
-	Inline                 bool             `yaml:"inline,omitempty"`
-	Prerequisites          []string         `yaml:"prerequisites,omitempty"`
-	Questions              []QuestionYAML   `yaml:"questions,omitempty"`
-	PassingScore           int              `yaml:"passing_score"`
-	Cooldown               CooldownSpecYAML `yaml:"cooldown"`
-	MaxAttemptsPerQuestion *int             `yaml:"max_attempts_per_question"`
-	LockOnMaxAttempts      bool             `yaml:"lock_on_max_attempts"`
-	CheckProvider          string           `yaml:"check_provider,omitempty"`
-	CheckType              string           `yaml:"check_type,omitempty"`
-	CheckParams            map[string]any   `yaml:"check_params,omitempty"`
-	Steps                  []CheckStep      `yaml:"steps,omitempty"`
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
+	Src  string `yaml:"src,omitempty"`
+	Ref  string `yaml:"ref,omitempty"`
+	Path string `yaml:"path,omitempty"`
+
+	LabURL        string         `yaml:"labUrl,omitempty"`
+	InlineContent string         `yaml:"content,omitempty"`
+	Replication   bool           `yaml:"replication,omitempty"`
+	Hidden        bool           `yaml:"hidden,omitempty"`
+	Inline        bool           `yaml:"inline,omitempty"`
+	Prerequisites []string       `yaml:"prerequisites,omitempty"`
+	Questions     []QuestionYAML `yaml:"questions,omitempty"`
+
+	PassingScore int              `yaml:"passingScore"`
+	Cooldown     CooldownSpecYAML `yaml:"cooldown"`
+
+	MaxAttemptsPerQuestion *int `yaml:"maxAttemptsPerQuestion"`
+
+	LockOnMaxAttempts bool `yaml:"lockOnMaxAttempts"`
+
+	CheckProvider string `yaml:"checkProvider,omitempty"`
+
+	CheckType string `yaml:"checkType,omitempty"`
+
+	CheckParams map[string]any `yaml:"checkParams,omitempty"`
+	Steps       []CheckStep    `yaml:"steps,omitempty"`
 }
 
 // ModuleIndexEntry is one entry in a module index YAML file (type: modules).
@@ -189,6 +220,21 @@ type lessonFrontmatter struct {
 	Title string `yaml:"title"`
 }
 
+// mergeIfZero sets *dst to src when *dst is the zero value for T.
+func mergeIfZero[T comparable](dst *T, src T) {
+	var zero T
+	if *dst == zero {
+		*dst = src
+	}
+}
+
+// mergeIfEmpty sets *dst to src when *dst is empty and src is not.
+func mergeIfEmpty[T any](dst *[]T, src []T) {
+	if len(*dst) == 0 && len(src) > 0 {
+		*dst = src
+	}
+}
+
 // MergeSpec merges the CRD format (spec nesting) into the flat fields.
 // If Spec is present, flat fields from Spec take priority over top-level.
 func (c *CourseYAML) MergeSpec() {
@@ -196,31 +242,15 @@ func (c *CourseYAML) MergeSpec() {
 		return
 	}
 
-	if c.Title == "" {
-		c.Title = c.Spec.Title
-	}
-
-	if c.Description == "" {
-		c.Description = c.Spec.Description
-	}
+	mergeIfZero(&c.Title, c.Spec.Title)
+	mergeIfZero(&c.Description, c.Spec.Description)
 
 	if !c.Public {
 		c.Public = c.Spec.Public
 	}
 
-	if c.Category == "" {
-		c.Category = c.Spec.Category
-	}
-
-	if c.Difficulty == "" {
-		c.Difficulty = c.Spec.Difficulty
-	}
-
-	if len(c.Prerequisites) == 0 && len(c.Spec.Prerequisites) > 0 {
-		c.Prerequisites = c.Spec.Prerequisites
-	}
-
-	if len(c.Modules) == 0 && len(c.Spec.Modules) > 0 {
-		c.Modules = c.Spec.Modules
-	}
+	mergeIfZero(&c.Category, c.Spec.Category)
+	mergeIfZero(&c.Difficulty, c.Spec.Difficulty)
+	mergeIfEmpty(&c.Prerequisites, c.Spec.Prerequisites)
+	mergeIfEmpty(&c.Modules, c.Spec.Modules)
 }

@@ -52,7 +52,7 @@ spec:
         - "rebase-interactif"
         - "gitflow-et-trunk-based-development"
         - "hooks-et-automatisation"
-      passing_score: 80
+      passingScore: 80
       questions:
         - id: q1
           type: single

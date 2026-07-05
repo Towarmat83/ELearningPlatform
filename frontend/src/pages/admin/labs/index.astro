@@ -64,7 +64,7 @@ import Admin from '../../../layouts/Admin.astro';
     async function populateCourseFilter(current: string) {
       if (allCourses.length === 0) {
         const rows = await api('/admin/lab-checks');
-        allCourses = [...new Set(rows.map((r: any) => r.course_slug))].sort() as string[];
+        allCourses = [...new Set(rows.map((r: any) => r.courseSlug))].sort() as string[];
       }
       const sel = document.getElementById('course-filter') as HTMLSelectElement;
       sel.innerHTML = `<option value="">Tous les cours</option>` +
@@ -119,15 +119,15 @@ import Admin from '../../../layouts/Admin.astro';
               <span style="font-weight:500">${r.username}</span>
             </div>
           </td>
-          <td style="padding:12px 16px;color:var(--ink-soft);font-size:.85rem">${r.course_slug}</td>
-          <td style="padding:12px 16px;font-size:.85rem">${r.module_name}</td>
+          <td style="padding:12px 16px;color:var(--ink-soft);font-size:.85rem">${r.courseSlug}</td>
+          <td style="padding:12px 16px;font-size:.85rem">${r.moduleName}</td>
           <td style="padding:12px 16px">${statusBadge(r.allow)}</td>
           <td style="padding:12px 16px;max-width:340px">
             ${r.violations && r.violations.length
               ? r.violations.map((v: string) => `<div style="font-size:.8rem;color:#991b1b;margin-bottom:2px">• ${v}</div>`).join('')
               : `<span style="color:var(--ink-soft);font-size:.82rem">—</span>`}
           </td>
-          <td style="padding:12px 16px;color:var(--ink-soft);font-size:.82rem;white-space:nowrap">${fmt(r.checked_at)}</td>
+          <td style="padding:12px 16px;color:var(--ink-soft);font-size:.82rem;white-space:nowrap">${fmt(r.checkedAt)}</td>
         </tr>
       `).join('');
     }

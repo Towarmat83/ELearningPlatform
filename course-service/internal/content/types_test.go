@@ -4,7 +4,10 @@ import (
 	"testing"
 )
 
+// TestModuleSlug checks module slug.
 func TestModuleSlug(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		want string
@@ -29,7 +32,10 @@ func TestModuleSlug(t *testing.T) {
 	}
 }
 
+// TestModuleContent checks module content.
 func TestModuleContent(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		typ  string
 		src  string
@@ -64,7 +70,10 @@ func TestModuleContent(t *testing.T) {
 	}
 }
 
+// TestModuleHasQuestions checks module has questions.
 func TestModuleHasQuestions(t *testing.T) {
+	t.Parallel()
+
 	// quiz with questions
 	m1 := Module{Type: "quiz", Questions: []Question{{ID: "q1"}}}
 	if !m1.HasQuestions() {
@@ -84,7 +93,10 @@ func TestModuleHasQuestions(t *testing.T) {
 	}
 }
 
+// TestModuleHasGitContent checks module has git content.
 func TestModuleHasGitContent(t *testing.T) {
+	t.Parallel()
+
 	m1 := Module{Src: "https://github.com/org/repo", Ref: "main", Path: "content.yaml"}
 	if !m1.HasGitContent() {
 		t.Error("expected HasGitContent=true when Src+Ref+Path set")
@@ -106,7 +118,10 @@ func TestModuleHasGitContent(t *testing.T) {
 	}
 }
 
+// TestCourseYAML_MergeSpec_NilSpec checks course YAML merge spec nil spec.
 func TestCourseYAML_MergeSpec_NilSpec(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{Title: "My Course"}
 	c.MergeSpec()
 
@@ -115,7 +130,10 @@ func TestCourseYAML_MergeSpec_NilSpec(t *testing.T) {
 	}
 }
 
+// TestCourseYAML_MergeSpec_FromSpec checks course YAML merge spec from spec.
 func TestCourseYAML_MergeSpec_FromSpec(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{
 		Spec: &CourseSpec{
 			Title:         "Spec Title",
@@ -158,7 +176,10 @@ func TestCourseYAML_MergeSpec_FromSpec(t *testing.T) {
 	}
 }
 
+// TestCourseYAML_MergeSpec_TopLevelTakesPrecedence checks top-level precedence.
 func TestCourseYAML_MergeSpec_TopLevelTakesPrecedence(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{
 		Title:       "Top Title",
 		Description: "Top Desc",
@@ -188,7 +209,10 @@ func TestCourseYAML_MergeSpec_TopLevelTakesPrecedence(t *testing.T) {
 	}
 }
 
+// TestCourseYAML_MergeSpec_PublicFallbackFromSpec checks public fallback.
 func TestCourseYAML_MergeSpec_PublicFallbackFromSpec(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{
 		Spec: &CourseSpec{Public: true},
 	}

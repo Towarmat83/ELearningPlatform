@@ -5,29 +5,29 @@ CREATE TABLE IF NOT EXISTS groups (
     name        VARCHAR(255) NOT NULL UNIQUE,
     description TEXT,
     source      VARCHAR(32) NOT NULL DEFAULT 'local', -- 'oidc', 'ldap', 'local'
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    createdAt  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updatedAt  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ── User → Group membership ────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_groups (
-    user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-    PRIMARY KEY (user_id, group_id)
+    userId  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    groupId UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    PRIMARY KEY (userId, groupId)
 );
 
 -- ── Group → Platform role mapping ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS group_role_mappings (
-    group_name    VARCHAR(255) PRIMARY KEY,
-    platform_role VARCHAR(16) NOT NULL CHECK (platform_role IN ('admin', 'student'))
+    groupName    VARCHAR(255) PRIMARY KEY,
+    platformRole VARCHAR(16) NOT NULL CHECK (platformRole IN ('admin', 'student'))
 );
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 
-CREATE INDEX IF NOT EXISTS idx_user_groups_user  ON user_groups(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_groups_group ON user_groups(group_id);
+CREATE INDEX IF NOT EXISTS idx_user_groups_user  ON user_groups(userId);
+CREATE INDEX IF NOT EXISTS idx_user_groups_group ON user_groups(groupId);
 
 -- ── Platform settings: OIDC ───────────────────────────────────────────────────
 

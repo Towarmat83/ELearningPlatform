@@ -195,10 +195,10 @@ fn check_distrobox_lab3(params: DistroboxLab3Params) -> Result<LocalCheckResult,
 /// Point d'entrée générique pour les checks locaux.
 #[tauri::command]
 fn local_check(
-    check_type: String,
+    checkType: String,
     params: serde_json::Value,
 ) -> Result<LocalCheckResult, String> {
-    match check_type.as_str() {
+    match checkType.as_str() {
         "podman_images" => {
             let p: PodmanCheckParams = serde_json::from_value(params)
                 .map_err(|e| format!("Params invalides : {e}"))?;
@@ -224,7 +224,7 @@ fn local_check(
                 .map_err(|e| format!("Params invalides : {e}"))?;
             check_distrobox_lab3_export(p)
         }
-        _ => Err(format!("check_type inconnu : {check_type}")),
+        _ => Err(format!("checkType inconnu : {checkType}")),
     }
 }
 

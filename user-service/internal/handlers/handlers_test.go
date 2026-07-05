@@ -23,15 +23,21 @@ import (
 )
 
 const (
+	// htSecret is the JWT signing secret shared by handler tests.
 	htSecret = "test-jwt-signing-secret-32bytes!!"
+	// htExpiry is the JWT expiry, in hours, used by handler tests.
 	htExpiry = 24
 )
 
+//nolint:gochecknoglobals // shared fixture, seeded once in TestMain
 var (
+	// htLoginPassword is the plaintext password backing htLoginHash.
 	htLoginPassword = "TestPass99"
-	htLoginHash     string
+	// htLoginHash is bcrypt(htLoginPassword), computed in TestMain.
+	htLoginHash string
 )
 
+// TestMain seeds htLoginHash before running the handler test suite.
 func TestMain(m *testing.M) {
 	h, err := bcrypt.GenerateFromPassword([]byte(htLoginPassword), bcrypt.MinCost)
 	if err != nil {
@@ -43,6 +49,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// newTestRouter builds a router wired to pool for handler tests.
 func newTestRouter(pool *fake.Pool) http.Handler {
 	cfg := &config.Config{
 		JWTSecret:   htSecret,
@@ -54,6 +61,7 @@ func newTestRouter(pool *fake.Pool) http.Handler {
 	return BuildRouter(s, cfg, pool, false)
 }
 
+// htAuthHeader builds a "Bearer <token>" header value for role.
 func htAuthHeader(t *testing.T, role string) string {
 	t.Helper()
 
@@ -65,13 +73,15 @@ func htAuthHeader(t *testing.T, role string) string {
 	return "Bearer " + tok
 }
 
-// skipErrRows pushes n error rows so ReadSetting calls consume them and return their fallbacks.
+// skipErrRows pushes n error rows so ReadSetting calls consume them
+// and return their fallbacks.
 func skipErrRows(pool *fake.Pool, n int) {
 	for range n {
 		pool.PushRow(errors.New("no value"))
 	}
 }
 
+// htDo issues an HTTP request against handler and returns the response.
 func htDo(t *testing.T, handler http.Handler, method, path, body, auth string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -82,7 +92,7 @@ func htDo(t *testing.T, handler http.Handler, method, path, body, auth string) *
 		buf = bytes.NewReader(nil)
 	}
 
-	req := httptest.NewRequest(method, path, buf)
+	req := httptest.NewRequestWithContext(t.Context(), method, path, buf)
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
@@ -97,9 +107,38 @@ func htDo(t *testing.T, handler http.Handler, method, path, body, auth string) *
 	return rec
 }
 
+// htSliceField extracts resp[key] as a []any, failing the test if the
+// key is absent or holds a value of a different type.
+func htSliceField(t *testing.T, resp map[string]any, key string) []any {
+	t.Helper()
+
+	v, ok := resp[key].([]any)
+	if !ok {
+		t.Fatalf("expected %q to be []any, got %T", key, resp[key])
+	}
+
+	return v
+}
+
+// htMapField extracts v as a map[string]any, failing the test if v
+// holds a value of a different type.
+func htMapField(t *testing.T, v any) map[string]any {
+	t.Helper()
+
+	m, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", v)
+	}
+
+	return m
+}
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
+// TestHealth verifies health behavior.
 func TestHealth(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -118,7 +157,10 @@ func TestHealth(t *testing.T) {
 
 // ── PublicSettings ────────────────────────────────────────────────────────────
 
+// TestPublicSettings verifies public settings behavior.
 func TestPublicSettings(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -137,7 +179,10 @@ func TestPublicSettings(t *testing.T) {
 
 // ── Register ──────────────────────────────────────────────────────────────────
 
+// TestRegister_InvalidJSON verifies register invalid JSON behavior.
 func TestRegister_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -147,7 +192,11 @@ func TestRegister_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestRegister_RegistrationDisabled verifies register registration disabled
+// behavior.
 func TestRegister_RegistrationDisabled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "false") // registration_enabled → "false"
 	r := newTestRouter(pool)
@@ -159,7 +208,11 @@ func TestRegister_RegistrationDisabled(t *testing.T) {
 	}
 }
 
+// TestRegister_EmailDomainBlocked verifies register email domain blocked
+// behavior.
 func TestRegister_EmailDomainBlocked(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true")        // registration_enabled → "true"
 	pool.PushRow(nil, "example.com") // registration_email_whitelist → "example.com"
@@ -172,7 +225,11 @@ func TestRegister_EmailDomainBlocked(t *testing.T) {
 	}
 }
 
+// TestRegister_UsernameTooShort verifies register username too short
+// behavior.
 func TestRegister_UsernameTooShort(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 	body := `{"username":"ab","email":"t@test.com","password":"TestPass99"}`
@@ -183,7 +240,11 @@ func TestRegister_UsernameTooShort(t *testing.T) {
 	}
 }
 
+// TestRegister_PasswordTooShort verifies register password too short
+// behavior.
 func TestRegister_PasswordTooShort(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 	body := `{"username":"validuser","email":"t@test.com","password":"short"}`
@@ -194,7 +255,11 @@ func TestRegister_PasswordTooShort(t *testing.T) {
 	}
 }
 
+// TestRegister_PasswordNeedsUppercase verifies register password needs
+// uppercase behavior.
 func TestRegister_PasswordNeedsUppercase(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 2)      // registration_enabled → fallback, email_whitelist → fallback
 	pool.PushRow(nil, "8")    // password_min_length → "8"
@@ -208,7 +273,11 @@ func TestRegister_PasswordNeedsUppercase(t *testing.T) {
 	}
 }
 
+// TestRegister_PasswordNeedsNumber verifies register password needs number
+// behavior.
 func TestRegister_PasswordNeedsNumber(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 2)       // registration_enabled, email_whitelist → fallbacks
 	pool.PushRow(nil, "8")     // password_min_length → "8"
@@ -223,7 +292,11 @@ func TestRegister_PasswordNeedsNumber(t *testing.T) {
 	}
 }
 
+// TestRegister_PasswordMinLenFallback verifies register password min len
+// fallback behavior.
 func TestRegister_PasswordMinLenFallback(t *testing.T) {
+	t.Parallel()
+
 	// When the min_length setting returns "0" (< 1), it falls back to 8
 	pool := &fake.Pool{}
 	skipErrRows(pool, 2)   // registration_enabled, email_whitelist
@@ -237,13 +310,17 @@ func TestRegister_PasswordMinLenFallback(t *testing.T) {
 	}
 }
 
+// TestRegister_PasswordHasUppercasePasses verifies register password has
+// uppercase passes behavior.
 func TestRegister_PasswordHasUppercasePasses(t *testing.T) {
+	t.Parallel()
+
 	// password_require_uppercase=true, password HAS uppercase → passes that check
 	pool := &fake.Pool{}
 	skipErrRows(pool, 2)       // registration_enabled, email_whitelist
 	pool.PushRow(nil, "8")     // password_min_length
-	pool.PushRow(nil, "true")  // password_require_uppercase=true
-	pool.PushRow(nil, "false") // password_require_number=false
+	pool.PushRow(nil, "true")  // password_require_uppercase is true
+	pool.PushRow(nil, "false") // password_require_number is false
 	// After validation passes, hit a DB error on COUNT(*) to stop
 	pool.PushRow(errors.New("db down"))
 	r := newTestRouter(pool)
@@ -255,13 +332,17 @@ func TestRegister_PasswordHasUppercasePasses(t *testing.T) {
 	}
 }
 
+// TestRegister_PasswordHasNumberPasses verifies register password has number
+// passes behavior.
 func TestRegister_PasswordHasNumberPasses(t *testing.T) {
+	t.Parallel()
+
 	// password_require_number=true, password HAS number → passes that check
 	pool := &fake.Pool{}
 	skipErrRows(pool, 2)       // registration_enabled, email_whitelist
 	pool.PushRow(nil, "8")     // password_min_length
-	pool.PushRow(nil, "false") // password_require_uppercase=false
-	pool.PushRow(nil, "true")  // password_require_number=true
+	pool.PushRow(nil, "false") // password_require_uppercase is false
+	pool.PushRow(nil, "true")  // password_require_number is true
 	// After validation passes, hit a DB error on COUNT(*) to stop
 	pool.PushRow(errors.New("db down"))
 	r := newTestRouter(pool)
@@ -273,7 +354,10 @@ func TestRegister_PasswordHasNumberPasses(t *testing.T) {
 	}
 }
 
+// TestRegister_Conflict verifies register conflict behavior.
 func TestRegister_Conflict(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 5)        // 2 before validation + 3 in validatePasswordPolicy
 	pool.PushRow(nil, int64(1)) // COUNT(*) → existing=1
@@ -286,7 +370,10 @@ func TestRegister_Conflict(t *testing.T) {
 	}
 }
 
+// TestRegister_DBError verifies register DB error behavior.
 func TestRegister_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 5)
 	pool.PushRow(errors.New("connection failed")) // COUNT(*) error → 500
@@ -301,7 +388,10 @@ func TestRegister_DBError(t *testing.T) {
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 
+// TestLogin_InvalidJSON verifies login invalid JSON behavior.
 func TestLogin_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -311,7 +401,10 @@ func TestLogin_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestLogin_LocalLoginDisabled verifies login local login disabled behavior.
 func TestLogin_LocalLoginDisabled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "false") // sso_local_login_enabled → "false"
 	r := newTestRouter(pool)
@@ -322,7 +415,10 @@ func TestLogin_LocalLoginDisabled(t *testing.T) {
 	}
 }
 
+// TestLogin_UserNotFound verifies login user not found behavior.
 func TestLogin_UserNotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// sso_local_login_enabled → empty → fallback "true"; user query → empty → error → 401
 	r := newTestRouter(pool)
@@ -333,7 +429,10 @@ func TestLogin_UserNotFound(t *testing.T) {
 	}
 }
 
+// TestLogin_NullPasswordHash verifies login null password hash behavior.
 func TestLogin_NullPasswordHash(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 1) // sso_local_login_enabled → fallback "true"
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com",
@@ -347,7 +446,10 @@ func TestLogin_NullPasswordHash(t *testing.T) {
 	}
 }
 
+// TestLogin_WrongPassword verifies login wrong password behavior.
 func TestLogin_WrongPassword(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 1) // sso_local_login_enabled → fallback "true"
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com",
@@ -360,7 +462,10 @@ func TestLogin_WrongPassword(t *testing.T) {
 	}
 }
 
+// TestLogin_Success verifies login success behavior.
 func TestLogin_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 1) // sso_local_login_enabled → fallback "true"
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com",
@@ -383,7 +488,10 @@ func TestLogin_Success(t *testing.T) {
 
 // ── Me ────────────────────────────────────────────────────────────────────────
 
+// TestMe_Unauthorized verifies me unauthorized behavior.
 func TestMe_Unauthorized(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -393,7 +501,10 @@ func TestMe_Unauthorized(t *testing.T) {
 	}
 }
 
+// TestMe_NotFound verifies me not found behavior.
 func TestMe_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -403,7 +514,10 @@ func TestMe_NotFound(t *testing.T) {
 	}
 }
 
+// TestMe_Success verifies me success behavior.
 func TestMe_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com", "student",
 		nil, nil, true, "local", "2024-01-01")
@@ -417,7 +531,11 @@ func TestMe_Success(t *testing.T) {
 
 // ── UpdateProfile ─────────────────────────────────────────────────────────────
 
+// TestUpdateProfile_InvalidJSON verifies update profile invalid JSON
+// behavior.
 func TestUpdateProfile_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -427,7 +545,11 @@ func TestUpdateProfile_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestUpdateProfile_UsernameTooShort verifies update profile username too
+// short behavior.
 func TestUpdateProfile_UsernameTooShort(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true") // profile_allow_username_change → "true"
 	r := newTestRouter(pool)
@@ -438,7 +560,11 @@ func TestUpdateProfile_UsernameTooShort(t *testing.T) {
 	}
 }
 
+// TestUpdateProfile_UsernameDisallowed verifies update profile username
+// disallowed behavior.
 func TestUpdateProfile_UsernameDisallowed(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "false") // profile_allow_username_change → "false"
 	r := newTestRouter(pool)
@@ -449,7 +575,10 @@ func TestUpdateProfile_UsernameDisallowed(t *testing.T) {
 	}
 }
 
+// TestUpdateProfile_BioOnly verifies update profile bio only behavior.
 func TestUpdateProfile_BioOnly(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com", "student",
 		nil, nil, true, "local", "2024-01-01")
@@ -463,66 +592,88 @@ func TestUpdateProfile_BioOnly(t *testing.T) {
 
 // ── ChangePassword ────────────────────────────────────────────────────────────
 
+// TestChangePassword_MissingOldPassword verifies change password missing old
+// password behavior.
 func TestChangePassword_MissingOldPassword(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "PUT", "/api/auth/password", `{"new_password":"NewPass99"}`, htAuthHeader(t, "student"))
+	rec := htDo(t, r, "PUT", "/api/auth/password", `{"newPassword":"NewPass99"}`, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestChangePassword_MissingNewPassword verifies change password missing new
+// password behavior.
 func TestChangePassword_MissingNewPassword(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "PUT", "/api/auth/password", `{"old_password":"OldPass99"}`, htAuthHeader(t, "student"))
+	rec := htDo(t, r, "PUT", "/api/auth/password", `{"oldPassword":"OldPass99"}`, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestChangePassword_NewPasswordTooShort verifies change password new
+// password too short behavior.
 func TestChangePassword_NewPasswordTooShort(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "PUT", "/api/auth/password", `{"old_password":"OldPass99","new_password":"short"}`, htAuthHeader(t, "student"))
+	rec := htDo(t, r, "PUT", "/api/auth/password", `{"oldPassword":"OldPass99","newPassword":"short"}`, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestChangePassword_SSOUser verifies change password SSO user behavior.
 func TestChangePassword_SSOUser(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// validatePasswordPolicy: 3 ReadSettings → all empty → fallbacks; then QueryRow → empty → error → 400
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "PUT", "/api/auth/password", `{"old_password":"OldPass99","new_password":"NewPass9999"}`, htAuthHeader(t, "student"))
+	rec := htDo(t, r, "PUT", "/api/auth/password", `{"oldPassword":"OldPass99","newPassword":"NewPass9999"}`, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400 (SSO user), got %d", rec.Code)
 	}
 }
 
+// TestChangePassword_WrongOldPassword verifies change password wrong old
+// password behavior.
 func TestChangePassword_WrongOldPassword(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 3)           // 3 ReadSettings in validatePasswordPolicy → fallbacks
 	pool.PushRow(nil, htLoginHash) // password_hash
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "PUT", "/api/auth/password", `{"old_password":"WrongOld","new_password":"NewPass9999"}`, htAuthHeader(t, "student"))
+	rec := htDo(t, r, "PUT", "/api/auth/password", `{"oldPassword":"WrongOld","newPassword":"NewPass9999"}`, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("want 401, got %d", rec.Code)
 	}
 }
 
+// TestChangePassword_Success verifies change password success behavior.
 func TestChangePassword_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 3)           // validatePasswordPolicy ReadSettings → defaults
 	pool.PushRow(nil, htLoginHash) // SELECT password_hash
 	pool.PushExec(1, nil)          // UPDATE password_hash
 	r := newTestRouter(pool)
-	body := fmt.Sprintf(`{"old_password":%q,"new_password":"NewPass9999"}`, htLoginPassword)
+	body := fmt.Sprintf(`{"oldPassword":%q,"newPassword":"NewPass9999"}`, htLoginPassword)
 
 	rec := htDo(t, r, "PUT", "/api/auth/password", body, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusOK {
@@ -530,13 +681,17 @@ func TestChangePassword_Success(t *testing.T) {
 	}
 }
 
+// TestChangePassword_DBUpdateError verifies change password DB update error
+// behavior.
 func TestChangePassword_DBUpdateError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 3)                    // validatePasswordPolicy ReadSettings
 	pool.PushRow(nil, htLoginHash)          // SELECT password_hash
 	pool.PushExec(0, errors.New("db down")) // UPDATE fails
 	r := newTestRouter(pool)
-	body := fmt.Sprintf(`{"old_password":%q,"new_password":"NewPass9999"}`, htLoginPassword)
+	body := fmt.Sprintf(`{"oldPassword":%q,"newPassword":"NewPass9999"}`, htLoginPassword)
 
 	rec := htDo(t, r, "PUT", "/api/auth/password", body, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusInternalServerError {
@@ -544,7 +699,11 @@ func TestChangePassword_DBUpdateError(t *testing.T) {
 	}
 }
 
+// TestChangePassword_InvalidJSON verifies change password invalid JSON
+// behavior.
 func TestChangePassword_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -554,7 +713,11 @@ func TestChangePassword_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestUpdateProfile_UsernameConflict verifies update profile username
+// conflict behavior.
 func TestUpdateProfile_UsernameConflict(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true")   // ReadSetting(profile_allow_username_change) → "true"
 	pool.PushRow(nil, int64(1)) // COUNT(*) → taken=1 → conflict
@@ -566,7 +729,11 @@ func TestUpdateProfile_UsernameConflict(t *testing.T) {
 	}
 }
 
+// TestUpdateProfile_UsernameSuccess verifies update profile username success
+// behavior.
 func TestUpdateProfile_UsernameSuccess(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true")   // ReadSetting → "true"
 	pool.PushRow(nil, int64(0)) // COUNT → 0 (not taken)
@@ -582,7 +749,10 @@ func TestUpdateProfile_UsernameSuccess(t *testing.T) {
 
 // ── Admin Stats ───────────────────────────────────────────────────────────────
 
+// TestAdminStats verifies admin stats behavior.
 func TestAdminStats(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -599,7 +769,10 @@ func TestAdminStats(t *testing.T) {
 	}
 }
 
+// TestAdminStats_Unauthorized verifies admin stats unauthorized behavior.
 func TestAdminStats_Unauthorized(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -611,7 +784,10 @@ func TestAdminStats_Unauthorized(t *testing.T) {
 
 // ── ListUsers ─────────────────────────────────────────────────────────────────
 
+// TestListUsers_Empty verifies list users empty behavior.
 func TestListUsers_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil) // empty result
 	r := newTestRouter(pool)
@@ -622,7 +798,10 @@ func TestListUsers_Empty(t *testing.T) {
 	}
 }
 
+// TestListUsers_DBError verifies list users DB error behavior.
 func TestListUsers_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
@@ -633,7 +812,10 @@ func TestListUsers_DBError(t *testing.T) {
 	}
 }
 
+// TestListUsers_WithData verifies list users with data behavior.
 func TestListUsers_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"user-uuid-1", "alice", "alice@test.com", "student", true, nil, nil, "local", "2024-01-01", int64(2)},
@@ -648,13 +830,17 @@ func TestListUsers_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	users := resp["users"].([]any)
+	users := htSliceField(t, resp, "users")
 	if len(users) != 1 {
 		t.Errorf("expected 1 user, got %d", len(users))
 	}
 }
 
+// TestListUsers_WithProviderFilter verifies list users with provider filter
+// behavior.
 func TestListUsers_WithProviderFilter(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"user-uuid-2", "bob", "bob@test.com", "student", true, nil, nil, "github", "2024-01-01", int64(0)},
@@ -669,7 +855,7 @@ func TestListUsers_WithProviderFilter(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	users := resp["users"].([]any)
+	users := htSliceField(t, resp, "users")
 	if len(users) != 1 {
 		t.Errorf("expected 1 user with github provider, got %d", len(users))
 	}
@@ -677,7 +863,10 @@ func TestListUsers_WithProviderFilter(t *testing.T) {
 
 // ── GetUser ───────────────────────────────────────────────────────────────────
 
+// TestGetUser_NotFound verifies get user not found behavior.
 func TestGetUser_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -687,7 +876,10 @@ func TestGetUser_NotFound(t *testing.T) {
 	}
 }
 
+// TestGetUser_Success verifies get user success behavior.
 func TestGetUser_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com", "student", true,
 		nil, nil, "local", "2024-01-01", int64(3), int64(10))
@@ -701,7 +893,10 @@ func TestGetUser_Success(t *testing.T) {
 
 // ── UpdateUser ────────────────────────────────────────────────────────────────
 
+// TestUpdateUser_InvalidRole verifies update user invalid role behavior.
 func TestUpdateUser_InvalidRole(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -711,7 +906,10 @@ func TestUpdateUser_InvalidRole(t *testing.T) {
 	}
 }
 
+// TestUpdateUser_NotFound verifies update user not found behavior.
 func TestUpdateUser_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -721,7 +919,10 @@ func TestUpdateUser_NotFound(t *testing.T) {
 	}
 }
 
+// TestUpdateUser_Success verifies update user success behavior.
 func TestUpdateUser_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "user-uuid-1", "testuser", "t@test.com", "admin",
 		nil, nil, true, "local", "2024-01-01")
@@ -735,7 +936,10 @@ func TestUpdateUser_Success(t *testing.T) {
 
 // ── DeleteUser ────────────────────────────────────────────────────────────────
 
+// TestDeleteUser_DBError verifies delete user DB error behavior.
 func TestDeleteUser_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -746,7 +950,10 @@ func TestDeleteUser_DBError(t *testing.T) {
 	}
 }
 
+// TestDeleteUser_Success verifies delete user success behavior.
 func TestDeleteUser_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -758,7 +965,10 @@ func TestDeleteUser_Success(t *testing.T) {
 
 // ── SearchUsers ───────────────────────────────────────────────────────────────
 
+// TestSearchUsers_Empty verifies search users empty behavior.
 func TestSearchUsers_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -769,7 +979,10 @@ func TestSearchUsers_Empty(t *testing.T) {
 	}
 }
 
+// TestSearchUsers_WithData verifies search users with data behavior.
 func TestSearchUsers_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil, []any{"user-uuid-1", "alice", "alice@test.com"})
 	r := newTestRouter(pool)
@@ -782,7 +995,10 @@ func TestSearchUsers_WithData(t *testing.T) {
 
 // ── ListAuthProviders ─────────────────────────────────────────────────────────
 
+// TestListAuthProviders_Empty verifies list auth providers empty behavior.
 func TestListAuthProviders_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -795,7 +1011,10 @@ func TestListAuthProviders_Empty(t *testing.T) {
 
 // ── AdminLeaderboard ──────────────────────────────────────────────────────────
 
+// TestAdminLeaderboard_Empty verifies admin leaderboard empty behavior.
 func TestAdminLeaderboard_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -806,7 +1025,11 @@ func TestAdminLeaderboard_Empty(t *testing.T) {
 	}
 }
 
+// TestAdminLeaderboard_WithData verifies admin leaderboard with data
+// behavior.
 func TestAdminLeaderboard_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"user-uuid-1", "alice", "alice@test.com", nil, int64(100), int64(5), int64(3)},
@@ -821,13 +1044,16 @@ func TestAdminLeaderboard_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	lb := resp["leaderboard"].([]any)
+	lb := htSliceField(t, resp, "leaderboard")
 	if len(lb) != 1 {
 		t.Errorf("expected 1 entry, got %d", len(lb))
 	}
 }
 
+// TestAdminLeaderboard_DBError verifies admin leaderboard DB error behavior.
 func TestAdminLeaderboard_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
@@ -840,7 +1066,10 @@ func TestAdminLeaderboard_DBError(t *testing.T) {
 
 // ── GetSettings ───────────────────────────────────────────────────────────────
 
+// TestGetSettings_DBError verifies get settings DB error behavior.
 func TestGetSettings_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
@@ -851,7 +1080,10 @@ func TestGetSettings_DBError(t *testing.T) {
 	}
 }
 
+// TestGetSettings_Empty verifies get settings empty behavior.
 func TestGetSettings_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -862,7 +1094,10 @@ func TestGetSettings_Empty(t *testing.T) {
 	}
 }
 
+// TestGetSettings_WithData verifies get settings with data behavior.
 func TestGetSettings_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	desc := "enable registration"
 	pool.PushRows(nil,
@@ -878,7 +1113,7 @@ func TestGetSettings_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	settings := resp["settings"].([]any)
+	settings := htSliceField(t, resp, "settings")
 	if len(settings) != 1 {
 		t.Errorf("expected 1 setting, got %d", len(settings))
 	}
@@ -886,7 +1121,10 @@ func TestGetSettings_WithData(t *testing.T) {
 
 // ── UpdateSettings ────────────────────────────────────────────────────────────
 
+// TestUpdateSettings_EmptyBody verifies update settings empty body behavior.
 func TestUpdateSettings_EmptyBody(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -896,7 +1134,11 @@ func TestUpdateSettings_EmptyBody(t *testing.T) {
 	}
 }
 
+// TestUpdateSettings_UnknownKey verifies update settings unknown key
+// behavior.
 func TestUpdateSettings_UnknownKey(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -906,7 +1148,11 @@ func TestUpdateSettings_UnknownKey(t *testing.T) {
 	}
 }
 
+// TestUpdateSettings_NonStringValue verifies update settings non string
+// value behavior.
 func TestUpdateSettings_NonStringValue(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -916,7 +1162,10 @@ func TestUpdateSettings_NonStringValue(t *testing.T) {
 	}
 }
 
+// TestUpdateSettings_DBError verifies update settings DB error behavior.
 func TestUpdateSettings_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -927,7 +1176,10 @@ func TestUpdateSettings_DBError(t *testing.T) {
 	}
 }
 
+// TestUpdateSettings_Success verifies update settings success behavior.
 func TestUpdateSettings_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// Exec → empty → OK, nil; GetSettings → Query → empty rows
 	pool.PushRows(nil)
@@ -941,7 +1193,10 @@ func TestUpdateSettings_Success(t *testing.T) {
 
 // ── Groups ────────────────────────────────────────────────────────────────────
 
+// TestCreateGroup_MissingName verifies create group missing name behavior.
 func TestCreateGroup_MissingName(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -951,7 +1206,10 @@ func TestCreateGroup_MissingName(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_Conflict verifies create group conflict behavior.
 func TestCreateGroup_Conflict(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil) // INSERT returns no id (conflict → DO NOTHING, no RETURNING)
 	r := newTestRouter(pool)
@@ -962,7 +1220,10 @@ func TestCreateGroup_Conflict(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_Success verifies create group success behavior.
 func TestCreateGroup_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "new-group-uuid")
 	r := newTestRouter(pool)
@@ -973,7 +1234,10 @@ func TestCreateGroup_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_NotFound verifies delete group not found behavior.
 func TestDeleteGroup_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// Exec → empty → "OK", nil → RowsAffected=0 → 404
 	r := newTestRouter(pool)
@@ -984,7 +1248,10 @@ func TestDeleteGroup_NotFound(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_Success verifies delete group success behavior.
 func TestDeleteGroup_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(1, nil)
 	r := newTestRouter(pool)
@@ -995,7 +1262,10 @@ func TestDeleteGroup_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_DBError verifies delete group DB error behavior.
 func TestDeleteGroup_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1006,7 +1276,10 @@ func TestDeleteGroup_DBError(t *testing.T) {
 	}
 }
 
+// TestListGroups_DBError verifies list groups DB error behavior.
 func TestListGroups_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1017,7 +1290,10 @@ func TestListGroups_DBError(t *testing.T) {
 	}
 }
 
+// TestListGroups_Empty verifies list groups empty behavior.
 func TestListGroups_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -1028,7 +1304,10 @@ func TestListGroups_Empty(t *testing.T) {
 	}
 }
 
+// TestListGroups_WithData verifies list groups with data behavior.
 func TestListGroups_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"group-uuid-1", "admins", "local", "2024-01-01", int64(3), "admin"},
@@ -1043,7 +1322,7 @@ func TestListGroups_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	groups := resp["groups"].([]any)
+	groups := htSliceField(t, resp, "groups")
 	if len(groups) != 1 {
 		t.Errorf("expected 1 group, got %d", len(groups))
 	}
@@ -1051,7 +1330,11 @@ func TestListGroups_WithData(t *testing.T) {
 
 // ── GroupMappings ─────────────────────────────────────────────────────────────
 
+// TestListGroupMappings_ScanError verifies list group mappings scan error
+// behavior.
 func TestListGroupMappings_ScanError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// struct{} cannot be converted to string → assignOne returns error → Scan error
 	pool.PushRows(nil, []any{struct{}{}, "admin"})
@@ -1063,7 +1346,10 @@ func TestListGroupMappings_ScanError(t *testing.T) {
 	}
 }
 
+// TestListGroupMappings_Empty verifies list group mappings empty behavior.
 func TestListGroupMappings_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -1074,7 +1360,11 @@ func TestListGroupMappings_Empty(t *testing.T) {
 	}
 }
 
+// TestListGroupMappings_WithData verifies list group mappings with data
+// behavior.
 func TestListGroupMappings_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil, []any{"devs", "admin"})
 	r := newTestRouter(pool)
@@ -1085,37 +1375,53 @@ func TestListGroupMappings_WithData(t *testing.T) {
 	}
 }
 
+// TestUpsertGroupMapping_MissingGroupName verifies upsert group mapping
+// missing group name behavior.
 func TestUpsertGroupMapping_MissingGroupName(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"group_name":"","platform_role":"admin"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"groupName":"","platformRole":"admin"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestUpsertGroupMapping_InvalidRole verifies upsert group mapping invalid
+// role behavior.
 func TestUpsertGroupMapping_InvalidRole(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"group_name":"devs","platform_role":"superadmin"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"groupName":"devs","platformRole":"superadmin"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestUpsertGroupMapping_Success verifies upsert group mapping success
+// behavior.
 func TestUpsertGroupMapping_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"group_name":"devs","platform_role":"admin"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"groupName":"devs","platformRole":"admin"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
 }
 
+// TestDeleteGroupMapping_NotFound verifies delete group mapping not found
+// behavior.
 func TestDeleteGroupMapping_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1125,7 +1431,11 @@ func TestDeleteGroupMapping_NotFound(t *testing.T) {
 	}
 }
 
+// TestDeleteGroupMapping_Success verifies delete group mapping success
+// behavior.
 func TestDeleteGroupMapping_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(1, nil)
 	r := newTestRouter(pool)
@@ -1138,7 +1448,10 @@ func TestDeleteGroupMapping_Success(t *testing.T) {
 
 // ── Enrollments ───────────────────────────────────────────────────────────────
 
+// TestEnroll_DBError verifies enroll DB error behavior.
 func TestEnroll_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1149,7 +1462,10 @@ func TestEnroll_DBError(t *testing.T) {
 	}
 }
 
+// TestEnroll_Success verifies enroll success behavior.
 func TestEnroll_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1159,7 +1475,10 @@ func TestEnroll_Success(t *testing.T) {
 	}
 }
 
+// TestUnenroll_DBError verifies unenroll DB error behavior.
 func TestUnenroll_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1170,7 +1489,10 @@ func TestUnenroll_DBError(t *testing.T) {
 	}
 }
 
+// TestUnenroll_Success verifies unenroll success behavior.
 func TestUnenroll_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1182,7 +1504,11 @@ func TestUnenroll_Success(t *testing.T) {
 
 // ── MarkLessonComplete ────────────────────────────────────────────────────────
 
+// TestMarkLessonComplete_DBError verifies mark lesson complete DB error
+// behavior.
 func TestMarkLessonComplete_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1193,7 +1519,11 @@ func TestMarkLessonComplete_DBError(t *testing.T) {
 	}
 }
 
+// TestMarkLessonComplete_Success verifies mark lesson complete success
+// behavior.
 func TestMarkLessonComplete_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1205,7 +1535,11 @@ func TestMarkLessonComplete_Success(t *testing.T) {
 
 // ── MyCourses ─────────────────────────────────────────────────────────────────
 
+// TestEnroll_ForeignKeyConstraint verifies enroll foreign key constraint
+// behavior.
 func TestEnroll_ForeignKeyConstraint(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("foreign key constraint violation"))
 	r := newTestRouter(pool)
@@ -1216,7 +1550,10 @@ func TestEnroll_ForeignKeyConstraint(t *testing.T) {
 	}
 }
 
+// TestMyCourses_DBError verifies my courses DB error behavior.
 func TestMyCourses_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1227,7 +1564,10 @@ func TestMyCourses_DBError(t *testing.T) {
 	}
 }
 
+// TestMyCourses_Empty verifies my courses empty behavior.
 func TestMyCourses_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -1238,7 +1578,11 @@ func TestMyCourses_Empty(t *testing.T) {
 	}
 }
 
+// TestMyCourses_WithEnrollments verifies my courses with enrollments
+// behavior.
 func TestMyCourses_WithEnrollments(t *testing.T) {
+	t.Parallel()
+
 	// Push one enrollment row; fetchCourseDetails will fail (empty URL → bad request)
 	// but MyCourses gracefully falls back to slug-only data
 	pool := &fake.Pool{}
@@ -1264,12 +1608,16 @@ func TestMyCourses_WithEnrollments(t *testing.T) {
 	}
 }
 
+// TestMyCourses_WithCourseService verifies my courses with course service
+// behavior.
 func TestMyCourses_WithCourseService(t *testing.T) {
+	t.Parallel()
+
 	// Mock course service that returns valid course data
 	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
 			"slug": "test-course", "id": "test-course", "title": "Test Course",
-			"is_public": true, "lab_count": 3,
+			"isPublic": true, "labCount": 3,
 		})
 	}))
 	defer courseSvc.Close()
@@ -1283,7 +1631,7 @@ func TestMyCourses_WithCourseService(t *testing.T) {
 	}
 	r := BuildRouter(s, s.Config, pool, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/my/courses", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/my/courses", http.NoBody)
 	req.Header.Set("Authorization", htAuthHeader(t, "student"))
 
 	rec := httptest.NewRecorder()
@@ -1305,7 +1653,11 @@ func TestMyCourses_WithCourseService(t *testing.T) {
 	}
 }
 
+// TestMyCourses_CourseServiceNon200 verifies my courses course service
+// non200 behavior.
 func TestMyCourses_CourseServiceNon200(t *testing.T) {
+	t.Parallel()
+
 	// Course service returns 404 → fetchCourseDetails returns err → fallback slug-only row
 	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -1320,7 +1672,7 @@ func TestMyCourses_CourseServiceNon200(t *testing.T) {
 	}
 	r := BuildRouter(s, s.Config, pool, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/my/courses", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/my/courses", http.NoBody)
 	req.Header.Set("Authorization", htAuthHeader(t, "student"))
 
 	rec := httptest.NewRecorder()
@@ -1331,7 +1683,11 @@ func TestMyCourses_CourseServiceNon200(t *testing.T) {
 	}
 }
 
+// TestMyCourses_CourseServiceBadJSON verifies my courses course service bad
+// JSON behavior.
 func TestMyCourses_CourseServiceBadJSON(t *testing.T) {
+	t.Parallel()
+
 	// Course service returns 200 but invalid JSON → fetchCourseDetails decode fails → fallback
 	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("not-json"))
@@ -1346,7 +1702,7 @@ func TestMyCourses_CourseServiceBadJSON(t *testing.T) {
 	}
 	r := BuildRouter(s, s.Config, pool, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/my/courses", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/my/courses", http.NoBody)
 	req.Header.Set("Authorization", htAuthHeader(t, "student"))
 
 	rec := httptest.NewRecorder()
@@ -1359,7 +1715,11 @@ func TestMyCourses_CourseServiceBadJSON(t *testing.T) {
 
 // ── Admin Courses ─────────────────────────────────────────────────────────────
 
+// TestListCourseEnrollments_Empty verifies list course enrollments empty
+// behavior.
 func TestListCourseEnrollments_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -1370,38 +1730,52 @@ func TestListCourseEnrollments_Empty(t *testing.T) {
 	}
 }
 
+// TestAdminEnrollUser_DBError verifies admin enroll user DB error behavior.
 func TestAdminEnrollUser_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db down"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"user_id":"user-uuid-1"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
+// TestAdminEnrollUser_MissingUserID verifies admin enroll user missing user
+// ID behavior.
 func TestAdminEnrollUser_MissingUserID(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"user_id":""}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"userId":""}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestAdminEnrollUser_Success verifies admin enroll user success behavior.
 func TestAdminEnrollUser_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"user_id":"user-uuid-1"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
 }
 
+// TestAdminUnenrollUser_Success verifies admin unenroll user success
+// behavior.
 func TestAdminUnenrollUser_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1411,28 +1785,39 @@ func TestAdminUnenrollUser_Success(t *testing.T) {
 	}
 }
 
+// TestAdminEnrollGroup_MissingGroupID verifies admin enroll group missing
+// group ID behavior.
 func TestAdminEnrollGroup_MissingGroupID(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", `{"group_id":""}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", `{"groupId":""}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
 }
 
+// TestAdminEnrollGroup_Success verifies admin enroll group success behavior.
 func TestAdminEnrollGroup_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// 2 Exec calls: group_enrollments link + backfill enrollments → both from empty → OK
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", `{"group_id":"group-uuid-1"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", `{"groupId":"group-uuid-1"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
 }
 
+// TestAdminUnenrollGroup_Success verifies admin unenroll group success
+// behavior.
 func TestAdminUnenrollGroup_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1442,7 +1827,11 @@ func TestAdminUnenrollGroup_Success(t *testing.T) {
 	}
 }
 
+// TestAdminListGroupEnrollments_Empty verifies admin list group enrollments
+// empty behavior.
 func TestAdminListGroupEnrollments_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
@@ -1455,10 +1844,14 @@ func TestAdminListGroupEnrollments_Empty(t *testing.T) {
 
 // ── SyncProgress ──────────────────────────────────────────────────────────────
 
+// TestSyncProgress_MissingFields verifies sync progress missing fields
+// behavior.
 func TestSyncProgress_MissingFields(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
-	body := `{"user_id":"uuid-1","course_slug":""}`
+	body := `{"userId":"uuid-1","courseSlug":""}`
 
 	rec := htDo(t, r, "POST", "/api/admin/sync-progress", body, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
@@ -1466,10 +1859,13 @@ func TestSyncProgress_MissingFields(t *testing.T) {
 	}
 }
 
+// TestSyncProgress_Success verifies sync progress success behavior.
 func TestSyncProgress_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
-	body := `{"user_id":"uuid-1","course_slug":"my-course","lesson_slug":"intro"}`
+	body := `{"userId":"uuid-1","courseSlug":"my-course","lessonSlug":"intro"}`
 
 	rec := htDo(t, r, "POST", "/api/admin/sync-progress", body, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
@@ -1477,7 +1873,10 @@ func TestSyncProgress_Success(t *testing.T) {
 	}
 }
 
+// TestSyncProgress_InvalidJSON verifies sync progress invalid JSON behavior.
 func TestSyncProgress_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1487,11 +1886,14 @@ func TestSyncProgress_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestSyncProgress_DBError verifies sync progress DB error behavior.
 func TestSyncProgress_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
-	body := `{"user_id":"uuid-1","course_slug":"my-course","lesson_slug":"intro"}`
+	body := `{"userId":"uuid-1","courseSlug":"my-course","lessonSlug":"intro"}`
 
 	rec := htDo(t, r, "POST", "/api/admin/sync-progress", body, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
@@ -1499,7 +1901,11 @@ func TestSyncProgress_DBError(t *testing.T) {
 	}
 }
 
+// TestListCourseEnrollments_WithData verifies list course enrollments with
+// data behavior.
 func TestListCourseEnrollments_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"user-uuid-1", "alice", "alice@example.com", "2024-01-01"},
@@ -1515,13 +1921,17 @@ func TestListCourseEnrollments_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	enrollments := resp["enrollments"].([]any)
+	enrollments := htSliceField(t, resp, "enrollments")
 	if len(enrollments) != 2 {
 		t.Errorf("want 2 enrollments, got %d", len(enrollments))
 	}
 }
 
+// TestListCourseEnrollments_DBError verifies list course enrollments DB
+// error behavior.
 func TestListCourseEnrollments_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{} // no rows queued → Query returns error
 	r := newTestRouter(pool)
 
@@ -1531,7 +1941,11 @@ func TestListCourseEnrollments_DBError(t *testing.T) {
 	}
 }
 
+// TestAdminUnenrollUser_DBError verifies admin unenroll user DB error
+// behavior.
 func TestAdminUnenrollUser_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1542,11 +1956,15 @@ func TestAdminUnenrollUser_DBError(t *testing.T) {
 	}
 }
 
+// TestAdminEnrollGroup_DBError verifies admin enroll group DB error
+// behavior.
 func TestAdminEnrollGroup_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
-	body := `{"group_id":"group-uuid-1"}`
+	body := `{"groupId":"group-uuid-1"}`
 
 	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", body, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
@@ -1554,7 +1972,11 @@ func TestAdminEnrollGroup_DBError(t *testing.T) {
 	}
 }
 
+// TestListAuthProviders_WithData verifies list auth providers with data
+// behavior.
 func TestListAuthProviders_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"local", int64(10)},
@@ -1570,13 +1992,17 @@ func TestListAuthProviders_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	providers := resp["providers"].([]any)
+	providers := htSliceField(t, resp, "providers")
 	if len(providers) != 2 {
 		t.Errorf("want 2 providers, got %d", len(providers))
 	}
 }
 
+// TestListAuthProviders_DBError verifies list auth providers DB error
+// behavior.
 func TestListAuthProviders_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1586,7 +2012,11 @@ func TestListAuthProviders_DBError(t *testing.T) {
 	}
 }
 
+// TestAdminListGroupEnrollments_WithData verifies admin list group
+// enrollments with data behavior.
 func TestAdminListGroupEnrollments_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"group-uuid-1", "devops-team", "local", int64(5), "2024-01-01"},
@@ -1601,13 +2031,17 @@ func TestAdminListGroupEnrollments_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	groups := resp["groups"].([]any)
+	groups := htSliceField(t, resp, "groups")
 	if len(groups) != 1 {
 		t.Errorf("want 1 group, got %d", len(groups))
 	}
 }
 
+// TestAdminListGroupEnrollments_DBError verifies admin list group
+// enrollments DB error behavior.
 func TestAdminListGroupEnrollments_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1617,7 +2051,11 @@ func TestAdminListGroupEnrollments_DBError(t *testing.T) {
 	}
 }
 
+// TestAdminUnenrollGroup_DBError verifies admin unenroll group DB error
+// behavior.
 func TestAdminUnenrollGroup_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -1628,7 +2066,10 @@ func TestAdminUnenrollGroup_DBError(t *testing.T) {
 	}
 }
 
+// TestRegister_Success verifies register success behavior.
 func TestRegister_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 2)                                               // registration_enabled, email_whitelist
 	skipErrRows(pool, 3)                                               // validatePasswordPolicy: min_length, uppercase, number
@@ -1645,18 +2086,22 @@ func TestRegister_Success(t *testing.T) {
 	}
 }
 
+// TestMyCourses_WithCourseData verifies my courses with course data
+// behavior.
 func TestMyCourses_WithCourseData(t *testing.T) {
+	t.Parallel()
+
 	mockCourse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"slug":             "kubernetes",
-			"id":               "k8s-1",
-			"title":            "Kubernetes",
-			"description":      "Learn K8s",
-			"category":         "devops",
-			"difficulty":       "beginner",
-			"is_public":        true,
-			"lab_count":        3,
-			"enrollment_count": 100,
+			"slug":            "kubernetes",
+			"id":              "k8s-1",
+			"title":           "Kubernetes",
+			"description":     "Learn K8s",
+			"category":        "devops",
+			"difficulty":      "beginner",
+			"isPublic":        true,
+			"labCount":        3,
+			"enrollmentCount": 100,
 		})
 	}))
 	defer mockCourse.Close()
@@ -1683,7 +2128,7 @@ func TestMyCourses_WithCourseData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	courses := resp["courses"].([]any)
+	courses := htSliceField(t, resp, "courses")
 	if len(courses) != 1 {
 		t.Errorf("want 1 course, got %d", len(courses))
 	}
@@ -1691,7 +2136,11 @@ func TestMyCourses_WithCourseData(t *testing.T) {
 
 // ── Internal: Enrollments ─────────────────────────────────────────────────────
 
+// TestInternalAutoEnroll_InvalidJSON verifies internal auto enroll invalid
+// JSON behavior.
 func TestInternalAutoEnroll_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1701,11 +2150,15 @@ func TestInternalAutoEnroll_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestInternalAutoEnroll_DBError verifies internal auto enroll DB error
+// behavior.
 func TestInternalAutoEnroll_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
-	body := `{"user_id":"user-uuid-1","course_slug":"my-course"}`
+	body := `{"userId":"user-uuid-1","courseSlug":"my-course"}`
 
 	rec := htDo(t, r, "POST", "/internal/enrollments/auto", body, "")
 	if rec.Code != http.StatusInternalServerError {
@@ -1713,10 +2166,14 @@ func TestInternalAutoEnroll_DBError(t *testing.T) {
 	}
 }
 
+// TestInternalAutoEnroll_Success verifies internal auto enroll success
+// behavior.
 func TestInternalAutoEnroll_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
-	body := `{"user_id":"user-uuid-1","course_slug":"my-course"}`
+	body := `{"userId":"user-uuid-1","courseSlug":"my-course"}`
 
 	rec := htDo(t, r, "POST", "/internal/enrollments/auto", body, "")
 	if rec.Code != http.StatusOK {
@@ -1724,12 +2181,16 @@ func TestInternalAutoEnroll_Success(t *testing.T) {
 	}
 }
 
+// TestInternalCheckEnrollment_Enrolled verifies internal check enrollment
+// enrolled behavior.
 func TestInternalCheckEnrollment_Enrolled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, true)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/enrollments/check?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1742,12 +2203,16 @@ func TestInternalCheckEnrollment_Enrolled(t *testing.T) {
 	}
 }
 
+// TestInternalCheckEnrollment_NotEnrolled verifies internal check enrollment
+// not enrolled behavior.
 func TestInternalCheckEnrollment_NotEnrolled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, false)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/enrollments/check?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1760,11 +2225,15 @@ func TestInternalCheckEnrollment_NotEnrolled(t *testing.T) {
 	}
 }
 
+// TestInternalCheckEnrollment_DBError verifies internal check enrollment DB
+// error behavior.
 func TestInternalCheckEnrollment_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/enrollments/check?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -1772,12 +2241,16 @@ func TestInternalCheckEnrollment_DBError(t *testing.T) {
 
 // ── Internal: Progress ────────────────────────────────────────────────────────
 
+// TestInternalViewedLessons_Empty verifies internal viewed lessons empty
+// behavior.
 func TestInternalViewedLessons_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/viewed?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/viewed?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1785,18 +2258,22 @@ func TestInternalViewedLessons_Empty(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	viewed := resp["viewed"].([]any)
+	viewed := htSliceField(t, resp, "viewed")
 	if len(viewed) != 0 {
 		t.Errorf("expected 0 viewed lessons, got %d", len(viewed))
 	}
 }
 
+// TestInternalViewedLessons_WithData verifies internal viewed lessons with
+// data behavior.
 func TestInternalViewedLessons_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil, []any{"intro"}, []any{"part-2"})
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/viewed?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/viewed?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1804,13 +2281,17 @@ func TestInternalViewedLessons_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	viewed := resp["viewed"].([]any)
+	viewed := htSliceField(t, resp, "viewed")
 	if len(viewed) != 2 {
 		t.Errorf("expected 2 viewed, got %d", len(viewed))
 	}
 }
 
+// TestInternalMarkComplete_InvalidJSON verifies internal mark complete
+// invalid JSON behavior.
 func TestInternalMarkComplete_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1820,10 +2301,14 @@ func TestInternalMarkComplete_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestInternalMarkComplete_Success verifies internal mark complete success
+// behavior.
 func TestInternalMarkComplete_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
-	body := `{"user_id":"uuid-1","course_slug":"my-course","lesson_slug":"intro"}`
+	body := `{"userId":"uuid-1","courseSlug":"my-course","lessonSlug":"intro"}`
 
 	rec := htDo(t, r, "POST", "/internal/progress/complete", body, "")
 	if rec.Code != http.StatusOK {
@@ -1831,7 +2316,11 @@ func TestInternalMarkComplete_Success(t *testing.T) {
 	}
 }
 
+// TestInternalRecordModuleProgress_InvalidJSON verifies internal record
+// module progress invalid JSON behavior.
 func TestInternalRecordModuleProgress_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -1841,10 +2330,14 @@ func TestInternalRecordModuleProgress_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestInternalRecordModuleProgress_Success verifies internal record module
+// progress success behavior.
 func TestInternalRecordModuleProgress_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
-	body := `{"user_id":"uuid-1","course_slug":"my-course","module_index":0,"score":80,"max_score":100,"passed":true}`
+	body := `{"userId":"uuid-1","courseSlug":"my-course","moduleIndex":0,"score":80,"maxScore":100,"passed":true}`
 
 	rec := htDo(t, r, "POST", "/internal/progress/module", body, "")
 	if rec.Code != http.StatusOK {
@@ -1852,18 +2345,26 @@ func TestInternalRecordModuleProgress_Success(t *testing.T) {
 	}
 }
 
+// TestInternalGetModuleProgress_Empty verifies internal get module progress
+// empty behavior.
 func TestInternalGetModuleProgress_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
 }
 
+// TestInternalGetModuleProgress_WithData verifies internal get module
+// progress with data behavior.
 func TestInternalGetModuleProgress_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{0, 80, 100, true, 2},
@@ -1871,7 +2372,7 @@ func TestInternalGetModuleProgress_WithData(t *testing.T) {
 	)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1879,33 +2380,41 @@ func TestInternalGetModuleProgress_WithData(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	progress := resp["progress"].([]any)
+	progress := htSliceField(t, resp, "progress")
 	if len(progress) != 2 {
 		t.Errorf("expected 2 progress entries, got %d", len(progress))
 	}
 }
 
+// TestInternalCourseSummary_DBError verifies internal course summary DB
+// error behavior.
 func TestInternalCourseSummary_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/course-summary?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
 }
 
+// TestInternalCourseSummary_Success verifies internal course summary success
+// behavior.
 func TestInternalCourseSummary_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
-	pool.PushRow(nil, 180) // total_score
+	pool.PushRow(nil, 180) // totalScore
 	pool.PushRows(nil,     // passed module slugs
 		[]any{"module-1"},
 		[]any{"module-2"},
 	)
-	pool.PushRow(nil, 5) // viewed_count
+	pool.PushRow(nil, 5) // viewedCount
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/course-summary?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -1913,11 +2422,11 @@ func TestInternalCourseSummary_Success(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	if resp["total_score"] == nil {
-		t.Error("expected total_score in response")
+	if resp["totalScore"] == nil {
+		t.Error("expected totalScore in response")
 	}
 
-	modules := resp["passed_modules"].([]any)
+	modules := htSliceField(t, resp, "passedModules")
 	if len(modules) != 2 {
 		t.Errorf("expected 2 passed modules, got %d", len(modules))
 	}
@@ -1925,6 +2434,7 @@ func TestInternalCourseSummary_Success(t *testing.T) {
 
 // ── OAuth handlers ────────────────────────────────────────────────────────────
 
+// newOAuthRouter builds a router wired with OAuth test routes.
 func newOAuthRouter(pool *fake.Pool, providers ...config.ProviderConfig) http.Handler {
 	cfg := &config.Config{
 		JWTSecret:         htSecret,
@@ -1938,7 +2448,11 @@ func newOAuthRouter(pool *fake.Pool, providers ...config.ProviderConfig) http.Ha
 	return BuildRouter(s, cfg, pool, false)
 }
 
+// TestOAuthAuthorize_UnknownProvider verifies o auth authorize unknown
+// provider behavior.
 func TestOAuthAuthorize_UnknownProvider(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newOAuthRouter(pool)
 
@@ -1948,7 +2462,10 @@ func TestOAuthAuthorize_UnknownProvider(t *testing.T) {
 	}
 }
 
+// TestOAuthAuthorize_GitHub verifies o auth authorize git hub behavior.
 func TestOAuthAuthorize_GitHub(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newOAuthRouter(pool, config.ProviderConfig{
 		ID: "github", Name: "GitHub", ClientID: "gh-client-id",
@@ -1967,7 +2484,11 @@ func TestOAuthAuthorize_GitHub(t *testing.T) {
 	}
 }
 
+// TestOAuthAuthorize_OIDCMissingIssuer verifies o auth authorize OIDC
+// missing issuer behavior.
 func TestOAuthAuthorize_OIDCMissingIssuer(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newOAuthRouter(pool, config.ProviderConfig{
 		ID: "custom-oidc", Name: "Custom OIDC", ClientID: "oidc-id",
@@ -1980,7 +2501,11 @@ func TestOAuthAuthorize_OIDCMissingIssuer(t *testing.T) {
 	}
 }
 
+// TestOAuthCallback_InvalidJSON verifies o auth callback invalid JSON
+// behavior.
 func TestOAuthCallback_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newOAuthRouter(pool)
 
@@ -1990,7 +2515,11 @@ func TestOAuthCallback_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestOAuthCallback_InvalidState verifies o auth callback invalid state
+// behavior.
 func TestOAuthCallback_InvalidState(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newOAuthRouter(pool)
 	body := `{"code":"some-code","state":"invalid-state-token"}`
@@ -2001,7 +2530,11 @@ func TestOAuthCallback_InvalidState(t *testing.T) {
 	}
 }
 
+// TestResolveIssuerURL_KnownProviders verifies resolve issuer URL known
+// providers behavior.
 func TestResolveIssuerURL_KnownProviders(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		id   string
 		want string
@@ -2019,7 +2552,11 @@ func TestResolveIssuerURL_KnownProviders(t *testing.T) {
 	}
 }
 
+// TestResolveIssuerURL_CustomIssuer verifies resolve issuer URL custom
+// issuer behavior.
 func TestResolveIssuerURL_CustomIssuer(t *testing.T) {
+	t.Parallel()
+
 	p := &config.ProviderConfig{ID: "keycloak", IssuerURL: "https://auth.example.com/realm/test"}
 
 	got := resolveIssuerURL(p)
@@ -2028,7 +2565,10 @@ func TestResolveIssuerURL_CustomIssuer(t *testing.T) {
 	}
 }
 
+// TestResolveIssuerURL_Unknown verifies resolve issuer URL unknown behavior.
 func TestResolveIssuerURL_Unknown(t *testing.T) {
+	t.Parallel()
+
 	p := &config.ProviderConfig{ID: "unknown-provider"}
 
 	got := resolveIssuerURL(p)
@@ -2044,7 +2584,10 @@ func patternRow() []any {
 	return []any{"uuid-ptn-1", "callout", "Callout", "A callout box", "", "<div>{{content}}</div>", ".callout{}", "", "global", false, nil, nil, nil}
 }
 
+// TestListPatterns_Success verifies list patterns success behavior.
 func TestListPatterns_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil, patternRow())
 	r := newTestRouter(pool)
@@ -2057,13 +2600,16 @@ func TestListPatterns_Success(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	patterns := resp["patterns"].([]any)
+	patterns := htSliceField(t, resp, "patterns")
 	if len(patterns) != 1 {
 		t.Errorf("want 1 pattern, got %d", len(patterns))
 	}
 }
 
+// TestListPatterns_Empty verifies list patterns empty behavior.
 func TestListPatterns_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil) // no rows
 	r := newTestRouter(pool)
@@ -2076,13 +2622,16 @@ func TestListPatterns_Empty(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	patterns := resp["patterns"].([]any)
+	patterns := htSliceField(t, resp, "patterns")
 	if len(patterns) != 0 {
 		t.Errorf("want empty patterns, got %d", len(patterns))
 	}
 }
 
+// TestListPatterns_DBError verifies list patterns DB error behavior.
 func TestListPatterns_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{} // no rows queued → Query returns error
 	r := newTestRouter(pool)
 
@@ -2092,7 +2641,10 @@ func TestListPatterns_DBError(t *testing.T) {
 	}
 }
 
+// TestGetPattern_Success verifies get pattern success behavior.
 func TestGetPattern_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, patternRow()...)
 	r := newTestRouter(pool)
@@ -2103,7 +2655,10 @@ func TestGetPattern_Success(t *testing.T) {
 	}
 }
 
+// TestGetPattern_InvalidUUID verifies get pattern invalid UUID behavior.
 func TestGetPattern_InvalidUUID(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -2113,7 +2668,10 @@ func TestGetPattern_InvalidUUID(t *testing.T) {
 	}
 }
 
+// TestGetPattern_NotFound verifies get pattern not found behavior.
 func TestGetPattern_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("no rows"))
 	r := newTestRouter(pool)
@@ -2124,7 +2682,11 @@ func TestGetPattern_NotFound(t *testing.T) {
 	}
 }
 
+// TestCreatePattern_Unauthorized verifies create pattern unauthorized
+// behavior.
 func TestCreatePattern_Unauthorized(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 	body := `{"name":"callout","label":"Callout","html":"<div></div>"}`
@@ -2135,7 +2697,11 @@ func TestCreatePattern_Unauthorized(t *testing.T) {
 	}
 }
 
+// TestCreatePattern_InvalidJSON verifies create pattern invalid JSON
+// behavior.
 func TestCreatePattern_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -2145,7 +2711,11 @@ func TestCreatePattern_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestCreatePattern_MissingFields verifies create pattern missing fields
+// behavior.
 func TestCreatePattern_MissingFields(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 	body := `{"name":"callout","label":"Callout"}` // missing html
@@ -2156,7 +2726,10 @@ func TestCreatePattern_MissingFields(t *testing.T) {
 	}
 }
 
+// TestCreatePattern_Success verifies create pattern success behavior.
 func TestCreatePattern_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, patternRow()...)
 	r := newTestRouter(pool)
@@ -2168,7 +2741,10 @@ func TestCreatePattern_Success(t *testing.T) {
 	}
 }
 
+// TestCreatePattern_Conflict verifies create pattern conflict behavior.
 func TestCreatePattern_Conflict(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("unique violation"))
 	r := newTestRouter(pool)
@@ -2180,7 +2756,10 @@ func TestCreatePattern_Conflict(t *testing.T) {
 	}
 }
 
+// TestUpdatePattern_Success verifies update pattern success behavior.
 func TestUpdatePattern_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, patternRow()...)
 	r := newTestRouter(pool)
@@ -2192,7 +2771,10 @@ func TestUpdatePattern_Success(t *testing.T) {
 	}
 }
 
+// TestUpdatePattern_NotFound verifies update pattern not found behavior.
 func TestUpdatePattern_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("no rows"))
 	r := newTestRouter(pool)
@@ -2204,7 +2786,11 @@ func TestUpdatePattern_NotFound(t *testing.T) {
 	}
 }
 
+// TestUpdatePattern_MissingHTML verifies update pattern missing HTML
+// behavior.
 func TestUpdatePattern_MissingHTML(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 	body := `{"label":"Updated"}`
@@ -2215,7 +2801,10 @@ func TestUpdatePattern_MissingHTML(t *testing.T) {
 	}
 }
 
+// TestDeletePattern_Success verifies delete pattern success behavior.
 func TestDeletePattern_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(1, nil)
 	r := newTestRouter(pool)
@@ -2226,7 +2815,10 @@ func TestDeletePattern_Success(t *testing.T) {
 	}
 }
 
+// TestDeletePattern_NotFound verifies delete pattern not found behavior.
 func TestDeletePattern_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{} // empty exec queue → "OK" tag → RowsAffected()=0 → 404
 	r := newTestRouter(pool)
 
@@ -2238,7 +2830,10 @@ func TestDeletePattern_NotFound(t *testing.T) {
 
 // ── OAuth helpers ─────────────────────────────────────────────────────────────
 
+// TestMakeOAuthState verifies make o auth state behavior.
 func TestMakeOAuthState(t *testing.T) {
+	t.Parallel()
+
 	tok, err := makeOAuthState("github", htSecret)
 	if err != nil {
 		t.Fatalf("makeOAuthState: %v", err)
@@ -2249,7 +2844,10 @@ func TestMakeOAuthState(t *testing.T) {
 	}
 }
 
+// TestDecodeOAuthState_Valid verifies decode o auth state valid behavior.
 func TestDecodeOAuthState_Valid(t *testing.T) {
+	t.Parallel()
+
 	tok, err := makeOAuthState("github", htSecret)
 	if err != nil {
 		t.Fatal(err)
@@ -2265,7 +2863,11 @@ func TestDecodeOAuthState_Valid(t *testing.T) {
 	}
 }
 
+// TestDecodeOAuthState_WrongSecret verifies decode o auth state wrong secret
+// behavior.
 func TestDecodeOAuthState_WrongSecret(t *testing.T) {
+	t.Parallel()
+
 	tok, _ := makeOAuthState("github", htSecret)
 
 	_, ok := decodeOAuthState(tok, "wrong-secret-key-32-bytes-long!!!")
@@ -2274,40 +2876,61 @@ func TestDecodeOAuthState_WrongSecret(t *testing.T) {
 	}
 }
 
+// TestDecodeOAuthState_Garbage verifies decode o auth state garbage
+// behavior.
 func TestDecodeOAuthState_Garbage(t *testing.T) {
+	t.Parallel()
+
 	_, ok := decodeOAuthState("not.a.valid.token", htSecret)
 	if ok {
 		t.Error("expected ok=false for garbage token")
 	}
 }
 
+// TestDecodeOAuthState_Empty verifies decode o auth state empty behavior.
 func TestDecodeOAuthState_Empty(t *testing.T) {
+	t.Parallel()
+
 	_, ok := decodeOAuthState("", htSecret)
 	if ok {
 		t.Error("expected ok=false for empty token")
 	}
 }
 
+// TestSanitizeUsername_Normal verifies sanitize username normal behavior.
 func TestSanitizeUsername_Normal(t *testing.T) {
+	t.Parallel()
+
 	if got := sanitizeUsername("John Doe"); got != "JohnDoe" {
 		t.Errorf("want JohnDoe, got %q", got)
 	}
 }
 
+// TestSanitizeUsername_Empty verifies sanitize username empty behavior.
 func TestSanitizeUsername_Empty(t *testing.T) {
+	t.Parallel()
+
 	if got := sanitizeUsername(""); got != "user" {
 		t.Errorf("want user, got %q", got)
 	}
 }
 
+// TestSanitizeUsername_SpecialChars verifies sanitize username special chars
+// behavior.
 func TestSanitizeUsername_SpecialChars(t *testing.T) {
+	t.Parallel()
+
 	got := sanitizeUsername("user@example.com!")
 	if got != "userexamplecom" {
 		t.Errorf("want userexamplecom, got %q", got)
 	}
 }
 
+// TestSanitizeUsername_Truncated verifies sanitize username truncated
+// behavior.
 func TestSanitizeUsername_Truncated(t *testing.T) {
+	t.Parallel()
+
 	long := "abcdefghijklmnopqrstuvwxyzabcdefghijklmno" // 41 chars
 
 	got := sanitizeUsername(long)
@@ -2316,13 +2939,21 @@ func TestSanitizeUsername_Truncated(t *testing.T) {
 	}
 }
 
+// TestSanitizeUsername_ValidChars verifies sanitize username valid chars
+// behavior.
 func TestSanitizeUsername_ValidChars(t *testing.T) {
+	t.Parallel()
+
 	if got := sanitizeUsername("user_name-123"); got != "user_name-123" {
 		t.Errorf("want user_name-123, got %q", got)
 	}
 }
 
+// TestListProviders_NoProviders verifies list providers no providers
+// behavior.
 func TestListProviders_NoProviders(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -2334,13 +2965,17 @@ func TestListProviders_NoProviders(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	providers := resp["providers"].([]any)
+	providers := htSliceField(t, resp, "providers")
 	if len(providers) != 0 {
 		t.Errorf("want empty providers list, got %d", len(providers))
 	}
 }
 
+// TestListProviders_WithProviders verifies list providers with providers
+// behavior.
 func TestListProviders_WithProviders(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	cfg := &config.Config{
 		JWTSecret:   htSecret,
@@ -2362,12 +2997,12 @@ func TestListProviders_WithProviders(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	providers := resp["providers"].([]any)
+	providers := htSliceField(t, resp, "providers")
 	if len(providers) != 1 {
 		t.Errorf("want 1 provider (empty filtered), got %d", len(providers))
 	}
 
-	p := providers[0].(map[string]any)
+	p := htMapField(t, providers[0])
 	if p["id"] != "github" {
 		t.Errorf("want id=github, got %v", p["id"])
 	}
@@ -2375,26 +3010,38 @@ func TestListProviders_WithProviders(t *testing.T) {
 
 // ── Pure helper function tests ────────────────────────────────────────────────
 
+// TestNullStr_Empty verifies null str empty behavior.
 func TestNullStr_Empty(t *testing.T) {
+	t.Parallel()
+
 	if nullStr("") != nil {
 		t.Error("expected nil for empty string")
 	}
 }
 
+// TestNullStr_NonEmpty verifies null str non empty behavior.
 func TestNullStr_NonEmpty(t *testing.T) {
+	t.Parallel()
+
 	s := nullStr("hello")
 	if s == nil || *s != "hello" {
 		t.Errorf("expected *string='hello', got %v", s)
 	}
 }
 
+// TestDerefStr_Nil verifies deref str nil behavior.
 func TestDerefStr_Nil(t *testing.T) {
+	t.Parallel()
+
 	if derefStr(nil) != "" {
 		t.Error("expected empty string for nil pointer")
 	}
 }
 
+// TestDerefStr_NonNil verifies deref str non nil behavior.
 func TestDerefStr_NonNil(t *testing.T) {
+	t.Parallel()
+
 	s := "world"
 	if derefStr(&s) != "world" {
 		t.Errorf("expected 'world', got %q", derefStr(&s))
@@ -2403,21 +3050,30 @@ func TestDerefStr_NonNil(t *testing.T) {
 
 // ── extractURLBase (oidc.go) ──────────────────────────────────────────────────
 
+// TestExtractURLBase_Valid verifies extract URL base valid behavior.
 func TestExtractURLBase_Valid(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("https://sso.example.com/auth/realms/master")
 	if got != "https://sso.example.com" {
 		t.Errorf("want https://sso.example.com, got %q", got)
 	}
 }
 
+// TestExtractURLBase_NoHost verifies extract URL base no host behavior.
 func TestExtractURLBase_NoHost(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("not-a-url")
 	if got != "not-a-url" {
 		t.Errorf("expected unchanged, got %q", got)
 	}
 }
 
+// TestExtractURLBase_JustHost verifies extract URL base just host behavior.
 func TestExtractURLBase_JustHost(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("http://localhost:8080")
 	if got != "http://localhost:8080" {
 		t.Errorf("want http://localhost:8080, got %q", got)
@@ -2426,11 +3082,14 @@ func TestExtractURLBase_JustHost(t *testing.T) {
 
 // ── viewedLessons direct call ─────────────────────────────────────────────────
 
+// TestViewedLessons_DBError verifies viewed lessons DB error behavior.
 func TestViewedLessons_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	s := &State{Pool: pool, Config: &config.Config{}}
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	result := viewedLessons(s, req, "some-course", "user-id")
 	if result != nil {
@@ -2438,14 +3097,17 @@ func TestViewedLessons_DBError(t *testing.T) {
 	}
 }
 
+// TestViewedLessons_WithData verifies viewed lessons with data behavior.
 func TestViewedLessons_WithData(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"intro"},
 		[]any{"advanced"},
 	)
 	s := &State{Pool: pool, Config: &config.Config{}}
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	result := viewedLessons(s, req, "my-course", "user-id")
 	if result == nil {
@@ -2457,11 +3119,14 @@ func TestViewedLessons_WithData(t *testing.T) {
 	}
 }
 
+// TestViewedLessons_Empty verifies viewed lessons empty behavior.
 func TestViewedLessons_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	s := &State{Pool: pool, Config: &config.Config{}}
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	result := viewedLessons(s, req, "my-course", "user-id")
 	if result == nil {
@@ -2475,6 +3140,7 @@ func TestViewedLessons_Empty(t *testing.T) {
 
 // ── Course patterns (direct handler calls with chi context) ───────────────────
 
+// newStateWithPool builds a handler state backed by the given pool.
 func newStateWithPool(pool *fake.Pool) *State {
 	return &State{
 		Pool: pool,
@@ -2485,6 +3151,7 @@ func newStateWithPool(pool *fake.Pool) *State {
 	}
 }
 
+// withChiParam injects a chi URL parameter into the request context.
 func withChiParam(r *http.Request, key, val string) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add(key, val)
@@ -2492,6 +3159,7 @@ func withChiParam(r *http.Request, key, val string) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 }
 
+// withAuthAndChiParam injects auth context and a chi URL parameter.
 func withAuthAndChiParam(r *http.Request, role, key, val string) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add(key, val)
@@ -2503,14 +3171,18 @@ func withAuthAndChiParam(r *http.Request, role, key, val string) *http.Request {
 	return r.WithContext(ctx)
 }
 
+// TestListCoursePatterns_Success verifies list course patterns success
+// behavior.
 func TestListCoursePatterns_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil,
 		[]any{"uuid-p1", "callout", "Callout", "A callout", "", "<div>{{content}}</div>", "", "", "my-course", false, nil, nil, nil},
 	)
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
-	req := withChiParam(httptest.NewRequest(http.MethodGet, "/api/courses/my-course/patterns", http.NoBody), "slug", "my-course")
+	req := withChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/my-course/patterns", http.NoBody), "slug", "my-course")
 	s.ListCoursePatterns(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -2518,12 +3190,16 @@ func TestListCoursePatterns_Success(t *testing.T) {
 	}
 }
 
+// TestListCoursePatterns_DBError verifies list course patterns DB error
+// behavior.
 func TestListCoursePatterns_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
-	req := withChiParam(httptest.NewRequest(http.MethodGet, "/api/courses/my-course/patterns", http.NoBody), "slug", "my-course")
+	req := withChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/my-course/patterns", http.NoBody), "slug", "my-course")
 	s.ListCoursePatterns(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
@@ -2531,12 +3207,15 @@ func TestListCoursePatterns_DBError(t *testing.T) {
 	}
 }
 
+// TestListCoursePatterns_Empty verifies list course patterns empty behavior.
 func TestListCoursePatterns_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
-	req := withChiParam(httptest.NewRequest(http.MethodGet, "/api/courses/my-course/patterns", http.NoBody), "slug", "my-course")
+	req := withChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/my-course/patterns", http.NoBody), "slug", "my-course")
 	s.ListCoursePatterns(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -2544,11 +3223,15 @@ func TestListCoursePatterns_Empty(t *testing.T) {
 	}
 }
 
+// TestCreateCoursePattern_InvalidJSON verifies create course pattern invalid
+// JSON behavior.
 func TestCreateCoursePattern_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
-	req := withAuthAndChiParam(httptest.NewRequest(http.MethodPost, "/", strings.NewReader("bad json")), "admin", "slug", "my-course")
+	req := withAuthAndChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("bad json")), "admin", "slug", "my-course")
 	s.CreateCoursePattern(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
@@ -2556,11 +3239,15 @@ func TestCreateCoursePattern_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestCreateCoursePattern_MissingFields verifies create course pattern
+// missing fields behavior.
 func TestCreateCoursePattern_MissingFields(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
-	req := withAuthAndChiParam(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"test"}`)), "admin", "slug", "my-course")
+	req := withAuthAndChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader(`{"name":"test"}`)), "admin", "slug", "my-course")
 	s.CreateCoursePattern(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
@@ -2568,13 +3255,17 @@ func TestCreateCoursePattern_MissingFields(t *testing.T) {
 	}
 }
 
+// TestCreateCoursePattern_Success verifies create course pattern success
+// behavior.
 func TestCreateCoursePattern_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "uuid-1", "callout", "Callout", "A callout", "", "<div>{{content}}</div>", "", "", "my-course", false, nil, nil, nil)
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
 	body := `{"name":"callout","label":"Callout","html":"<div>{{content}}</div>"}`
-	req := withAuthAndChiParam(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), "admin", "slug", "my-course")
+	req := withAuthAndChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader(body)), "admin", "slug", "my-course")
 	s.CreateCoursePattern(rec, req)
 
 	if rec.Code != http.StatusCreated {
@@ -2582,13 +3273,17 @@ func TestCreateCoursePattern_Success(t *testing.T) {
 	}
 }
 
+// TestCreateCoursePattern_Conflict verifies create course pattern conflict
+// behavior.
 func TestCreateCoursePattern_Conflict(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("unique constraint violation"))
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
 	body := `{"name":"callout","label":"Callout","html":"<div>{{content}}</div>"}`
-	req := withAuthAndChiParam(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), "admin", "slug", "my-course")
+	req := withAuthAndChiParam(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader(body)), "admin", "slug", "my-course")
 	s.CreateCoursePattern(rec, req)
 
 	if rec.Code != http.StatusConflict {
@@ -2596,14 +3291,18 @@ func TestCreateCoursePattern_Conflict(t *testing.T) {
 	}
 }
 
+// TestDeleteCoursePattern_InvalidUUID verifies delete course pattern invalid
+// UUID behavior.
 func TestDeleteCoursePattern_InvalidUUID(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	s := newStateWithPool(pool)
 	rec := httptest.NewRecorder()
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("slug", "my-course")
 	rctx.URLParams.Add("id", "not-a-uuid")
-	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody).WithContext(
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", http.NoBody).WithContext(
 		context.WithValue(context.Background(), chi.RouteCtxKey, rctx))
 	s.DeleteCoursePattern(rec, req)
 
@@ -2612,7 +3311,11 @@ func TestDeleteCoursePattern_InvalidUUID(t *testing.T) {
 	}
 }
 
+// TestDeleteCoursePattern_Success verifies delete course pattern success
+// behavior.
 func TestDeleteCoursePattern_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(1, nil)
 	s := newStateWithPool(pool)
@@ -2620,7 +3323,7 @@ func TestDeleteCoursePattern_Success(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("slug", "my-course")
 	rctx.URLParams.Add("id", "550e8400-e29b-41d4-a716-446655440000")
-	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody).WithContext(
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", http.NoBody).WithContext(
 		context.WithValue(context.Background(), chi.RouteCtxKey, rctx))
 	s.DeleteCoursePattern(rec, req)
 
@@ -2629,7 +3332,11 @@ func TestDeleteCoursePattern_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteCoursePattern_NotFound verifies delete course pattern not found
+// behavior.
 func TestDeleteCoursePattern_NotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, nil)
 	s := newStateWithPool(pool)
@@ -2637,7 +3344,7 @@ func TestDeleteCoursePattern_NotFound(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("slug", "my-course")
 	rctx.URLParams.Add("id", "550e8400-e29b-41d4-a716-446655440000")
-	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody).WithContext(
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", http.NoBody).WithContext(
 		context.WithValue(context.Background(), chi.RouteCtxKey, rctx))
 	s.DeleteCoursePattern(rec, req)
 
@@ -2648,7 +3355,10 @@ func TestDeleteCoursePattern_NotFound(t *testing.T) {
 
 // ── upsertSSOUser direct calls ────────────────────────────────────────────────
 
+// TestUpsertSSOUser_NewUser verifies upsert SSO user new user behavior.
 func TestUpsertSSOUser_NewUser(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// First SELECT by provider/providerUserID → not found
 	pool.PushRow(errors.New("not found"))
@@ -2669,7 +3379,11 @@ func TestUpsertSSOUser_NewUser(t *testing.T) {
 	}
 }
 
+// TestUpsertSSOUser_ExistingByProvider verifies upsert SSO user existing by
+// provider behavior.
 func TestUpsertSSOUser_ExistingByProvider(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// SELECT by provider → found
 	pool.PushRow(nil, "existing-uuid", "johndoe", "john@example.com", "student", nil, nil, true, "github", "2024-01-01")
@@ -2686,7 +3400,11 @@ func TestUpsertSSOUser_ExistingByProvider(t *testing.T) {
 	}
 }
 
+// TestUpsertSSOUser_ExistingByEmail_SameProvider verifies upsert SSO user
+// existing by email same provider behavior.
 func TestUpsertSSOUser_ExistingByEmail_SameProvider(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// SELECT by provider → not found
 	pool.PushRow(errors.New("not found"))
@@ -2705,7 +3423,11 @@ func TestUpsertSSOUser_ExistingByEmail_SameProvider(t *testing.T) {
 	}
 }
 
+// TestUpsertSSOUser_ExistingByEmail_DifferentProvider verifies upsert SSO
+// user existing by email different provider behavior.
 func TestUpsertSSOUser_ExistingByEmail_DifferentProvider(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// SELECT by provider → not found
 	pool.PushRow(errors.New("not found"))
@@ -2718,7 +3440,11 @@ func TestUpsertSSOUser_ExistingByEmail_DifferentProvider(t *testing.T) {
 	}
 }
 
+// TestUpsertSSOUser_UsernameConflict verifies upsert SSO user username
+// conflict behavior.
 func TestUpsertSSOUser_UsernameConflict(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// SELECT by provider → not found
 	pool.PushRow(errors.New("not found"))
@@ -2741,7 +3467,11 @@ func TestUpsertSSOUser_UsernameConflict(t *testing.T) {
 
 // ── syncGroupsAndDeriveRole direct calls ──────────────────────────────────────
 
+// TestSyncGroupsAndDeriveRole_DBError verifies sync groups and derive role
+// DB error behavior.
 func TestSyncGroupsAndDeriveRole_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("db error")) // SELECT role
 
@@ -2751,7 +3481,11 @@ func TestSyncGroupsAndDeriveRole_DBError(t *testing.T) {
 	}
 }
 
+// TestSyncGroupsAndDeriveRole_NoGroups verifies sync groups and derive role
+// no groups behavior.
 func TestSyncGroupsAndDeriveRole_NoGroups(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student") // SELECT role
 
@@ -2765,13 +3499,17 @@ func TestSyncGroupsAndDeriveRole_NoGroups(t *testing.T) {
 	}
 }
 
+// TestSyncGroupsAndDeriveRole_WithGroup verifies sync groups and derive role
+// with group behavior.
 func TestSyncGroupsAndDeriveRole_WithGroup(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student") // SELECT role
-	// For each group name: INSERT group, INSERT user_groups, SELECT mapped_role
+	// For each group name: INSERT group, INSERT user_groups, SELECT mappedRole
 	pool.PushRow(nil, "group-uuid-1") // INSERT/SELECT group
 	pool.PushExec(1, nil)             // INSERT user_groups
-	pool.PushRow(nil, "admin")        // SELECT mapped_role → admin
+	pool.PushRow(nil, "admin")        // SELECT mappedRole → admin
 	pool.PushExec(1, nil)             // UPDATE users SET role
 
 	role, err := syncGroupsAndDeriveRole(context.Background(), pool, "user-uuid", []string{"admins"}, "oidc")
@@ -2786,7 +3524,10 @@ func TestSyncGroupsAndDeriveRole_WithGroup(t *testing.T) {
 
 // ── OIDCAuthorize (disabled) ──────────────────────────────────────────────────
 
+// TestOIDCAuthorize_Disabled verifies OIDC authorize disabled behavior.
 func TestOIDCAuthorize_Disabled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// loadOIDCSettings calls ReadSetting 9 times; all return defaults (push error rows)
 	for range 10 {
@@ -2801,7 +3542,11 @@ func TestOIDCAuthorize_Disabled(t *testing.T) {
 	}
 }
 
+// TestOIDCCallback_InvalidState verifies OIDC callback invalid state
+// behavior.
 func TestOIDCCallback_InvalidState(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -2811,7 +3556,10 @@ func TestOIDCCallback_InvalidState(t *testing.T) {
 	}
 }
 
+// TestOIDCCallback_InvalidJSON verifies OIDC callback invalid JSON behavior.
 func TestOIDCCallback_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -2823,7 +3571,11 @@ func TestOIDCCallback_InvalidJSON(t *testing.T) {
 
 // ── OAuthCallback provider not found path ─────────────────────────────────────
 
+// TestOAuthCallback_GithubProviderFetchFails verifies o auth callback github
+// provider fetch fails behavior.
 func TestOAuthCallback_GithubProviderFetchFails(t *testing.T) {
+	t.Parallel()
+
 	// GitHub provider is configured but fetchGitHub will fail (invalid code → 401)
 	pool := &fake.Pool{}
 	s := &State{
@@ -2844,7 +3596,7 @@ func TestOAuthCallback_GithubProviderFetchFails(t *testing.T) {
 	}
 
 	body := fmt.Sprintf(`{"code":"invalid-code","state":%q}`, state)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/oauth/callback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -2855,7 +3607,11 @@ func TestOAuthCallback_GithubProviderFetchFails(t *testing.T) {
 	}
 }
 
+// TestOAuthCallback_ValidStateUnknownProvider verifies o auth callback valid
+// state unknown provider behavior.
 func TestOAuthCallback_ValidStateUnknownProvider(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	cfg := &config.Config{
 		JWTSecret:   htSecret,
@@ -2878,7 +3634,11 @@ func TestOAuthCallback_ValidStateUnknownProvider(t *testing.T) {
 
 // ── LoadPatternsFromConfig ────────────────────────────────────────────────────
 
+// TestLoadPatternsFromConfig_FileNotFound verifies load patterns from config
+// file not found behavior.
 func TestLoadPatternsFromConfig_FileNotFound(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 
 	err := LoadPatternsFromConfig(context.Background(), pool, "/nonexistent/path.yaml")
@@ -2887,7 +3647,11 @@ func TestLoadPatternsFromConfig_FileNotFound(t *testing.T) {
 	}
 }
 
+// TestLoadPatternsFromConfig_InvalidYAML verifies load patterns from config
+// invalid YAML behavior.
 func TestLoadPatternsFromConfig_InvalidYAML(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 
 	tmpFile, err := os.CreateTemp(t.TempDir(), "patterns-*.yaml")
@@ -2905,7 +3669,11 @@ func TestLoadPatternsFromConfig_InvalidYAML(t *testing.T) {
 	}
 }
 
+// TestLoadPatternsFromConfig_Success verifies load patterns from config
+// success behavior.
 func TestLoadPatternsFromConfig_Success(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(1, nil) // INSERT for one pattern
 
@@ -2932,7 +3700,11 @@ func TestLoadPatternsFromConfig_Success(t *testing.T) {
 	}
 }
 
+// TestLoadPatternsFromConfig_DBError verifies load patterns from config DB
+// error behavior.
 func TestLoadPatternsFromConfig_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 
@@ -2959,7 +3731,10 @@ func TestLoadPatternsFromConfig_DBError(t *testing.T) {
 
 // ── doGet (oauth.go) ─────────────────────────────────────────────────────────
 
+// TestDoGet_Success verifies do get success behavior.
 func TestDoGet_Success(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer mytoken" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -2984,7 +3759,10 @@ func TestDoGet_Success(t *testing.T) {
 	}
 }
 
+// TestDoGet_NoBearer verifies do get no bearer behavior.
 func TestDoGet_NoBearer(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":true}`))
 	}))
@@ -2998,7 +3776,10 @@ func TestDoGet_NoBearer(t *testing.T) {
 	}
 }
 
+// TestDoGet_BadURL verifies do get bad URL behavior.
 func TestDoGet_BadURL(t *testing.T) {
+	t.Parallel()
+
 	var result map[string]any
 
 	err := doGet(&http.Client{}, "http://127.0.0.1:0/invalid", "", &result)
@@ -3007,7 +3788,10 @@ func TestDoGet_BadURL(t *testing.T) {
 	}
 }
 
+// TestDoGet_InvalidJSON verifies do get invalid JSON behavior.
 func TestDoGet_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("not json"))
 	}))
@@ -3023,7 +3807,11 @@ func TestDoGet_InvalidJSON(t *testing.T) {
 
 // ── oidcContext (oidc.go) ─────────────────────────────────────────────────────
 
+// TestOIDCContext_WithIssuerURL verifies OIDC context with issuer URL
+// behavior.
 func TestOIDCContext_WithIssuerURL(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	cfg := oidcSettings{IssuerURL: "https://issuer.example.com"}
 
@@ -3033,7 +3821,11 @@ func TestOIDCContext_WithIssuerURL(t *testing.T) {
 	}
 }
 
+// TestOIDCContext_WithoutIssuerURL verifies OIDC context without issuer URL
+// behavior.
 func TestOIDCContext_WithoutIssuerURL(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	cfg := oidcSettings{}
 
@@ -3045,7 +3837,11 @@ func TestOIDCContext_WithoutIssuerURL(t *testing.T) {
 
 // ── loadOIDCSettings (oidc.go) ────────────────────────────────────────────────
 
+// TestLoadOIDCSettings_EnabledAndConfigured verifies load OIDC settings
+// enabled and configured behavior.
 func TestLoadOIDCSettings_EnabledAndConfigured(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	// Push "true" for oidc_enabled
 	pool.PushRow(nil, "true")
@@ -3081,7 +3877,11 @@ func TestLoadOIDCSettings_EnabledAndConfigured(t *testing.T) {
 	}
 }
 
+// TestLoadOIDCSettings_MissingClientID verifies load OIDC settings missing
+// client ID behavior.
 func TestLoadOIDCSettings_MissingClientID(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true")                    // oidc_enabled
 	pool.PushRow(nil, "https://sso.example.com") // oidc_provider_url
@@ -3096,23 +3896,31 @@ func TestLoadOIDCSettings_MissingClientID(t *testing.T) {
 
 	_, err := s.loadOIDCSettings(context.Background())
 	if err == nil {
-		t.Error("expected error for missing client_id")
+		t.Error("expected error for missing clientId")
 	}
 }
 
 // ── More groups handler tests ─────────────────────────────────────────────────
 
+// TestUpsertGroupMapping_InvalidPlatformRole verifies upsert group mapping
+// invalid platform role behavior.
 func TestUpsertGroupMapping_InvalidPlatformRole(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"group_name":"admins","platform_role":"superuser"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"groupName":"admins","platformRole":"superuser"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("want 400 for invalid platform_role, got %d", rec.Code)
+		t.Errorf("want 400 for invalid platformRole, got %d", rec.Code)
 	}
 }
 
+// TestUpsertGroupMapping_InvalidJSON verifies upsert group mapping invalid
+// JSON behavior.
 func TestUpsertGroupMapping_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3122,7 +3930,11 @@ func TestUpsertGroupMapping_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestDeleteGroupMapping_DBError2 verifies delete group mapping DB error2
+// behavior.
 func TestDeleteGroupMapping_DBError2(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
@@ -3135,22 +3947,30 @@ func TestDeleteGroupMapping_DBError2(t *testing.T) {
 
 // ── More internal handlers ────────────────────────────────────────────────────
 
+// TestInternalMarkComplete_DBError verifies internal mark complete DB error
+// behavior.
 func TestInternalMarkComplete_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/internal/progress/complete", `{"user_id":"uid","course_slug":"c","lesson_slug":"l"}`, "")
+	rec := htDo(t, r, "POST", "/internal/progress/complete", `{"userId":"uid","courseSlug":"c","lessonSlug":"l"}`, "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
 }
 
+// TestInternalRecordModuleProgress_DBError verifies internal record module
+// progress DB error behavior.
 func TestInternalRecordModuleProgress_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
-	body := `{"user_id":"uid","course_slug":"c","module_index":0,"score":10,"max_score":10,"passed":true}`
+	body := `{"userId":"uid","courseSlug":"c","moduleIndex":0,"score":10,"maxScore":10,"passed":true}`
 
 	rec := htDo(t, r, "POST", "/internal/progress/module", body, "")
 	if rec.Code != http.StatusInternalServerError {
@@ -3158,12 +3978,16 @@ func TestInternalRecordModuleProgress_DBError(t *testing.T) {
 	}
 }
 
+// TestInternalGetModuleProgress_NoProgress verifies internal get module
+// progress no progress behavior.
 func TestInternalGetModuleProgress_NoProgress(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?user_id=uid&course_slug=c", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uid&courseSlug=c", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -3171,7 +3995,10 @@ func TestInternalGetModuleProgress_NoProgress(t *testing.T) {
 
 // ── Register additional coverage ──────────────────────────────────────────────
 
+// TestRegister_InsertError verifies register insert error behavior.
 func TestRegister_InsertError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	skipErrRows(pool, 5)
 	pool.PushRow(nil, int64(0))
@@ -3187,7 +4014,10 @@ func TestRegister_InsertError(t *testing.T) {
 
 // ── UpdateUser additional coverage ───────────────────────────────────────────
 
+// TestUpdateUser_InvalidJSON verifies update user invalid JSON behavior.
 func TestUpdateUser_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3199,7 +4029,10 @@ func TestUpdateUser_InvalidJSON(t *testing.T) {
 
 // ── SearchUsers additional coverage ──────────────────────────────────────────
 
+// TestSearchUsers_DBError verifies search users DB error behavior.
 func TestSearchUsers_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
@@ -3212,12 +4045,16 @@ func TestSearchUsers_DBError(t *testing.T) {
 
 // ── AdminEnrollGroup additional coverage ─────────────────────────────────────
 
+// TestAdminEnrollGroup_BackfillError verifies admin enroll group backfill
+// error behavior.
 func TestAdminEnrollGroup_BackfillError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushExec(1, nil)
 	pool.PushExec(0, errors.New("backfill err"))
 	r := newTestRouter(pool)
-	body := `{"group_id":"group-uuid-1"}`
+	body := `{"groupId":"group-uuid-1"}`
 
 	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", body, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
@@ -3227,7 +4064,11 @@ func TestAdminEnrollGroup_BackfillError(t *testing.T) {
 
 // ── UpdateSettings additional coverage ───────────────────────────────────────
 
+// TestUpdateSettings_InvalidJSON verifies update settings invalid JSON
+// behavior.
 func TestUpdateSettings_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3239,7 +4080,11 @@ func TestUpdateSettings_InvalidJSON(t *testing.T) {
 
 // ── syncGroupsAndDeriveRole additional coverage ───────────────────────────────
 
+// TestSyncGroupsAndDeriveRole_EmptyGroupName verifies sync groups and derive
+// role empty group name behavior.
 func TestSyncGroupsAndDeriveRole_EmptyGroupName(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student")
 	pool.PushExec(1, nil) // DELETE
@@ -3254,7 +4099,11 @@ func TestSyncGroupsAndDeriveRole_EmptyGroupName(t *testing.T) {
 	}
 }
 
+// TestSyncGroupsAndDeriveRole_DeleteError verifies sync groups and derive
+// role delete error behavior.
 func TestSyncGroupsAndDeriveRole_DeleteError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student")
 	pool.PushExec(0, errors.New("delete error"))
@@ -3265,7 +4114,11 @@ func TestSyncGroupsAndDeriveRole_DeleteError(t *testing.T) {
 	}
 }
 
+// TestSyncGroupsAndDeriveRole_UserGroupsInsertError verifies sync groups and
+// derive role user groups insert error behavior.
 func TestSyncGroupsAndDeriveRole_UserGroupsInsertError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student")
 	pool.PushRow(nil, "group-uuid")
@@ -3278,11 +4131,15 @@ func TestSyncGroupsAndDeriveRole_UserGroupsInsertError(t *testing.T) {
 	}
 }
 
+// TestSyncGroupsAndDeriveRole_NonAdminRoleMapping verifies sync groups and
+// derive role non admin role mapping behavior.
 func TestSyncGroupsAndDeriveRole_NonAdminRoleMapping(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student")
 	pool.PushRow(nil, "group-uuid")
-	pool.PushRow(nil, "student") // mapped_role
+	pool.PushRow(nil, "student") // mappedRole
 	pool.PushExec(1, nil)        // DELETE
 	pool.PushExec(1, nil)        // INSERT user_groups
 	pool.PushExec(1, nil)        // UPDATE users
@@ -3297,11 +4154,15 @@ func TestSyncGroupsAndDeriveRole_NonAdminRoleMapping(t *testing.T) {
 	}
 }
 
+// TestSyncGroupsAndDeriveRole_UpdateRoleError verifies sync groups and
+// derive role update role error behavior.
 func TestSyncGroupsAndDeriveRole_UpdateRoleError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "student")
 	pool.PushRow(nil, "group-uuid")
-	pool.PushRow(nil, "admin")                   // mapped_role
+	pool.PushRow(nil, "admin")                   // mappedRole
 	pool.PushExec(1, nil)                        // DELETE
 	pool.PushExec(1, nil)                        // INSERT user_groups
 	pool.PushExec(0, errors.New("update error")) // UPDATE users
@@ -3314,7 +4175,11 @@ func TestSyncGroupsAndDeriveRole_UpdateRoleError(t *testing.T) {
 
 // ── upsertSSOUser additional coverage ────────────────────────────────────────
 
+// TestUpsertSSOUser_ExistingByProvider_UpdateError verifies upsert SSO user
+// existing by provider update error behavior.
 func TestUpsertSSOUser_ExistingByProvider_UpdateError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "existing-uuid", "johndoe", "john@example.com", "student", nil, nil, true, "github", "2024-01-01")
 	pool.PushRow(errors.New("update error"))
@@ -3329,7 +4194,11 @@ func TestUpsertSSOUser_ExistingByProvider_UpdateError(t *testing.T) {
 	}
 }
 
+// TestUpsertSSOUser_ExistingByEmail_UpdateError verifies upsert SSO user
+// existing by email update error behavior.
 func TestUpsertSSOUser_ExistingByEmail_UpdateError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("not found"))
 	pool.PushRow(nil, "email-uuid", "johndoe", "john@example.com", "student", nil, nil, true, "", "2024-01-01")
@@ -3345,7 +4214,11 @@ func TestUpsertSSOUser_ExistingByEmail_UpdateError(t *testing.T) {
 	}
 }
 
+// TestUpsertSSOUser_InsertError verifies upsert SSO user insert error
+// behavior.
 func TestUpsertSSOUser_InsertError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(errors.New("not found"))
 	pool.PushRow(errors.New("not found"))
@@ -3360,7 +4233,11 @@ func TestUpsertSSOUser_InsertError(t *testing.T) {
 
 // ── OIDCCallback additional coverage ─────────────────────────────────────────
 
+// TestOIDCCallback_OIDCDisabled verifies OIDC callback OIDC disabled
+// behavior.
 func TestOIDCCallback_OIDCDisabled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 	state, _ := makeOAuthState("oidc", htSecret)
@@ -3372,7 +4249,11 @@ func TestOIDCCallback_OIDCDisabled(t *testing.T) {
 	}
 }
 
+// TestOIDCCallback_ProviderUnreachable verifies OIDC callback provider
+// unreachable behavior.
 func TestOIDCCallback_ProviderUnreachable(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -3400,7 +4281,11 @@ func TestOIDCCallback_ProviderUnreachable(t *testing.T) {
 
 // ── loadLDAPSettings ──────────────────────────────────────────────────────────
 
+// TestLoadLDAPSettings_Disabled verifies load LDAP settings disabled
+// behavior.
 func TestLoadLDAPSettings_Disabled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	s := &State{Pool: pool, Config: &config.Config{}}
 
@@ -3410,7 +4295,11 @@ func TestLoadLDAPSettings_Disabled(t *testing.T) {
 	}
 }
 
+// TestLoadLDAPSettings_NotConfigured verifies load LDAP settings not
+// configured behavior.
 func TestLoadLDAPSettings_NotConfigured(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true")
 	s := &State{Pool: pool, Config: &config.Config{}}
@@ -3421,7 +4310,11 @@ func TestLoadLDAPSettings_NotConfigured(t *testing.T) {
 	}
 }
 
+// TestLoadLDAPSettings_Configured verifies load LDAP settings configured
+// behavior.
 func TestLoadLDAPSettings_Configured(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, "true")
 	pool.PushRow(nil, "ldap://ldap.example.com")
@@ -3445,7 +4338,10 @@ func TestLoadLDAPSettings_Configured(t *testing.T) {
 
 // ── LDAPLogin early paths ─────────────────────────────────────────────────────
 
+// TestLDAPLogin_InvalidJSON verifies LDAP login invalid JSON behavior.
 func TestLDAPLogin_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3455,7 +4351,11 @@ func TestLDAPLogin_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestLDAPLogin_EmptyCredentials verifies LDAP login empty credentials
+// behavior.
 func TestLDAPLogin_EmptyCredentials(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3465,7 +4365,10 @@ func TestLDAPLogin_EmptyCredentials(t *testing.T) {
 	}
 }
 
+// TestLDAPLogin_LDAPDisabled verifies LDAP login LDAP disabled behavior.
 func TestLDAPLogin_LDAPDisabled(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3477,14 +4380,22 @@ func TestLDAPLogin_LDAPDisabled(t *testing.T) {
 
 // ── buildRestConfig (pattern_watcher.go) ─────────────────────────────────────
 
+// TestBuildRestConfig_InvalidKubeconfig verifies build rest config invalid
+// kubeconfig behavior.
 func TestBuildRestConfig_InvalidKubeconfig(t *testing.T) {
+	t.Parallel()
+
 	_, err := buildRestConfig("/nonexistent/kubeconfig.yaml")
 	if err == nil {
 		t.Error("expected error for nonexistent kubeconfig")
 	}
 }
 
+// TestBuildRestConfig_NoKubeconfig verifies build rest config no kubeconfig
+// behavior.
 func TestBuildRestConfig_NoKubeconfig(t *testing.T) {
+	t.Parallel()
+
 	_, err := buildRestConfig("")
 	if err == nil {
 		t.Error("expected error when not in k8s cluster")
@@ -3493,7 +4404,11 @@ func TestBuildRestConfig_NoKubeconfig(t *testing.T) {
 
 // ── PatternWatcher (pattern_watcher.go) ──────────────────────────────────────
 
+// TestPatternWatcher_Upsert_NoSpec verifies pattern watcher upsert no spec
+// behavior.
 func TestPatternWatcher_Upsert_NoSpec(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
 	cr := &patternv1.MarkdownPattern{}
@@ -3501,7 +4416,11 @@ func TestPatternWatcher_Upsert_NoSpec(t *testing.T) {
 	w.upsert(context.Background(), cr)
 }
 
+// TestPatternWatcher_Upsert_WithSpec verifies pattern watcher upsert with
+// spec behavior.
 func TestPatternWatcher_Upsert_WithSpec(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
 	cr := &patternv1.MarkdownPattern{
@@ -3515,7 +4434,11 @@ func TestPatternWatcher_Upsert_WithSpec(t *testing.T) {
 	w.upsert(context.Background(), cr)
 }
 
+// TestPatternWatcher_Upsert_DefaultsApplied verifies pattern watcher upsert
+// defaults applied behavior.
 func TestPatternWatcher_Upsert_DefaultsApplied(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
 	cr := &patternv1.MarkdownPattern{
@@ -3527,7 +4450,11 @@ func TestPatternWatcher_Upsert_DefaultsApplied(t *testing.T) {
 	w.upsert(context.Background(), cr)
 }
 
+// TestPatternWatcher_Delete_WithSpec verifies pattern watcher delete with
+// spec behavior.
 func TestPatternWatcher_Delete_WithSpec(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
 	cr := &patternv1.MarkdownPattern{
@@ -3539,7 +4466,11 @@ func TestPatternWatcher_Delete_WithSpec(t *testing.T) {
 	w.delete(context.Background(), cr)
 }
 
+// TestPatternWatcher_Delete_NoSpec verifies pattern watcher delete no spec
+// behavior.
 func TestPatternWatcher_Delete_NoSpec(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	w := &PatternWatcher{pool: pool}
 	cr := &patternv1.MarkdownPattern{}
@@ -3549,13 +4480,17 @@ func TestPatternWatcher_Delete_NoSpec(t *testing.T) {
 
 // ── InternalCourseSummary additional coverage ─────────────────────────────────
 
+// TestInternalCourseSummary_QueryError verifies internal course summary
+// query error behavior.
 func TestInternalCourseSummary_QueryError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRow(nil, 0)
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/course-summary?user_id=uuid-1&course_slug=my-course", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -3563,12 +4498,16 @@ func TestInternalCourseSummary_QueryError(t *testing.T) {
 
 // ── InternalGetModuleProgress additional coverage ─────────────────────────────
 
+// TestInternalGetModuleProgress_DBError verifies internal get module
+// progress DB error behavior.
 func TestInternalGetModuleProgress_DBError(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?user_id=uid&course_slug=c", "", "")
+	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uid&courseSlug=c", "", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -3576,13 +4515,20 @@ func TestInternalGetModuleProgress_DBError(t *testing.T) {
 
 // ── sanitizeUsername (extra cases) ───────────────────────────────────────────
 
+// TestSanitizeUsername_AllSpecial verifies sanitize username all special
+// behavior.
 func TestSanitizeUsername_AllSpecial(t *testing.T) {
+	t.Parallel()
+
 	if got := sanitizeUsername("!@#$%^&*()"); got != "user" {
 		t.Errorf("want user for all-special input, got %q", got)
 	}
 }
 
+// TestSanitizeUsername_Long verifies sanitize username long behavior.
 func TestSanitizeUsername_Long(t *testing.T) {
+	t.Parallel()
+
 	long := "abcdefghijklmnopqrstuvwxyz_extra_chars_here"
 
 	got := sanitizeUsername(long)
@@ -3591,7 +4537,11 @@ func TestSanitizeUsername_Long(t *testing.T) {
 	}
 }
 
+// TestSanitizeUsername_WithDashUnderscore verifies sanitize username with
+// dash underscore behavior.
 func TestSanitizeUsername_WithDashUnderscore(t *testing.T) {
+	t.Parallel()
+
 	got := sanitizeUsername("user-name_ok")
 	if got != "user-name_ok" {
 		t.Errorf("want user-name_ok, got %q", got)
@@ -3600,28 +4550,42 @@ func TestSanitizeUsername_WithDashUnderscore(t *testing.T) {
 
 // ── extractURLBase ───────────────────────────────────────────────────────────
 
+// TestExtractURLBase_Normal verifies extract URL base normal behavior.
 func TestExtractURLBase_Normal(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("http://localhost:8080/auth/realms/test")
 	if got != "http://localhost:8080" {
 		t.Errorf("want http://localhost:8080, got %q", got)
 	}
 }
 
+// TestExtractURLBase_NoPath verifies extract URL base no path behavior.
 func TestExtractURLBase_NoPath(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("https://example.com")
 	if got != "https://example.com" {
 		t.Errorf("want https://example.com, got %q", got)
 	}
 }
 
+// TestExtractURLBase_InvalidURL verifies extract URL base invalid URL
+// behavior.
 func TestExtractURLBase_InvalidURL(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("://bad-url")
 	if got == "" {
 		t.Error("expected non-empty result for invalid URL")
 	}
 }
 
+// TestExtractURLBase_EmptyHost verifies extract URL base empty host
+// behavior.
 func TestExtractURLBase_EmptyHost(t *testing.T) {
+	t.Parallel()
+
 	got := extractURLBase("relative-path/only")
 	if got != "relative-path/only" {
 		t.Errorf("want raw URL returned, got %q", got)
@@ -3630,7 +4594,11 @@ func TestExtractURLBase_EmptyHost(t *testing.T) {
 
 // ── OIDCAuthorize provider unreachable ───────────────────────────────────────
 
+// TestOIDCAuthorize_ProviderUnreachable verifies OIDC authorize provider
+// unreachable behavior.
 func TestOIDCAuthorize_ProviderUnreachable(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -3656,7 +4624,11 @@ func TestOIDCAuthorize_ProviderUnreachable(t *testing.T) {
 
 // ── decodeOAuthState (extra cases) ───────────────────────────────────────────
 
+// TestDecodeOAuthState_Invalid verifies decode o auth state invalid
+// behavior.
 func TestDecodeOAuthState_Invalid(t *testing.T) {
+	t.Parallel()
+
 	_, ok := decodeOAuthState("not-a-jwt", htSecret)
 	if ok {
 		t.Error("expected invalid state to fail")
@@ -3665,7 +4637,10 @@ func TestDecodeOAuthState_Invalid(t *testing.T) {
 
 // ── ListProviders (extra cases) ───────────────────────────────────────────────
 
+// TestListProviders_Empty verifies list providers empty behavior.
 func TestListProviders_Empty(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
@@ -3685,7 +4660,11 @@ func TestListProviders_Empty(t *testing.T) {
 	_ = providers
 }
 
+// TestListProviders_WithProvider verifies list providers with provider
+// behavior.
 func TestListProviders_WithProvider(t *testing.T) {
+	t.Parallel()
+
 	pool := &fake.Pool{}
 	s := &State{
 		Pool: pool,

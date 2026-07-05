@@ -7,9 +7,13 @@ import (
 	"testing"
 )
 
+// TestHandler_ReturnsMetrics verifies that Handler serves a 200 response
+// containing the expected Prometheus metric names.
 func TestHandler_ReturnsMetrics(t *testing.T) {
+	t.Parallel()
+
 	h := Handler()
-	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", http.NoBody)
 	rec := httptest.NewRecorder()
 	h(rec, req)
 

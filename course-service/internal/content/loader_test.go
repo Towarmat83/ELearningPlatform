@@ -6,7 +6,10 @@ import (
 	"testing"
 )
 
+// TestStore_PutAndGet checks store put and get.
 func TestStore_PutAndGet(t *testing.T) {
+	t.Parallel()
+
 	s := NewStore()
 	c := &Course{Slug: "test-course", Title: "Test", IsPublic: true}
 	s.Put(c)
@@ -21,7 +24,10 @@ func TestStore_PutAndGet(t *testing.T) {
 	}
 }
 
+// TestStore_Get_Missing checks store get missing.
 func TestStore_Get_Missing(t *testing.T) {
+	t.Parallel()
+
 	s := NewStore()
 
 	got := s.Get("nonexistent")
@@ -30,7 +36,10 @@ func TestStore_Get_Missing(t *testing.T) {
 	}
 }
 
+// TestStore_List_OnlyPublic checks store list only public.
 func TestStore_List_OnlyPublic(t *testing.T) {
+	t.Parallel()
+
 	s := NewStore()
 	s.Put(&Course{Slug: "public1", Title: "A Public", IsPublic: true})
 	s.Put(&Course{Slug: "private1", Title: "Private", IsPublic: false})
@@ -46,7 +55,10 @@ func TestStore_List_OnlyPublic(t *testing.T) {
 	}
 }
 
+// TestStore_All checks store all.
 func TestStore_All(t *testing.T) {
+	t.Parallel()
+
 	s := NewStore()
 	s.Put(&Course{Slug: "c1", Title: "B", IsPublic: true})
 	s.Put(&Course{Slug: "c2", Title: "A", IsPublic: false})
@@ -61,7 +73,10 @@ func TestStore_All(t *testing.T) {
 	}
 }
 
+// TestStore_DeleteBySource checks store delete by source.
 func TestStore_DeleteBySource(t *testing.T) {
+	t.Parallel()
+
 	s := NewStore()
 	s.Put(&Course{Slug: "c1", Title: "C1", Source: "k8s:c1"})
 	s.Put(&Course{Slug: "c2", Title: "C2", Source: "k8s:c2"})
@@ -82,7 +97,10 @@ func TestStore_DeleteBySource(t *testing.T) {
 	}
 }
 
+// TestStore_PutOverwrite checks store put overwrite.
 func TestStore_PutOverwrite(t *testing.T) {
+	t.Parallel()
+
 	s := NewStore()
 	s.Put(&Course{Slug: "c1", Title: "Original"})
 	s.Put(&Course{Slug: "c1", Title: "Updated"})
@@ -93,7 +111,10 @@ func TestStore_PutOverwrite(t *testing.T) {
 	}
 }
 
+// TestParseMarkdownLesson_WithFrontmatter checks frontmatter parsing.
 func TestParseMarkdownLesson_WithFrontmatter(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	file := filepath.Join(dir, "01-intro.md")
 	content := `---
@@ -103,7 +124,7 @@ title: Introduction to Kubernetes
 
 Some content here.
 `
-	os.WriteFile(file, []byte(content), 0644)
+	os.WriteFile(file, []byte(content), 0o644)
 
 	lesson, err := ParseMarkdownLesson(file, 1)
 	if err != nil {
@@ -127,13 +148,16 @@ Some content here.
 	}
 }
 
+// TestParseMarkdownLesson_NoFrontmatter checks parsing without frontmatter.
 func TestParseMarkdownLesson_NoFrontmatter(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	file := filepath.Join(dir, "getting-started.md")
 	content := `# Getting Started
 
 Just content, no frontmatter.`
-	os.WriteFile(file, []byte(content), 0644)
+	os.WriteFile(file, []byte(content), 0o644)
 
 	lesson, err := ParseMarkdownLesson(file, 2)
 	if err != nil {
@@ -153,17 +177,23 @@ Just content, no frontmatter.`
 	}
 }
 
+// TestParseMarkdownLesson_NonExistentFile checks missing file handling.
 func TestParseMarkdownLesson_NonExistentFile(t *testing.T) {
+	t.Parallel()
+
 	_, err := ParseMarkdownLesson("/nonexistent/file.md", 0)
 	if err == nil {
 		t.Error("expected error for missing file")
 	}
 }
 
+// TestParseMarkdownLesson_NoOrderPrefix checks lesson without order prefix.
 func TestParseMarkdownLesson_NoOrderPrefix(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	file := filepath.Join(dir, "my-lesson.md")
-	os.WriteFile(file, []byte("hello world"), 0644)
+	os.WriteFile(file, []byte("hello world"), 0o644)
 
 	lesson, err := ParseMarkdownLesson(file, 0)
 	if err != nil {
@@ -175,7 +205,10 @@ func TestParseMarkdownLesson_NoOrderPrefix(t *testing.T) {
 	}
 }
 
+// TestExtractFrontmatter_NoFrontmatter checks extraction with no frontmatter.
 func TestExtractFrontmatter_NoFrontmatter(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("# Hello\nContent here")
 
 	title, body := extractFrontmatter(data)
@@ -188,7 +221,10 @@ func TestExtractFrontmatter_NoFrontmatter(t *testing.T) {
 	}
 }
 
+// TestExtractFrontmatter_WithTitle checks extract frontmatter with title.
 func TestExtractFrontmatter_WithTitle(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("---\ntitle: My Title\n---\nBody content")
 
 	title, body := extractFrontmatter(data)
@@ -201,7 +237,10 @@ func TestExtractFrontmatter_WithTitle(t *testing.T) {
 	}
 }
 
+// TestExtractFrontmatter_MissingClosingDelimiter checks missing delimiter.
 func TestExtractFrontmatter_MissingClosingDelimiter(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("---\ntitle: Incomplete")
 
 	title, body := extractFrontmatter(data)
@@ -212,7 +251,10 @@ func TestExtractFrontmatter_MissingClosingDelimiter(t *testing.T) {
 	_ = body
 }
 
+// TestExtractFrontmatter_EmptyFrontmatter checks empty frontmatter block.
 func TestExtractFrontmatter_EmptyFrontmatter(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("---\n---\nBody here")
 
 	_, body := extractFrontmatter(data)
@@ -221,7 +263,10 @@ func TestExtractFrontmatter_EmptyFrontmatter(t *testing.T) {
 	}
 }
 
+// TestExtractFrontmatter_InvalidYAML checks extract frontmatter invalid YAML.
 func TestExtractFrontmatter_InvalidYAML(t *testing.T) {
+	t.Parallel()
+
 	// Tab-indented YAML is invalid and triggers yaml.Unmarshal error.
 	data := []byte("---\n\t invalid: yaml:\n---\nBody content")
 	title, body := extractFrontmatter(data)

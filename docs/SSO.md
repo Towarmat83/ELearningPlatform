@@ -30,8 +30,8 @@ with **different feature sets**. This matters: an OIDC provider configured in th
 | **Routes** | `/api/auth/oauth/{id}/authorize` · `/api/auth/oauth/callback` | `/api/auth/oidc/authorize` · `/api/auth/oidc/callback` |
 | **Scopes** | Fixed: `openid email profile` | Configurable (`oidc_scopes`, default incl. `groups`) |
 | **Group → role mapping** | ❌ **Not supported** | ✅ via `oidc_group_claim` |
-| **Split-horizon** (internal discovery URL ≠ public issuer) | ❌ Not supported | ✅ via `issuer_url` / `browser_base_url` |
-| **`auth_provider` stored** | the provider `id` (e.g. `keycloak`) | always `oidc` |
+| **Split-horizon** (internal discovery URL ≠ public issuer) | ❌ Not supported | ✅ via `issuerUrl` / `browser_base_url` |
+| **`authProvider` stored** | the provider `id` (e.g. `keycloak`) | always `oidc` |
 
 **Rule of thumb:**
 
@@ -54,7 +54,7 @@ On every SSO login the platform automatically syncs the user's profile from the 
 
 | Field | Behaviour |
 |---|---|
-| **Avatar** | Always updated from the provider (`picture` claim / GitHub `avatar_url`). Displayed on the profile page with a graceful fallback to initials if the URL is unreachable. |
+| **Avatar** | Always updated from the provider (`picture` claim / GitHub `avatarUrl`). Displayed on the profile page with a graceful fallback to initials if the URL is unreachable. |
 | **Bio** | Populated from the provider on first login only (`bio` / `description` / `about` claims). Once a user writes their own bio it is **never overwritten** by a subsequent login. |
 | **Display name** | Used only when creating a new account (`name` → `preferred_username` → email). Not updated on subsequent logins to preserve user edits. |
 
@@ -79,7 +79,7 @@ Browser → GET /api/auth/oauth/{id}/authorize  → redirect to provider
        ← JWT token
 ```
 
-The backend reads `sso.providers` from the Helm configmap. For each provider with a non-empty `client_id`, a button appears on the login page.
+The backend reads `sso.providers` from the Helm configmap. For each provider with a non-empty `clientId`, a button appears on the login page.
 
 > **No group → role mapping in this flow.** Users created through `sso.providers`
 > are added to the default group and get the default role; IdP group claims are
@@ -91,9 +91,9 @@ The backend reads `sso.providers` from the Helm configmap. For each provider wit
 | Provider `id` | Flow |
 |---|---|
 | `github` | OAuth2 direct (GitHub has no OIDC discovery) |
-| anything else | OIDC discovery via `issuer_url` |
+| anything else | OIDC discovery via `issuerUrl` |
 
-The `id` value is stored in the database as `auth_provider` for each user — choose a stable, meaningful value and don't change it once users have signed in.
+The `id` value is stored in the database as `authProvider` for each user — choose a stable, meaningful value and don't change it once users have signed in.
 
 ---
 
@@ -108,12 +108,12 @@ sso:
   providers: []           # OAuth2/OIDC providers list (GitHub, GitLab, …)
 ```
 
-`redirectBase` must match the **Callback URL** registered with each provider.  
+`redirectBase` must match the **Callback URL** registered with each provider.
 The actual redirect URI sent to providers is `{redirectBase}/auth/callback`.
 
 ### Sourcing provider client secrets from a Secret
 
-Each entry in `sso.providers` accepts its `client_secret` inline (rendered into the
+Each entry in `sso.providers` accepts its `clientSecret` inline (rendered into the
 release Secret, fine for dev) **or** a reference to an existing Secret you manage:
 
 ```yaml
@@ -122,10 +122,10 @@ sso:
   providers:
     - id: gitlab
       name: GitLab
-      client_id: "xxx"
-      issuer_url: "https://gitlab.com"
+      clientId: "xxx"
+      issuerUrl: "https://gitlab.com"
       existingSecret: gitlab-oauth      # Secret you manage (Vault / ESO / SOPS)
-      existingSecretKey: client_secret  # key inside that Secret (default: client_secret)
+      existingSecretKey: clientSecret  # key inside that Secret (default: clientSecret)
 ```
 
 The client secret is injected into user-service as the `SSO_<ID>_CLIENT_SECRET`
@@ -203,8 +203,8 @@ sso:
   providers:
     - id: github
       name: GitHub
-      client_id: "Iv23li..."
-      client_secret: "abc123..."
+      clientId: "Iv23li..."
+      clientSecret: "abc123..."
 ```
 
 **GitHub App setup** (`github.com/settings/apps` → New GitHub App):
@@ -223,23 +223,23 @@ After creation: copy **Client ID** and generate a **Client Secret**.
 
 ### GitLab (SaaS or self-hosted)
 
-Uses OIDC discovery. `issuer_url` defaults to `https://gitlab.com` when omitted —
+Uses OIDC discovery. `issuerUrl` defaults to `https://gitlab.com` when omitted —
 only set it for self-hosted instances.
 
 ```yaml
 providers:
-  # GitLab SaaS — issuer_url optional
+  # GitLab SaaS — issuerUrl optional
   - id: gitlab
     name: GitLab
-    client_id: "xxx"
-    client_secret: "yyy"
+    clientId: "xxx"
+    clientSecret: "yyy"
 
-  # GitLab self-hosted — set issuer_url to your instance
+  # GitLab self-hosted — set issuerUrl to your instance
   - id: gitlab
     name: GitLab
-    client_id: "xxx"
-    client_secret: "yyy"
-    issuer_url: "https://gitlab.company.com"
+    clientId: "xxx"
+    clientSecret: "yyy"
+    issuerUrl: "https://gitlab.company.com"
 ```
 
 **GitLab setup** (User Settings → Applications):
@@ -255,11 +255,11 @@ providers:
 
 ```yaml
 providers:
-  # issuer_url optional for Google, defaults to https://accounts.google.com
+  # issuerUrl optional for Google, defaults to https://accounts.google.com
   - id: google
     name: Google
-    client_id: "xxx.apps.googleusercontent.com"
-    client_secret: "yyy"
+    clientId: "xxx.apps.googleusercontent.com"
+    clientSecret: "yyy"
 ```
 
 **Google Cloud Console** (APIs & Services → Credentials → OAuth 2.0 Client ID):
@@ -277,12 +277,12 @@ providers:
 providers:
   - id: microsoft
     name: Microsoft
-    client_id: "xxx"
-    client_secret: "yyy"
+    clientId: "xxx"
+    clientSecret: "yyy"
     # Organisation accounts only:
-    issuer_url: "https://login.microsoftonline.com/{tenant-id}/v2.0"
+    issuerUrl: "https://login.microsoftonline.com/{tenant-id}/v2.0"
     # Personal + org accounts:
-    # issuer_url: "https://login.microsoftonline.com/common/v2.0"
+    # issuerUrl: "https://login.microsoftonline.com/common/v2.0"
 ```
 
 **Azure Portal** (App registrations → New registration):
@@ -302,12 +302,12 @@ Add a client secret in **Certificates & secrets**.
 providers:
   - id: authentik
     name: "Company SSO"
-    client_id: "xxx"
-    client_secret: "yyy"
-    issuer_url: "https://authentik.company.com/application/o/{app-slug}/"
+    clientId: "xxx"
+    clientSecret: "yyy"
+    issuerUrl: "https://authentik.company.com/application/o/{app-slug}/"
 ```
 
-The `issuer_url` is shown in the Authentik provider detail page.  
+The `issuerUrl` is shown in the Authentik provider detail page.
 Required scopes: `openid`, `email`, `profile`.
 
 > For group → role mapping with Authentik, use the dedicated
@@ -327,9 +327,9 @@ Required scopes: `openid`, `email`, `profile`.
 providers:
   - id: keycloak
     name: "Company SSO"
-    client_id: "elearning"
-    client_secret: "yyy"
-    issuer_url: "https://keycloak.company.com/realms/{realm-name}"
+    clientId: "elearning"
+    clientSecret: "yyy"
+    issuerUrl: "https://keycloak.company.com/realms/{realm-name}"
 ```
 
 **Keycloak admin** (Clients → Create):
@@ -348,9 +348,9 @@ providers:
 providers:
   - id: okta
     name: Okta
-    client_id: "xxx"
-    client_secret: "yyy"
-    issuer_url: "https://your-domain.okta.com"
+    clientId: "xxx"
+    clientSecret: "yyy"
+    issuerUrl: "https://your-domain.okta.com"
 ```
 
 ---
@@ -361,25 +361,25 @@ providers:
 providers:
   - id: auth0
     name: Auth0
-    client_id: "xxx"
-    client_secret: "yyy"
-    issuer_url: "https://your-domain.auth0.com"
+    clientId: "xxx"
+    clientSecret: "yyy"
+    issuerUrl: "https://your-domain.auth0.com"
 ```
 
 ---
 
 ### Any OIDC-compatible provider
 
-Any provider that exposes a standard OIDC discovery endpoint at  
-`{issuer_url}/.well-known/openid-configuration` works out of the box:
+Any provider that exposes a standard OIDC discovery endpoint at
+`{issuerUrl}/.well-known/openid-configuration` works out of the box:
 
 ```yaml
 providers:
   - id: my-sso
     name: "My SSO"
-    client_id: "xxx"
-    client_secret: "yyy"
-    issuer_url: "https://sso.company.com"
+    clientId: "xxx"
+    clientSecret: "yyy"
+    issuerUrl: "https://sso.company.com"
 ```
 
 ---
@@ -399,18 +399,18 @@ sso:
   providers:
     - id: github
       name: GitHub
-      client_id: "..."
-      client_secret: "..."
+      clientId: "..."
+      clientSecret: "..."
     - id: gitlab
       name: GitLab
-      client_id: "..."
-      client_secret: "..."
-      issuer_url: "https://gitlab.com"
+      clientId: "..."
+      clientSecret: "..."
+      issuerUrl: "https://gitlab.com"
     - id: google
       name: Google
-      client_id: "..."
-      client_secret: "..."
-      issuer_url: "https://accounts.google.com"
+      clientId: "..."
+      clientSecret: "..."
+      issuerUrl: "https://accounts.google.com"
 ```
 
 ---
@@ -450,6 +450,7 @@ const providerIcon: Record<string, string> = {
 ```
 
 **Rules:**
+
 - Use `class="w-5 h-5"` on the `<svg>` to match the button size
 - The key must exactly match the `id` used in `sso.providers`
 - Inline SVG only — no external images (CSP)
@@ -473,7 +474,7 @@ same keys):
 | `oidc_group_claim` | JWT claim containing group names (default: `groups`) |
 | `oidc_browser_base_url` | Override issuer base URL for browser redirects (split-horizon DNS) |
 
-When enabled, a **"Continue with SSO (OIDC)"** button appears on the login page.  
+When enabled, a **"Continue with SSO (OIDC)"** button appears on the login page.
 This is useful for an enterprise IdP (Authentik, Keycloak, Azure AD) managed by an admin
 without needing a Helm upgrade.
 

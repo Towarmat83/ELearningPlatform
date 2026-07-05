@@ -4,7 +4,10 @@ import (
 	"testing"
 )
 
+// TestToQuiz_Basic checks to quiz basic.
 func TestToQuiz_Basic(t *testing.T) {
+	t.Parallel()
+
 	qy := QuizYAML{
 		ID:           "quiz-1",
 		Title:        "Test Quiz",
@@ -51,7 +54,10 @@ func TestToQuiz_Basic(t *testing.T) {
 	}
 }
 
+// TestToQuiz_DefaultPointsAndDifficulty checks default points and difficulty.
 func TestToQuiz_DefaultPointsAndDifficulty(t *testing.T) {
+	t.Parallel()
+
 	qy := QuizYAML{
 		Questions: []QuestionYAML{
 			{ID: "q1", Type: "boolean"},
@@ -68,7 +74,10 @@ func TestToQuiz_DefaultPointsAndDifficulty(t *testing.T) {
 	}
 }
 
+// TestToQuiz_DefaultIDAndTitle checks to quiz default ID and title.
 func TestToQuiz_DefaultIDAndTitle(t *testing.T) {
+	t.Parallel()
+
 	qy := QuizYAML{} // no ID, no Title
 
 	quiz := qy.ToQuiz()
@@ -77,7 +86,10 @@ func TestToQuiz_DefaultIDAndTitle(t *testing.T) {
 	}
 }
 
+// TestToQuiz_FillsIDFromPath checks to quiz fills ID from path.
 func TestToQuiz_FillsIDFromPath(t *testing.T) {
+	t.Parallel()
+
 	// FetchQuizContent sets ID from path when empty — ToQuiz just propagates it
 	qy := QuizYAML{ID: "content/quiz.yaml", Title: ""}
 
@@ -87,7 +99,10 @@ func TestToQuiz_FillsIDFromPath(t *testing.T) {
 	}
 }
 
+// TestToQuiz_WithOrderItems checks to quiz with order items.
 func TestToQuiz_WithOrderItems(t *testing.T) {
+	t.Parallel()
+
 	qy := QuizYAML{
 		Questions: []QuestionYAML{
 			{
@@ -111,7 +126,10 @@ func TestToQuiz_WithOrderItems(t *testing.T) {
 	}
 }
 
+// TestToQuiz_WithPartialScoring checks to quiz with partial scoring.
 func TestToQuiz_WithPartialScoring(t *testing.T) {
+	t.Parallel()
+
 	enabled := true
 	qy := QuizYAML{
 		Questions: []QuestionYAML{
@@ -136,7 +154,10 @@ func TestToQuiz_WithPartialScoring(t *testing.T) {
 	}
 }
 
+// TestToQuiz_WithFeedback checks to quiz with feedback.
 func TestToQuiz_WithFeedback(t *testing.T) {
+	t.Parallel()
+
 	qy := QuizYAML{
 		Questions: []QuestionYAML{
 			{
@@ -168,7 +189,10 @@ func TestToQuiz_WithFeedback(t *testing.T) {
 	}
 }
 
+// TestToQuiz_WithCovers checks to quiz with covers.
 func TestToQuiz_WithCovers(t *testing.T) {
+	t.Parallel()
+
 	qy := QuizYAML{
 		Covers: []CoverEntryYAML{
 			{Course: "kubernetes", Modules: []string{"pods", "services"}},

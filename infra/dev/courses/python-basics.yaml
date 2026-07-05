@@ -52,7 +52,7 @@ spec:
         - "structures-de-contrôle"
         - "fonctions-et-modules"
         - "listes,-tuples-et-dictionnaires"
-      passing_score: 75
+      passingScore: 75
       questions:
         - id: q1
           type: single

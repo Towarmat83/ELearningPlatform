@@ -4,12 +4,7 @@ import (
 	"testing"
 )
 
-//go:fix inline
-func boolPtr(b bool) *bool { return new(b) }
-
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
-
+// makeQuestion builds a Question fixture with the given id, type, and points.
 func makeQuestion(id, typ string, points int) Question {
 	return Question{
 		ID:     id,
@@ -24,7 +19,10 @@ func makeQuestion(id, typ string, points int) Question {
 
 // ─── ScoreSingle ───────────────────────────────────────────────────────────
 
+// TestScoreSingle_NilAnswer checks score single nil answer.
 func TestScoreSingle_NilAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "single", 5)
 	q.Answers = []Answer{{ID: "a", Text: "A", Correct: true}}
 
@@ -42,7 +40,10 @@ func TestScoreSingle_NilAnswer(t *testing.T) {
 	}
 }
 
+// TestScoreSingle_CorrectAnswer checks score single correct answer.
 func TestScoreSingle_CorrectAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "single", 10)
 	q.Answers = []Answer{
 		{ID: "a", Text: "A", Correct: false},
@@ -59,7 +60,10 @@ func TestScoreSingle_CorrectAnswer(t *testing.T) {
 	}
 }
 
+// TestScoreSingle_WrongAnswer checks score single wrong answer.
 func TestScoreSingle_WrongAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "single", 10)
 	q.Answers = []Answer{
 		{ID: "a", Text: "A", Correct: false},
@@ -80,7 +84,10 @@ func TestScoreSingle_WrongAnswer(t *testing.T) {
 	}
 }
 
+// TestScoreSingle_UnknownAnswer checks score single unknown answer.
 func TestScoreSingle_UnknownAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "single", 5)
 	q.Answers = []Answer{{ID: "a", Text: "A", Correct: true}}
 
@@ -96,7 +103,10 @@ func TestScoreSingle_UnknownAnswer(t *testing.T) {
 
 // ─── ScoreMultiple ─────────────────────────────────────────────────────────
 
+// TestScoreMultiple_EmptyAnswers checks score multiple empty answers.
 func TestScoreMultiple_EmptyAnswers(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "multiple", 6)
 	q.Answers = []Answer{{ID: "a", Correct: true}, {ID: "b", Correct: true}}
 
@@ -110,7 +120,10 @@ func TestScoreMultiple_EmptyAnswers(t *testing.T) {
 	}
 }
 
+// TestScoreMultiple_AllCorrect checks score multiple all correct.
 func TestScoreMultiple_AllCorrect(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "multiple", 6)
 	q.Answers = []Answer{
 		{ID: "a", Correct: true},
@@ -128,7 +141,10 @@ func TestScoreMultiple_AllCorrect(t *testing.T) {
 	}
 }
 
+// TestScoreMultiple_PartialWithFalsePositive checks partial, false positive.
 func TestScoreMultiple_PartialWithFalsePositive(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "multiple", 10)
 	q.Answers = []Answer{
 		{ID: "a", Correct: true},
@@ -143,7 +159,10 @@ func TestScoreMultiple_PartialWithFalsePositive(t *testing.T) {
 	}
 }
 
+// TestScoreMultiple_PartialNoNegative checks partial scoring, no negative.
 func TestScoreMultiple_PartialNoNegative(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "multiple", 10)
 	q.Answers = []Answer{
 		{ID: "a", Correct: true},
@@ -158,7 +177,10 @@ func TestScoreMultiple_PartialNoNegative(t *testing.T) {
 	}
 }
 
+// TestScoreMultiple_WrongAll_NoPartial checks all-wrong without partial credit.
 func TestScoreMultiple_WrongAll_NoPartial(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "multiple", 6)
 	q.Answers = []Answer{
 		{ID: "a", Correct: true},
@@ -177,7 +199,10 @@ func TestScoreMultiple_WrongAll_NoPartial(t *testing.T) {
 
 // ─── ScoreBoolean ──────────────────────────────────────────────────────────
 
+// TestScoreBoolean_NilAnswer checks score boolean nil answer.
 func TestScoreBoolean_NilAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "boolean", 4)
 	q.CorrectAnswer = new(true)
 
@@ -191,7 +216,10 @@ func TestScoreBoolean_NilAnswer(t *testing.T) {
 	}
 }
 
+// TestScoreBoolean_Correct checks score boolean correct.
 func TestScoreBoolean_Correct(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "boolean", 4)
 	q.CorrectAnswer = new(true)
 
@@ -205,7 +233,10 @@ func TestScoreBoolean_Correct(t *testing.T) {
 	}
 }
 
+// TestScoreBoolean_Wrong checks score boolean wrong.
 func TestScoreBoolean_Wrong(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "boolean", 4)
 	q.CorrectAnswer = new(true)
 
@@ -219,7 +250,10 @@ func TestScoreBoolean_Wrong(t *testing.T) {
 	}
 }
 
+// TestScoreBoolean_NilCorrectAnswer checks score boolean nil correct answer.
 func TestScoreBoolean_NilCorrectAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "boolean", 4)
 	q.CorrectAnswer = nil
 
@@ -229,7 +263,10 @@ func TestScoreBoolean_NilCorrectAnswer(t *testing.T) {
 	}
 }
 
+// TestScoreSingle_NoCorrectAnswerDefined checks missing correct answer.
 func TestScoreSingle_NoCorrectAnswerDefined(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "single", 5)
 	// No answer has Correct: true → correctAnswerID returns ""
 	q.Answers = []Answer{
@@ -245,7 +282,10 @@ func TestScoreSingle_NoCorrectAnswerDefined(t *testing.T) {
 
 // ─── ScoreOrder ────────────────────────────────────────────────────────────
 
+// TestScoreOrder_EmptyAnswer checks score order empty answer.
 func TestScoreOrder_EmptyAnswer(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "order", 5)
 	q.CorrectOrder = []string{"a", "b", "c"}
 
@@ -255,7 +295,10 @@ func TestScoreOrder_EmptyAnswer(t *testing.T) {
 	}
 }
 
+// TestScoreOrder_Correct checks score order correct.
 func TestScoreOrder_Correct(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "order", 5)
 	q.CorrectOrder = []string{"a", "b", "c"}
 
@@ -269,7 +312,10 @@ func TestScoreOrder_Correct(t *testing.T) {
 	}
 }
 
+// TestScoreOrder_WrongOrder checks score order wrong order.
 func TestScoreOrder_WrongOrder(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "order", 5)
 	q.CorrectOrder = []string{"a", "b", "c"}
 
@@ -283,7 +329,10 @@ func TestScoreOrder_WrongOrder(t *testing.T) {
 	}
 }
 
+// TestScoreOrder_WrongLength checks score order wrong length.
 func TestScoreOrder_WrongLength(t *testing.T) {
+	t.Parallel()
+
 	q := makeQuestion("q1", "order", 5)
 	q.CorrectOrder = []string{"a", "b", "c"}
 
@@ -295,7 +344,10 @@ func TestScoreOrder_WrongLength(t *testing.T) {
 
 // ─── ScoreQuiz ─────────────────────────────────────────────────────────────
 
+// TestScoreQuiz_Mixed checks score quiz mixed.
 func TestScoreQuiz_Mixed(t *testing.T) {
+	t.Parallel()
+
 	quiz := &Quiz{
 		PassingScore: 60,
 		Questions: []Question{
@@ -338,7 +390,10 @@ func TestScoreQuiz_Mixed(t *testing.T) {
 	}
 }
 
+// TestScoreQuiz_NotPassed checks score quiz not passed.
 func TestScoreQuiz_NotPassed(t *testing.T) {
+	t.Parallel()
+
 	quiz := &Quiz{
 		PassingScore: 80,
 		Questions: []Question{
@@ -363,7 +418,10 @@ func TestScoreQuiz_NotPassed(t *testing.T) {
 	}
 }
 
+// TestScoreQuiz_UnknownType checks score quiz unknown type.
 func TestScoreQuiz_UnknownType(t *testing.T) {
+	t.Parallel()
+
 	quiz := &Quiz{
 		PassingScore: 50,
 		Questions: []Question{
@@ -382,7 +440,10 @@ func TestScoreQuiz_UnknownType(t *testing.T) {
 	}
 }
 
+// TestScoreQuiz_EmptyAnswers checks score quiz empty answers.
 func TestScoreQuiz_EmptyAnswers(t *testing.T) {
+	t.Parallel()
+
 	quiz := &Quiz{
 		PassingScore: 50,
 		Questions:    []Question{},
@@ -398,7 +459,10 @@ func TestScoreQuiz_EmptyAnswers(t *testing.T) {
 	}
 }
 
+// TestScoreQuiz_OrderQuestion checks score quiz order question.
 func TestScoreQuiz_OrderQuestion(t *testing.T) {
+	t.Parallel()
+
 	quiz := &Quiz{
 		PassingScore: 50,
 		Questions: []Question{
@@ -421,7 +485,10 @@ func TestScoreQuiz_OrderQuestion(t *testing.T) {
 	}
 }
 
+// TestScoreQuiz_MultipleQuestion checks score quiz multiple question.
 func TestScoreQuiz_MultipleQuestion(t *testing.T) {
+	t.Parallel()
+
 	quiz := &Quiz{
 		PassingScore: 50,
 		Questions: []Question{

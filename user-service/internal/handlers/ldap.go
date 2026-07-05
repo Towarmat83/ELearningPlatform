@@ -9,12 +9,12 @@ import (
 	"time"
 
 	ldap "github.com/go-ldap/ldap/v3"
-
-	"github.com/elearning/user-service/internal/middleware"
 )
 
+// ldapTimeout bounds how long an LDAP login attempt may take end-to-end.
 const ldapTimeout = 5 * time.Minute
 
+// ldapSettings holds the LDAP configuration read from the settings table.
 type ldapSettings struct {
 	Enabled      bool
 	ServerURL    string
@@ -26,9 +26,10 @@ type ldapSettings struct {
 	GroupFilter  string
 }
 
+// loadLDAPSettings reads the LDAP configuration and validates it is usable.
 func (s *State) loadLDAPSettings(ctx context.Context) (ldapSettings, error) {
 	cfg := ldapSettings{
-		Enabled:      ReadSetting(ctx, s.Pool, "ldap_enabled", "false") == "true",
+		Enabled:      ReadSetting(ctx, s.Pool, "ldap_enabled", "false") == authSettingTrue,
 		ServerURL:    ReadSetting(ctx, s.Pool, "ldap_server_url", ""),
 		BindDN:       ReadSetting(ctx, s.Pool, "ldap_bind_dn", ""),
 		BindPassword: ReadSetting(ctx, s.Pool, "ldap_bind_password", ""),
@@ -57,51 +58,82 @@ func (s *State) loadLDAPSettings(ctx context.Context) (ldapSettings, error) {
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/ldap/login [post].
-func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
+func (s *State) LDAPLogin(writer http.ResponseWriter, httpReq *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	if err := decode(r, &req); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+
+	err := decode(httpReq, &req)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
 
 		return
 	}
 
 	if req.Email == "" || req.Password == "" {
-		s.Error(w, http.StatusBadRequest, "email and password are required")
+		s.Error(writer, http.StatusBadRequest, "email and password are required")
 
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), ldapTimeout)
+	ctx, cancel := context.WithTimeout(httpReq.Context(), ldapTimeout)
 	defer cancel()
 
 	cfg, err := s.loadLDAPSettings(ctx)
 	if err != nil {
-		s.Error(w, http.StatusBadRequest, err.Error())
+		s.Error(writer, http.StatusBadRequest, err.Error())
 
 		return
 	}
 
+	conn, connected := s.dialLDAPServer(writer, cfg)
+	if !connected {
+		return
+	}
+	defer func() { _ = conn.Close() }()
+
+	entry, authenticated := s.bindLDAPUser(writer, conn, cfg, req.Email, req.Password)
+	if !authenticated {
+		return
+	}
+
+	name := ldapDisplayName(entry, req.Email)
+	groups := ldapUserGroups(conn, cfg, entry.DN)
+
+	s.completeSSOLogin(ctx, writer, req.Email, name, nil, nil, "ldap", entry.DN, groups)
+}
+
+// dialLDAPServer connects to the LDAP server and binds the service account
+// when configured, writing an error response and returning ok=false on failure.
+func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*ldap.Conn, bool) {
 	conn, err := ldap.DialURL(cfg.ServerURL)
 	if err != nil {
-		s.Error(w, http.StatusBadGateway, "Cannot connect to LDAP server: "+err.Error())
+		s.Error(writer, http.StatusBadGateway, "Cannot connect to LDAP server: "+err.Error())
 
-		return
+		return nil, false
 	}
-	defer conn.Close()
 
 	if cfg.BindDN != "" {
-		err := conn.Bind(cfg.BindDN, cfg.BindPassword)
+		err = conn.Bind(cfg.BindDN, cfg.BindPassword)
 		if err != nil {
-			s.Error(w, http.StatusBadGateway, "LDAP service bind failed: "+err.Error())
+			_ = conn.Close()
 
-			return
+			s.Error(writer, http.StatusBadGateway, "LDAP service bind failed: "+err.Error())
+
+			return nil, false
 		}
 	}
 
-	filter := fmt.Sprintf(cfg.UserFilter, ldap.EscapeFilter(req.Email))
+	return conn, true
+}
+
+// bindLDAPUser searches for the user by email and binds as them to verify
+// their password, writing an error response and returning ok=false on failure.
+func (s *State) bindLDAPUser(
+	writer http.ResponseWriter, conn *ldap.Conn, cfg ldapSettings, email, password string,
+) (*ldap.Entry, bool) {
+	filter := fmt.Sprintf(cfg.UserFilter, ldap.EscapeFilter(email))
 	searchReq := ldap.NewSearchRequest(
 		cfg.UserBaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
@@ -113,24 +145,30 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 
 	result, err := conn.Search(searchReq)
 	if err != nil || len(result.Entries) == 0 {
-		s.Error(w, http.StatusUnauthorized, "Invalid email or password")
+		s.Error(writer, http.StatusUnauthorized, "Invalid email or password")
 
-		return
+		return nil, false
 	}
 
 	entry := result.Entries[0]
-	userDN := entry.DN
 
-	if err := conn.Bind(userDN, req.Password); err != nil {
-		s.Error(w, http.StatusUnauthorized, "Invalid email or password")
+	err = conn.Bind(entry.DN, password)
+	if err != nil {
+		s.Error(writer, http.StatusUnauthorized, "Invalid email or password")
 
-		return
+		return nil, false
 	}
 
 	if cfg.BindDN != "" {
 		_ = conn.Bind(cfg.BindDN, cfg.BindPassword)
 	}
 
+	return entry, true
+}
+
+// ldapDisplayName derives a human display name from an LDAP entry, falling
+// back to fallback (typically the email used to look it up) when unset.
+func ldapDisplayName(entry *ldap.Entry, fallback string) string {
 	name := entry.GetAttributeValue("displayName")
 	if name == "" {
 		name = entry.GetAttributeValue("cn")
@@ -143,54 +181,43 @@ func (s *State) LDAPLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if name == "" {
-		name = req.Email
+		name = fallback
+	}
+
+	return name
+}
+
+// ldapUserGroups looks up the group names the user at userDN belongs to,
+// returning nil when group lookup is not configured or the search fails.
+func ldapUserGroups(conn *ldap.Conn, cfg ldapSettings, userDN string) []string {
+	if cfg.GroupBaseDN == "" {
+		return nil
+	}
+
+	escapedDN := ldap.EscapeFilter(userDN)
+	groupFilter := fmt.Sprintf(cfg.GroupFilter, escapedDN, escapedDN, escapedDN)
+
+	groupReq := ldap.NewSearchRequest(
+		cfg.GroupBaseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
+		0, 0, false,
+		groupFilter,
+		[]string{"cn"},
+		nil,
+	)
+
+	result, err := conn.Search(groupReq)
+	if err != nil {
+		return nil
 	}
 
 	var groups []string
 
-	if cfg.GroupBaseDN != "" {
-		escapedDN := ldap.EscapeFilter(userDN)
-		groupFilter := fmt.Sprintf(cfg.GroupFilter, escapedDN, escapedDN, escapedDN)
-
-		groupReq := ldap.NewSearchRequest(
-			cfg.GroupBaseDN,
-			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
-			0, 0, false,
-			groupFilter,
-			[]string{"cn"},
-			nil,
-		)
-		if groupResult, err := conn.Search(groupReq); err == nil {
-			for _, g := range groupResult.Entries {
-				if cn := g.GetAttributeValue("cn"); cn != "" {
-					groups = append(groups, cn)
-				}
-			}
+	for _, g := range result.Entries {
+		if cn := g.GetAttributeValue("cn"); cn != "" {
+			groups = append(groups, cn)
 		}
 	}
 
-	user, err := upsertSSOUser(ctx, s.Pool, req.Email, name, nil, nil, "ldap", userDN)
-	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
-
-		return
-	}
-
-	role, err := syncGroupsAndDeriveRole(ctx, s.Pool, user.ID, groups, "ldap")
-	if err != nil {
-		role = user.Role
-	}
-
-	addToDefaultGroup(ctx, s.Pool, user.ID)
-	syncGroupEnrollments(ctx, s.Pool, user.ID)
-
-	token, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
-	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Token error")
-
-		return
-	}
-
-	user.Role = role
-	s.JSON(w, http.StatusOK, authResponse{Token: token, User: *user})
+	return groups
 }

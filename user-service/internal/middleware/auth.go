@@ -1,8 +1,11 @@
+// Package middleware provides HTTP middleware for authentication and
+// authorization using JWT bearer tokens.
 package middleware
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -12,16 +15,24 @@ import (
 	"github.com/elearning/user-service/internal/db"
 )
 
+// roleAdmin is the role name granted administrative access.
+const roleAdmin = "admin"
+
+// Claims are the JWT claims embedded in issued access tokens.
 type Claims struct {
+	jwt.RegisteredClaims
+
 	Email string `json:"email"`
 	Role  string `json:"role"`
-	jwt.RegisteredClaims
 }
 
+// contextKey is the type used for context values set by this package.
 type contextKey string
 
+// ClaimsKey is the context key under which verified Claims are stored.
 const ClaimsKey contextKey = "claims"
 
+// CreateToken issues a signed JWT for the given user identity.
 func CreateToken(userID, email, role, secret string, expiryHours int) (string, error) {
 	claims := Claims{
 		Email: email,
@@ -33,9 +44,15 @@ func CreateToken(userID, email, role, secret string, expiryHours int) (string, e
 		},
 	}
 
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("sign token: %w", err)
+	}
+
+	return token, nil
 }
 
+// VerifyToken parses and validates a JWT, returning its Claims.
 func VerifyToken(tokenStr, secret string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -45,7 +62,7 @@ func VerifyToken(tokenStr, secret string) (*Claims, error) {
 		return []byte(secret), nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse token: %w", err)
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
@@ -55,80 +72,89 @@ func VerifyToken(tokenStr, secret string) (*Claims, error) {
 	return nil, jwt.ErrTokenInvalidClaims
 }
 
-func GetClaims(r *http.Request) *Claims {
-	if c, ok := r.Context().Value(ClaimsKey).(*Claims); ok {
+// GetClaims retrieves the Claims stored in the request context by Auth.
+func GetClaims(req *http.Request) *Claims {
+	if c, ok := req.Context().Value(ClaimsKey).(*Claims); ok {
 		return c
 	}
 
 	return nil
 }
 
-func httpErr(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+// httpErr writes a JSON error response with the given status and message.
+func httpErr(writer http.ResponseWriter, status int, msg string) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(status)
+
+	err := json.NewEncoder(writer).Encode(map[string]string{"error": msg})
+	if err != nil {
+		return
+	}
 }
 
+// Auth returns middleware that requires a valid bearer token.
 func Auth(_ db.Pool, secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Header.Get("Authorization")
+		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			auth := req.Header.Get("Authorization")
 			if !strings.HasPrefix(auth, "Bearer ") {
-				httpErr(w, http.StatusUnauthorized, "Missing Authorization header")
+				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
 
 				return
 			}
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				httpErr(w, http.StatusUnauthorized, "Invalid token: "+err.Error())
+				httpErr(resp, http.StatusUnauthorized, "Invalid token: "+err.Error())
 
 				return
 			}
 
 			if claims.Subject == "" {
-				httpErr(w, http.StatusUnauthorized, "Invalid token: missing user ID")
+				httpErr(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
 
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
+			next.ServeHTTP(resp, req.WithContext(ctx))
 		})
 	}
 }
 
+// Admin returns middleware that requires a valid bearer token whose
+// claims carry the admin role.
 func Admin(_ db.Pool, secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Header.Get("Authorization")
+		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			auth := req.Header.Get("Authorization")
 			if !strings.HasPrefix(auth, "Bearer ") {
-				httpErr(w, http.StatusUnauthorized, "Missing Authorization header")
+				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
 
 				return
 			}
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				httpErr(w, http.StatusUnauthorized, "Invalid token: "+err.Error())
+				httpErr(resp, http.StatusUnauthorized, "Invalid token: "+err.Error())
 
 				return
 			}
 
 			if claims.Subject == "" {
-				httpErr(w, http.StatusUnauthorized, "Invalid token: missing user ID")
+				httpErr(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
 
 				return
 			}
 
-			if claims.Role != "admin" {
-				httpErr(w, http.StatusForbidden, "Admin access required")
+			if claims.Role != roleAdmin {
+				httpErr(resp, http.StatusForbidden, "Admin access required")
 
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
+			next.ServeHTTP(resp, req.WithContext(ctx))
 		})
 	}
 }

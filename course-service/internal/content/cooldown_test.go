@@ -5,7 +5,10 @@ import (
 	"time"
 )
 
+// TestIntToString checks int-to-string conversion across sample values.
 func TestIntToString(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		input int
 		want  string
@@ -25,7 +28,10 @@ func TestIntToString(t *testing.T) {
 	}
 }
 
+// TestKey checks the key format for user/quiz/question identifiers.
 func TestKey(t *testing.T) {
+	t.Parallel()
+
 	k := key("user1", "quiz1", "q1")
 
 	expected := "user1:quiz1:q1"
@@ -34,7 +40,10 @@ func TestKey(t *testing.T) {
 	}
 }
 
+// TestKeyWithModuleIndex checks the key format including a module index.
 func TestKeyWithModuleIndex(t *testing.T) {
+	t.Parallel()
+
 	k := keyWithModuleIndex("user1", "course1", 3, "q1")
 
 	expected := "user1:course1:3:q1"
@@ -43,7 +52,10 @@ func TestKeyWithModuleIndex(t *testing.T) {
 	}
 }
 
+// TestNewCooldownTracker checks the tracker's zero-value defaults.
 func TestNewCooldownTracker(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	if ct == nil {
 		t.Fatal("expected non-nil CooldownTracker")
@@ -58,7 +70,10 @@ func TestNewCooldownTracker(t *testing.T) {
 	}
 }
 
+// TestComputeCooldown_Fixed checks the fixed cooldown strategy.
 func TestComputeCooldown_Fixed(t *testing.T) {
+	t.Parallel()
+
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 30}
 
 	d := computeCooldown(1, spec)
@@ -72,7 +87,10 @@ func TestComputeCooldown_Fixed(t *testing.T) {
 	}
 }
 
+// TestComputeCooldown_Linear checks the linear cooldown strategy.
 func TestComputeCooldown_Linear(t *testing.T) {
+	t.Parallel()
+
 	spec := CooldownSpec{Strategy: "linear", BaseSeconds: 10}
 
 	d1 := computeCooldown(1, spec)
@@ -86,7 +104,10 @@ func TestComputeCooldown_Linear(t *testing.T) {
 	}
 }
 
+// TestComputeCooldown_Exponential checks the exponential strategy.
 func TestComputeCooldown_Exponential(t *testing.T) {
+	t.Parallel()
+
 	spec := CooldownSpec{Strategy: "exponential", BaseSeconds: 10, Multiplier: 2.0}
 
 	d1 := computeCooldown(1, spec)
@@ -105,7 +126,10 @@ func TestComputeCooldown_Exponential(t *testing.T) {
 	}
 }
 
+// TestComputeCooldown_ExponentialMax checks the exponential cap.
 func TestComputeCooldown_ExponentialMax(t *testing.T) {
+	t.Parallel()
+
 	spec := CooldownSpec{Strategy: "exponential", BaseSeconds: 10, Multiplier: 2.0, MaxSeconds: 25}
 
 	d3 := computeCooldown(3, spec)
@@ -114,7 +138,10 @@ func TestComputeCooldown_ExponentialMax(t *testing.T) {
 	}
 }
 
+// TestComputeCooldown_DefaultExponential checks the default strategy.
 func TestComputeCooldown_DefaultExponential(t *testing.T) {
+	t.Parallel()
+
 	// Empty strategy defaults to exponential
 	spec := CooldownSpec{BaseSeconds: 5, Multiplier: 3.0}
 
@@ -124,7 +151,10 @@ func TestComputeCooldown_DefaultExponential(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_Check_Initial checks an unseen entry.
 func TestCooldownTracker_Check_Initial(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 
 	remaining, attempts := ct.Check("u", "q", "q1")
@@ -137,7 +167,10 @@ func TestCooldownTracker_Check_Initial(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_Record_Fixed checks recording a fixed cooldown.
 func TestCooldownTracker_Record_Fixed(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 60}
 
@@ -160,33 +193,42 @@ func TestCooldownTracker_Record_Fixed(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_Record_MaxAttempts_Lock checks locking behavior.
 func TestCooldownTracker_Record_MaxAttempts_Lock(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 5}
-	max := 2
+	maxAttempts := 2
 
-	ct.Record("u1", "quiz1", "q1", spec, &max, true)
+	ct.Record("u1", "quiz1", "q1", spec, &maxAttempts, true)
 
-	_, locked := ct.Record("u1", "quiz1", "q1", spec, &max, true)
+	_, locked := ct.Record("u1", "quiz1", "q1", spec, &maxAttempts, true)
 	if !locked {
 		t.Error("expected locked after max attempts")
 	}
 }
 
+// TestCooldownTracker_Record_MaxAttempts_NoLock checks no-lock behavior.
 func TestCooldownTracker_Record_MaxAttempts_NoLock(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 5}
-	max := 1
+	maxAttempts := 1
 
-	ct.Record("u1", "quiz1", "q1", spec, &max, false)
+	ct.Record("u1", "quiz1", "q1", spec, &maxAttempts, false)
 
-	_, locked := ct.Record("u1", "quiz1", "q1", spec, &max, false)
+	_, locked := ct.Record("u1", "quiz1", "q1", spec, &maxAttempts, false)
 	if locked {
 		t.Error("expected not locked when lockOnMax=false")
 	}
 }
 
+// TestCooldownTracker_Clear checks clearing a tracked entry.
 func TestCooldownTracker_Clear(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 60}
 	ct.Record("u1", "quiz1", "q1", spec, nil, false)
@@ -199,7 +241,10 @@ func TestCooldownTracker_Clear(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_ClearModule checks clearing a module entry.
 func TestCooldownTracker_ClearModule(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 60}
 	ct.RecordModule("u1", "course1", 2, "q1", spec, nil, false)
@@ -212,7 +257,10 @@ func TestCooldownTracker_ClearModule(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_CheckModule_Initial checks an unseen module entry.
 func TestCooldownTracker_CheckModule_Initial(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 
 	remaining, attempts := ct.CheckModule("u", "course", 0, "q")
@@ -221,7 +269,10 @@ func TestCooldownTracker_CheckModule_Initial(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_RecordModule checks recording a module cooldown.
 func TestCooldownTracker_RecordModule(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 30}
 
@@ -240,7 +291,10 @@ func TestCooldownTracker_RecordModule(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_Expired checks that expired cooldowns clamp to zero.
 func TestCooldownTracker_Expired(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 0}
 	ct.Record("u1", "quiz1", "q1", spec, nil, false)
@@ -252,7 +306,10 @@ func TestCooldownTracker_Expired(t *testing.T) {
 	}
 }
 
+// TestCooldownTracker_CheckModule_Expired checks expired module cooldowns.
 func TestCooldownTracker_CheckModule_Expired(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	// Negative BaseSeconds sets CooldownUntil in the past → remaining < 0 → clamped to 0.
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: -10}
@@ -268,25 +325,37 @@ func TestCooldownTracker_CheckModule_Expired(t *testing.T) {
 	}
 }
 
+// TestIntToString_Negative checks conversion of a negative value.
 func TestIntToString_Negative(t *testing.T) {
+	t.Parallel()
+
 	if got := intToString(-5); got != "-5" {
 		t.Errorf("intToString(-5): want -5, got %q", got)
 	}
 }
 
+// TestIntToString_Zero checks conversion of zero.
 func TestIntToString_Zero(t *testing.T) {
+	t.Parallel()
+
 	if got := intToString(0); got != "0" {
 		t.Errorf("intToString(0): want 0, got %q", got)
 	}
 }
 
+// TestIntToString_Positive checks conversion of a positive value.
 func TestIntToString_Positive(t *testing.T) {
+	t.Parallel()
+
 	if got := intToString(42); got != "42" {
 		t.Errorf("intToString(42): want 42, got %q", got)
 	}
 }
 
+// TestCooldownTracker_RecordModule_MaxAttempts_Lock checks module locking.
 func TestCooldownTracker_RecordModule_MaxAttempts_Lock(t *testing.T) {
+	t.Parallel()
+
 	ct := NewCooldownTracker()
 	spec := CooldownSpec{Strategy: "fixed", BaseSeconds: 30}
 	maxAttempts := 1

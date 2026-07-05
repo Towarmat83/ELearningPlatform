@@ -113,7 +113,7 @@ Student clicks "Vérifier" (inside Pupitre)
   → {allow, violations} returned to frontend
 ```
 
-Lab modules with `check_provider: local` in the CRD use this flow. Labs with `check_provider: gitlab` (or no provider) use the remote checker-service as before.
+Lab modules with `checkProvider: local` in the CRD use this flow. Labs with `checkProvider: gitlab` (or no provider) use the remote checker-service as before.
 
 ### Build Pupitre
 

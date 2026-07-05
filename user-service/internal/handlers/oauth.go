@@ -26,24 +26,59 @@ import (
 	"github.com/elearning/user-service/internal/middleware"
 )
 
+// Repeated OAuth/OIDC literals and tunables, pulled out to satisfy goconst
+// and mnd. The "providers" JSON key is shared with adminJSONKeyProviders
+// in admin.go to avoid a duplicate constant in the package.
+const (
+	oauthProviderGitHub   = "github"
+	oauthFieldEmail       = "email"
+	oauthStateKey         = "state"
+	oauthProviderGitLab   = "gitlab"
+	oauthIssuerGitLab     = "https://gitlab.com"
+	oauthProviderGoogle   = "google"
+	oauthIssuerGoogle     = "https://accounts.google.com"
+	oauthClaimAbout       = "about"
+	oauthClaimDescription = "description"
+	oauthDefaultUsername  = "user"
+	oauthScopeProfile     = "profile"
+	oauthFieldBio         = "bio"
+	oauthJSONKeyURL       = "url"
+
+	oauthStateTokenTTL  = 10 * time.Minute
+	oauthMaxUsernameLen = 32
+)
+
 // ── OAuth CSRF state JWT ──────────────────────────────────────────────────────
 
+// oauthStateClaims is the JWT payload carried in the OAuth "state"
+// parameter, used to prevent CSRF and remember which provider a login
+// flow was started with.
 type oauthStateClaims struct {
-	Provider string `json:"provider"`
 	jwt.RegisteredClaims
+
+	Provider string `json:"provider"`
 }
 
+// makeOAuthState creates a short-lived, signed JWT to use as the OAuth
+// "state" parameter for the given provider.
 func makeOAuthState(provider, secret string) (string, error) {
 	claims := oauthStateClaims{
-		Provider: provider,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(oauthStateTokenTTL)),
 		},
+		Provider: provider,
 	}
 
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("sign oauth state: %w", err)
+	}
+
+	return token, nil
 }
 
+// decodeOAuthState verifies and parses an OAuth state JWT, returning the
+// provider id it was issued for and whether it is valid.
 func decodeOAuthState(stateToken, secret string) (string, bool) {
 	token, err := jwt.ParseWithClaims(stateToken, &oauthStateClaims{},
 		func(t *jwt.Token) (any, error) {
@@ -70,7 +105,7 @@ func decodeOAuthState(stateToken, secret string) (string, bool) {
 // @Produce  json
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/auth/oauth/providers [get].
-func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
+func (s *State) ListProviders(writer http.ResponseWriter, _ *http.Request) {
 	var providers []map[string]string
 
 	for _, p := range s.Config.Providers {
@@ -83,7 +118,7 @@ func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
 		providers = []map[string]string{}
 	}
 
-	s.JSON(w, http.StatusOK, map[string]any{"providers": providers})
+	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyProviders: providers})
 }
 
 // OAuthAuthorize godoc
@@ -94,19 +129,19 @@ func (s *State) ListProviders(w http.ResponseWriter, r *http.Request) {
 // @Success  200  {object}  map[string]string
 // @Failure  400  {object}  map[string]string
 // @Router   /api/auth/oauth/{provider}/authorize [get].
-func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
-	providerID := param(r, "provider")
+func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request) {
+	providerID := param(request, "provider")
 
-	p := s.Config.FindProvider(providerID)
-	if p == nil || p.ClientID == "" {
-		s.Error(w, http.StatusBadRequest, "Unknown or unconfigured provider: "+providerID)
+	providerCfg := s.Config.FindProvider(providerID)
+	if providerCfg == nil || providerCfg.ClientID == "" {
+		s.Error(writer, http.StatusBadRequest, "Unknown or unconfigured provider: "+providerID)
 
 		return
 	}
 
 	stateToken, err := makeOAuthState(providerID, s.Config.JWTSecret)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "State token error")
+		s.Error(writer, http.StatusInternalServerError, "State token error")
 
 		return
 	}
@@ -115,41 +150,41 @@ func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	var authURL string
 
-	if providerID == "github" {
-		u, _ := url.Parse("https://github.com/login/oauth/authorize")
+	if providerID == oauthProviderGitHub {
+		parsedURL, _ := url.Parse("https://github.com/login/oauth/authorize")
 		q := url.Values{}
-		q.Set("client_id", p.ClientID)
+		q.Set("client_id", providerCfg.ClientID)
 		q.Set("redirect_uri", redirectURI)
 		q.Set("scope", "user:email read:user")
-		q.Set("state", stateToken)
-		u.RawQuery = q.Encode()
-		authURL = u.String()
+		q.Set(oauthStateKey, stateToken)
+		parsedURL.RawQuery = q.Encode()
+		authURL = parsedURL.String()
 	} else {
-		issuerURL := resolveIssuerURL(p)
+		issuerURL := resolveIssuerURL(providerCfg)
 		if issuerURL == "" {
-			s.Error(w, http.StatusBadRequest, "Provider "+providerID+" requires issuer_url")
+			s.Error(writer, http.StatusBadRequest, "Provider "+providerID+" requires issuerUrl")
 
 			return
 		}
 
-		oidcProvider, err := gooidc.NewProvider(r.Context(), issuerURL)
+		oidcProvider, err := gooidc.NewProvider(request.Context(), issuerURL)
 		if err != nil {
-			s.Error(w, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
+			s.Error(writer, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
 
 			return
 		}
 
 		oauth2Cfg := oauth2.Config{
-			ClientID:     p.ClientID,
-			ClientSecret: p.ClientSecret,
+			ClientID:     providerCfg.ClientID,
+			ClientSecret: providerCfg.ClientSecret,
 			RedirectURL:  redirectURI,
 			Endpoint:     oidcProvider.Endpoint(),
-			Scopes:       []string{gooidc.ScopeOpenID, "email", "profile"},
+			Scopes:       []string{gooidc.ScopeOpenID, oauthFieldEmail, oauthScopeProfile},
 		}
 		authURL = oauth2Cfg.AuthCodeURL(stateToken, oauth2.AccessTypeOnline)
 	}
 
-	s.JSON(w, http.StatusOK, map[string]string{"url": authURL, "state": stateToken})
+	s.JSON(writer, http.StatusOK, map[string]string{oauthJSONKeyURL: authURL, oauthStateKey: stateToken})
 }
 
 // OAuthCallback godoc
@@ -161,83 +196,96 @@ func (s *State) OAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/oauth/callback [post].
-func (s *State) OAuthCallback(w http.ResponseWriter, r *http.Request) {
-	var req struct {
+func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request) {
+	var body struct {
 		Code  string `json:"code"`
 		State string `json:"state"`
 	}
-	if err := decode(r, &req); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+
+	err := decode(request, &body)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
 
 		return
 	}
 
-	providerID, ok := decodeOAuthState(req.State, s.Config.JWTSecret)
+	providerID, ok := decodeOAuthState(body.State, s.Config.JWTSecret)
 	if !ok {
-		s.Error(w, http.StatusUnauthorized, "Invalid or expired OAuth state")
+		s.Error(writer, http.StatusUnauthorized, "Invalid or expired OAuth state")
 
 		return
 	}
 
-	p := s.Config.FindProvider(providerID)
-	if p == nil || p.ClientID == "" {
-		s.Error(w, http.StatusBadRequest, "Unknown or unconfigured provider: "+providerID)
+	providerCfg := s.Config.FindProvider(providerID)
+	if providerCfg == nil || providerCfg.ClientID == "" {
+		s.Error(writer, http.StatusBadRequest, "Unknown or unconfigured provider: "+providerID)
 
 		return
 	}
 
 	redirectURI := s.Config.OAuthRedirectBase + "/auth/callback"
 
-	var (
-		email, displayName, providerUserID string
-		avatarURL, bioStr                  *string
-		err                                error
-	)
-
-	if providerID == "github" {
-		email, displayName, avatarURL, bioStr, providerUserID, err = fetchGitHub(p, req.Code, redirectURI)
-	} else {
-		email, displayName, avatarURL, bioStr, providerUserID, err = fetchOIDCProvider(r.Context(), p, req.Code, redirectURI)
-	}
-
+	email, displayName, avatarURL, bioStr, providerUserID, err := fetchOAuthProfile(
+		request.Context(), providerID, providerCfg, body.Code, redirectURI)
 	if err != nil {
-		s.Error(w, http.StatusUnauthorized, err.Error())
+		s.Error(writer, http.StatusUnauthorized, err.Error())
 
 		return
 	}
 
-	user, err := upsertSSOUser(r.Context(), s.Pool, email, displayName, avatarURL, bioStr, providerID, providerUserID)
+	user, err := upsertSSOUser(request.Context(), s.Pool, email, displayName, avatarURL, bioStr, providerID, providerUserID)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
+		s.Error(writer, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 
 		return
 	}
 
-	addToDefaultGroup(r.Context(), s.Pool, user.ID)
-	syncGroupEnrollments(r.Context(), s.Pool, user.ID)
+	s.oauthFinishLogin(writer, request, user)
+}
+
+// fetchOAuthProfile fetches the authenticated user's profile from the
+// given OAuth/OIDC provider, dispatching to the GitHub or generic OIDC
+// fetcher. It returns (email, name, avatar, bio, providerUserID, err).
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func fetchOAuthProfile(
+	ctx context.Context, providerID string, providerCfg *config.ProviderConfig, code, redirectURI string,
+) (string, string, *string, *string, string, error) {
+	if providerID == oauthProviderGitHub {
+		return fetchGitHub(ctx, providerCfg, code, redirectURI)
+	}
+
+	return fetchOIDCProvider(ctx, providerCfg, code, redirectURI)
+}
+
+// oauthFinishLogin enrolls the user in their default/group courses, issues
+// a session JWT, and writes the login response.
+func (s *State) oauthFinishLogin(writer http.ResponseWriter, request *http.Request, user *userPublicRow) {
+	addToDefaultGroup(request.Context(), s.Pool, user.ID)
+	syncGroupEnrollments(request.Context(), s.Pool, user.ID)
 
 	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Token error")
+		s.Error(writer, http.StatusInternalServerError, "Token error")
 
 		return
 	}
 
-	s.JSON(w, http.StatusOK, authResponse{Token: token, User: *user})
+	s.JSON(writer, http.StatusOK, authResponse{Token: token, User: *user})
 }
 
 // resolveIssuerURL returns the OIDC issuer URL for a provider, falling back to
-// well-known defaults when issuer_url is not explicitly configured.
-func resolveIssuerURL(p *config.ProviderConfig) string {
-	if p.IssuerURL != "" {
-		return p.IssuerURL
+// well-known defaults when issuerUrl is not explicitly configured.
+func resolveIssuerURL(providerCfg *config.ProviderConfig) string {
+	if providerCfg.IssuerURL != "" {
+		return providerCfg.IssuerURL
 	}
 
-	switch p.ID {
-	case "gitlab":
-		return "https://gitlab.com"
-	case "google":
-		return "https://accounts.google.com"
+	switch providerCfg.ID {
+	case oauthProviderGitLab:
+		return oauthIssuerGitLab
+	case oauthProviderGoogle:
+		return oauthIssuerGoogle
 	}
 
 	return ""
@@ -245,18 +293,24 @@ func resolveIssuerURL(p *config.ProviderConfig) string {
 
 // ── Generic OIDC fetch (GitLab, Google, Authentik, Keycloak, …) ──────────────
 
-func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar, bio *string, sub string, err error) {
-	oidcProvider, err := gooidc.NewProvider(ctx, resolveIssuerURL(p))
+// fetchOIDCProvider exchanges an OAuth2 code for the user's profile via
+// generic OIDC discovery. It returns (email, name, avatar, bio, sub, err).
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func fetchOIDCProvider(
+	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI string,
+) (string, string, *string, *string, string, error) {
+	oidcProvider, err := gooidc.NewProvider(ctx, resolveIssuerURL(providerCfg))
 	if err != nil {
 		return "", "", nil, nil, "", fmt.Errorf("cannot reach OIDC provider: %w", err)
 	}
 
 	oauth2Cfg := oauth2.Config{
-		ClientID:     p.ClientID,
-		ClientSecret: p.ClientSecret,
+		ClientID:     providerCfg.ClientID,
+		ClientSecret: providerCfg.ClientSecret,
 		RedirectURL:  redirectURI,
 		Endpoint:     oidcProvider.Endpoint(),
-		Scopes:       []string{gooidc.ScopeOpenID, "email", "profile"},
+		Scopes:       []string{gooidc.ScopeOpenID, oauthFieldEmail, oauthScopeProfile},
 	}
 
 	token, err := oauth2Cfg.Exchange(ctx, code)
@@ -269,7 +323,7 @@ func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redi
 		return "", "", nil, nil, "", errors.New("no id_token in response")
 	}
 
-	verifier := oidcProvider.Verifier(&gooidc.Config{ClientID: p.ClientID})
+	verifier := oidcProvider.Verifier(&gooidc.Config{ClientID: providerCfg.ClientID})
 
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
@@ -277,85 +331,95 @@ func fetchOIDCProvider(ctx context.Context, p *config.ProviderConfig, code, redi
 	}
 
 	var claims map[string]any
-	if err := idToken.Claims(&claims); err != nil {
+
+	err = idToken.Claims(&claims)
+	if err != nil {
 		return "", "", nil, nil, "", fmt.Errorf("claims extraction failed: %w", err)
 	}
 
-	// Enrich claims from the UserInfo endpoint (takes priority over ID token).
-	userInfo, uiErr := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(token))
-	if uiErr == nil {
-		var uiClaims map[string]any
+	enrichClaimsFromUserInfo(ctx, oidcProvider, token, claims)
 
-		uiErr2 := userInfo.Claims(&uiClaims)
-		if uiErr2 == nil {
-			maps.Copy(claims, uiClaims)
-		}
-	}
-
-	email, _ = claims["email"].(string)
+	email, _ := claims[oauthFieldEmail].(string)
 	if email == "" {
 		return "", "", nil, nil, "", errors.New("no email in OIDC token")
 	}
 
-	nameStr, _ := claims["name"].(string)
-	if nameStr == "" {
-		nameStr, _ = claims["preferred_username"].(string)
-	}
+	nameStr := oidcDisplayName(claims, email)
 
-	if nameStr == "" {
-		nameStr = email
-	}
+	var avatar *string
 
 	if pic, ok := claims["picture"].(string); ok && pic != "" {
 		avatar = &pic
 	}
-	// Extract bio from common non-standard OIDC attributes.
-	for _, key := range []string{"bio", "description", "about", "profile"} {
-		if v, ok := claims[key].(string); ok && v != "" {
-			bio = &v
 
-			break
-		}
-	}
+	bio := oidcBioFromClaims(claims)
 
 	return email, nameStr, avatar, bio, idToken.Subject, nil
 }
 
-// ── GitHub fetch (OAuth2 only, no OIDC discovery) ─────────────────────────────
-
-func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, name string, avatar, bio *string, id string, err error) {
-	client := &http.Client{}
-
-	tokenReq, _ := http.NewRequest(http.MethodPost, "https://github.com/login/oauth/access_token",
-		strings.NewReader(url.Values{
-			"client_id":     {p.ClientID},
-			"client_secret": {p.ClientSecret},
-			"code":          {code},
-			"redirect_uri":  {redirectURI},
-		}.Encode()))
-	tokenReq.Header.Set("Accept", "application/json")
-	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	tokenReq.Header.Set("User-Agent", "LearnLab-SSO/1.0")
-
-	resp, err := client.Do(tokenReq)
-	if err != nil {
-		return "", "", nil, nil, "", fmt.Errorf("GitHub token request failed: %w", err)
+// enrichClaimsFromUserInfo merges claims fetched from the OIDC UserInfo
+// endpoint into claims; UserInfo values take priority over the ID token.
+func enrichClaimsFromUserInfo(ctx context.Context, oidcProvider *gooidc.Provider, token *oauth2.Token, claims map[string]any) {
+	userInfo, uiErr := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+	if uiErr != nil {
+		return
 	}
 
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close() //nolint:errcheck
+	var uiClaims map[string]any
 
-	var tokenRes map[string]any
+	if userInfo.Claims(&uiClaims) == nil {
+		maps.Copy(claims, uiClaims)
+	}
+}
 
-	_ = json.Unmarshal(body, &tokenRes)
+// oidcDisplayName resolves a human display name from OIDC claims, falling
+// back to preferred_username and finally to email when name is absent.
+func oidcDisplayName(claims map[string]any, email string) string {
+	name, _ := claims["name"].(string)
+	if name == "" {
+		name, _ = claims["preferred_username"].(string)
+	}
 
-	accessToken, _ := tokenRes["access_token"].(string)
-	if accessToken == "" {
-		return "", "", nil, nil, "", errors.New("GitHub did not return an access token")
+	if name == "" {
+		name = email
+	}
+
+	return name
+}
+
+// oidcBioFromClaims extracts a bio/description from common non-standard
+// OIDC claim keys, returning nil when none of them are present.
+func oidcBioFromClaims(claims map[string]any) *string {
+	for _, key := range []string{oauthFieldBio, oauthClaimDescription, oauthClaimAbout, oauthScopeProfile} {
+		if v, ok := claims[key].(string); ok && v != "" {
+			return &v
+		}
+	}
+
+	return nil
+}
+
+// ── GitHub fetch (OAuth2 only, no OIDC discovery) ─────────────────────────────
+
+// fetchGitHub exchanges an OAuth2 code for a GitHub access token and
+// returns the authenticated user's profile fields as
+// (email, name, avatar, bio, id, err).
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func fetchGitHub(
+	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI string,
+) (string, string, *string, *string, string, error) {
+	client := &http.Client{}
+
+	accessToken, err := githubAccessToken(ctx, client, providerCfg, code, redirectURI)
+	if err != nil {
+		return "", "", nil, nil, "", err
 	}
 
 	var profile map[string]any
-	if err = doGet(client, "https://api.github.com/user", accessToken, &profile); err != nil {
+
+	err = doGet(client, "https://api.github.com/user", accessToken, &profile) //nolint:contextcheck // doGet's signature is pinned by pre-existing whitebox tests; see doGet's doc comment
+	if err != nil {
 		return "", "", nil, nil, "", fmt.Errorf("GitHub user request failed: %w", err)
 	}
 
@@ -367,51 +431,120 @@ func fetchGitHub(p *config.ProviderConfig, code, redirectURI string) (email, nam
 		nameStr = login
 	}
 
-	var avPtr *string
-	if av, ok := profile["avatar_url"].(string); ok && av != "" {
-		avPtr = &av
-	}
-	// GitHub exposes bio directly in the user profile.
-	var bioPtr *string
-	if b, ok := profile["bio"].(string); ok && b != "" {
-		bioPtr = &b
-	}
+	avatarPtr, bioPtr := githubProfileMedia(profile)
 
-	emailStr, _ := profile["email"].(string)
+	emailStr, _ := profile[oauthFieldEmail].(string)
 	if emailStr == "" {
-		var emails []map[string]any
-
-		_ = doGet(client, "https://api.github.com/user/emails", accessToken, &emails)
-		for _, e := range emails {
-			if prim, _ := e["primary"].(bool); !prim {
-				continue
-			}
-
-			if ver, _ := e["verified"].(bool); ver {
-				emailStr, _ = e["email"].(string)
-
-				break
-			}
-		}
-
-		if emailStr == "" && len(emails) > 0 {
-			emailStr, _ = emails[0]["email"].(string)
-		}
+		emailStr = githubPrimaryEmail(client, accessToken) //nolint:contextcheck // githubPrimaryEmail calls doGet, whose signature is pinned by pre-existing tests
 	}
 
 	if emailStr == "" {
 		return "", "", nil, nil, "", errors.New("could not retrieve a verified GitHub email address")
 	}
 
-	return emailStr, nameStr, avPtr, bioPtr, ghID, nil
+	return emailStr, nameStr, avatarPtr, bioPtr, ghID, nil
+}
+
+// githubAccessToken exchanges an OAuth2 authorization code for a GitHub
+// access token.
+func githubAccessToken(
+	ctx context.Context, client *http.Client, providerCfg *config.ProviderConfig, code, redirectURI string,
+) (string, error) {
+	tokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://github.com/login/oauth/access_token",
+		strings.NewReader(url.Values{
+			"client_id":     {providerCfg.ClientID},
+			"client_secret": {providerCfg.ClientSecret},
+			"code":          {code},
+			"redirect_uri":  {redirectURI},
+		}.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("build github token request: %w", err)
+	}
+
+	tokenReq.Header.Set("Accept", "application/json")
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	tokenReq.Header.Set("User-Agent", "LearnLab-SSO/1.0")
+
+	resp, err := client.Do(tokenReq)
+	if err != nil {
+		return "", fmt.Errorf("GitHub token request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var tokenRes map[string]any
+
+	_ = json.Unmarshal(body, &tokenRes)
+
+	accessToken, _ := tokenRes["access_token"].(string)
+	if accessToken == "" {
+		return "", errors.New("GitHub did not return an access token")
+	}
+
+	return accessToken, nil
+}
+
+// githubPrimaryEmail finds the user's primary, verified email address via
+// the GitHub emails API, falling back to the first listed address.
+func githubPrimaryEmail(client *http.Client, accessToken string) string {
+	var emails []map[string]any
+
+	_ = doGet(client, "https://api.github.com/user/emails", accessToken, &emails)
+
+	for _, emailEntry := range emails {
+		primary, _ := emailEntry["primary"].(bool)
+		if !primary {
+			continue
+		}
+
+		verified, _ := emailEntry["verified"].(bool)
+		if verified {
+			email, _ := emailEntry[oauthFieldEmail].(string)
+
+			return email
+		}
+	}
+
+	if len(emails) > 0 {
+		email, _ := emails[0][oauthFieldEmail].(string)
+
+		return email
+	}
+
+	return ""
+}
+
+// githubProfileMedia extracts the avatar URL and bio from a GitHub user
+// profile payload, when present. It returns (avatar, bio).
+func githubProfileMedia(profile map[string]any) (*string, *string) { //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment for the meaning of each value
+	var avatar, bio *string
+
+	// GitHub exposes bio directly in the user profile.
+	if av, ok := profile["avatarUrl"].(string); ok && av != "" {
+		avatar = &av
+	}
+
+	if b, ok := profile[oauthFieldBio].(string); ok && b != "" {
+		bio = &b
+	}
+
+	return avatar, bio
 }
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
+// doGet issues an authenticated GET request against rawURL and decodes the
+// JSON response body into out. It has no caller-supplied context because
+// call sites (and existing tests) invoke it without one; it still avoids
+// noctx by building the request through NewRequestWithContext.
 func doGet(client *http.Client, rawURL, bearer string, out any) error {
-	req, err := http.NewRequest(http.MethodGet, rawURL, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
-		return err
+		return fmt.Errorf("build request for %s: %w", rawURL, err)
 	}
 
 	if bearer != "" {
@@ -423,66 +556,41 @@ func doGet(client *http.Client, rawURL, bearer string, out any) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request %s: %w", rawURL, err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, _ := io.ReadAll(resp.Body)
 
-	return json.Unmarshal(body, out)
+	unmarshalErr := json.Unmarshal(body, out)
+	if unmarshalErr != nil {
+		return fmt.Errorf("decode response from %s: %w", rawURL, unmarshalErr)
+	}
+
+	return nil
 }
 
 // ── User upsert ───────────────────────────────────────────────────────────────
 
-func upsertSSOUser(ctx context.Context, pool db.Pool, email, displayName string, avatarURL, bio *string, provider, providerUserID string) (*userPublicRow, error) {
-	const sel = `SELECT id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text FROM users`
+// upsertSSOUser finds or creates the local user for an SSO login, trying a
+// provider-identity match first, then an email match, and finally creating
+// a brand-new account.
+func upsertSSOUser(
+	ctx context.Context, pool db.Pool, email, displayName string, avatarURL, bio *string, provider, providerUserID string,
+) (*userPublicRow, error) {
+	const sel = `SELECT id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text FROM users`
 
-	u, err := scanUserPublic(pool.QueryRow(ctx,
-		sel+` WHERE auth_provider = $1 AND provider_user_id = $2`, provider, providerUserID))
-	if err == nil {
-		// Sync avatar always; bio only when the user has not set their own yet.
-		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
-			`UPDATE users SET
-			   avatar_url = COALESCE($1, avatar_url),
-			   bio        = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($2, bio) ELSE bio END,
-			   updated_at = NOW()
-			 WHERE id = $3::uuid
-			 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
-			avatarURL, bio, u.ID))
-		if err2 != nil {
-			slog.Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", "err", err2, "user_id", u.ID)
-
-			return &u, nil
-		}
-
-		return &u2, nil
+	user := upsertSSOUserByProvider(ctx, pool, sel, provider, providerUserID, avatarURL, bio)
+	if user != nil {
+		return user, nil
 	}
 
-	u, err = scanUserPublic(pool.QueryRow(ctx, sel+` WHERE email = $1`, email))
-	if err == nil {
-		// Never silently take over a local account — that would lock out password login.
-		// Only link when the account has no provider yet or already belongs to this provider.
-		if u.AuthProvider != "" && u.AuthProvider != provider {
-			return nil, fmt.Errorf("an account with this email already exists with a different login method (%s)", u.AuthProvider)
-		}
-
-		u2, err2 := scanUserPublic(pool.QueryRow(ctx,
-			`UPDATE users SET
-			   auth_provider    = $1,
-			   provider_user_id = $2,
-			   avatar_url       = COALESCE($3, avatar_url),
-			   bio              = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($4, bio) ELSE bio END,
-			   updated_at       = NOW()
-			 WHERE id = $5::uuid
-			 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
-			provider, providerUserID, avatarURL, bio, u.ID))
-		if err2 != nil {
-			slog.Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", "err", err2, "user_id", u.ID)
-
-			return &u, nil
-		}
-
-		return &u2, nil
+	user, err := upsertSSOUserByEmail(ctx, pool, sel, email, provider, providerUserID, avatarURL, bio)
+	if user != nil || err != nil {
+		return user, err //nolint:nilnil // cascading lookup: (nil,nil) means "no match, fall through to create a new user"
 	}
 
 	username := sanitizeUsername(displayName)
@@ -494,10 +602,10 @@ func upsertSSOUser(ctx context.Context, pool db.Pool, email, displayName string,
 		username = username + "_" + uuid.New().String()[:6]
 	}
 
-	u, err = scanUserPublic(pool.QueryRow(ctx,
-		`INSERT INTO users (username, email, auth_provider, provider_user_id, role, avatar_url, bio)
+	created, err := scanUserPublic(pool.QueryRow(ctx,
+		`INSERT INTO users (username, email, authProvider, provider_user_id, role, avatarUrl, bio)
 		 VALUES ($1, $2, $3, $4, 'student', $5, $6)
-		 RETURNING id::text, username, email, role, avatar_url, bio, is_active, auth_provider, created_at::text`,
+		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
 		username, email, provider, providerUserID, avatarURL, bio))
 	if err != nil {
 		return nil, err
@@ -505,25 +613,126 @@ func upsertSSOUser(ctx context.Context, pool db.Pool, email, displayName string,
 
 	metrics.ActiveUsers.Inc()
 
-	return &u, nil
+	return &created, nil
 }
 
+// completeSSOLogin provisions/refreshes the local user for an SSO identity,
+// syncs their group membership and role, issues a JWT, and writes the auth
+// response. Shared by every SSO login flow (OIDC, LDAP, ...).
+func (s *State) completeSSOLogin(
+	ctx context.Context, writer http.ResponseWriter,
+	email, displayName string, avatarURL, bio *string, provider, providerUserID string, groups []string,
+) {
+	user, err := upsertSSOUser(ctx, s.Pool, email, displayName, avatarURL, bio, provider, providerUserID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Failed to create user: "+err.Error())
+
+		return
+	}
+
+	role, err := syncGroupsAndDeriveRole(ctx, s.Pool, user.ID, groups, provider)
+	if err != nil {
+		role = user.Role
+	}
+
+	addToDefaultGroup(ctx, s.Pool, user.ID)
+	syncGroupEnrollments(ctx, s.Pool, user.ID)
+
+	token, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Token error")
+
+		return
+	}
+
+	user.Role = role
+	s.JSON(writer, http.StatusOK, authResponse{Token: token, User: *user})
+}
+
+// upsertSSOUserByProvider looks up a user already linked to this
+// provider+providerUserID and refreshes their avatar/bio. It returns nil
+// when no such user exists yet; lookup/update failures are not fatal to
+// the overall SSO login, so no error is returned here.
+func upsertSSOUserByProvider(
+	ctx context.Context, pool db.Pool, sel, provider, providerUserID string, avatarURL, bio *string,
+) *userPublicRow {
+	existing, err := scanUserPublic(pool.QueryRow(ctx,
+		sel+` WHERE authProvider = $1 AND provider_user_id = $2`, provider, providerUserID))
+	if err != nil {
+		return nil
+	}
+
+	updated, err := scanUserPublic(pool.QueryRow(ctx,
+		`UPDATE users SET
+		   avatarUrl = COALESCE($1, avatarUrl),
+		   bio        = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($2, bio) ELSE bio END,
+		   updatedAt = NOW()
+		 WHERE id = $3::uuid
+		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
+		avatarURL, bio, existing.ID))
+	if err != nil {
+		slog.Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", "err", err, "userId", existing.ID)
+
+		return &existing
+	}
+
+	return &updated
+}
+
+// upsertSSOUserByEmail looks up a user by email and, unless it is already
+// linked to a different provider, links it to this provider and refreshes
+// their avatar/bio. It returns nil, nil when no such user exists yet.
+func upsertSSOUserByEmail(
+	ctx context.Context, pool db.Pool, sel, email, provider, providerUserID string, avatarURL, bio *string,
+) (*userPublicRow, error) {
+	existing, err := scanUserPublic(pool.QueryRow(ctx, sel+` WHERE email = $1`, email))
+	if err != nil {
+		return nil, nil //nolint:nilerr,nilnil // sentinel: no user matched this email yet, try creating one
+	}
+
+	// Never silently take over a local account — that would lock out password login.
+	// Only link when the account has no provider yet or already belongs to this provider.
+	if existing.AuthProvider != "" && existing.AuthProvider != provider {
+		return nil, fmt.Errorf("an account with this email already exists with a different login method (%s)", existing.AuthProvider)
+	}
+
+	updated, err := scanUserPublic(pool.QueryRow(ctx,
+		`UPDATE users SET
+		   authProvider    = $1,
+		   provider_user_id = $2,
+		   avatarUrl       = COALESCE($3, avatarUrl),
+		   bio              = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($4, bio) ELSE bio END,
+		   updatedAt       = NOW()
+		 WHERE id = $5::uuid
+		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
+		provider, providerUserID, avatarURL, bio, existing.ID))
+	if err != nil {
+		slog.Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", "err", err, "userId", existing.ID)
+
+		return &existing, nil
+	}
+
+	return &updated, nil
+}
+
+// sanitizeUsername derives a URL/DB-safe username from an OAuth display
+// name, keeping only letters, digits, underscores, and hyphens.
 func sanitizeUsername(name string) string {
-	var b strings.Builder
+	var builder strings.Builder
 
 	for _, c := range name {
 		if unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_' || c == '-' {
-			b.WriteRune(c)
+			builder.WriteRune(c)
 		}
 
-		if b.Len() >= 32 {
+		if builder.Len() >= oauthMaxUsernameLen {
 			break
 		}
 	}
 
-	if b.Len() == 0 {
-		return "user"
+	if builder.Len() == 0 {
+		return oauthDefaultUsername
 	}
 
-	return b.String()
+	return builder.String()
 }

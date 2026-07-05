@@ -16,7 +16,7 @@ type CoursePrerequisite struct {
 	// MinScore is the minimum total quiz score (in points) required in Course.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Optional
-	MinScore int `json:"min_score,omitempty"`
+	MinScore int `json:"minScore,omitempty"`
 	// Modules restricts the requirement to specific module slugs within Course,
 	// instead of the whole course.
 	// +kubebuilder:validation:Optional
@@ -35,7 +35,7 @@ type CooldownSpec struct {
 	// BaseSeconds is the initial cooldown duration, in seconds, after the first failed attempt.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Optional
-	BaseSeconds int `json:"base_seconds,omitempty"`
+	BaseSeconds int `json:"baseSeconds,omitempty"`
 	// Multiplier scales BaseSeconds after each subsequent failed attempt (exponential strategy only).
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Optional
@@ -43,7 +43,7 @@ type CooldownSpec struct {
 	// MaxSeconds caps the cooldown duration regardless of how many attempts have failed.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Optional
-	MaxSeconds int `json:"max_seconds,omitempty"`
+	MaxSeconds int `json:"maxSeconds,omitempty"`
 }
 
 // Answer is one candidate answer of a single/multiple-choice question.
@@ -76,7 +76,7 @@ type PartialScoring struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// AllowNegative allows the partial score to go below zero for this question.
 	// +kubebuilder:validation:Optional
-	AllowNegative bool `json:"allow_negative,omitempty"`
+	AllowNegative bool `json:"allowNegative,omitempty"`
 }
 
 // SourceRef points to the course/module/anchor backing a feedback message.
@@ -106,7 +106,7 @@ type Feedback struct {
 	Correct string `json:"correct,omitempty"`
 	// SourceRefs point back to the course material covering this question.
 	// +kubebuilder:validation:Optional
-	SourceRefs []SourceRef `json:"source_refs,omitempty"`
+	SourceRefs []SourceRef `json:"sourceRefs,omitempty"`
 }
 
 // Question is one inline quiz question of a quiz-type module.
@@ -135,16 +135,16 @@ type Question struct {
 	Answers []Answer `json:"answers,omitempty"`
 	// CorrectAnswer is the expected answer for boolean questions.
 	// +kubebuilder:validation:Optional
-	CorrectAnswer *bool `json:"correct_answer,omitempty"`
+	CorrectAnswer *bool `json:"correctAnswer,omitempty"`
 	// Items lists the elements to be ordered for order-type questions.
 	// +kubebuilder:validation:Optional
 	Items []OrderItem `json:"items,omitempty"`
 	// CorrectOrder lists the item IDs in their correct order, for order-type questions.
 	// +kubebuilder:validation:Optional
-	CorrectOrder []string `json:"correct_order,omitempty"`
+	CorrectOrder []string `json:"correctOrder,omitempty"`
 	// PartialScoring configures partial credit for this question.
 	// +kubebuilder:validation:Optional
-	PartialScoring *PartialScoring `json:"partial_scoring,omitempty"`
+	PartialScoring *PartialScoring `json:"partialScoring,omitempty"`
 	// Feedback holds the right/wrong messages shown after answering.
 	// +kubebuilder:validation:Optional
 	Feedback Feedback `json:"feedback,omitempty"`
@@ -157,11 +157,11 @@ type CheckStep struct {
 	Title string `json:"title"`
 	// CheckType selects how this step is verified (provider-specific).
 	// +kubebuilder:validation:MinLength=1
-	CheckType string `json:"check_type"`
+	CheckType string `json:"checkType"`
 	// CheckParams holds provider-specific parameters for verifying this step.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Optional
-	CheckParams *runtime.RawExtension `json:"check_params,omitempty"`
+	CheckParams *runtime.RawExtension `json:"checkParams,omitempty"`
 }
 
 // Module is a course element as defined in spec.modules[].
@@ -186,7 +186,7 @@ type Module struct {
 	Path string `json:"path,omitempty"`
 	// LabURL is the URL of the lab environment for lab-type modules.
 	// +kubebuilder:validation:Optional
-	LabURL string `json:"lab_url,omitempty"`
+	LabURL string `json:"labUrl,omitempty"`
 	// InlineContent is the module content provided directly in the spec instead of fetched from git.
 	// +kubebuilder:validation:Optional
 	InlineContent string `json:"content,omitempty"`
@@ -209,34 +209,34 @@ type Module struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
 	// +kubebuilder:validation:Optional
-	PassingScore int `json:"passing_score,omitempty"`
+	PassingScore int `json:"passingScore,omitempty"`
 	// Cooldown configures the retry delay after a failed quiz attempt.
 	// +kubebuilder:validation:Optional
 	Cooldown *CooldownSpec `json:"cooldown,omitempty"`
 	// MaxAttemptsPerQuestion caps how many times a single question can be retried.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Optional
-	MaxAttemptsPerQuestion *int `json:"max_attempts_per_question,omitempty"`
+	MaxAttemptsPerQuestion *int `json:"maxAttemptsPerQuestion,omitempty"`
 	// LockOnMaxAttempts locks the quiz once MaxAttemptsPerQuestion is reached on any question.
 	// +kubebuilder:validation:Optional
-	LockOnMaxAttempts bool `json:"lock_on_max_attempts,omitempty"`
+	LockOnMaxAttempts bool `json:"lockOnMaxAttempts,omitempty"`
 	// CheckProvider selects the backend used to verify lab-type module completion.
 	// +kubebuilder:validation:Enum=local;gitlab
 	// +kubebuilder:validation:Optional
-	CheckProvider string `json:"check_provider,omitempty"`
+	CheckProvider string `json:"checkProvider,omitempty"`
 	// CheckType selects how the module as a whole is verified (provider-specific).
 	// +kubebuilder:validation:Optional
-	CheckType string `json:"check_type,omitempty"`
+	CheckType string `json:"checkType,omitempty"`
 	// CheckParams holds provider-specific parameters for verifying this module.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Optional
-	CheckParams *runtime.RawExtension `json:"check_params,omitempty"`
+	CheckParams *runtime.RawExtension `json:"checkParams,omitempty"`
 	// Steps lists the individually verifiable steps of a lab-type module.
 	// +kubebuilder:validation:Optional
 	Steps []CheckStep `json:"steps,omitempty"`
 	// QuizRef references an external quiz definition instead of inline Questions.
 	// +kubebuilder:validation:Optional
-	QuizRef string `json:"quiz_ref,omitempty"`
+	QuizRef string `json:"quizRef,omitempty"`
 }
 
 // CourseSpec defines the desired state of a Course.
@@ -275,7 +275,6 @@ type CourseSpec struct {
 // +kubebuilder:printcolumn:name="Category",type=string,JSONPath=`.spec.category`
 // +kubebuilder:printcolumn:name="Public",type=boolean,JSONPath=`.spec.public`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-
 // Course is the Schema for the courses API.
 type Course struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -286,11 +285,11 @@ type Course struct {
 }
 
 // +kubebuilder:object:root=true
-
 // CourseList contains a list of Course.
 type CourseList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
+
 	// Items is the list of Courses.
 	Items []Course `json:"items"`
 }

@@ -4,7 +4,7 @@ VALUES ('everyone', 'local', 'Default group — all users are members automatica
 ON CONFLICT (name) DO NOTHING;
 
 -- Backfill all existing users into this group
-INSERT INTO user_groups (user_id, group_id)
+INSERT INTO user_groups (userId, groupId)
 SELECT u.id, g.id
 FROM users u
 CROSS JOIN groups g

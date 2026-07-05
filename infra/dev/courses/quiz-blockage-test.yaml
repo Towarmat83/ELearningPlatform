@@ -6,7 +6,7 @@ metadata:
 spec:
   title: "Test — Blocage des Quiz"
   description: |
-    Cours de test pour valider la feature de blocage (lock_on_max_attempts).
+    Cours de test pour valider la feature de blocage (lockOnMaxAttempts).
     Contient trois quiz inline avec des configurations de blocage différentes :
       - Quiz 1 : blocage strict (2 tentatives max, puis verrou définitif)
       - Quiz 2 : cooldown exponentiel sans blocage permanent
@@ -24,14 +24,14 @@ spec:
 
     - name: "Quiz Blocage Strict"
       type: quiz
-      max_attempts_per_question: 2
-      lock_on_max_attempts: true
-      passing_score: 100
+      maxAttemptsPerQuestion: 2
+      lockOnMaxAttempts: true
+      passingScore: 100
       cooldown:
         strategy: exponential
-        base_seconds: 10
+        baseSeconds: 10
         multiplier: 2.0
-        max_seconds: 60
+        maxSeconds: 60
       questions:
         - id: q1
           type: single
@@ -57,21 +57,21 @@ spec:
           difficulty: easy
           points: 1
           question: "La commande `rm -rf /` supprime uniquement le répertoire courant."
-          correct_answer: false
+          correctAnswer: false
           feedback:
             wrong: "Attention ! `rm -rf /` supprime la racine entière du système."
             correct: "Exact — cette commande est extrêmement destructrice."
 
     - name: "Quiz Cooldown Sans Blocage"
       type: quiz
-      max_attempts_per_question: 3
-      lock_on_max_attempts: false
-      passing_score: 50
+      maxAttemptsPerQuestion: 3
+      lockOnMaxAttempts: false
+      passingScore: 50
       cooldown:
         strategy: exponential
-        base_seconds: 5
+        baseSeconds: 5
         multiplier: 3.0
-        max_seconds: 120
+        maxSeconds: 120
       prerequisites:
         - "introduction-au-blocage"
       questions:
@@ -112,23 +112,23 @@ spec:
             - id: d
               text: "IP"
               correct: false
-          partial_scoring:
+          partialScoring:
             enabled: true
-            allow_negative: false
+            allowNegative: false
           feedback:
             wrong: "HTTP est applicatif, IP est réseau. TCP et UDP sont en couche Transport."
             correct: "Parfait ! TCP et UDP opèrent bien en couche 4."
 
     - name: "Quiz Final avec Prérequis"
       type: quiz
-      max_attempts_per_question: 3
-      lock_on_max_attempts: true
-      passing_score: 75
+      maxAttemptsPerQuestion: 3
+      lockOnMaxAttempts: true
+      passingScore: 75
       cooldown:
         strategy: exponential
-        base_seconds: 15
+        baseSeconds: 15
         multiplier: 2.0
-        max_seconds: 300
+        maxSeconds: 300
       prerequisites:
         - "quiz-blocage-strict"
         - "quiz-cooldown-sans-blocage"
@@ -147,7 +147,7 @@ spec:
               text: "Transport"
             - id: i4
               text: "Application"
-          correct_order: [i1, i2, i3, i4]
+          correctOrder: [i1, i2, i3, i4]
           feedback:
             wrong: "L'ordre est : Physique → Liaison → Réseau → Transport → Session → Présentation → Application."
             correct: "Exact ! Vous connaissez le modèle OSI."

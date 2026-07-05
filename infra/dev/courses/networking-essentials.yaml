@@ -44,7 +44,7 @@ spec:
         - "tcp-ip-en-pratique"
         - "dns-et-résolution-de-noms"
         - "http-et-https"
-      passing_score: 70
+      passingScore: 70
       questions:
         - id: q1
           type: single

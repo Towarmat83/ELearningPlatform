@@ -51,35 +51,50 @@ spec:
         - "rebase-interactif"
         - "gitflow-et-trunk-based-development"
         - "hooks-et-automatisation"
-      passing_score: 80
+      passingScore: 80
       questions:
-        - text: "Quelle commande permet de réécrire l'historique des 3 derniers commits ?"
+        - question: "Quelle commande permet de réécrire l'historique des 3 derniers commits ?"
+          type: "single"
           answers:
-            - text: "git rebase -i HEAD~3"
+            - id: "a"
+              text: "git rebase -i HEAD~3"
               correct: true
-            - text: "git reset HEAD~3"
+            - id: "b"
+              text: "git reset HEAD~3"
               correct: false
-            - text: "git amend -3"
+            - id: "c"
+              text: "git amend -3"
               correct: false
-            - text: "git rewrite HEAD~3"
+            - id: "d"
+              text: "git rewrite HEAD~3"
               correct: false
-        - text: "Dans GitFlow, quelle branche reçoit les hotfixes ?"
+        - question: "Dans GitFlow, quelle branche reçoit les hotfixes ?"
+          type: "single"
           answers:
-            - text: "main et develop"
+            - id: "a"
+              text: "main et develop"
               correct: true
-            - text: "feature"
+            - id: "b"
+              text: "feature"
               correct: false
-            - text: "release"
+            - id: "c"
+              text: "release"
               correct: false
-            - text: "staging"
+            - id: "d"
+              text: "staging"
               correct: false
-        - text: "Quel fichier configure les hooks côté client ?"
+        - question: "Quel fichier configure les hooks côté client ?"
+          type: "single"
           answers:
-            - text: ".git/hooks/"
+            - id: "a"
+              text: ".git/hooks/"
               correct: true
-            - text: ".gitconfig"
+            - id: "b"
+              text: ".gitconfig"
               correct: false
-            - text: ".githooks"
+            - id: "c"
+              text: ".githooks"
               correct: false
-            - text: "hooks.yaml"
+            - id: "d"
+              text: "hooks.yaml"
               correct: false

@@ -5,7 +5,10 @@ import (
 	"testing"
 )
 
+// TestMatchGitURL checks pattern matching against various repo URL forms.
 func TestMatchGitURL(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		pattern string
@@ -58,6 +61,8 @@ func TestMatchGitURL(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := matchGitURL(tc.pattern, tc.repoURL)
 			if got != tc.want {
 				t.Errorf("matchGitURL(%q, %q) = %v, want %v", tc.pattern, tc.repoURL, got, tc.want)
@@ -66,15 +71,22 @@ func TestMatchGitURL(t *testing.T) {
 	}
 }
 
+// TestGitCredentialStore_Match_Nil checks matching against a nil store.
 func TestGitCredentialStore_Match_Nil(t *testing.T) {
+	t.Parallel()
+
 	var s *GitCredentialStore
+
 	token := s.Match("https://github.com/any/repo")
 	if token != "" {
 		t.Errorf("expected empty token from nil store, got %q", token)
 	}
 }
 
+// TestGitCredentialStore_Match_Found checks a successful credential match.
 func TestGitCredentialStore_Match_Found(t *testing.T) {
+	t.Parallel()
+
 	s := &GitCredentialStore{
 		entries: []Credential{
 			{URL: "github.com/org1/*", Token: "tok1"},
@@ -93,34 +105,48 @@ func TestGitCredentialStore_Match_Found(t *testing.T) {
 	}
 }
 
+// TestGitCredentialStore_Match_NotFound checks an unmatched repo URL.
 func TestGitCredentialStore_Match_NotFound(t *testing.T) {
+	t.Parallel()
+
 	s := &GitCredentialStore{
 		entries: []Credential{
 			{URL: "github.com/org1/*", Token: "tok1"},
 		},
 	}
+
 	tok := s.Match("https://gitlab.com/org1/repo")
 	if tok != "" {
 		t.Errorf("expected empty token, got %q", tok)
 	}
 }
 
+// TestGitCredentialStore_Match_Empty checks matching against an empty store.
 func TestGitCredentialStore_Match_Empty(t *testing.T) {
+	t.Parallel()
+
 	s := &GitCredentialStore{}
+
 	tok := s.Match("https://github.com/any/repo")
 	if tok != "" {
 		t.Errorf("expected empty token from empty store, got %q", tok)
 	}
 }
 
+// TestLoadCredentials_FileNotFound checks the error for a missing file.
 func TestLoadCredentials_FileNotFound(t *testing.T) {
+	t.Parallel()
+
 	_, err := LoadCredentials("/nonexistent/path/creds.yaml")
 	if err == nil {
 		t.Error("expected error for missing file")
 	}
 }
 
+// TestLoadCredentials_ValidFile checks loading a well-formed file.
 func TestLoadCredentials_ValidFile(t *testing.T) {
+	t.Parallel()
+
 	content := `
 credentials:
   - url: "github.com/myorg/*"
@@ -128,11 +154,13 @@ credentials:
   - url: "gitlab.com/other/*"
     token: "token456"
 `
-	f, err := os.CreateTemp("", "creds-*.yaml")
+
+	f, err := os.CreateTemp(t.TempDir(), "creds-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
+
 	f.WriteString(content)
 	f.Close()
 
@@ -140,6 +168,7 @@ credentials:
 	if err != nil {
 		t.Fatalf("LoadCredentials failed: %v", err)
 	}
+
 	if store == nil {
 		t.Fatal("expected non-nil store")
 	}
@@ -155,25 +184,33 @@ credentials:
 	}
 }
 
+// TestLoadCredentials_EmptyFile checks loading an empty credentials file.
 func TestLoadCredentials_EmptyFile(t *testing.T) {
-	f, err := os.CreateTemp("", "empty-*.yaml")
+	t.Parallel()
+
+	f, err := os.CreateTemp(t.TempDir(), "empty-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
+
 	f.Close()
 
 	store, err := LoadCredentials(f.Name())
 	if err != nil {
 		t.Fatalf("LoadCredentials on empty file: %v", err)
 	}
+
 	if store == nil {
 		t.Fatal("expected non-nil store even for empty file")
 	}
 }
 
+// TestLoadCredentials_InvalidYAML checks the error for malformed YAML.
 func TestLoadCredentials_InvalidYAML(t *testing.T) {
-	f, err := os.CreateTemp("", "bad-*.yaml")
+	t.Parallel()
+
+	f, err := os.CreateTemp(t.TempDir(), "bad-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

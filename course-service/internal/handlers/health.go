@@ -7,11 +7,11 @@ import "net/http"
 // @Tags     Health
 // @Produce  json
 // @Success  200  {object}  map[string]string
-// @Router   /health [get]
+// @Router   /health [get].
 func (s *State) Health(w http.ResponseWriter, r *http.Request) {
 	s.JSON(w, http.StatusOK, map[string]string{
-		"status":  "ok",
-		"service": "course-service",
-		"version": "1.0.0",
+		statusJSONKey: "ok",
+		"service":     courseServiceName,
+		"version":     "1.0.0",
 	})
 }

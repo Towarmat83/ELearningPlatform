@@ -7,7 +7,7 @@ covers:
     modules:
       - "What is Kubernetes"
       - "Pods and Containers"
-passing_score: 80
+passingScore: 80
 questions:
   - id: q1
     type: single
@@ -28,7 +28,7 @@ questions:
     feedback:
       wrong: "Un Pod n'est ni un nœud ni un service. Relisez la définition."
       correct: "Exact ! Un Pod encapsule un ou plusieurs conteneurs."
-      source_refs:
+      sourceRefs:
         - course: kubernetes-basics
           module: "What is Kubernetes"
           anchor: definition-pod
@@ -64,7 +64,7 @@ questions:
     question: |
       Un Service de type ClusterIP est accessible depuis l'extérieur du cluster
       sans configuration supplémentaire.
-    correct_answer: false
+    correctAnswer: false
     feedback:
       wrong: |
         ClusterIP est interne uniquement. Pour l'extérieur : NodePort, LoadBalancer
@@ -90,9 +90,9 @@ questions:
       - id: d
         text: "Service"
         correct: false
-    partial_scoring:
+    partialScoring:
       enabled: true
-      allow_negative: false
+      allowNegative: false
     feedback:
       wrong: "ConfigMap stocke de la config. Service expose le réseau."
       correct: "Exact ! Deployment et ReplicaSet gèrent les réplicas."
@@ -112,7 +112,7 @@ questions:
         text: "kubectl get pods (vérification)"
       - id: i4
         text: "kubectl expose deployment"
-    correct_order: [i2, i1, i3, i4]
+    correctOrder: [i2, i1, i3, i4]
     feedback:
       wrong: "On écrit le manifest, on l'applique, on vérifie, puis on expose."
       correct: "Parfait ! L'ordre est logique : écrire → appliquer → vérifier → exposer."

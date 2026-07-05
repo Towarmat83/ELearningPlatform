@@ -2,20 +2,25 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
 
 	"github.com/elearning/course-service/internal/content"
+	"github.com/elearning/course-service/internal/middleware"
 )
 
-// courseCompleteBody is the request body sent to the user-service when a course is completed.
+// courseCompleteBody is the request body sent to the user-service when a
+// course is completed.
 type courseCompleteBody struct {
-	UserID     string `json:"user_id"`
-	CourseSlug string `json:"course_slug"`
+	UserID     string `json:"userId"`
+	CourseSlug string `json:"courseSlug"`
 }
 
+// lessonSummary is the public API representation of a lesson within a
+// lesson list.
 type lessonSummary struct {
 	Slug   string `json:"slug"`
 	Title  string `json:"title"`
@@ -23,6 +28,8 @@ type lessonSummary struct {
 	Viewed bool   `json:"viewed"`
 }
 
+// lessonDetail is the public API representation of a single lesson,
+// including its full content.
 type lessonDetail struct {
 	Slug    string `json:"slug"`
 	Title   string `json:"title"`
@@ -35,40 +42,94 @@ type lessonDetail struct {
 // autoEnroll silently enrolls the user in a public course via the user-service
 // internal API. Errors are ignored — the course is accessible regardless.
 func (s *State) autoEnroll(userID, courseSlug string) {
-	body, _ := json.Marshal(map[string]string{
-		"user_id":     userID,
-		"course_slug": courseSlug,
+	body, err := json.Marshal(map[string]string{
+		userIDJSONKey:     userID,
+		courseSlugJSONKey: courseSlug,
 	})
-	resp, err := http.Post(s.Config.UserServiceURL+"/internal/enrollments/auto",
-		"application/json", bytes.NewReader(body))
+	if err != nil {
+		slog.Warn("failed to build auto-enroll request", "err", err)
+
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		context.Background(), http.MethodPost, s.Config.UserServiceURL+"/internal/enrollments/auto", bytes.NewReader(body),
+	)
+	if err != nil {
+		slog.Warn("failed to build auto-enroll request", "err", err)
+
+		return
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err == nil {
-		_ = resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 	}
 }
 
-func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
-	u, err := url.Parse(s.Config.UserServiceURL + "/internal/enrollments/check")
+// isEnrolled reports whether userID is enrolled in courseSlug, according to
+// the user-service internal enrollment-check API.
+func (s *State) isEnrolled(req *http.Request, courseSlug, userID string) bool {
+	target, err := url.Parse(s.Config.UserServiceURL + "/internal/enrollments/check")
 	if err != nil {
 		return false
 	}
-	q := u.Query()
-	q.Set("user_id", userID)
-	q.Set("course_slug", courseSlug)
-	u.RawQuery = q.Encode()
 
-	resp, err := http.Get(u.String())
+	q := target.Query()
+	q.Set(userIDJSONKey, userID)
+	q.Set(courseSlugJSONKey, courseSlug)
+	target.RawQuery = q.Encode()
+
+	httpReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, target.String(), http.NoBody)
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Enrolled bool `json:"enrolled"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
 		return false
 	}
+
 	return result.Enrolled
+}
+
+// ensureLessonAccess verifies that the requester (identified by claims) may
+// access lessons of course: admins always pass, public courses trigger an
+// auto-enroll, and private courses require an existing enrollment. On
+// denial it writes deniedMsg as a 403 response and returns false.
+func (s *State) ensureLessonAccess(
+	writer http.ResponseWriter, req *http.Request, course *content.Course, courseSlug string,
+	claims *middleware.Claims, deniedMsg string,
+) bool {
+	if claims.Role == roleAdmin {
+		return true
+	}
+
+	if course.IsPublic {
+		s.autoEnroll(claims.Subject, courseSlug)
+
+		return true
+	}
+
+	if !s.isEnrolled(req, courseSlug, claims.Subject) {
+		s.Error(writer, http.StatusForbidden, deniedMsg)
+
+		return false
+	}
+
+	return true
 }
 
 // ListLessons godoc
@@ -80,53 +141,102 @@ func (s *State) isEnrolled(r *http.Request, courseSlug, userID string) bool {
 // @Success   200   {object}  map[string]interface{}
 // @Failure   403   {object}  map[string]string
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons [get]
-func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
-	courseSlug := param(r, "slug")
-	claims := s.claims(r)
+// @Router    /api/courses/{slug}/lessons [get].
+func (s *State) ListLessons(writer http.ResponseWriter, req *http.Request) {
+	courseSlug := param(req, "slug")
+	claims := s.claims(req)
 
-	c := s.Content.Get(courseSlug)
-	if c == nil {
-		s.Error(w, http.StatusNotFound, "Course not found")
+	course := s.Content.Get(courseSlug)
+	if course == nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
+
 		return
 	}
-	if claims.Role != "admin" {
-		if c.IsPublic {
-			s.autoEnroll(claims.Subject, courseSlug)
-		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
-			s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
-			return
-		}
+
+	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
+		return
 	}
 
-	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
+	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
 
-	modules := s.visibleModules(c, r)
+	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
 
-	if len(c.Lessons) > 0 {
-		out := make([]lessonSummary, 0, len(c.Lessons))
-		for _, l := range c.Lessons {
+	if len(course.Lessons) > 0 {
+		out := make([]lessonSummary, 0, len(course.Lessons))
+		for _, lesson := range course.Lessons {
 			out = append(out, lessonSummary{
-				Slug:   l.Slug,
-				Title:  l.Title,
-				Order:  l.Order,
-				Viewed: viewed[l.Slug],
+				Slug:   lesson.Slug,
+				Title:  lesson.Title,
+				Order:  lesson.Order,
+				Viewed: viewed[lesson.Slug],
 			})
 		}
-		s.JSON(w, http.StatusOK, map[string]any{"lessons": out})
+
+		s.JSON(writer, http.StatusOK, map[string]any{lessonsJSONKey: out})
+
 		return
 	}
 
 	out := make([]lessonSummary, 0, len(modules))
-	for i, m := range modules {
+	for pos, mod := range modules {
 		out = append(out, lessonSummary{
-			Slug:   m.Slug(),
-			Title:  m.Name,
-			Order:  i + 1,
-			Viewed: viewed[m.Slug()],
+			Slug:   mod.Slug(),
+			Title:  mod.Name,
+			Order:  pos + 1,
+			Viewed: viewed[mod.Slug()],
 		})
 	}
-	s.JSON(w, http.StatusOK, map[string]any{"lessons": out})
+
+	s.JSON(writer, http.StatusOK, map[string]any{lessonsJSONKey: out})
+}
+
+// findStoredLesson looks up a course-defined (non-module) lesson by slug.
+func findStoredLesson(course *content.Course, lessonSlug string, viewed map[string]bool) (lessonDetail, bool) {
+	for idx := range course.Lessons {
+		if course.Lessons[idx].Slug == lessonSlug {
+			return lessonDetail{
+				Slug:    course.Lessons[idx].Slug,
+				Title:   course.Lessons[idx].Title,
+				Order:   course.Lessons[idx].Order,
+				Content: course.Lessons[idx].Content,
+				Viewed:  viewed[course.Lessons[idx].Slug],
+			}, true
+		}
+	}
+
+	return lessonDetail{}, false
+}
+
+// moduleLessonBody resolves the display body for a module-backed lesson,
+// fetching remote git content when configured.
+func (s *State) moduleLessonBody(mod content.Module) string {
+	body := mod.Content()
+	if mod.Type != moduleTypeText {
+		body = content.ReplicatedPath(mod, s.Config.UploadsDir)
+	}
+
+	if mod.HasGitContent() {
+		data, err := s.GitCache.FetchModuleContent(mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
+		if err != nil {
+			body = "⚠️ This content is not yet available. Please check back later.\n\n_Failed to load from remote repository._"
+		} else {
+			body = string(data)
+		}
+	}
+
+	return body
+}
+
+// findModuleLesson looks up a module-backed lesson by slug among modules,
+// returning its zero-based position when found.
+func findModuleLesson(modules []content.Module, lessonSlug string) (content.Module, int, bool) {
+	for pos, mod := range modules {
+		if mod.Slug() == lessonSlug {
+			return mod, pos, true
+		}
+	}
+
+	return content.Module{}, 0, false
 }
 
 // GetLesson godoc
@@ -135,77 +245,179 @@ func (s *State) ListLessons(w http.ResponseWriter, r *http.Request) {
 // @Security  BearerAuth
 // @Produce   json
 // @Param     slug         path  string  true  "Course slug"
-// @Param     lesson_slug  path  string  true  "Lesson slug"
+// @Param     lessonSlug  path  string  true  "Lesson slug"
 // @Success   200   {object}  map[string]interface{}
 // @Failure   403   {object}  map[string]string
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons/{lesson_slug} [get]
-func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
-	courseSlug := param(r, "slug")
-	lessonSlug := param(r, "lesson_slug")
-	claims := s.claims(r)
+// @Router    /api/courses/{slug}/lessons/{lessonSlug} [get].
+func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
+	courseSlug := param(req, "slug")
+	lessonSlug := param(req, "lessonSlug")
+	claims := s.claims(req)
 
-	c := s.Content.Get(courseSlug)
-	if c == nil {
-		s.Error(w, http.StatusNotFound, "Course not found")
+	course := s.Content.Get(courseSlug)
+	if course == nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
+
 		return
 	}
-	if claims.Role != "admin" {
-		if c.IsPublic {
-			s.autoEnroll(claims.Subject, courseSlug)
-		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
-			s.Error(w, http.StatusForbidden, "Enroll in this course to access lessons")
-			return
+
+	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
+		return
+	}
+
+	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
+	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+
+	if detail, found := findStoredLesson(course, lessonSlug, viewed); found {
+		s.JSON(writer, http.StatusOK, map[string]any{lessonJSONKey: detail})
+
+		return
+	}
+
+	mod, pos, found := findModuleLesson(modules, lessonSlug)
+	if !found {
+		s.Error(writer, http.StatusNotFound, "Lesson not found")
+
+		return
+	}
+
+	if mod.Type == moduleTypeQuiz {
+		s.Error(writer, http.StatusNotFound, "Quiz modules use a separate endpoint")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{lessonJSONKey: lessonDetail{
+		Slug:    mod.Slug(),
+		Title:   mod.Name,
+		Order:   pos + 1,
+		Type:    mod.Type,
+		Content: s.moduleLessonBody(mod), //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+		Viewed:  viewed[mod.Slug()],
+	}})
+}
+
+// lessonModuleIndex reports whether lessonSlug identifies a course-defined
+// lesson (moduleIndex -1) or a module (its index), and whether it was
+// found at all.
+func lessonModuleIndex(course *content.Course, lessonSlug string) (int, bool) {
+	for _, lesson := range course.Lessons {
+		if lesson.Slug == lessonSlug {
+			return -1, true
 		}
 	}
 
-	viewed := s.viewedLessons(r, courseSlug, claims.Subject)
-	modules := s.visibleModules(c, r)
-
-	for i := range c.Lessons {
-		if c.Lessons[i].Slug == lessonSlug {
-			s.JSON(w, http.StatusOK, map[string]any{"lesson": lessonDetail{
-				Slug:    c.Lessons[i].Slug,
-				Title:   c.Lessons[i].Title,
-				Order:   c.Lessons[i].Order,
-				Content: c.Lessons[i].Content,
-				Viewed:  viewed[c.Lessons[i].Slug],
-			}})
-			return
+	for idx, mod := range course.Modules {
+		if mod.Slug() == lessonSlug {
+			return idx, true
 		}
 	}
 
-	for i, m := range modules {
-		if m.Slug() == lessonSlug {
-			if m.Type == "quiz" {
-				s.Error(w, http.StatusNotFound, "Quiz modules use a separate endpoint")
-				return
-			}
-			body := m.Content()
-			if m.Type != "text" {
-				body = content.ReplicatedPath(m, s.Config.UploadsDir)
-			}
-			if m.HasGitContent() {
-				data, err := content.FetchModuleContent(m.Src, m.Ref, m.Path, s.tokenForRepo(m.Src))
-				if err != nil {
-					body = "⚠️ This content is not yet available. Please check back later.\n\n_Failed to load from remote repository._"
-				} else {
-					body = string(data)
-				}
-			}
-			s.JSON(w, http.StatusOK, map[string]any{"lesson": lessonDetail{
-				Slug:    m.Slug(),
-				Title:   m.Name,
-				Order:   i + 1,
-				Type:    m.Type,
-				Content: body,
-				Viewed:  viewed[m.Slug()],
-			}})
-			return
-		}
+	return -1, false
+}
+
+// isLastMeaningfulModule reports whether moduleIndex is the last module of
+// course, ignoring trailing inline quiz modules.
+func isLastMeaningfulModule(course *content.Course, moduleIndex int) bool {
+	lastMeaningful := len(course.Modules) - 1
+	for lastMeaningful > 0 && course.Modules[lastMeaningful].Inline && course.Modules[lastMeaningful].Type == moduleTypeQuiz {
+		lastMeaningful--
 	}
 
-	s.Error(w, http.StatusNotFound, "Lesson not found")
+	return moduleIndex >= 0 && moduleIndex == lastMeaningful
+}
+
+// postLessonComplete notifies the user-service that lessonSlug was
+// completed by userID, writing an HTTP error and returning false on any
+// failure.
+func (s *State) postLessonComplete(
+	writer http.ResponseWriter, req *http.Request, userID, courseSlug, lessonSlug string,
+) bool {
+	body := map[string]string{
+		userIDJSONKey:     userID,
+		courseSlugJSONKey: courseSlug,
+		"lessonSlug":      lessonSlug,
+	}
+
+	var buf bytes.Buffer
+
+	err := json.NewEncoder(&buf).Encode(body)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
+
+		return false
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		req.Context(), http.MethodPost, s.Config.UserServiceURL+"/internal/progress/complete", &buf,
+	)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
+
+		return false
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
+
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
+
+		return false
+	}
+
+	return true
+}
+
+// notifyCourseComplete notifies the user-service that userID completed
+// courseSlug. Failures are only logged: the lesson itself was already
+// recorded as complete, so they must not affect the HTTP response.
+//
+// Follow-up(security): unauthenticated internal call, see the equivalent
+// note in user-service/internal/handlers/router.go — flagged in PR #74 review.
+func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug string) {
+	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
+
+	var buf bytes.Buffer
+
+	err := json.NewEncoder(&buf).Encode(payload)
+	if err != nil {
+		slog.Error("failed to build course-complete request", "userID", userID, "courseSlug", courseSlug, "err", err)
+
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		req.Context(), http.MethodPost, s.Config.UserServiceURL+"/internal/progress/course-complete", &buf,
+	)
+	if err != nil {
+		slog.Error("failed to build course-complete request", "userID", userID, "courseSlug", courseSlug, "err", err)
+
+		return
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		slog.Error("failed to mark course complete", "userID", userID, "courseSlug", courseSlug, "err", err)
+
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		slog.Error("user-service rejected course-complete request",
+			"userID", userID, "courseSlug", courseSlug, "status", resp.StatusCode)
+	}
 }
 
 // MarkLessonComplete godoc
@@ -214,94 +426,41 @@ func (s *State) GetLesson(w http.ResponseWriter, r *http.Request) {
 // @Security  BearerAuth
 // @Produce   json
 // @Param     slug         path  string  true  "Course slug"
-// @Param     lesson_slug  path  string  true  "Lesson slug"
+// @Param     lessonSlug  path  string  true  "Lesson slug"
 // @Success   200   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Failure   404   {object}  map[string]string
-// @Router    /api/courses/{slug}/lessons/{lesson_slug}/complete [post]
-func (s *State) MarkLessonComplete(w http.ResponseWriter, r *http.Request) {
-	courseSlug := param(r, "slug")
-	lessonSlug := param(r, "lesson_slug")
-	claims := s.claims(r)
+// @Router    /api/courses/{slug}/lessons/{lessonSlug}/complete [post].
+func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request) {
+	courseSlug := param(req, "slug")
+	lessonSlug := param(req, "lessonSlug")
+	claims := s.claims(req)
 
-	c := s.Content.Get(courseSlug)
-	if c == nil {
-		s.Error(w, http.StatusNotFound, "Course not found")
+	course := s.Content.Get(courseSlug)
+	if course == nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
+
 		return
 	}
-	if claims.Role != "admin" {
-		if c.IsPublic {
-			s.autoEnroll(claims.Subject, courseSlug)
-		} else if !s.isEnrolled(r, courseSlug, claims.Subject) {
-			s.Error(w, http.StatusForbidden, "Not enrolled")
-			return
-		}
+
+	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Not enrolled") { //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
+		return
 	}
 
-	found := false
-	moduleIndex := -1
-	for _, l := range c.Lessons {
-		if l.Slug == lessonSlug {
-			found = true
-			break
-		}
-	}
+	moduleIndex, found := lessonModuleIndex(course, lessonSlug)
 	if !found {
-		for i, m := range c.Modules {
-			if m.Slug() == lessonSlug {
-				found = true
-				moduleIndex = i
-				break
-			}
-		}
-	}
-	if !found {
-		s.Error(w, http.StatusNotFound, "Lesson not found")
+		s.Error(writer, http.StatusNotFound, "Lesson not found")
+
 		return
 	}
 
-	body := map[string]string{
-		"user_id":     claims.Subject,
-		"course_slug": courseSlug,
-		"lesson_slug": lessonSlug,
-	}
-	var buf bytes.Buffer
-	_ = json.NewEncoder(&buf).Encode(body)
-
-	resp, err := http.Post(s.Config.UserServiceURL+"/internal/progress/complete", "application/json", &buf)
-	if err != nil {
-		s.Error(w, http.StatusInternalServerError, "Failed to mark lesson as complete")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		s.Error(w, http.StatusInternalServerError, "Failed to mark lesson as complete")
+	if !s.postLessonComplete(writer, req, claims.Subject, courseSlug, lessonSlug) {
 		return
 	}
 
-	// If this is the last meaningful module (ignoring trailing inline quizzes), record course completion.
-	lastMeaningful := len(c.Modules) - 1
-	for lastMeaningful > 0 && c.Modules[lastMeaningful].Inline && c.Modules[lastMeaningful].Type == "quiz" {
-		lastMeaningful--
-	}
-	isLastModule := moduleIndex >= 0 && moduleIndex == lastMeaningful
-	if isLastModule {
-		// TODO(security): unauthenticated internal call, see TODO in
-		// user-service/internal/handlers/router.go — flagged in PR #74 review.
-		req2 := courseCompleteBody{UserID: claims.Subject, CourseSlug: courseSlug}
-		var buf2 bytes.Buffer
-		_ = json.NewEncoder(&buf2).Encode(req2)
-		resp2, err2 := http.Post(s.Config.UserServiceURL+"/internal/progress/course-complete", "application/json", &buf2)
-		if err2 != nil {
-			slog.Error("failed to mark course complete", "userID", claims.Subject, "courseSlug", courseSlug, "err", err2)
-		} else {
-			defer resp2.Body.Close()
-			if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusCreated {
-				slog.Error("user-service rejected course-complete request", "userID", claims.Subject, "courseSlug", courseSlug, "status", resp2.StatusCode)
-			}
-		}
+	if isLastMeaningfulModule(course, moduleIndex) {
+		s.notifyCourseComplete(req, claims.Subject, courseSlug)
 	}
 
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})
+	s.JSON(writer, http.StatusOK, map[string]string{messageJSONKey: lessonCompleteMessage})
 }

@@ -283,7 +283,7 @@
                 }
             }
         },
-        "/api/courses/{slug}/lessons/{lesson_slug}": {
+        "/api/courses/{slug}/lessons/{lessonSlug}": {
             "get": {
                 "security": [
                     {
@@ -308,7 +308,7 @@
                     {
                         "type": "string",
                         "description": "Lesson slug",
-                        "name": "lesson_slug",
+                        "name": "lessonSlug",
                         "in": "path",
                         "required": true
                     }
@@ -342,7 +342,7 @@
                 }
             }
         },
-        "/api/courses/{slug}/lessons/{lesson_slug}/complete": {
+        "/api/courses/{slug}/lessons/{lessonSlug}/complete": {
             "post": {
                 "security": [
                     {
@@ -367,7 +367,7 @@
                     {
                         "type": "string",
                         "description": "Lesson slug",
-                        "name": "lesson_slug",
+                        "name": "lessonSlug",
                         "in": "path",
                         "required": true
                     }
@@ -681,10 +681,10 @@
         "handlers.cooldown": {
             "type": "object",
             "properties": {
-                "base_seconds": {
+                "baseSeconds": {
                     "type": "integer"
                 },
-                "max_seconds": {
+                "maxSeconds": {
                     "type": "integer"
                 },
                 "multiplier": {
@@ -704,7 +704,7 @@
                 "locked": {
                     "type": "boolean"
                 },
-                "remaining_seconds": {
+                "remainingSeconds": {
                     "type": "integer"
                 }
             }
@@ -721,16 +721,16 @@
                 "difficulty": {
                     "type": "string"
                 },
-                "enrollment_count": {
+                "enrollmentCount": {
                     "type": "integer"
                 },
                 "id": {
                     "type": "string"
                 },
-                "is_public": {
+                "isPublic": {
                     "type": "boolean"
                 },
-                "lab_count": {
+                "labCount": {
                     "type": "integer"
                 },
                 "module_count": {
@@ -759,7 +759,7 @@
                 "attempts": {
                     "type": "integer"
                 },
-                "best_score": {
+                "bestScore": {
                     "type": "integer"
                 },
                 "content": {
@@ -780,7 +780,7 @@
                 "locked": {
                     "type": "boolean"
                 },
-                "max_score": {
+                "maxScore": {
                     "type": "integer"
                 },
                 "name": {
@@ -795,14 +795,14 @@
                         "type": "string"
                     }
                 },
-                "question_count": {
+                "questionCount": {
                     "type": "integer"
                 },
                 "questions": {
                     "type": "array",
                     "items": {}
                 },
-                "quiz_config": {
+                "quizConfig": {
                     "$ref": "#/definitions/handlers.quizConfig"
                 },
                 "slug": {
@@ -822,7 +822,7 @@
                 "course": {
                     "type": "string"
                 },
-                "min_score": {
+                "minScore": {
                     "type": "integer"
                 },
                 "modules": {
@@ -836,23 +836,23 @@
         "handlers.questionResultAPI": {
             "type": "object",
             "properties": {
-                "correct_answer": {},
+                "correctAnswer": {},
                 "feedback": {
                     "type": "string"
                 },
-                "is_correct": {
+                "isCorrect": {
                     "type": "boolean"
                 },
-                "points_earned": {
+                "pointsEarned": {
                     "type": "integer"
                 },
-                "points_max": {
+                "pointsMax": {
                     "type": "integer"
                 },
-                "question_id": {
+                "questionId": {
                     "type": "string"
                 },
-                "source_refs": {
+                "sourceRefs": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/content.SourceRef"
@@ -869,13 +869,13 @@
                 "cooldown": {
                     "$ref": "#/definitions/handlers.cooldown"
                 },
-                "lock_on_max_attempts": {
+                "lockOnMaxAttempts": {
                     "type": "boolean"
                 },
-                "max_attempts_per_question": {
+                "maxAttemptsPerQuestion": {
                     "type": "integer"
                 },
-                "passing_score": {
+                "passingScore": {
                     "type": "integer"
                 }
             }
@@ -889,19 +889,19 @@
                         "$ref": "#/definitions/handlers.cooldownState"
                     }
                 },
-                "max_score": {
+                "maxScore": {
                     "type": "integer"
                 },
                 "passed": {
                     "type": "boolean"
                 },
-                "question_results": {
+                "questionResults": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/handlers.questionResultAPI"
                     }
                 },
-                "total_score": {
+                "totalScore": {
                     "type": "integer"
                 }
             }

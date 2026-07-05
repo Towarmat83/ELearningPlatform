@@ -279,7 +279,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/courses/{slug}/lessons/{lesson_slug}:
+  /api/courses/{slug}/lessons/{lessonSlug}:
     get:
       summary: Get a lesson with full content
       operationId: getLesson
@@ -291,7 +291,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: lesson_slug
+        - name: lessonSlug
           in: path
           required: true
           schema:
@@ -313,7 +313,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/courses/{slug}/lessons/{lesson_slug}/complete:
+  /api/courses/{slug}/lessons/{lessonSlug}/complete:
     post:
       summary: Mark a lesson as complete
       operationId: markLessonComplete
@@ -325,7 +325,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: lesson_slug
+        - name: lessonSlug
           in: path
           required: true
           schema:
@@ -419,13 +419,13 @@ components:
         difficulty:
           type: string
           example: beginner
-        is_published:
+        isPublished:
           type: boolean
         module_count:
           type: integer
-        lab_count:
+        labCount:
           type: integer
-        enrollment_count:
+        enrollmentCount:
           type: integer
         source:
           type: string
@@ -463,20 +463,20 @@ components:
       properties:
         id:
           type: string
-        course_id:
+        courseId:
           type: string
         title:
           type: string
         description:
           type: string
-        lab_type:
+        labType:
           type: string
           enum: [form, interactive]
         points:
           type: integer
-        order_index:
+        orderIndex:
           type: integer
-        is_published:
+        isPublished:
           type: boolean
 
     LessonSummary:
@@ -508,13 +508,13 @@ components:
     CourseProgress:
       type: object
       properties:
-        course_id:
+        courseId:
           type: string
-        user_id:
+        userId:
           type: string
         total_labs:
           type: integer
-        completed_labs:
+        completedLabs:
           type: integer
         total_points_possible:
           type: integer

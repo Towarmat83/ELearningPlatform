@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -23,6 +24,7 @@ type PatternWatcher struct {
 	cache crcache.Cache
 }
 
+// NewPatternWatcher builds a PatternWatcher for the given Kubernetes cluster.
 func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatcher, error) {
 	cfg, err := buildRestConfig(kubeconfig)
 	if err != nil {
@@ -30,11 +32,13 @@ func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatc
 	}
 
 	scheme := runtime.NewScheme()
-	if err := patternv1.AddToScheme(scheme); err != nil {
+
+	err = patternv1.AddToScheme(scheme)
+	if err != nil {
 		return nil, fmt.Errorf("register scheme: %w", err)
 	}
 
-	c, err := crcache.New(cfg, crcache.Options{
+	patternCache, err := crcache.New(cfg, crcache.Options{
 		Scheme:            scheme,
 		DefaultNamespaces: map[string]crcache.Config{namespace: {}},
 	})
@@ -42,53 +46,63 @@ func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatc
 		return nil, fmt.Errorf("create cache: %w", err)
 	}
 
-	return &PatternWatcher{pool: pool, cache: c}, nil
+	return &PatternWatcher{pool: pool, cache: patternCache}, nil
 }
 
+// Start begins watching MarkdownPattern CRDs until ctx is cancelled.
 func (w *PatternWatcher) Start(ctx context.Context) error {
 	informer, err := w.cache.GetInformer(ctx, &patternv1.MarkdownPattern{})
 	if err != nil {
 		return fmt.Errorf("get informer: %w", err)
 	}
 
-	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.upsert(context.Background(), obj) },
-		UpdateFunc: func(_, obj interface{}) { w.upsert(context.Background(), obj) },
-		DeleteFunc: func(obj interface{}) { w.delete(context.Background(), obj) },
-	}); err != nil {
+	_, err = informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj any) { w.upsert(ctx, obj) },
+		UpdateFunc: func(_, obj any) { w.upsert(ctx, obj) },
+		DeleteFunc: func(obj any) { w.delete(ctx, obj) },
+	})
+	if err != nil {
 		return fmt.Errorf("add event handler: %w", err)
 	}
 
 	go func() {
-		if err := w.cache.Start(ctx); err != nil {
+		err := w.cache.Start(ctx)
+		if err != nil {
 			slog.Error("pattern CRD cache stopped", "err", err)
 		}
 	}()
 
 	if !w.cache.WaitForCacheSync(ctx) {
-		return fmt.Errorf("cache sync failed")
+		return errors.New("cache sync failed")
 	}
+
 	slog.Info("markdown patterns synced from CRDs")
+
 	return nil
 }
 
-func (w *PatternWatcher) upsert(ctx context.Context, obj interface{}) {
-	cr, ok := obj.(*patternv1.MarkdownPattern)
+// upsert writes a MarkdownPattern CRD's spec into the markdown_patterns table.
+func (w *PatternWatcher) upsert(ctx context.Context, obj any) {
+	pattern, ok := obj.(*patternv1.MarkdownPattern)
 	if !ok {
 		return
 	}
-	spec := cr.Spec
+
+	spec := pattern.Spec
+
 	name := spec.Name
 	if name == "" {
-		name = cr.Name
+		name = pattern.Name
 	}
+
 	label := spec.Label
 	if label == "" {
 		label = name
 	}
+
 	scope := spec.Scope
 	if scope == "" {
-		scope = "global"
+		scope = patternsGlobalScope
 	}
 
 	_, err := w.pool.Exec(ctx, `
@@ -101,7 +115,7 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj interface{}) {
 			css         = EXCLUDED.css,
 			js          = EXCLUDED.js,
 			from_config = TRUE,
-			updated_at  = NOW()
+			updatedAt  = NOW()
 	`,
 		name,
 		label,
@@ -113,38 +127,60 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj interface{}) {
 	)
 	if err != nil {
 		slog.Error("failed to upsert pattern from CRD", "name", name, "err", err)
+
 		return
 	}
+
 	slog.Info("pattern upserted from CRD", "name", name, "scope", scope)
 }
 
-func (w *PatternWatcher) delete(ctx context.Context, obj interface{}) {
+// delete removes the markdown_patterns row for a deleted MarkdownPattern CRD.
+func (w *PatternWatcher) delete(ctx context.Context, obj any) {
 	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
 		obj = final.Obj
 	}
-	cr, ok := obj.(*patternv1.MarkdownPattern)
+
+	pattern, ok := obj.(*patternv1.MarkdownPattern)
 	if !ok {
 		return
 	}
-	name := cr.Spec.Name
+
+	name := pattern.Spec.Name
 	if name == "" {
-		name = cr.Name
+		name = pattern.Name
 	}
-	scope := cr.Spec.Scope
+
+	scope := pattern.Spec.Scope
 	if scope == "" {
-		scope = "global"
+		scope = patternsGlobalScope
 	}
+
 	_, err := w.pool.Exec(ctx, `DELETE FROM markdown_patterns WHERE name = $1 AND scope = $2 AND from_config = TRUE`, name, scope)
 	if err != nil {
 		slog.Error("failed to delete pattern from CRD", "name", name, "err", err)
+
 		return
 	}
+
 	slog.Info("pattern deleted from CRD", "name", name)
 }
 
+// buildRestConfig loads a Kubernetes REST config from kubeconfig, or from the
+// in-cluster service account when kubeconfig is empty.
 func buildRestConfig(kubeconfig string) (*rest.Config, error) {
 	if kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+		cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("building rest config from kubeconfig: %w", err)
+		}
+
+		return cfg, nil
 	}
-	return rest.InClusterConfig()
+
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("building in-cluster rest config: %w", err)
+	}
+
+	return cfg, nil
 }

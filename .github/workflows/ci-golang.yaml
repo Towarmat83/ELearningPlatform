@@ -54,7 +54,7 @@ jobs:
           version: latest
           working-directory: ${{ matrix.service }}
           args: --timeout=5m
-          only-new-issues: true
+          only-new-issues: false
 
   test:
     name: Test (${{ matrix.service }})

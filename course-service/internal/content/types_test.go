@@ -4,7 +4,10 @@ import (
 	"testing"
 )
 
+// TestModuleSlug checks module slug.
 func TestModuleSlug(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		want string
@@ -21,6 +24,7 @@ func TestModuleSlug(t *testing.T) {
 
 	for _, tc := range tests {
 		m := Module{Name: tc.name}
+
 		got := m.Slug()
 		if got != tc.want {
 			t.Errorf("Module{Name:%q}.Slug() = %q, want %q", tc.name, got, tc.want)
@@ -28,7 +32,10 @@ func TestModuleSlug(t *testing.T) {
 	}
 }
 
+// TestModuleContent checks module content.
 func TestModuleContent(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		typ  string
 		src  string
@@ -43,6 +50,7 @@ func TestModuleContent(t *testing.T) {
 
 	for _, tc := range tests {
 		m := Module{Type: tc.typ, Src: tc.src}
+
 		got := m.Content()
 		if got != tc.want {
 			t.Errorf("Module{Type:%q}.Content() = %q, want %q", tc.typ, got, tc.want)
@@ -62,7 +70,10 @@ func TestModuleContent(t *testing.T) {
 	}
 }
 
+// TestModuleHasQuestions checks module has questions.
 func TestModuleHasQuestions(t *testing.T) {
+	t.Parallel()
+
 	// quiz with questions
 	m1 := Module{Type: "quiz", Questions: []Question{{ID: "q1"}}}
 	if !m1.HasQuestions() {
@@ -82,7 +93,10 @@ func TestModuleHasQuestions(t *testing.T) {
 	}
 }
 
+// TestModuleHasGitContent checks module has git content.
 func TestModuleHasGitContent(t *testing.T) {
+	t.Parallel()
+
 	m1 := Module{Src: "https://github.com/org/repo", Ref: "main", Path: "content.yaml"}
 	if !m1.HasGitContent() {
 		t.Error("expected HasGitContent=true when Src+Ref+Path set")
@@ -104,15 +118,22 @@ func TestModuleHasGitContent(t *testing.T) {
 	}
 }
 
+// TestCourseYAML_MergeSpec_NilSpec checks course YAML merge spec nil spec.
 func TestCourseYAML_MergeSpec_NilSpec(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{Title: "My Course"}
 	c.MergeSpec()
+
 	if c.Title != "My Course" {
 		t.Errorf("MergeSpec with nil Spec changed title to %q", c.Title)
 	}
 }
 
+// TestCourseYAML_MergeSpec_FromSpec checks course YAML merge spec from spec.
 func TestCourseYAML_MergeSpec_FromSpec(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{
 		Spec: &CourseSpec{
 			Title:         "Spec Title",
@@ -125,30 +146,40 @@ func TestCourseYAML_MergeSpec_FromSpec(t *testing.T) {
 		},
 	}
 	c.MergeSpec()
+
 	if c.Title != "Spec Title" {
 		t.Errorf("expected Title=Spec Title, got %q", c.Title)
 	}
+
 	if c.Description != "Spec Desc" {
 		t.Errorf("expected Description=Spec Desc, got %q", c.Description)
 	}
+
 	if !c.Public {
 		t.Error("expected Public=true")
 	}
+
 	if c.Category != "k8s" {
 		t.Errorf("expected Category=k8s, got %q", c.Category)
 	}
+
 	if c.Difficulty != "hard" {
 		t.Errorf("expected Difficulty=hard, got %q", c.Difficulty)
 	}
+
 	if len(c.Modules) != 1 {
 		t.Errorf("expected 1 module from spec, got %d", len(c.Modules))
 	}
+
 	if len(c.Prerequisites) != 1 {
 		t.Errorf("expected 1 prerequisite from spec, got %d", len(c.Prerequisites))
 	}
 }
 
+// TestCourseYAML_MergeSpec_TopLevelTakesPrecedence checks top-level precedence.
 func TestCourseYAML_MergeSpec_TopLevelTakesPrecedence(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{
 		Title:       "Top Title",
 		Description: "Top Desc",
@@ -164,22 +195,29 @@ func TestCourseYAML_MergeSpec_TopLevelTakesPrecedence(t *testing.T) {
 		},
 	}
 	c.MergeSpec()
+
 	if c.Title != "Top Title" {
 		t.Errorf("expected top-level Title to take precedence, got %q", c.Title)
 	}
+
 	if c.Category != "docker" {
 		t.Errorf("expected top-level Category, got %q", c.Category)
 	}
+
 	if len(c.Modules) != 1 || c.Modules[0].Name != "top-mod" {
 		t.Error("expected top-level modules to take precedence")
 	}
 }
 
+// TestCourseYAML_MergeSpec_PublicFallbackFromSpec checks public fallback.
 func TestCourseYAML_MergeSpec_PublicFallbackFromSpec(t *testing.T) {
+	t.Parallel()
+
 	c := &CourseYAML{
 		Spec: &CourseSpec{Public: true},
 	}
 	c.MergeSpec()
+
 	if !c.Public {
 		t.Error("expected Public=true from spec when top-level is false")
 	}

@@ -94,20 +94,20 @@ spec:
       src: "http://10.89.0.1:8880/e-learning/devops-course.git"
       ref: "main"
       path: "modules/lab1/content.md"
-      lab_url: "http://localhost:8880/e-learning/devops-course/-/blob/main/modules/lab1/content.md"
+      labUrl: "http://localhost:8880/e-learning/devops-course/-/blob/main/modules/lab1/content.md"
       prerequisites:
         - "introduction-au-ci-cd-avec-gitlab"
 
     - name: "Quiz de validation"
       type: "quiz"
       inline: false
-      passing_score: 70
+      passingScore: 70
       questions:
         - id: "q1"
           type: "single"
-          text: "Qu'est-ce qu'une Merge Request dans GitLab ?"
+          question: "Qu'est-ce qu'une Merge Request dans GitLab ?"
           points: 1
-          choices:
+          answers:
             - id: "a"
               text: "Une demande de fusion de branches"
               correct: true

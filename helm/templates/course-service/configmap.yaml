@@ -7,12 +7,12 @@ metadata:
 data:
   config.yaml: |
     port: {{ .Values.courseService.service.port }}
-    jwt_expiry_hours: {{ .Values.courseService.env.JWT_EXPIRY_HOURS }}
-    cors_origins:
+    jwtExpiryHours: {{ .Values.courseService.env.JWT_EXPIRY_HOURS }}
+    corsOrigins:
       - "{{ include "elearning.publicUrl" . }}"
-    uploads_dir: "/data/uploads"
-    k8s_namespace: {{ .Release.Namespace | quote }}
-    user_service_url: "http://{{ include "elearning.fullname" . }}-user-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.userService.service.port }}"
-    git_cache_ttl_minutes: {{ .Values.courseService.env.GIT_CACHE_TTL }}
-    git_credentials_path: "/etc/git-credentials/git-credentials.yaml"
-    checker_service_url: "http://{{ include "elearning.fullname" . }}-checker-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.checkerService.service.port }}"
+    uploadsDir: "/data/uploads"
+    k8sNamespace: {{ .Release.Namespace | quote }}
+    userServiceUrl: "http://{{ include "elearning.fullname" . }}-user-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.userService.service.port }}"
+    gitCacheTtlMinutes: {{ .Values.courseService.env.GIT_CACHE_TTL }}
+    gitCredentialsPath: "/etc/git-credentials/git-credentials.yaml"
+    checkerServiceUrl: "http://{{ include "elearning.fullname" . }}-checker-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:{{ .Values.checkerService.service.port }}"

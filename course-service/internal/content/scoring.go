@@ -2,7 +2,18 @@ package content
 
 import "math"
 
-// ── Answer Submission ─────────────────────────────────────────────────────────────
+// Question type identifiers understood by ScoreQuiz.
+const (
+	questionTypeSingle   = "single"
+	questionTypeMultiple = "multiple"
+	questionTypeBoolean  = "boolean"
+	questionTypeOrder    = "order"
+)
+
+// scoringPercentageScale converts a score fraction into a percentage.
+const scoringPercentageScale = 100
+
+// ── Answer Submission ──────────────────────────────────────────────────
 
 // UserAnswer represents a user's answer to a single question.
 type UserAnswer struct {
@@ -14,22 +25,27 @@ type UserAnswer struct {
 
 // QuestionResult holds the scoring outcome for one question.
 type QuestionResult struct {
-	QuestionID    string      `json:"question_id"`
-	Type          string      `json:"type"`
-	IsCorrect     bool        `json:"is_correct"`
-	PointsEarned  int         `json:"points_earned"`
-	PointsMax     int         `json:"points_max"`
-	CorrectAnswer interface{} `json:"correct_answer,omitempty"`
+	QuestionID string `json:"questionId"`
+	Type       string `json:"type"`
+
+	IsCorrect bool `json:"isCorrect"`
+
+	PointsEarned int `json:"pointsEarned"`
+
+	PointsMax     int         `json:"pointsMax"`
+	CorrectAnswer any         `json:"correctAnswer,omitempty"`
 	Feedback      string      `json:"feedback,omitempty"`
-	SourceRefs    []SourceRef `json:"source_refs,omitempty"`
+	SourceRefs    []SourceRef `json:"sourceRefs,omitempty"`
 }
 
 // QuizResult holds the overall scoring outcome.
 type QuizResult struct {
-	TotalScore      int              `json:"total_score"`
-	MaxScore        int              `json:"max_score"`
-	Passed          bool             `json:"passed"`
-	QuestionResults []QuestionResult `json:"question_results"`
+	TotalScore int `json:"totalScore"`
+
+	MaxScore int  `json:"maxScore"`
+	Passed   bool `json:"passed"`
+
+	QuestionResults []QuestionResult `json:"questionResults"`
 }
 
 // SubmitRequest represents a user's answers to a quiz submission.
@@ -37,64 +53,65 @@ type SubmitRequest struct {
 	Answers map[string]UserAnswer `json:"answers"`
 }
 
-// ── Scoring Functions ─────────────────────────────────────────────────────────────
+// ── Scoring Functions ──────────────────────────────────────────────────
 
-func ScoreSingle(q Question, answer *string) QuestionResult {
-	r := QuestionResult{
-		QuestionID: q.ID,
-		Type:       q.Type,
-		PointsMax:  q.Points,
+// ScoreSingle scores a single-choice question against answer.
+func ScoreSingle(question Question, answer *string) QuestionResult {
+	result := QuestionResult{
+		QuestionID: question.ID,
+		Type:       question.Type,
+		PointsMax:  question.Points,
 	}
 	if answer == nil {
-		r.Feedback = q.Feedback.Wrong
-		r.SourceRefs = q.Feedback.SourceRefs
-		return r
+		result.Feedback = question.Feedback.Wrong
+		result.SourceRefs = question.Feedback.SourceRefs
+
+		return result
 	}
-	for _, a := range q.Answers {
+
+	for _, a := range question.Answers {
 		if a.ID == *answer {
 			if a.Correct {
-				r.IsCorrect = true
-				r.PointsEarned = q.Points
-				r.CorrectAnswer = a.ID
-				r.Feedback = q.Feedback.Correct
+				result.IsCorrect = true
+				result.PointsEarned = question.Points
+				result.CorrectAnswer = a.ID
+				result.Feedback = question.Feedback.Correct
 			} else {
-				r.Feedback = q.Feedback.Wrong
-				r.CorrectAnswer = correctAnswerID(q.Answers)
-				r.SourceRefs = q.Feedback.SourceRefs
+				result.Feedback = question.Feedback.Wrong
+				result.CorrectAnswer = correctAnswerID(question.Answers)
+				result.SourceRefs = question.Feedback.SourceRefs
 			}
-			return r
+
+			return result
 		}
 	}
-	r.Feedback = q.Feedback.Wrong
-	r.CorrectAnswer = correctAnswerID(q.Answers)
-	r.SourceRefs = q.Feedback.SourceRefs
-	return r
+
+	result.Feedback = question.Feedback.Wrong
+	result.CorrectAnswer = correctAnswerID(question.Answers)
+	result.SourceRefs = question.Feedback.SourceRefs
+
+	return result
 }
 
-func ScoreMultiple(q Question, answers []string) QuestionResult {
-	r := QuestionResult{
-		QuestionID: q.ID,
-		Type:       q.Type,
-		PointsMax:  q.Points,
-	}
-	if len(answers) == 0 {
-		r.Feedback = q.Feedback.Wrong
-		r.SourceRefs = q.Feedback.SourceRefs
-		return r
-	}
-	correctIDs := make(map[string]bool)
-	for _, a := range q.Answers {
+// tallyMultipleChoice counts how many of the selected answers are correct
+// (correctSelected) versus incorrect (falsePositives), and returns the set
+// of correct answer IDs for question.
+//
+//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
+func tallyMultipleChoice(question Question, answers []string) (correctIDs map[string]bool, correctSelected, falsePositives int) {
+	correctIDs = make(map[string]bool)
+
+	for _, a := range question.Answers {
 		if a.Correct {
 			correctIDs[a.ID] = true
 		}
 	}
+
 	selected := make(map[string]bool)
 	for _, id := range answers {
 		selected[id] = true
 	}
 
-	correctSelected := 0
-	falsePositives := 0
 	for id := range selected {
 		if correctIDs[id] {
 			correctSelected++
@@ -102,123 +119,169 @@ func ScoreMultiple(q Question, answers []string) QuestionResult {
 			falsePositives++
 		}
 	}
+
+	return correctIDs, correctSelected, falsePositives
+}
+
+// partialMultipleChoiceScore computes the partial-credit points earned for
+// a multiple-choice question that was not answered fully correctly.
+func partialMultipleChoiceScore(question Question, correctCount, correctSelected, falsePositives int) int {
+	if question.PartialScoring == nil || !question.PartialScoring.Enabled {
+		return 0
+	}
+
+	raw := float64(question.Points) * float64(correctSelected-falsePositives) / float64(correctCount)
+	if !question.PartialScoring.AllowNegative && raw < 0 {
+		raw = 0
+	}
+
+	return int(math.Round(raw))
+}
+
+// ScoreMultiple scores a multiple-choice question against answers.
+func ScoreMultiple(question Question, answers []string) QuestionResult {
+	result := QuestionResult{
+		QuestionID: question.ID,
+		Type:       question.Type,
+		PointsMax:  question.Points,
+	}
+	if len(answers) == 0 {
+		result.Feedback = question.Feedback.Wrong
+		result.SourceRefs = question.Feedback.SourceRefs
+
+		return result
+	}
+
+	correctIDs, correctSelected, falsePositives := tallyMultipleChoice(question, answers)
 	allCorrect := correctSelected == len(correctIDs) && falsePositives == 0
 
 	if allCorrect {
-		r.IsCorrect = true
-		r.PointsEarned = q.Points
-		r.Feedback = q.Feedback.Correct
-		r.CorrectAnswer = correctIDs
-		return r
+		result.IsCorrect = true
+		result.PointsEarned = question.Points
+		result.Feedback = question.Feedback.Correct
+		result.CorrectAnswer = correctIDs
+
+		return result
 	}
 
-	// Partial scoring
-	if q.PartialScoring != nil && q.PartialScoring.Enabled {
-		raw := float64(q.Points) * float64(correctSelected-falsePositives) / float64(len(correctIDs))
-		if !q.PartialScoring.AllowNegative && raw < 0 {
-			raw = 0
-		}
-		r.PointsEarned = int(math.Round(raw))
-	} else {
-		r.PointsEarned = 0
-	}
-	r.Feedback = q.Feedback.Wrong
-	r.CorrectAnswer = correctIDs
-	r.SourceRefs = q.Feedback.SourceRefs
-	return r
+	result.PointsEarned = partialMultipleChoiceScore(question, len(correctIDs), correctSelected, falsePositives)
+	result.Feedback = question.Feedback.Wrong
+	result.CorrectAnswer = correctIDs
+	result.SourceRefs = question.Feedback.SourceRefs
+
+	return result
 }
 
-func ScoreBoolean(q Question, answer *bool) QuestionResult {
-	r := QuestionResult{
-		QuestionID: q.ID,
-		Type:       q.Type,
-		PointsMax:  q.Points,
+// ScoreBoolean scores a true/false question against answer.
+func ScoreBoolean(question Question, answer *bool) QuestionResult {
+	result := QuestionResult{
+		QuestionID: question.ID,
+		Type:       question.Type,
+		PointsMax:  question.Points,
 	}
 	if answer == nil {
-		r.Feedback = q.Feedback.Wrong
-		r.SourceRefs = q.Feedback.SourceRefs
-		return r
+		result.Feedback = question.Feedback.Wrong
+		result.SourceRefs = question.Feedback.SourceRefs
+
+		return result
 	}
-	if q.CorrectAnswer != nil && *answer == *q.CorrectAnswer {
-		r.IsCorrect = true
-		r.PointsEarned = q.Points
-		r.CorrectAnswer = *q.CorrectAnswer
-		r.Feedback = q.Feedback.Correct
+
+	if question.CorrectAnswer != nil && *answer == *question.CorrectAnswer {
+		result.IsCorrect = true
+		result.PointsEarned = question.Points
+		result.CorrectAnswer = *question.CorrectAnswer
+		result.Feedback = question.Feedback.Correct
 	} else {
-		r.CorrectAnswer = q.CorrectAnswer
-		r.Feedback = q.Feedback.Wrong
-		r.SourceRefs = q.Feedback.SourceRefs
+		result.CorrectAnswer = question.CorrectAnswer
+		result.Feedback = question.Feedback.Wrong
+		result.SourceRefs = question.Feedback.SourceRefs
 	}
-	return r
+
+	return result
 }
 
-func ScoreOrder(q Question, order []string) QuestionResult {
-	r := QuestionResult{
-		QuestionID: q.ID,
-		Type:       q.Type,
-		PointsMax:  q.Points,
+// ScoreOrder scores an ordering question against order.
+func ScoreOrder(question Question, order []string) QuestionResult {
+	result := QuestionResult{
+		QuestionID: question.ID,
+		Type:       question.Type,
+		PointsMax:  question.Points,
 	}
 	if len(order) == 0 {
-		r.Feedback = q.Feedback.Wrong
-		r.SourceRefs = q.Feedback.SourceRefs
-		return r
+		result.Feedback = question.Feedback.Wrong
+		result.SourceRefs = question.Feedback.SourceRefs
+
+		return result
 	}
+
 	correct := true
+
 	for i, id := range order {
-		if i >= len(q.CorrectOrder) || id != q.CorrectOrder[i] {
+		if i >= len(question.CorrectOrder) || id != question.CorrectOrder[i] {
 			correct = false
+
 			break
 		}
 	}
-	if correct && len(order) == len(q.CorrectOrder) {
-		r.IsCorrect = true
-		r.PointsEarned = q.Points
-		r.CorrectAnswer = q.CorrectOrder
-		r.Feedback = q.Feedback.Correct
+
+	if correct && len(order) == len(question.CorrectOrder) {
+		result.IsCorrect = true
+		result.PointsEarned = question.Points
+		result.CorrectAnswer = question.CorrectOrder
+		result.Feedback = question.Feedback.Correct
 	} else {
-		r.CorrectAnswer = q.CorrectOrder
-		r.Feedback = q.Feedback.Wrong
-		r.SourceRefs = q.Feedback.SourceRefs
+		result.CorrectAnswer = question.CorrectOrder
+		result.Feedback = question.Feedback.Wrong
+		result.SourceRefs = question.Feedback.SourceRefs
 	}
-	return r
+
+	return result
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
 
+// correctAnswerID returns the ID of the first correct answer in answers.
 func correctAnswerID(answers []Answer) string {
 	for _, a := range answers {
 		if a.Correct {
 			return a.ID
 		}
 	}
+
 	return ""
 }
 
 // ScoreQuiz evaluates all answers and returns the full result.
-func ScoreQuiz(q *Quiz, answers map[string]UserAnswer) QuizResult {
-	r := QuizResult{}
-	for _, qq := range q.Questions {
-		ua := answers[qq.ID]
-		var qr QuestionResult
-		switch qq.Type {
-		case "single":
-			qr = ScoreSingle(qq, ua.Single)
-		case "multiple":
-			qr = ScoreMultiple(qq, ua.Multiple)
-		case "boolean":
-			qr = ScoreBoolean(qq, ua.Boolean)
-		case "order":
-			qr = ScoreOrder(qq, ua.Order)
+func ScoreQuiz(quiz *Quiz, answers map[string]UserAnswer) QuizResult {
+	result := QuizResult{}
+
+	for _, question := range quiz.Questions {
+		userAnswer := answers[question.ID]
+
+		var questionResult QuestionResult
+
+		switch question.Type {
+		case questionTypeSingle:
+			questionResult = ScoreSingle(question, userAnswer.Single)
+		case questionTypeMultiple:
+			questionResult = ScoreMultiple(question, userAnswer.Multiple)
+		case questionTypeBoolean:
+			questionResult = ScoreBoolean(question, userAnswer.Boolean)
+		case questionTypeOrder:
+			questionResult = ScoreOrder(question, userAnswer.Order)
 		default:
-			qr = QuestionResult{QuestionID: qq.ID, Type: qq.Type, PointsMax: qq.Points}
+			questionResult = QuestionResult{QuestionID: question.ID, Type: question.Type, PointsMax: question.Points}
 		}
-		r.TotalScore += qr.PointsEarned
-		r.MaxScore += qr.PointsMax
-		r.QuestionResults = append(r.QuestionResults, qr)
+
+		result.TotalScore += questionResult.PointsEarned
+		result.MaxScore += questionResult.PointsMax
+		result.QuestionResults = append(result.QuestionResults, questionResult)
 	}
-	if r.MaxScore > 0 {
-		pct := float64(r.TotalScore) / float64(r.MaxScore) * 100
-		r.Passed = pct >= float64(q.PassingScore)
+
+	if result.MaxScore > 0 {
+		pct := float64(result.TotalScore) / float64(result.MaxScore) * scoringPercentageScale
+		result.Passed = pct >= float64(quiz.PassingScore)
 	}
-	return r
+
+	return result
 }

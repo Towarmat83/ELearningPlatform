@@ -73,10 +73,10 @@ spec:
 
 | Méthode | Path | Usage |
 |---|---|---|
-| `GET` | `/internal/enrollments/check?user_id=X&course_slug=Y` | Vérifier si enrolled |
-| `POST` | `/internal/enrollments/auto` body: `{user_id, course_slug}` | Auto-enrôler (cours publics) — idempotent |
-| `GET` | `/internal/progress/viewed?user_id=X&course_slug=Y` | Récupérer les slugs vus |
-| `POST` | `/internal/progress/complete` body: `{user_id, course_slug, lesson_slug}` | Marquer complet |
+| `GET` | `/internal/enrollments/check?userId=X&courseSlug=Y` | Vérifier si enrolled |
+| `POST` | `/internal/enrollments/auto` body: `{userId, courseSlug}` | Auto-enrôler (cours publics) — idempotent |
+| `GET` | `/internal/progress/viewed?userId=X&courseSlug=Y` | Récupérer les slugs vus |
+| `POST` | `/internal/progress/complete` body: `{userId, courseSlug, lessonSlug}` | Marquer complet |
 
 ## Périmètre des services
 

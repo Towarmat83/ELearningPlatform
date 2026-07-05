@@ -3,92 +3,137 @@ package checker
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// GitLabFetcher fetches project, merge request, and file state from GitLab
+// for policy evaluation.
 type GitLabFetcher struct {
 	client *gitlab.Client
 }
 
+// NewFetcher creates a GitLabFetcher authenticated against the given GitLab
+// instance.
 func NewFetcher(token, baseURL string) (*GitLabFetcher, error) {
-	git, err := gitlab.NewClient(token, gitlab.WithBaseURL(baseURL+"/api/v4"))
+	client, err := gitlab.NewClient(token, gitlab.WithBaseURL(baseURL+"/api/v4"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gitlab new client: %w", err)
 	}
-	return &GitLabFetcher{client: git}, nil
+
+	return &GitLabFetcher{client: client}, nil
 }
 
+// Fetch gathers project info, merge request state, and file contents for the
+// given project from GitLab.
 func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, error) {
 	state := &gitLabState{Files: make(map[string]string)}
 
-	// Project info
 	proj, _, err := f.client.Projects.GetProject(project, &gitlab.GetProjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("GetProject %q: %w", project, err)
 	}
+
 	state.Project = &projectInfo{
-		ID:            fmt.Sprint(proj.ID),
+		ID:            strconv.FormatInt(proj.ID, 10),
 		Name:          proj.Name,
 		Path:          proj.PathWithNamespace,
 		DefaultBranch: proj.DefaultBranch,
 	}
 
-	// Merged MRs count
-	merged := "merged"
-	mergedMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
-		State: &merged,
-	})
-	if err == nil {
-		state.MergedMRCount = len(mergedMRs)
-	}
-
-	// Open MRs with pipeline status and commits
-	opened := "opened"
-	openMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
-		State: &opened,
-	})
-	if err == nil {
-		state.OpenMRs = make([]openMRInfo, 0, len(openMRs))
-		for _, mr := range openMRs {
-			info := openMRInfo{
-				IID:          mr.IID,
-				Title:        mr.Title,
-				SourceBranch: mr.SourceBranch,
-			}
-			// ListProjectMergeRequests does not populate HeadPipeline; fetch individually
-			fullMR, _, merr := f.client.MergeRequests.GetMergeRequest(project, mr.IID, &gitlab.GetMergeRequestsOptions{})
-			if merr == nil && fullMR.HeadPipeline != nil {
-				info.PipelineStatus = fullMR.HeadPipeline.Status
-			}
-			commits, _, cerr := f.client.MergeRequests.GetMergeRequestCommits(project, mr.IID, nil)
-			if cerr == nil {
-				for _, c := range commits {
-					info.Commits = append(info.Commits, commitInfo{Message: c.Message})
-				}
-			}
-			state.OpenMRs = append(state.OpenMRs, info)
-		}
-	}
+	state.MergedMRCount = f.countMergedMRs(project)
+	state.OpenMRs = f.fetchOpenMRs(project)
 
 	// File contents — check on the source branch of the first open MR (if any), else default branch
 	ref := proj.DefaultBranch
 	if len(state.OpenMRs) > 0 {
 		ref = state.OpenMRs[0].SourceBranch
 	}
+
+	state.Files = f.fetchFiles(project, ref, files)
+
+	return state, nil
+}
+
+// countMergedMRs returns the number of merged merge requests for the project.
+func (f *GitLabFetcher) countMergedMRs(project string) int {
+	merged := "merged"
+
+	mergedMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
+		State: &merged,
+	})
+	if err != nil {
+		return 0
+	}
+
+	return len(mergedMRs)
+}
+
+// fetchOpenMRs returns open merge requests for the project, enriched with
+// pipeline status and commits.
+func (f *GitLabFetcher) fetchOpenMRs(project string) []openMRInfo {
+	opened := "opened"
+
+	openMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
+		State: &opened,
+	})
+	if err != nil {
+		return nil
+	}
+
+	infos := make([]openMRInfo, 0, len(openMRs))
+	for _, mergeRequest := range openMRs {
+		infos = append(infos, f.buildOpenMRInfo(project, mergeRequest))
+	}
+
+	return infos
+}
+
+// buildOpenMRInfo enriches a merge request with pipeline status and commits.
+func (f *GitLabFetcher) buildOpenMRInfo(project string, mergeRequest *gitlab.BasicMergeRequest) openMRInfo {
+	info := openMRInfo{
+		IID:          mergeRequest.IID,
+		Title:        mergeRequest.Title,
+		SourceBranch: mergeRequest.SourceBranch,
+	}
+
+	// ListProjectMergeRequests does not populate HeadPipeline; fetch individually
+	fullMR, _, err := f.client.MergeRequests.GetMergeRequest(project, mergeRequest.IID, &gitlab.GetMergeRequestsOptions{})
+	if err == nil && fullMR.HeadPipeline != nil {
+		info.PipelineStatus = fullMR.HeadPipeline.Status
+	}
+
+	commits, _, err := f.client.MergeRequests.GetMergeRequestCommits(project, mergeRequest.IID, nil)
+	if err == nil {
+		for _, commit := range commits {
+			info.Commits = append(info.Commits, commitInfo{Message: commit.Message})
+		}
+	}
+
+	return info
+}
+
+// fetchFiles reads the given file paths from the given ref, skipping any
+// that fail to fetch or decode.
+func (f *GitLabFetcher) fetchFiles(project, ref string, files []string) map[string]string {
+	contents := make(map[string]string, len(files))
+
 	for _, filePath := range files {
 		file, _, err := f.client.RepositoryFiles.GetFile(project, filePath, &gitlab.GetFileOptions{
-			Ref: gitlab.Ptr(ref),
+			Ref: &ref,
 		})
 		if err != nil {
 			continue
 		}
+
 		decoded, err := base64.StdEncoding.DecodeString(file.Content)
 		if err != nil {
 			decoded = []byte(file.Content)
 		}
-		state.Files[filePath] = string(decoded)
+
+		contents[filePath] = string(decoded)
 	}
 
-	return state, nil
+	return contents
 }

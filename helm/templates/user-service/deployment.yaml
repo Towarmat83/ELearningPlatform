@@ -80,13 +80,13 @@ spec:
         {{- end }}
         {{- if .Values.sso.enabled }}
         {{- range .Values.sso.providers }}
-        {{- if or .client_secret .existingSecret }}
+        {{- if or .clientSecret .existingSecret }}
         - name: SSO_{{ .id | upper }}_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
               {{- if .existingSecret }}
               name: {{ .existingSecret | quote }}
-              key: {{ .existingSecretKey | default "client_secret" | quote }}
+              key: {{ .existingSecretKey | default "clientSecret" | quote }}
               {{- else }}
               name: {{ include "elearning.fullname" $ }}-secrets
               key: SSO_{{ .id | upper }}_CLIENT_SECRET

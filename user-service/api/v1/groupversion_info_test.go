@@ -6,19 +6,27 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// TestAddToScheme verifies AddToScheme registers the known types.
 func TestAddToScheme(t *testing.T) {
+	t.Parallel()
+
 	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
+
+	err := AddToScheme(scheme)
+	if err != nil {
 		t.Fatalf("AddToScheme failed: %v", err)
 	}
+
 	if !scheme.Recognizes(GroupVersion.WithKind("MarkdownPattern")) {
 		t.Error("scheme does not recognize MarkdownPattern")
 	}
+
 	if !scheme.Recognizes(GroupVersion.WithKind("MarkdownPatternList")) {
 		t.Error("scheme does not recognize MarkdownPatternList")
 	}
 }
 
+// newFullMarkdownPattern builds a MarkdownPattern with all fields set.
 func newFullMarkdownPattern() *MarkdownPattern {
 	return &MarkdownPattern{
 		Spec: MarkdownPatternSpec{
@@ -33,7 +41,10 @@ func newFullMarkdownPattern() *MarkdownPattern {
 	}
 }
 
+// TestMarkdownPatternDeepCopy verifies DeepCopy makes an independent copy.
 func TestMarkdownPatternDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	original := newFullMarkdownPattern()
 	copied := original.DeepCopy()
 
@@ -47,19 +58,28 @@ func TestMarkdownPatternDeepCopy(t *testing.T) {
 	}
 }
 
+// TestMarkdownPatternDeepCopyObject verifies DeepCopyObject returns a
+// distinct *MarkdownPattern.
 func TestMarkdownPatternDeepCopyObject(t *testing.T) {
+	t.Parallel()
+
 	original := newFullMarkdownPattern()
 	obj := original.DeepCopyObject()
+
 	copied, ok := obj.(*MarkdownPattern)
 	if !ok {
 		t.Fatalf("DeepCopyObject returned %T, want *MarkdownPattern", obj)
 	}
+
 	if copied == original {
 		t.Fatal("DeepCopyObject returned the same pointer as the original")
 	}
 }
 
+// TestMarkdownPatternListDeepCopy verifies list items are deep-copied.
 func TestMarkdownPatternListDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	original := &MarkdownPatternList{Items: []MarkdownPattern{*newFullMarkdownPattern()}}
 	copied := original.DeepCopy()
 
@@ -74,26 +94,37 @@ func TestMarkdownPatternListDeepCopy(t *testing.T) {
 	}
 }
 
+// TestMarkdownPatternSpecDeepCopy verifies DeepCopy on a spec value.
 func TestMarkdownPatternSpecDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	spec := &MarkdownPatternSpec{Name: "callout", HTML: "<div>{{content}}</div>"}
+
 	got := spec.DeepCopy()
 	if got == spec || *got != *spec {
 		t.Error("MarkdownPatternSpec.DeepCopy did not produce an equal, distinct copy")
 	}
 }
 
+// TestDeepCopyNilReceiver verifies DeepCopy on nil receivers returns nil.
 func TestDeepCopyNilReceiver(t *testing.T) {
-	var nilSpec *MarkdownPatternSpec
-	var nilPattern *MarkdownPattern
-	var nilList *MarkdownPatternList
+	t.Parallel()
+
+	var (
+		nilSpec    *MarkdownPatternSpec
+		nilPattern *MarkdownPattern
+		nilList    *MarkdownPatternList
+	)
 	if nilSpec.DeepCopy() != nil ||
 		nilPattern.DeepCopy() != nil ||
 		nilList.DeepCopy() != nil {
 		t.Error("DeepCopy on a nil receiver should return nil")
 	}
+
 	if nilPattern.DeepCopyObject() != nil {
 		t.Error("MarkdownPattern.DeepCopyObject on a nil receiver should return nil")
 	}
+
 	if nilList.DeepCopyObject() != nil {
 		t.Error("MarkdownPatternList.DeepCopyObject on a nil receiver should return nil")
 	}

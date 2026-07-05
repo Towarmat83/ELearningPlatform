@@ -60,15 +60,15 @@ total=$(echo "$courses" | python3 -c "import sys,json; print(json.load(sys.stdin
 check "Courses API returns courses (total >= 1)" "4" "$total"
 
 # Get first course identifier (supports both new UUID id and old slug format)
-course_id=$(echo "$courses" | python3 -c "
+courseId=$(echo "$courses" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 if data['courses']:
   c = data['courses'][0]
   print(c.get('id') or c.get('slug', ''))
 " 2>/dev/null || echo "")
-if [ -n "$course_id" ]; then
-  id_len=$(echo -n "$course_id" | wc -c)
+if [ -n "$courseId" ]; then
+  id_len=$(echo -n "$courseId" | wc -c)
   if [ "$id_len" -eq 36 ]; then
     check "Course has UUID id" "36" "$id_len"
   else
@@ -110,11 +110,11 @@ if [ -n "$token" ]; then
   check "GET /api/auth/me returns 200" "200" "$me_status"
 
   # Enroll — TODO: Ingress routes /api/courses to course-service; enroll is on user-service
-  if [ -n "$course_id" ]; then
+  if [ -n "$courseId" ]; then
     enroll_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $HOST" \
       -X POST -H "Authorization: Bearer $token" \
       -H "Content-Type: application/json" \
-      "$BASE/api/courses/$course_id/enroll")
+      "$BASE/api/courses/$courseId/enroll")
     if [ "$enroll_status" = "200" ]; then
       check "POST /api/courses/{id}/enroll returns 200" "200" "$enroll_status"
     else
@@ -128,7 +128,7 @@ if [ -n "$token" ]; then
 
     # Labs — not implemented on course-service
     labs_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $HOST" \
-      -H "Authorization: Bearer $token" "$BASE/api/courses/$course_id/labs")
+      -H "Authorization: Bearer $token" "$BASE/api/courses/$courseId/labs")
     if [ "$labs_status" = "200" ]; then
       check "GET /api/courses/{id}/labs returns 200" "200" "$labs_status"
     else
@@ -137,7 +137,7 @@ if [ -n "$token" ]; then
 
     # Course progress — not implemented on course-service
     progress_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $HOST" \
-      -H "Authorization: Bearer $token" "$BASE/api/courses/$course_id/progress")
+      -H "Authorization: Bearer $token" "$BASE/api/courses/$courseId/progress")
     if [ "$progress_status" = "200" ]; then
       check "GET /api/courses/{id}/progress returns 200" "200" "$progress_status"
     else
@@ -152,7 +152,7 @@ if [ -n "$token" ]; then
     -d '{"bio":"Test bio"}' "$BASE/api/auth/profile")
   check "PUT /api/auth/profile returns 200" "200" "$profile_status"
 
-  # Change password — use correct old_password based on auth method
+  # Change password — use correct oldPassword based on auth method
   if [ "$auth_method" = "register" ]; then
     pwd_old="TestPass123"
   else
@@ -161,21 +161,21 @@ if [ -n "$token" ]; then
   pwd_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $HOST" \
     -X PUT -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
-    -d "{\"old_password\":\"$pwd_old\",\"new_password\":\"NewPass1234\"}" "$BASE/api/auth/password")
+    -d "{\"oldPassword\":\"$pwd_old\",\"newPassword\":\"NewPass1234\"}" "$BASE/api/auth/password")
   check "PUT /api/auth/password returns 200" "200" "$pwd_status"
 
   # Revert password
   pwd_back=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $HOST" \
     -X PUT -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
-    -d "{\"old_password\":\"NewPass1234\",\"new_password\":\"$pwd_old\"}" "$BASE/api/auth/password")
+    -d "{\"oldPassword\":\"NewPass1234\",\"newPassword\":\"$pwd_old\"}" "$BASE/api/auth/password")
   check "Revert password" "200" "$pwd_back"
 
   # Unenroll — TODO: Ingress routes /api/courses to course-service; unenroll is on user-service
-  if [ -n "$course_id" ]; then
+  if [ -n "$courseId" ]; then
     unenroll_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: $HOST" \
       -X DELETE -H "Authorization: Bearer $token" \
-      "$BASE/api/courses/$course_id/unenroll")
+      "$BASE/api/courses/$courseId/unenroll")
     if [ "$unenroll_status" = "200" ]; then
       check "DELETE /api/courses/{id}/unenroll returns 200" "200" "$unenroll_status"
     else

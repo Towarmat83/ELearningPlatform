@@ -1,19 +1,18 @@
 id: blockage-test
 title: "Quiz Blockage Test (fichier Git)"
 description: |
-  Quiz référencé depuis un fichier Git pour tester le blocage via quiz_ref.
-  max_attempts_per_question: 2 — après 2 réponses fausses, le module est verrouillé.
+  Quiz référencé depuis un fichier Git pour tester le blocage via quizRef.
+  maxAttemptsPerQuestion: 2 — après 2 réponses fausses, le module est verrouillé.
 version: "1.0.0"
-
-passing_score: 80
-max_attempts_per_question: 2
-lock_on_max_attempts: true
+passingScore: 80
+maxAttemptsPerQuestion: 2
+lockOnMaxAttempts: true
 
 cooldown:
   strategy: exponential
-  base_seconds: 30
+  baseSeconds: 30
   multiplier: 2.0
-  max_seconds: 300
+  maxSeconds: 300
 
 questions:
   - id: q1
@@ -46,7 +45,7 @@ questions:
     difficulty: easy
     points: 1
     question: "`git rebase -i HEAD~3` permet de modifier les 3 derniers commits."
-    correct_answer: true
+    correctAnswer: true
     feedback:
       wrong: "Si, `git rebase -i HEAD~3` ouvre bien un éditeur interactif sur les 3 derniers commits."
       correct: "Correct ! Le rebase interactif est très puissant pour réécrire l'historique."
@@ -69,9 +68,9 @@ questions:
       - id: d
         text: "git diff"
         correct: false
-    partial_scoring:
+    partialScoring:
       enabled: true
-      allow_negative: false
+      allowNegative: false
     feedback:
       wrong: "`git diff` ne restaure rien, il affiche seulement les différences."
       correct: "Exact ! Les trois premières options permettent de jeter les modifications locales."

@@ -6,22 +6,31 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// TestAddToScheme verifies Course, CourseList get registered with scheme.
 func TestAddToScheme(t *testing.T) {
+	t.Parallel()
+
 	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
+
+	err := AddToScheme(scheme)
+	if err != nil {
 		t.Fatalf("AddToScheme failed: %v", err)
 	}
+
 	if !scheme.Recognizes(GroupVersion.WithKind("Course")) {
 		t.Error("scheme does not recognize Course")
 	}
+
 	if !scheme.Recognizes(GroupVersion.WithKind("CourseList")) {
 		t.Error("scheme does not recognize CourseList")
 	}
 }
 
+// newFullCourse builds a Course populating every nested field, for DeepCopy.
 func newFullCourse() *Course {
 	maxAttempts := 3
 	correctAnswer := true
+
 	return &Course{
 		Spec: CourseSpec{
 			Title:       "Intro to Go",
@@ -84,7 +93,10 @@ func newFullCourse() *Course {
 	}
 }
 
+// TestCourseDeepCopy verifies Course.DeepCopy produces an independent copy.
 func TestCourseDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	original := newFullCourse()
 	copied := original.DeepCopy()
 
@@ -104,39 +116,53 @@ func TestCourseDeepCopy(t *testing.T) {
 	if original.Spec.Modules[0].Prerequisites[0] != "other-module" {
 		t.Error("DeepCopy did not deep-copy Module.Prerequisites")
 	}
+
 	if original.Spec.Modules[0].Questions[0].Answers[0].Text != "4" {
 		t.Error("DeepCopy did not deep-copy Question.Answers")
 	}
+
 	if !*original.Spec.Modules[0].Questions[0].CorrectAnswer {
 		t.Error("DeepCopy did not deep-copy Question.CorrectAnswer pointer")
 	}
+
 	if original.Spec.Modules[0].Cooldown.Strategy != "exponential" {
 		t.Error("DeepCopy did not deep-copy Module.Cooldown pointer")
 	}
+
 	if *original.Spec.Modules[0].MaxAttemptsPerQuestion != 3 {
 		t.Error("DeepCopy did not deep-copy Module.MaxAttemptsPerQuestion pointer")
 	}
+
 	if original.Spec.Modules[0].CheckParams.Raw[0] == 'X' {
 		t.Error("DeepCopy did not deep-copy Module.CheckParams")
 	}
+
 	if original.Spec.Modules[0].Steps[0].Title != "step-1" {
 		t.Error("DeepCopy did not deep-copy Module.Steps")
 	}
 }
 
+// TestCourseDeepCopyObject verifies DeepCopyObject returns distinct *Course.
 func TestCourseDeepCopyObject(t *testing.T) {
+	t.Parallel()
+
 	original := newFullCourse()
 	obj := original.DeepCopyObject()
+
 	copied, ok := obj.(*Course)
 	if !ok {
 		t.Fatalf("DeepCopyObject returned %T, want *Course", obj)
 	}
+
 	if copied == original {
 		t.Fatal("DeepCopyObject returned the same pointer as the original")
 	}
 }
 
+// TestLeafTypesDeepCopy verifies DeepCopy for every leaf type, incl. nils.
 func TestLeafTypesDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	correctAnswer := true
 
 	answer := &Answer{ID: "a1", Text: "4", Correct: true}
@@ -153,6 +179,7 @@ func TestLeafTypesDeepCopy(t *testing.T) {
 	if got := prereq.DeepCopy(); got == prereq || got.Modules[0] != "m1" {
 		t.Error("CoursePrerequisite.DeepCopy did not produce an equal, distinct copy")
 	}
+
 	prereq.DeepCopyInto(&CoursePrerequisite{})
 
 	feedback := &Feedback{Wrong: "no", Correct: "yes", SourceRefs: []SourceRef{{Course: "c1"}}}
@@ -195,19 +222,21 @@ func TestLeafTypesDeepCopy(t *testing.T) {
 		t.Error("CourseSpec.DeepCopy did not produce an equal, distinct copy")
 	}
 
-	var nilAnswer *Answer
-	var nilCooldown *CooldownSpec
-	var nilPrereq *CoursePrerequisite
-	var nilFeedback *Feedback
-	var nilOrderItem *OrderItem
-	var nilPartial *PartialScoring
-	var nilSourceRef *SourceRef
-	var nilCheckStep *CheckStep
-	var nilQuestion *Question
-	var nilModule *Module
-	var nilSpec *CourseSpec
-	var nilCourse *Course
-	var nilCourseList *CourseList
+	var (
+		nilAnswer     *Answer
+		nilCooldown   *CooldownSpec
+		nilPrereq     *CoursePrerequisite
+		nilFeedback   *Feedback
+		nilOrderItem  *OrderItem
+		nilPartial    *PartialScoring
+		nilSourceRef  *SourceRef
+		nilCheckStep  *CheckStep
+		nilQuestion   *Question
+		nilModule     *Module
+		nilSpec       *CourseSpec
+		nilCourse     *Course
+		nilCourseList *CourseList
+	)
 	if nilAnswer.DeepCopy() != nil ||
 		nilCooldown.DeepCopy() != nil ||
 		nilPrereq.DeepCopy() != nil ||
@@ -223,15 +252,20 @@ func TestLeafTypesDeepCopy(t *testing.T) {
 		nilCourseList.DeepCopy() != nil {
 		t.Error("DeepCopy on a nil receiver should return nil")
 	}
+
 	if nilCourse.DeepCopyObject() != nil {
 		t.Error("Course.DeepCopyObject on a nil receiver should return nil")
 	}
+
 	if nilCourseList.DeepCopyObject() != nil {
 		t.Error("CourseList.DeepCopyObject on a nil receiver should return nil")
 	}
 }
 
+// TestCourseListDeepCopy verifies CourseList.DeepCopy makes indep. copy.
 func TestCourseListDeepCopy(t *testing.T) {
+	t.Parallel()
+
 	original := &CourseList{Items: []Course{*newFullCourse()}}
 	copied := original.DeepCopy()
 

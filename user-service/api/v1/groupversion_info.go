@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+//nolint:gochecknoglobals // controller-runtime scheme registration pattern
 var (
 	// GroupVersion is group version used to register these objects.
 	GroupVersion = schema.GroupVersion{Group: "elearning.pupitre.io", Version: "v1"}
@@ -21,8 +22,10 @@ var (
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 
+// addKnownTypes registers the MarkdownPattern types with the given scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(GroupVersion, &MarkdownPattern{}, &MarkdownPatternList{})
 	metav1.AddToGroupVersion(scheme, GroupVersion)
+
 	return nil
 }

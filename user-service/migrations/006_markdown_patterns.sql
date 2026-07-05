@@ -8,10 +8,10 @@ CREATE TABLE IF NOT EXISTS markdown_patterns (
     css         TEXT NOT NULL DEFAULT '',
     js          TEXT NOT NULL DEFAULT '',
     scope       TEXT NOT NULL DEFAULT 'global',
-    created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    createdBy  UUID REFERENCES users(id) ON DELETE SET NULL,
     from_config BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    createdAt  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updatedAt  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (name, scope)
 );
 

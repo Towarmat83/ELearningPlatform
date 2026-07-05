@@ -12,8 +12,8 @@ You are strictly forbidden from running `git commit`, `git add`, `git push`, or 
 
 ## API shape
 
-- `api/courses/kubernetes-basics/<course_slug>` — returns module list with slugs, titles, order, and per-user `viewed` status.
-- `api/courses/kubernetes-basics/<course_slug>/<module_slug>` — returns module content with `viewed` boolean.
+- `api/courses/kubernetes-basics/<courseSlug>` — returns module list with slugs, titles, order, and per-user `viewed` status.
+- `api/courses/kubernetes-basics/<courseSlug>/<moduleSlug>` — returns module content with `viewed` boolean.
 
 ## Architecture
 

@@ -47,10 +47,10 @@ import Admin from '../../../layouts/Admin.astro';
             <div style="flex:1;min-width:0">
               <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.username}</div>
               <div style="font-size:.75rem;color:var(--ink-soft);margin-top:1px">${e.email || ''}</div>
-              <div style="font-size:.72rem;color:var(--ink-soft);margin-top:1px">${e.enrolled_courses ?? 0} cours · ${e.passed_modules ?? 0} modules validés</div>
+              <div style="font-size:.72rem;color:var(--ink-soft);margin-top:1px">${e.enrolledCourses ?? 0} cours · ${e.passedModules ?? 0} modules validés</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-weight:700;color:var(--blue);font-size:.95rem">${e.total_score ?? 0} pts</div>
+              <div style="font-weight:700;color:var(--blue);font-size:.95rem">${e.totalScore ?? 0} pts</div>
               ${e.success_rate != null ? `<div style="font-size:.72rem;color:var(--ink-soft)">${e.success_rate}% réussite</div>` : ''}
             </div>
           </div>

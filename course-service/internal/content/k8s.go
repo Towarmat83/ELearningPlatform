@@ -11,9 +11,18 @@ import (
 	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	crcache "sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	coursev1 "github.com/elearning/course-service/api/v1"
 )
+
+// k8sCooldownDefaultBaseSeconds is the default cooldown base duration (in
+// seconds) applied to quiz modules that omit it.
+const k8sCooldownDefaultBaseSeconds = 30
+
+// k8sCooldownDefaultMultiplier is the default exponential cooldown
+// multiplier applied to quiz modules that omit it.
+const k8sCooldownDefaultMultiplier = 1.0
 
 // K8sWatcher watches Course CRDs in the cluster and populates a Store.
 // It uses controller-runtime's informer-backed cache, which relists on
@@ -25,83 +34,54 @@ type K8sWatcher struct {
 
 // NewK8sWatcher creates a watcher that syncs Course CRDs into the given store.
 func NewK8sWatcher(store *Store, kubeconfig, namespace string) (*K8sWatcher, error) {
-	cfg, err := restConfig(kubeconfig)
+	cache, err := newCRCache(kubeconfig, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("k8s config: %w", err)
+		return nil, err
 	}
 
-	scheme := runtime.NewScheme()
-	if err := coursev1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("register scheme: %w", err)
-	}
-
-	c, err := crcache.New(cfg, crcache.Options{
-		Scheme:            scheme,
-		DefaultNamespaces: map[string]crcache.Config{namespace: {}},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create cache: %w", err)
-	}
-
-	return &K8sWatcher{store: store, cache: c}, nil
+	return &K8sWatcher{store: store, cache: cache}, nil
 }
 
 // Start begins watching Course CRDs. Cache sync happens in the background
 // so the HTTP server can start accepting requests immediately.
 func (w *K8sWatcher) Start(ctx context.Context) error {
-	informer, err := w.cache.GetInformer(ctx, &coursev1.Course{})
-	if err != nil {
-		return fmt.Errorf("get informer: %w", err)
-	}
-
-	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.upsert(obj) },
-		UpdateFunc: func(_, obj interface{}) { w.upsert(obj) },
-		DeleteFunc: func(obj interface{}) { w.remove(obj) },
-	}); err != nil {
-		return fmt.Errorf("add event handler: %w", err)
-	}
-
-	go func() {
-		if err := w.cache.Start(ctx); err != nil {
-			slog.Error("k8s cache stopped", "err", err)
-		}
-	}()
-
-	go func() {
-		if !w.cache.WaitForCacheSync(ctx) {
-			slog.Error("course cache sync failed")
-			return
-		}
-		slog.Info("initial course list synced from K8s")
-	}()
-
-	return nil
+	return watchCRD(ctx, w.cache, &coursev1.Course{},
+		func(obj any) { w.upsert(obj) },
+		func(obj any) { w.remove(obj) },
+		"k8s cache stopped", "course cache sync failed", "initial course list synced from K8s")
 }
 
-func (w *K8sWatcher) upsert(obj interface{}) {
+// upsert converts obj into a Course and stores it, ignoring objects of
+// the wrong type.
+func (w *K8sWatcher) upsert(obj any) {
 	cr, ok := obj.(*coursev1.Course)
 	if !ok {
 		return
 	}
-	c := courseFromCR(cr)
-	w.store.Put(c)
-	slog.Debug("course upserted from K8s", "slug", c.Slug)
+
+	course := courseFromCR(cr)
+	w.store.Put(course)
+	slog.Debug("course upserted from K8s", "slug", course.Slug)
 }
 
-func (w *K8sWatcher) remove(obj interface{}) {
+// remove deletes the course backed by obj from the store, ignoring
+// objects of the wrong type.
+func (w *K8sWatcher) remove(obj any) {
 	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
 		obj = final.Obj
 	}
-	cr, ok := obj.(*coursev1.Course)
+
+	course, ok := obj.(*coursev1.Course)
 	if !ok {
 		return
 	}
-	w.store.DeleteBySource(sourceK8s(cr.Name))
-	slog.Debug("course removed from K8s", "slug", cr.Name)
+
+	w.store.DeleteBySource(sourceK8s(course.Name))
+	slog.Debug("course removed from K8s", "slug", course.Name)
 }
 
-// courseFromCR converts a typed Course custom resource into the in-memory Course.
+// courseFromCR converts a typed Course custom resource into the
+// in-memory Course.
 func courseFromCR(cr *coursev1.Course) *Course {
 	slug := cr.Name
 	spec := cr.Spec
@@ -112,20 +92,22 @@ func courseFromCR(cr *coursev1.Course) *Course {
 	}
 
 	var prerequisites []CoursePrerequisite
-	for _, p := range spec.Prerequisites {
-		if p.Course == "" {
+
+	for _, prereq := range spec.Prerequisites {
+		if prereq.Course == "" {
 			continue
 		}
+
 		prerequisites = append(prerequisites, CoursePrerequisite{
-			Course:   p.Course,
-			MinScore: p.MinScore,
-			Modules:  p.Modules,
+			Course:   prereq.Course,
+			MinScore: prereq.MinScore,
+			Modules:  prereq.Modules,
 		})
 	}
 
 	modules := make([]Module, 0, len(spec.Modules))
-	for i, m := range spec.Modules {
-		modules = append(modules, moduleFromCR(i, m))
+	for i, crModule := range spec.Modules {
+		modules = append(modules, moduleFromCR(i, crModule))
 	}
 
 	return &Course{
@@ -141,97 +123,119 @@ func courseFromCR(cr *coursev1.Course) *Course {
 	}
 }
 
-func moduleFromCR(index int, m coursev1.Module) Module {
+// moduleFromCR converts a single CRD module entry into the in-memory
+// Module, applying name/type/cooldown defaults and parsing inline quiz
+// questions when present.
+func moduleFromCR(index int, crModule coursev1.Module) Module {
 	mod := Module{
-		Name:                   m.Name,
-		Type:                   m.Type,
-		Src:                    m.Src,
-		Ref:                    m.Ref,
-		Path:                   m.Path,
-		LabURL:                 m.LabURL,
-		InlineContent:          m.InlineContent,
-		Replication:            m.Replication,
-		Hidden:                 m.Hidden,
-		Inline:                 m.Inline,
-		Prerequisites:          m.Prerequisites,
-		PassingScore:           m.PassingScore,
-		MaxAttemptsPerQuestion: m.MaxAttemptsPerQuestion,
-		LockOnMaxAttempts:      m.LockOnMaxAttempts,
-		CheckProvider:          m.CheckProvider,
-		CheckType:              m.CheckType,
-		CheckParams:            rawExtensionToMap(m.CheckParams),
-		Steps:                  stepsFromCR(m.Steps),
+		Name:                   crModule.Name,
+		Type:                   crModule.Type,
+		Src:                    crModule.Src,
+		Ref:                    crModule.Ref,
+		Path:                   crModule.Path,
+		LabURL:                 crModule.LabURL,
+		InlineContent:          crModule.InlineContent,
+		Replication:            crModule.Replication,
+		Hidden:                 crModule.Hidden,
+		Inline:                 crModule.Inline,
+		Prerequisites:          crModule.Prerequisites,
+		PassingScore:           crModule.PassingScore,
+		MaxAttemptsPerQuestion: crModule.MaxAttemptsPerQuestion,
+		LockOnMaxAttempts:      crModule.LockOnMaxAttempts,
+		CheckProvider:          crModule.CheckProvider,
+		CheckType:              crModule.CheckType,
+		CheckParams:            rawExtensionToMap(crModule.CheckParams),
+		Steps:                  stepsFromCR(crModule.Steps),
 	}
 	if mod.Name == "" {
 		mod.Name = fmt.Sprintf("module-%d", index+1)
 	}
+
 	if mod.Type == "" {
-		mod.Type = "text"
+		mod.Type = moduleTypeText
 	}
 
 	// Parse inline quiz config for quiz-type modules.
-	if mod.Type == "quiz" {
-		if m.Cooldown != nil {
-			mod.Cooldown = CooldownSpec{
-				Strategy:    m.Cooldown.Strategy,
-				BaseSeconds: m.Cooldown.BaseSeconds,
-				Multiplier:  m.Cooldown.Multiplier,
-				MaxSeconds:  m.Cooldown.MaxSeconds,
-			}
-			if mod.Cooldown.Strategy == "" {
-				mod.Cooldown.Strategy = "exponential"
-			}
-			if mod.Cooldown.BaseSeconds == 0 {
-				mod.Cooldown.BaseSeconds = 30
-			}
-			if mod.Cooldown.Multiplier == 0 {
-				mod.Cooldown.Multiplier = 1.0
-			}
-		}
-		for i, q := range m.Questions {
-			mod.Questions = append(mod.Questions, questionFromCR(i, q))
-		}
+	if mod.Type == moduleTypeQuiz {
+		applyQuizDefaults(&mod, crModule)
 	}
 
 	return mod
 }
 
-func questionFromCR(index int, q coursev1.Question) Question {
-	question := Question{
-		ID:            q.ID,
-		Type:          q.Type,
-		Difficulty:    q.Difficulty,
-		Points:        q.Points,
-		Question:      q.Question,
-		CorrectAnswer: q.CorrectAnswer,
-		CorrectOrder:  q.CorrectOrder,
+// applyQuizDefaults populates mod's Cooldown and Questions fields from
+// crModule, defaulting Cooldown's Strategy/BaseSeconds/Multiplier when
+// omitted. It is only called for quiz-type modules.
+func applyQuizDefaults(mod *Module, crModule coursev1.Module) {
+	if crModule.Cooldown != nil {
+		mod.Cooldown = CooldownSpec{
+			Strategy:    crModule.Cooldown.Strategy,
+			BaseSeconds: crModule.Cooldown.BaseSeconds,
+			Multiplier:  crModule.Cooldown.Multiplier,
+			MaxSeconds:  crModule.Cooldown.MaxSeconds,
+		}
+		if mod.Cooldown.Strategy == "" {
+			mod.Cooldown.Strategy = cooldownStrategyExponential
+		}
+
+		if mod.Cooldown.BaseSeconds == 0 {
+			mod.Cooldown.BaseSeconds = k8sCooldownDefaultBaseSeconds
+		}
+
+		if mod.Cooldown.Multiplier == 0 {
+			mod.Cooldown.Multiplier = k8sCooldownDefaultMultiplier
+		}
 	}
-	for _, a := range q.Answers {
+
+	for i, q := range crModule.Questions {
+		mod.Questions = append(mod.Questions, questionFromCR(i, q))
+	}
+}
+
+// questionFromCR converts a single CRD question entry into the in-memory
+// Question, applying ID/Difficulty/Points defaults.
+func questionFromCR(index int, crQuestion coursev1.Question) Question {
+	question := Question{
+		ID:            crQuestion.ID,
+		Type:          crQuestion.Type,
+		Difficulty:    crQuestion.Difficulty,
+		Points:        crQuestion.Points,
+		Question:      crQuestion.Question,
+		CorrectAnswer: crQuestion.CorrectAnswer,
+		CorrectOrder:  crQuestion.CorrectOrder,
+	}
+	for _, a := range crQuestion.Answers {
 		question.Answers = append(question.Answers, Answer{ID: a.ID, Text: a.Text, Correct: a.Correct})
 	}
-	for _, it := range q.Items {
+
+	for _, it := range crQuestion.Items {
 		question.Items = append(question.Items, OrderItem{ID: it.ID, Text: it.Text})
 	}
+
 	if question.ID == "" {
 		question.ID = fmt.Sprintf("q-%d", index+1)
 	}
+
 	if question.Difficulty == "" {
-		question.Difficulty = "medium"
+		question.Difficulty = difficultyMedium
 	}
+
 	if question.Points == 0 {
 		question.Points = 1
 	}
-	if q.PartialScoring != nil {
+
+	if crQuestion.PartialScoring != nil {
 		question.PartialScoring = &PartialScoring{
-			Enabled:       q.PartialScoring.Enabled,
-			AllowNegative: q.PartialScoring.AllowNegative,
+			Enabled:       crQuestion.PartialScoring.Enabled,
+			AllowNegative: crQuestion.PartialScoring.AllowNegative,
 		}
 	}
+
 	question.Feedback = Feedback{
-		Wrong:   q.Feedback.Wrong,
-		Correct: q.Feedback.Correct,
+		Wrong:   crQuestion.Feedback.Wrong,
+		Correct: crQuestion.Feedback.Correct,
 	}
-	for _, sr := range q.Feedback.SourceRefs {
+	for _, sr := range crQuestion.Feedback.SourceRefs {
 		question.Feedback.SourceRefs = append(question.Feedback.SourceRefs, SourceRef{
 			Course:   sr.Course,
 			Module:   sr.Module,
@@ -239,13 +243,17 @@ func questionFromCR(index int, q coursev1.Question) Question {
 			Priority: sr.Priority,
 		})
 	}
+
 	return question
 }
 
+// stepsFromCR converts CRD check steps into their in-memory form,
+// returning nil when steps is empty.
 func stepsFromCR(steps []coursev1.CheckStep) []CheckStep {
 	if len(steps) == 0 {
 		return nil
 	}
+
 	out := make([]CheckStep, 0, len(steps))
 	for _, s := range steps {
 		out = append(out, CheckStep{
@@ -254,20 +262,28 @@ func stepsFromCR(steps []coursev1.CheckStep) []CheckStep {
 			CheckParams: rawExtensionToMap(s.CheckParams),
 		})
 	}
+
 	return out
 }
 
-func rawExtensionToMap(re *runtime.RawExtension) map[string]interface{} {
-	if re == nil || len(re.Raw) == 0 {
+// rawExtensionToMap decodes a Kubernetes RawExtension into a generic map,
+// returning nil when raw is empty or invalid JSON.
+func rawExtensionToMap(raw *runtime.RawExtension) map[string]any {
+	if raw == nil || len(raw.Raw) == 0 {
 		return nil
 	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(re.Raw, &m); err != nil {
+
+	var decoded map[string]any
+
+	err := json.Unmarshal(raw.Raw, &decoded)
+	if err != nil {
 		return nil
 	}
-	return m
+
+	return decoded
 }
 
+// sourceK8s builds the Source value recorded for content synced from K8s.
 func sourceK8s(slug string) string {
 	return "k8s:" + slug
 }
@@ -281,17 +297,119 @@ type PathWatcher struct {
 
 // NewPathWatcher creates a watcher that syncs Path CRDs into the given store.
 func NewPathWatcher(store *PathStore, kubeconfig, namespace string) (*PathWatcher, error) {
+	cache, err := newCRCache(kubeconfig, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PathWatcher{store: store, cache: cache}, nil
+}
+
+// Start begins watching Path CRDs. Cache sync happens in the background
+// so the HTTP server can start accepting requests immediately.
+func (w *PathWatcher) Start(ctx context.Context) error {
+	return watchCRD(ctx, w.cache, &coursev1.Path{},
+		func(obj any) { w.upsert(obj) },
+		func(obj any) { w.remove(obj) },
+		"k8s path cache stopped", "path cache sync failed", "initial path list synced from K8s")
+}
+
+// upsert converts obj into a Path and stores it, ignoring objects of the
+// wrong type.
+func (w *PathWatcher) upsert(obj any) {
+	cr, ok := obj.(*coursev1.Path)
+	if !ok {
+		return
+	}
+
+	learningPath := pathFromCR(cr)
+	w.store.Put(learningPath)
+	slog.Debug("path upserted from K8s", "slug", learningPath.Slug)
+}
+
+// remove deletes the path backed by obj from the store, ignoring objects
+// of the wrong type.
+func (w *PathWatcher) remove(obj any) {
+	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
+		obj = final.Obj
+	}
+
+	pathCR, ok := obj.(*coursev1.Path)
+	if !ok {
+		return
+	}
+
+	w.store.DeleteBySource(sourceK8s(pathCR.Name))
+	slog.Debug("path removed from K8s", "slug", pathCR.Name)
+}
+
+// pathFromCR converts a typed Path custom resource into the in-memory Path.
+func pathFromCR(pathCR *coursev1.Path) *Path {
+	slug := pathCR.Name
+
+	title := pathCR.Spec.Title
+	if title == "" {
+		title = slug
+	}
+
+	courses := make([]string, 0, len(pathCR.Spec.Courses))
+	for _, courseSlug := range pathCR.Spec.Courses {
+		if courseSlug != "" {
+			courses = append(courses, courseSlug)
+		}
+	}
+
+	return &Path{
+		Slug:        slug,
+		Title:       title,
+		Description: pathCR.Spec.Description,
+		Courses:     courses,
+		Source:      sourceK8s(slug),
+	}
+}
+
+// restConfig builds a Kubernetes REST config from kubeconfig, falling
+// back to the in-cluster config when kubeconfig is empty.
+func restConfig(kubeconfig string) (*rest.Config, error) {
+	if kubeconfig != "" {
+		cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("build config from kubeconfig: %w", err)
+		}
+
+		return cfg, nil
+	}
+
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("build in-cluster config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// newCRCache builds a controller-runtime cache scoped to namespace,
+// backed by kubeconfig (or the in-cluster config when kubeconfig is
+// empty).
+//
+// crcache.Cache is controller-runtime's own interface; wrapping it in
+// a concrete type here would add no value.
+//
+//nolint:ireturn // third-party interface, no useful concrete wrapper.
+func newCRCache(kubeconfig, namespace string) (crcache.Cache, error) {
 	cfg, err := restConfig(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)
 	}
 
 	scheme := runtime.NewScheme()
-	if err := coursev1.AddToScheme(scheme); err != nil {
+
+	err = coursev1.AddToScheme(scheme)
+	if err != nil {
 		return nil, fmt.Errorf("register scheme: %w", err)
 	}
 
-	c, err := crcache.New(cfg, crcache.Options{
+	cache, err := crcache.New(cfg, crcache.Options{
 		Scheme:            scheme,
 		DefaultNamespaces: map[string]crcache.Config{namespace: {}},
 	})
@@ -299,90 +417,49 @@ func NewPathWatcher(store *PathStore, kubeconfig, namespace string) (*PathWatche
 		return nil, fmt.Errorf("create cache: %w", err)
 	}
 
-	return &PathWatcher{store: store, cache: c}, nil
+	return cache, nil
 }
 
-// Start begins watching Path CRDs. Cache sync happens in the background
-// so the HTTP server can start accepting requests immediately.
-func (w *PathWatcher) Start(ctx context.Context) error {
-	informer, err := w.cache.GetInformer(ctx, &coursev1.Path{})
+// watchCRD registers onUpsert/onRemove informer event handlers for
+// objects of the same type as example, starts cache in the background,
+// and logs the outcome using stoppedMsg/syncFailedMsg/syncedMsg.
+func watchCRD(
+	ctx context.Context,
+	cache crcache.Cache,
+	example client.Object,
+	onUpsert, onRemove func(obj any),
+	stoppedMsg, syncFailedMsg, syncedMsg string,
+) error {
+	informer, err := cache.GetInformer(ctx, example)
 	if err != nil {
 		return fmt.Errorf("get informer: %w", err)
 	}
 
-	if _, err := informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.upsert(obj) },
-		UpdateFunc: func(_, obj interface{}) { w.upsert(obj) },
-		DeleteFunc: func(obj interface{}) { w.remove(obj) },
-	}); err != nil {
+	_, err = informer.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj any) { onUpsert(obj) },
+		UpdateFunc: func(_, obj any) { onUpsert(obj) },
+		DeleteFunc: func(obj any) { onRemove(obj) },
+	})
+	if err != nil {
 		return fmt.Errorf("add event handler: %w", err)
 	}
 
 	go func() {
-		if err := w.cache.Start(ctx); err != nil {
-			slog.Error("k8s path cache stopped", "err", err)
+		err := cache.Start(ctx)
+		if err != nil {
+			slog.Error(stoppedMsg, "err", err)
 		}
 	}()
 
 	go func() {
-		if !w.cache.WaitForCacheSync(ctx) {
-			slog.Error("path cache sync failed")
+		if !cache.WaitForCacheSync(ctx) {
+			slog.Error(syncFailedMsg)
+
 			return
 		}
-		slog.Info("initial path list synced from K8s")
+
+		slog.Info(syncedMsg)
 	}()
 
 	return nil
-}
-
-func (w *PathWatcher) upsert(obj interface{}) {
-	cr, ok := obj.(*coursev1.Path)
-	if !ok {
-		return
-	}
-	p := pathFromCR(cr)
-	w.store.Put(p)
-	slog.Debug("path upserted from K8s", "slug", p.Slug)
-}
-
-func (w *PathWatcher) remove(obj interface{}) {
-	if final, ok := obj.(toolscache.DeletedFinalStateUnknown); ok {
-		obj = final.Obj
-	}
-	cr, ok := obj.(*coursev1.Path)
-	if !ok {
-		return
-	}
-	w.store.DeleteBySource(sourceK8s(cr.Name))
-	slog.Debug("path removed from K8s", "slug", cr.Name)
-}
-
-func pathFromCR(cr *coursev1.Path) *Path {
-	slug := cr.Name
-	title := cr.Spec.Title
-	if title == "" {
-		title = slug
-	}
-
-	courses := make([]string, 0, len(cr.Spec.Courses))
-	for _, slug := range cr.Spec.Courses {
-		if slug != "" {
-			courses = append(courses, slug)
-		}
-	}
-
-	return &Path{
-		Slug:        slug,
-		Title:       title,
-		Description: cr.Spec.Description,
-		Courses:     courses,
-		Source:      sourceK8s(slug),
-	}
-}
-
-func restConfig(kubeconfig string) (*rest.Config, error) {
-	if kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags("", kubeconfig)
-	}
-	return rest.InClusterConfig()
 }

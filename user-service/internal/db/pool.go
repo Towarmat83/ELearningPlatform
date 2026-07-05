@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -26,14 +27,31 @@ type Adapter struct{ p *pgxpool.Pool }
 // NewAdapter wraps a real pgxpool.Pool.
 func NewAdapter(p *pgxpool.Pool) *Adapter { return &Adapter{p: p} }
 
+// QueryRow implements Pool.
+//
+//nolint:ireturn // return type is pinned by the Pool interface it implements
 func (a *Adapter) QueryRow(ctx context.Context, sql string, args ...any) Row {
 	return a.p.QueryRow(ctx, sql, args...)
 }
 
+// Query implements Pool.
+//
+//nolint:ireturn // return type is pinned by the Pool interface it implements
 func (a *Adapter) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	return a.p.Query(ctx, sql, args...)
+	rows, err := a.p.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+
+	return rows, nil
 }
 
+// Exec implements Pool.
 func (a *Adapter) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	return a.p.Exec(ctx, sql, args...)
+	tag, err := a.p.Exec(ctx, sql, args...)
+	if err != nil {
+		return tag, fmt.Errorf("exec: %w", err)
+	}
+
+	return tag, nil
 }

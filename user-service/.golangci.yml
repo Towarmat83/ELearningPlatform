@@ -1,40 +1,162 @@
-# golangci-lint configuration — user-service
-# Schema v2 (golangci-lint v2.x / golangci-lint-action@v8)
 version: "2"
-
-run:
-  timeout: 5m
-
 linters:
-  enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - bodyclose
-    - misspell
-    - unconvert
+  default: all
+  disable:
+    - depguard
+    - err113
+    - exhaustruct
+    - gochecknoinits
+    - gomodguard
+    - interfacebloat
+    - lll
+    - revive
+    - testpackage
+    - wsl
+  settings:
+    copyloopvar:
+      check-alias: true
+    dupl:
+      threshold: 100
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - fmt:.*,io/ioutil:^Read.*
+    goconst:
+      min-occurrences: 2
+      match-constant: false
+      find-duplicates: true
+      eval-const-expressions: true
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - ptrToRefParam
+        - tooManyResultsChecker
+      settings:
+        captLocal:
+          paramsOnly: true
+        rangeValCopy:
+          sizeThreshold: 32
+    gocyclo:
+      min-complexity: 10
+    godoclint:
+      default: all
+      options:
+        require-doc:
+          ignore-unexported: false
+        start-with-name:
+          include-unexported: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    iface:
+      # List of analyzers.
+      # Default: ["identical"]
+      enable:
+        - identical
+        - unused
+        - unexported
+    lll:
+      tab-width: 1
+    modernize:
+      disable:
+        - omitzero
+    nakedret:
+      max-func-lines: 30
+    nilnil:
+      detect-opposite: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+    promlinter:
+      strict: true
+    reassign:
+      patterns:
+        - ".*"
+    unconvert:
+      fast-math: true
+    unparam:
+      check-exported: false
+    usestdlibvars:
+      http-method: true
+      http-status-code: true
+      time-date-month: true
+      time-weekday: true
+      time-month: true
+      time-layout: true
+      crypto-hash: true
+      default-rpc-path: true
+      sql-isolation-level: true
+      tls-signature-scheme: true
+      constant-kind: true
   exclusions:
+    generated: lax
     rules:
-      # Test files: relax errcheck for setup helpers (os.Setenv, defer os.Remove, etc.)
-      - path: ".*_test\\.go$"
-        linters:
+      - linters:
+          - containedctx
+          - cyclop
+          - dupl
           - errcheck
-      # defer resp.Body.Close() is an accepted Go idiom; the error is unrecoverable
-      - source: "defer .+\\.Body\\.Close\\(\\)"
-        linters:
-          - errcheck
-      # defer conn.Close() cleanup
-      - source: "defer conn\\.Close\\(\\)"
-        linters:
-          - errcheck
-
+          - exportloopref
+          - funlen
+          - goconst
+          - gocyclo
+          - gosec
+          - unparam
+          - varnamelen
+        path: _test(ing)?\.go
+      - linters:
+          - gocritic
+        path: _test\.go
+        text: (unnamedResult|exitAfterDefer)
+      - linters:
+          - gocritic
+        text: "(hugeParam|rangeValCopy):"
+      - linters:
+          - staticcheck
+        text: "SA3000:"
+      - linters:
+          - staticcheck
+        text: "SA1019: mgr.GetEventRecorderFor is deprecated:"
+      - linters:
+          - staticcheck
+        text: "SA1019: scheme.Builder is deprecated:"
+      - linters:
+          - gosec
+        text: "G101:"
+      - linters:
+          - gosec
+        text: "G104:"
+    paths:
+      - zz_generated\..+\.go$
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0
+  new: false
 formatters:
   enable:
     - gofmt
     - goimports
   settings:
+    gofmt:
+      simplify: true
     goimports:
       local-prefixes:
-        - github.com/elearning/user-service
+        - github.com/Towarmat83/ELearningPlatform
+  exclusions:
+    generated: lax
+    paths:
+      - zz_generated\..+\.go$
+      - third_party$
+      - builtin$
+      - examples$

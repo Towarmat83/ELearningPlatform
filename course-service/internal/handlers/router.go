@@ -10,7 +10,14 @@ import (
 	apimiddleware "github.com/elearning/course-service/internal/middleware"
 )
 
-func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
+// routerCORSMaxAgeSeconds is the max-age advertised for CORS preflight
+// response caching.
+const routerCORSMaxAgeSeconds = 300
+
+// BuildRouter constructs the course-service chi router, wiring public
+// routes, admin routes behind the auth middleware, and CORS/logging
+// middleware.
+func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(cfg.JWTSecret)
 
 	corsOptions := cors.New(cors.Options{
@@ -18,56 +25,69 @@ func BuildRouter(s *State, cfg *config.Config, withLogger bool) *chi.Mux {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
-		MaxAge:           300,
+		MaxAge:           routerCORSMaxAgeSeconds,
 	})
 
-	r := chi.NewRouter()
-	r.Use(chiMiddleware.RequestID)
-	r.Use(chiMiddleware.RealIP)
+	router := chi.NewRouter()
+	router.Use(chiMiddleware.RequestID)
+	router.Use(chiMiddleware.RealIP)
+
 	if withLogger {
-		r.Use(chiMiddleware.Logger)
+		router.Use(chiMiddleware.Logger)
 	}
-	r.Use(chiMiddleware.Recoverer)
-	r.Use(corsOptions.Handler)
 
-	r.Get("/health", s.Health)
-	r.Get("/metrics", metrics.Handler())
+	router.Use(chiMiddleware.Recoverer)
+	router.Use(corsOptions.Handler)
 
-	r.Get("/api/courses", s.ListCourses)
-	r.Get("/api/courses/{slug}", s.GetCourse)
+	registerPublicRoutes(router, state)
 
-	r.Get("/api/paths", s.ListPaths)
-	r.Get("/api/paths/{slug}", s.GetPath)
+	router.Group(func(group chi.Router) {
+		group.Use(authMW)
 
-	r.Get("/uploads/{filename}", s.ServeUpload)
-
-	r.Group(func(r chi.Router) {
-		r.Use(authMW)
-
-		r.Get("/api/admin/courses", s.ListAdminCourses)
-		r.Post("/api/admin/courses", s.CreateCourseCRD)
-		r.Get("/api/admin/courses/{slug}/crd", s.GetCourseCRD)
-		r.Put("/api/admin/courses/{slug}/crd", s.UpdateCourseCRD)
-		r.Delete("/api/admin/courses/{slug}/crd", s.DeleteCourseCRD)
-		r.Get("/api/admin/lab-checks", s.GetLabResults)
-		r.Post("/api/admin/cache/clear", s.ClearCache)
-		r.Post("/api/admin/courses/{slug}/cache/clear", s.ClearCourseCache)
-		r.Post("/api/admin/courses/{slug}/modules/{index}/cache/clear", s.ClearModuleCache)
-
-		r.Get("/api/courses/{slug}/modules", s.ListModules)
-		r.Get("/api/courses/{slug}/modules/{index}", s.GetModule)
-		r.Post("/api/courses/{slug}/modules/{index}/submit", s.SubmitModule)
-		r.Post("/api/courses/{slug}/modules/{index}/check", s.CheckModule)
-		r.Post("/api/courses/{slug}/modules/{index}/record", s.RecordLocalCheck)
-
-		r.Get("/api/courses/{slug}/labs", s.ListLabs)
-		r.Get("/api/courses/{slug}/labs/{lab_id}", s.GetLab)
-		r.Get("/api/courses/{slug}/progress", s.GetCourseProgress)
-
-		r.Get("/api/courses/{slug}/lessons", s.ListLessons)
-		r.Get("/api/courses/{slug}/lessons/{lesson_slug}", s.GetLesson)
-		r.Post("/api/courses/{slug}/lessons/{lesson_slug}/complete", s.MarkLessonComplete)
+		registerAdminRoutes(group, state)
 	})
 
-	return r
+	return router
+}
+
+// registerPublicRoutes wires the unauthenticated course-service endpoints.
+func registerPublicRoutes(router chi.Router, state *State) {
+	router.Get("/health", state.Health)
+	router.Get("/metrics", metrics.Handler())
+
+	router.Get("/api/courses", state.ListCourses)
+	router.Get("/api/courses/{slug}", state.GetCourse)
+
+	router.Get("/api/paths", state.ListPaths)
+	router.Get("/api/paths/{slug}", state.GetPath)
+
+	router.Get("/uploads/{filename}", state.ServeUpload)
+}
+
+// registerAdminRoutes wires the authenticated admin and course-content
+// endpoints behind the auth middleware group.
+func registerAdminRoutes(router chi.Router, state *State) {
+	router.Get("/api/admin/courses", state.ListAdminCourses)
+	router.Post("/api/admin/courses", state.CreateCourseCRD)
+	router.Get("/api/admin/courses/{slug}/crd", state.GetCourseCRD)
+	router.Put("/api/admin/courses/{slug}/crd", state.UpdateCourseCRD)
+	router.Delete("/api/admin/courses/{slug}/crd", state.DeleteCourseCRD)
+	router.Get("/api/admin/lab-checks", state.GetLabResults)
+	router.Post("/api/admin/cache/clear", state.ClearCache)
+	router.Post("/api/admin/courses/{slug}/cache/clear", state.ClearCourseCache)
+	router.Post("/api/admin/courses/{slug}/modules/{index}/cache/clear", state.ClearModuleCache)
+
+	router.Get("/api/courses/{slug}/modules", state.ListModules)
+	router.Get("/api/courses/{slug}/modules/{index}", state.GetModule)
+	router.Post("/api/courses/{slug}/modules/{index}/submit", state.SubmitModule)
+	router.Post("/api/courses/{slug}/modules/{index}/check", state.CheckModule)
+	router.Post("/api/courses/{slug}/modules/{index}/record", state.RecordLocalCheck)
+
+	router.Get("/api/courses/{slug}/labs", state.ListLabs)
+	router.Get("/api/courses/{slug}/labs/{lab_id}", state.GetLab)
+	router.Get("/api/courses/{slug}/progress", state.GetCourseProgress)
+
+	router.Get("/api/courses/{slug}/lessons", state.ListLessons)
+	router.Get("/api/courses/{slug}/lessons/{lessonSlug}", state.GetLesson)
+	router.Post("/api/courses/{slug}/lessons/{lessonSlug}/complete", state.MarkLessonComplete)
 }

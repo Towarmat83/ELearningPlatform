@@ -2,11 +2,21 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elearning/user-service/internal/config"
+)
+
+const (
+	// settingValueTrue is the stored string form of a boolean-true setting.
+	settingValueTrue = "true"
+	// settingKeyOIDCClientSecret is the platform_settings key for the OIDC
+	// client secret, referenced twice: once to seed it, once to redact it
+	// from logs.
+	settingKeyOIDCClientSecret = "oidc_client_secret"
 )
 
 // SeedOIDC bootstraps the OIDC platform settings from deploy-time configuration
@@ -24,25 +34,25 @@ import (
 // var; it is never hardcoded in the chart values. Rotating it requires a pod
 // restart so the new value is re-seeded.
 func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
-	b := cfg.OIDC
-	if !b.Enabled {
+	oidcCfg := cfg.OIDC
+	if !oidcCfg.Enabled {
 		return nil
 	}
 
 	// key/value pairs to seed; empty values are skipped below.
 	settings := map[string]string{
-		"oidc_enabled":          "true",
-		"oidc_provider_url":     b.ProviderURL,
-		"oidc_issuer_url":       b.IssuerURL,
-		"oidc_client_id":        b.ClientID,
-		"oidc_client_secret":    b.ResolveClientSecret(),
-		"oidc_scopes":           b.Scopes,
-		"oidc_group_claim":      b.GroupClaim,
-		"oidc_redirect_base":    b.RedirectBase,
-		"oidc_browser_base_url": b.BrowserBaseURL,
+		"oidc_enabled":             settingValueTrue,
+		"oidc_provider_url":        oidcCfg.ProviderURL,
+		"oidc_issuer_url":          oidcCfg.IssuerURL,
+		"oidc_client_id":           oidcCfg.ClientID,
+		settingKeyOIDCClientSecret: oidcCfg.ResolveClientSecret(),
+		"oidc_scopes":              oidcCfg.Scopes,
+		"oidc_group_claim":         oidcCfg.GroupClaim,
+		"oidc_redirect_base":       oidcCfg.RedirectBase,
+		"oidc_browser_base_url":    oidcCfg.BrowserBaseURL,
 	}
-	if b.InsecureSkipVerify {
-		settings["oidc_insecure_skip_verify"] = "true"
+	if oidcCfg.InsecureSkipVerify {
+		settings["oidc_insecure_skip_verify"] = settingValueTrue
 	}
 
 	seeded := make([]string, 0, len(settings))
@@ -50,21 +60,24 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		if val == "" {
 			continue
 		}
+
 		_, err := pool.Exec(ctx,
-			`INSERT INTO platform_settings (key, value, updated_at)
+			`INSERT INTO platform_settings (key, value, updatedAt)
 			 VALUES ($1, $2, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+			 ON CONFLICT (key) DO UPDATE SET value = $2, updatedAt = NOW()`,
 			key, val)
 		if err != nil {
-			return err
+			return fmt.Errorf("seed OIDC setting %s: %w", key, err)
 		}
-		if key != "oidc_client_secret" {
+
+		if key != settingKeyOIDCClientSecret {
 			seeded = append(seeded, key)
 		} else {
-			seeded = append(seeded, "oidc_client_secret(redacted)")
+			seeded = append(seeded, settingKeyOIDCClientSecret+"(redacted)")
 		}
 	}
 
 	slog.Info("OIDC settings bootstrapped from deploy-time config", "keys", seeded)
+
 	return nil
 }

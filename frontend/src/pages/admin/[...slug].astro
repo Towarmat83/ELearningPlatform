@@ -116,7 +116,7 @@ import App from '../../layouts/App.astro';
             <div class="text-soft text-sm" style="margin-top:4px">Utilisateurs</div>
           </div>
           <div class="card-sm" style="text-align:center;padding:20px">
-            <div style="font-size:2rem;font-weight:700;color:var(--blue)">${stats.total_courses ?? '—'}</div>
+            <div style="font-size:2rem;font-weight:700;color:var(--blue)">${stats.totalCourses ?? '—'}</div>
             <div class="text-soft text-sm" style="margin-top:4px">Cours</div>
           </div>
           <div class="card-sm" style="text-align:center;padding:20px">
@@ -146,9 +146,9 @@ import App from '../../layouts/App.astro';
             </div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:500;font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.username}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${e.passed_modules} modules · ${e.enrolled_courses} cours</div>
+              <div style="font-size:.75rem;color:var(--ink-soft)">${e.passedModules} modules · ${e.enrolledCourses} cours</div>
             </div>
-            <span style="font-weight:700;color:var(--blue);flex-shrink:0">${e.total_score} pts</span>
+            <span style="font-weight:700;color:var(--blue);flex-shrink:0">${e.totalScore} pts</span>
           </div>
         `).join('');
       } catch {

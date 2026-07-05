@@ -39,19 +39,19 @@ components:
         role:
           type: string
           enum: [admin, student]
-        avatar_url:
+        avatarUrl:
           type: string
           nullable: true
         bio:
           type: string
           nullable: true
-        is_active:
+        isActive:
           type: boolean
-        auth_provider:
+        authProvider:
           type: string
-        created_at:
+        createdAt:
           type: string
-      required: [id, username, email, role, is_active, auth_provider, created_at]
+      required: [id, username, email, role, isActive, authProvider, createdAt]
 
     AuthResponse:
       type: object
@@ -70,13 +70,13 @@ components:
       schema:
         type: string
     lessonSlug:
-      name: lesson_slug
+      name: lessonSlug
       in: path
       required: true
       schema:
         type: string
     userId:
-      name: user_id
+      name: userId
       in: path
       required: true
       schema:
@@ -238,7 +238,7 @@ paths:
                 bio:
                   type: string
                   nullable: true
-                avatar_url:
+                avatarUrl:
                   type: string
                   nullable: true
       responses:
@@ -262,11 +262,11 @@ paths:
             schema:
               type: object
               properties:
-                old_password:
+                oldPassword:
                   type: string
-                new_password:
+                newPassword:
                   type: string
-              required: [old_password, new_password]
+              required: [oldPassword, newPassword]
       responses:
         "200":
           description: Password changed
@@ -389,7 +389,7 @@ paths:
                     type: string
 
   # ── Progress ──────────────────────────────────────────────────────────────────
-  /api/courses/{slug}/lessons/{lesson_slug}/complete:
+  /api/courses/{slug}/lessons/{lessonSlug}/complete:
     post:
       summary: Mark a lesson as complete
       tags: [Progress]
@@ -433,7 +433,7 @@ paths:
                           type: string
                         viewed_lessons:
                           type: integer
-                        last_activity:
+                        lastActivity:
                           type: string
                           nullable: true
 
@@ -500,7 +500,7 @@ paths:
                     type: integer
                   total_enrollments:
                     type: integer
-                  total_courses:
+                  totalCourses:
                     type: integer
                   total_labs:
                     type: integer
@@ -537,17 +537,17 @@ paths:
                           type: string
                         role:
                           type: string
-                        is_active:
+                        isActive:
                           type: boolean
-                        avatar_url:
+                        avatarUrl:
                           type: string
                           nullable: true
                         bio:
                           type: string
                           nullable: true
-                        created_at:
+                        createdAt:
                           type: string
-                        enrolled_courses:
+                        enrolledCourses:
                           type: integer
                   total:
                     type: integer
@@ -583,7 +583,7 @@ paths:
                         email:
                           type: string
 
-  /api/admin/users/{user_id}:
+  /api/admin/users/{userId}:
     get:
       summary: Get user details (admin)
       tags: [Admin]
@@ -607,17 +607,17 @@ paths:
                     type: string
                   role:
                     type: string
-                  is_active:
+                  isActive:
                     type: boolean
-                  avatar_url:
+                  avatarUrl:
                     type: string
                     nullable: true
                   bio:
                     type: string
                     nullable: true
-                  created_at:
+                  createdAt:
                     type: string
-                  enrolled_courses:
+                  enrolledCourses:
                     type: integer
                   viewed_lessons:
                     type: integer
@@ -640,10 +640,10 @@ paths:
                 bio:
                   type: string
                   nullable: true
-                avatar_url:
+                avatarUrl:
                   type: string
                   nullable: true
-                is_active:
+                isActive:
                   type: boolean
                 role:
                   type: string
@@ -695,13 +695,13 @@ paths:
                     items:
                       type: object
                       properties:
-                        user_id:
+                        userId:
                           type: string
                         username:
                           type: string
                         email:
                           type: string
-                        enrolled_at:
+                        enrolledAt:
                           type: string
     post:
       summary: Enroll a user in a course (admin)
@@ -717,10 +717,10 @@ paths:
             schema:
               type: object
               properties:
-                user_id:
+                userId:
                   type: string
                   format: uuid
-              required: [user_id]
+              required: [userId]
       responses:
         "200":
           description: User enrolled
@@ -732,7 +732,7 @@ paths:
                   message:
                     type: string
 
-  /api/admin/courses/{slug}/enrollments/{user_id}:
+  /api/admin/courses/{slug}/enrollments/{userId}:
     delete:
       summary: Unenroll a user from a course (admin)
       tags: [Admin]
@@ -766,14 +766,14 @@ paths:
             schema:
               type: object
               properties:
-                user_id:
+                userId:
                   type: string
                   format: uuid
-                course_slug:
+                courseSlug:
                   type: string
-                lesson_slug:
+                lessonSlug:
                   type: string
-              required: [user_id, course_slug, lesson_slug]
+              required: [userId, courseSlug, lessonSlug]
       responses:
         "200":
           description: Progress synced
@@ -791,13 +791,13 @@ paths:
       summary: Check if a user is enrolled (internal)
       tags: [Internal]
       parameters:
-        - name: user_id
+        - name: userId
           in: query
           required: true
           schema:
             type: string
             format: uuid
-        - name: course_slug
+        - name: courseSlug
           in: query
           required: true
           schema:
@@ -818,13 +818,13 @@ paths:
       summary: Get viewed lessons for a course (internal)
       tags: [Internal]
       parameters:
-        - name: user_id
+        - name: userId
           in: query
           required: true
           schema:
             type: string
             format: uuid
-        - name: course_slug
+        - name: courseSlug
           in: query
           required: true
           schema:
@@ -853,14 +853,14 @@ paths:
             schema:
               type: object
               properties:
-                user_id:
+                userId:
                   type: string
                   format: uuid
-                course_slug:
+                courseSlug:
                   type: string
-                lesson_slug:
+                lessonSlug:
                   type: string
-              required: [user_id, course_slug, lesson_slug]
+              required: [userId, courseSlug, lessonSlug]
       responses:
         "200":
           description: Lesson marked complete

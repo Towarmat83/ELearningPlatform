@@ -48,8 +48,8 @@ sso:
   providers:
     - id: github
       name: GitHub
-      client_id: "Iv23lio9LgGJ8blbGG7e"
-      client_secret: "c8465a66ca28b389a2810ff116f44c97a35b6ae9"
+      clientId: "Iv23lio9LgGJ8blbGG7e"
+      clientSecret: "c8465a66ca28b389a2810ff116f44c97a35b6ae9"
 
 ingress:
   enabled: false

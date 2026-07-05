@@ -1,6 +1,7 @@
 package content
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -11,76 +12,118 @@ import (
 	"strings"
 )
 
+// replicatedPrefix is the URL path prefix under which replicated module
+// resources are served once downloaded.
 const replicatedPrefix = "/uploads/"
 
-// ReplicatedPath returns the local /uploads/ URL path for a replicated module resource.
-// For text modules or when replication is false, it returns the original Src unchanged.
-// The downloaded file is cached on disk; subsequent calls skip the download.
-func ReplicatedPath(m Module, uploadsDir string) string {
-	if !m.Replication || m.Type == "text" {
-		return m.Src
+// replicateDirPerm is the permission used when creating the uploads
+// directory.
+const replicateDirPerm = 0o750
+
+// maxReplicateExtLength is the longest file extension (including the
+// leading dot) considered valid when deriving a cached filename.
+const maxReplicateExtLength = 5
+
+// ReplicatedPath returns the local /uploads/ URL path for a replicated
+// module resource.
+// For text modules or when replication is false, it returns the original
+// Src unchanged. The downloaded file is cached on disk; subsequent calls
+// skip the download.
+func ReplicatedPath(mod Module, uploadsDir string) string {
+	if !mod.Replication || mod.Type == moduleTypeText {
+		return mod.Src
 	}
-	if m.Src == "" {
+
+	if mod.Src == "" {
 		return ""
 	}
 
-	ext := extension(m.Src)
-	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(m.Src)))[:16]
+	ext := extension(mod.Src)
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(mod.Src)))[:16]
 	filename := hash + ext
 	localPath := filepath.Join(uploadsDir, filename)
 
-	if _, err := os.Stat(localPath); err == nil {
+	_, err := os.Stat(localPath)
+	if err == nil {
 		return replicatedPrefix + filename
 	}
 
-	if err := downloadFile(m.Src, localPath); err != nil {
+	err = downloadFile(mod.Src, localPath)
+	if err != nil {
 		slog.Error("replication: download failed — returning local path anyway",
-			"src", m.Src, "dest", localPath, "err", err)
+			"src", mod.Src, "dest", localPath, "err", err)
+
 		return replicatedPrefix + filename
 	}
 
-	slog.Info("replication: resource cached", "src", m.Src, "local", filename)
+	slog.Info("replication: resource cached", "src", mod.Src, "local", filename)
+
 	return replicatedPrefix + filename
 }
 
-func downloadFile(url, dest string) error {
-	resp, err := http.Get(url)
+// downloadFile downloads the resource at rawURL and writes it to dest,
+// creating any missing parent directories.
+func downloadFile(rawURL, dest string) error {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawURL, http.NoBody)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("http get: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+	err = os.MkdirAll(filepath.Dir(dest), replicateDirPerm)
+	if err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
 
-	f, err := os.Create(dest)
+	file, err := os.Create(filepath.Clean(dest))
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer f.Close() //nolint:errcheck
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	//nolint:errcheck // closing the file post-write cannot recover from
+	// an error here; write success is already validated below.
+	defer file.Close()
+
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
 		_ = os.Remove(dest)
+
 		return fmt.Errorf("write file: %w", err)
 	}
 
 	return nil
 }
 
-func extension(url string) string {
-	if idx := strings.LastIndex(url, "."); idx >= 0 {
-		ext := strings.ToLower(url[idx:])
-		if idx2 := strings.IndexAny(ext, "?#"); idx2 >= 0 {
-			ext = ext[:idx2]
-		}
-		if len(ext) <= 5 {
-			return ext
-		}
+// extension returns the lowercased file extension (including the leading
+// dot) from rawURL, or "" if none is found or it looks implausibly long.
+func extension(rawURL string) string {
+	idx := strings.LastIndex(rawURL, ".")
+	if idx < 0 {
+		return ""
 	}
+
+	ext := strings.ToLower(rawURL[idx:])
+
+	idx2 := strings.IndexAny(ext, "?#")
+	if idx2 >= 0 {
+		ext = ext[:idx2]
+	}
+
+	if len(ext) <= maxReplicateExtLength {
+		return ext
+	}
+
 	return ""
 }

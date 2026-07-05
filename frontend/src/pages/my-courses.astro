@@ -187,7 +187,7 @@ import App from '../layouts/App.astro';
     let searchTimer: ReturnType<typeof setTimeout>;
 
     function pct(c: any) {
-      return c.lab_count > 0 ? Math.round(c.completed_labs / c.lab_count * 100) : 0;
+      return c.labCount > 0 ? Math.round(c.completedLabs / c.labCount * 100) : 0;
     }
 
     function courseStatus(c: any): 'not-started' | 'in-progress' | 'completed' {
@@ -222,7 +222,7 @@ import App from '../layouts/App.astro';
               <div class="progress-bar"><div class="progress-bar-fill" style="width:${p}%"></div></div>
               <span class="mc-card-prog-pct">${p}%</span>
             </div>
-            <div class="mc-card-meta">${c.completed_labs ?? 0}/${c.lab_count ?? 0} modules terminés</div>
+            <div class="mc-card-meta">${c.completedLabs ?? 0}/${c.labCount ?? 0} modules terminés</div>
             <div class="mc-card-cta">
               <a href="/courses/${c.slug || c.id}" class="btn btn-primary btn-sm" style="flex:1;justify-content:center">${ctaLabel}</a>
               <a href="/courses/${c.slug || c.id}" class="btn btn-secondary btn-sm">Détails</a>
@@ -270,8 +270,8 @@ import App from '../layouts/App.astro';
         }
 
         // Stats
-        const totalModules = allCourses.reduce((s: number, c: any) => s + (c.lab_count || 0), 0);
-        const doneModules = allCourses.reduce((s: number, c: any) => s + (c.completed_labs || 0), 0);
+        const totalModules = allCourses.reduce((s: number, c: any) => s + (c.labCount || 0), 0);
+        const doneModules = allCourses.reduce((s: number, c: any) => s + (c.completedLabs || 0), 0);
         const completedCourses = allCourses.filter(c => courseStatus(c) === 'completed').length;
         document.getElementById('mc-stats')!.innerHTML = `
           <div class="mc-stat">

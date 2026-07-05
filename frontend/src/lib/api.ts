@@ -1,10 +1,14 @@
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 export class ApiError extends Error {
   body: Record<string, unknown> | null;
-  constructor(public status: number, message: string, body?: Record<string, unknown>) {
+  constructor(
+    public status: number,
+    message: string,
+    body?: Record<string, unknown>,
+  ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.body = body ?? null;
   }
 }
@@ -13,13 +17,13 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  token?: string
+  token?: string,
 ): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   };
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
   const res = await fetch(`${API_BASE}${path}`, {
     method,
@@ -27,12 +31,12 @@ async function request<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401 && token) {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
     }
-    window.location.href = '/';
-    throw new ApiError(401, 'Session expirée');
+    window.location.href = "/";
+    throw new ApiError(401, "Session expirée");
   }
 
   if (!res.ok) {
@@ -49,10 +53,14 @@ async function request<T>(
 }
 
 export const api = {
-  get:    <T>(path: string, token?: string) => request<T>('GET',    path, undefined, token),
-  post:   <T>(path: string, body: unknown, token?: string) => request<T>('POST',   path, body, token),
-  put:    <T>(path: string, body: unknown, token?: string) => request<T>('PUT',    path, body, token),
-  delete: <T>(path: string, token?: string) => request<T>('DELETE', path, undefined, token),
+  get: <T>(path: string, token?: string) =>
+    request<T>("GET", path, undefined, token),
+  post: <T>(path: string, body: unknown, token?: string) =>
+    request<T>("POST", path, body, token),
+  put: <T>(path: string, body: unknown, token?: string) =>
+    request<T>("PUT", path, body, token),
+  delete: <T>(path: string, token?: string) =>
+    request<T>("DELETE", path, undefined, token),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -66,12 +74,12 @@ export interface UserPublic {
   id: string;
   username: string;
   email: string;
-  role: 'admin' | 'student';
-  is_active: boolean;
-  avatar_url: string | null;
+  role: "admin" | "student";
+  isActive: boolean;
+  avatarUrl: string | null;
   bio: string | null;
-  auth_provider: string;
-  created_at: string;
+  authProvider: string;
+  createdAt: string;
 }
 
 export interface AuthResponse {
@@ -81,7 +89,7 @@ export interface AuthResponse {
 
 export interface CoursePrerequisite {
   course: string;
-  min_score?: number;
+  minScore?: number;
   modules?: string[];
 }
 
@@ -92,31 +100,31 @@ export interface Course {
   thumbnail: string | null;
   category: string | null;
   difficulty: string | null;
-  is_public: boolean;
-  created_by: string;
+  isPublic: boolean;
+  createdBy: string;
   creator_username: string | null;
-  lab_count: number;
-  enrollment_count: number;
-  created_at: string;
-  updated_at: string;
+  labCount: number;
+  enrollmentCount: number;
+  createdAt: string;
+  updatedAt: string;
   prerequisites?: CoursePrerequisite[];
 }
 
 export interface MyCourse extends Course {
-  completed_labs: number;
-  total_score: number;
+  completedLabs: number;
+  totalScore: number;
 }
 
 export interface AdminUser extends UserPublic {
-  enrolled_courses: number;
-  completed_labs: number;
+  enrolledCourses: number;
+  completedLabs: number;
 }
 
 export interface UpdateUser {
   username?: string;
   bio?: string;
-  avatar_url?: string;
-  is_active?: boolean;
+  avatarUrl?: string;
+  isActive?: boolean;
   role?: string;
 }
 
@@ -134,14 +142,14 @@ export interface Group {
   id: string;
   name: string;
   source: string;
-  created_at: string;
-  member_count: number;
-  mapped_role: string;
+  createdAt: string;
+  memberCount: number;
+  mappedRole: string;
 }
 
 export interface GroupMapping {
-  group_name: string;
-  platform_role: string;
+  groupName: string;
+  platformRole: string;
 }
 
 export interface PlatformSetting {
@@ -151,26 +159,25 @@ export interface PlatformSetting {
 }
 
 export interface CourseEnrollment {
-  user_id: string;
+  userId: string;
   username: string;
   email: string;
-  enrolled_at: string;
+  enrolledAt: string;
 }
-
 
 export interface LeaderboardEntry {
   id: string;
   username: string;
   email: string;
-  avatar_url: string | null;
-  total_score: number;
-  passed_modules: number;
-  enrolled_courses: number;
+  avatarUrl: string | null;
+  totalScore: number;
+  passedModules: number;
+  enrolledCourses: number;
 }
 
 export interface AdminStats {
   total_users: number;
-  total_courses: number;
+  totalCourses: number;
   total_labs: number;
   total_submissions: number;
   total_enrollments: number;
@@ -179,23 +186,23 @@ export interface AdminStats {
 
 export interface Lab {
   id: string;
-  course_id: string;
+  courseId: string;
   title: string;
   description: string | null;
-  lab_type: 'form' | 'ctf' | 'interactive';
-  module_type?: 'video' | 'image' | 'text' | 'quiz';
+  labType: "form" | "ctf" | "interactive";
+  moduleType?: "video" | "image" | "text" | "quiz";
   content: Record<string, unknown>;
   points: number;
-  order_index: number;
-  is_published: boolean;
+  orderIndex: number;
+  isPublished: boolean;
   hidden: boolean;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LabProgress {
   completed: boolean;
-  best_score: number;
+  bestScore: number;
   total_attempts: number;
   completed_at: string | null;
 }
@@ -206,112 +213,145 @@ export interface LabWithProgress {
 }
 
 export interface CourseProgress {
-  course_id: string;
-  user_id: string;
+  courseId: string;
+  userId: string;
   total_labs: number;
-  completed_labs: number;
+  completedLabs: number;
   total_points_possible: number;
   total_points_earned: number;
   completion_percentage: number;
   lab_progress: {
     lab_id: string;
     lab_title: string;
-    lab_type: string;
+    labType: string;
     points: number;
     completed: boolean;
-    best_score: number;
+    bestScore: number;
     total_attempts: number;
     completed_at: string | null;
   }[];
 }
 
 export interface SubmissionResult {
-  is_correct: boolean;
+  isCorrect: boolean;
   score: number;
-  max_score: number;
+  maxScore: number;
   feedback: string | null;
-  question_results?: {
-    question_id: string;
-    is_correct: boolean;
-    points_earned: number;
-    correct_answer: string | null;
-    explanation: string | null;
-  }[] | null;
-  flag_results?: {
-    flag_id: string;
-    name: string;
-    is_correct: boolean;
-    points_earned: number;
-  }[] | null;
+  questionResults?:
+    | {
+        questionId: string;
+        isCorrect: boolean;
+        pointsEarned: number;
+        correctAnswer: string | null;
+        explanation: string | null;
+      }[]
+    | null;
+  flag_results?:
+    | {
+        flag_id: string;
+        name: string;
+        isCorrect: boolean;
+        pointsEarned: number;
+      }[]
+    | null;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post<AuthResponse>('/auth/login', { email, password }),
+    api.post<AuthResponse>("/auth/login", { email, password }),
   register: (username: string, email: string, password: string) =>
-    api.post<AuthResponse>('/auth/register', { username, email, password }),
-  me: (token: string) => api.get<UserPublic>('/auth/me', token),
+    api.post<AuthResponse>("/auth/register", { username, email, password }),
+  me: (token: string) => api.get<UserPublic>("/auth/me", token),
   changePassword: (oldPassword: string, newPassword: string, token: string) =>
-    api.put('/auth/password', { old_password: oldPassword, new_password: newPassword }, token),
-  updateProfile: (data: { bio?: string; avatar_url?: string }, token: string) =>
-    api.put<UserPublic>('/auth/profile', data, token),
+    api.put(
+      "/auth/password",
+      { oldPassword: oldPassword, newPassword: newPassword },
+      token,
+    ),
+  updateProfile: (data: { bio?: string; avatarUrl?: string }, token: string) =>
+    api.put<UserPublic>("/auth/profile", data, token),
 };
 
 export const ssoApi = {
-  providers: () => api.get<{ providers: OAuthProvider[] }>('/auth/oauth/providers'),
+  providers: () =>
+    api.get<{ providers: OAuthProvider[] }>("/auth/oauth/providers"),
   authorize: (provider: string) =>
-    api.get<{ url: string; state: string }>(`/auth/oauth/${provider}/authorize`),
+    api.get<{ url: string; state: string }>(
+      `/auth/oauth/${provider}/authorize`,
+    ),
   callback: (code: string, state: string) =>
-    api.post<AuthResponse>('/auth/oauth/callback', { code, state }),
+    api.post<AuthResponse>("/auth/oauth/callback", { code, state }),
 };
 
 export const oidcApi = {
-  authorize: () => api.get<{ url: string; state: string }>('/auth/oidc/authorize'),
+  authorize: () =>
+    api.get<{ url: string; state: string }>("/auth/oidc/authorize"),
   callback: (code: string, state: string) =>
-    api.post<AuthResponse>('/auth/oidc/callback', { code, state }),
+    api.post<AuthResponse>("/auth/oidc/callback", { code, state }),
 };
 
 export const ldapApi = {
   login: (email: string, password: string) =>
-    api.post<AuthResponse>('/auth/ldap/login', { email, password }),
+    api.post<AuthResponse>("/auth/ldap/login", { email, password }),
 };
 
 export const groupsApi = {
-  list: (token: string) =>
-    api.get<{ groups: Group[] }>('/admin/groups', token),
+  list: (token: string) => api.get<{ groups: Group[] }>("/admin/groups", token),
   create: (name: string, token: string) =>
-    api.post<{ id: string; message: string }>('/admin/groups', { name }, token),
+    api.post<{ id: string; message: string }>("/admin/groups", { name }, token),
   delete: (id: string, token: string) =>
     api.delete<{ message: string }>(`/admin/groups/${id}`, token),
   getMappings: (token: string) =>
-    api.get<{ mappings: GroupMapping[] }>('/admin/groups/mappings', token),
+    api.get<{ mappings: GroupMapping[] }>("/admin/groups/mappings", token),
   upsertMapping: (data: GroupMapping, token: string) =>
-    api.post<{ message: string }>('/admin/groups/mappings', data, token),
+    api.post<{ message: string }>("/admin/groups/mappings", data, token),
   deleteMapping: (groupName: string, token: string) =>
-    api.delete<{ message: string }>(`/admin/groups/mappings/${encodeURIComponent(groupName)}`, token),
+    api.delete<{ message: string }>(
+      `/admin/groups/mappings/${encodeURIComponent(groupName)}`,
+      token,
+    ),
 };
 
 export const publicSettingsApi = {
-  get: () => api.get<PublicSettings>('/settings/public'),
+  get: () => api.get<PublicSettings>("/settings/public"),
 };
 
 export const adminSettingsApi = {
   get: (token: string) =>
-    api.get<{ settings: PlatformSetting[] }>('/admin/settings', token),
+    api.get<{ settings: PlatformSetting[] }>("/admin/settings", token),
   update: (data: Record<string, string>, token: string) =>
-    api.put<{ settings: PlatformSetting[] }>('/admin/settings', data, token),
+    api.put<{ settings: PlatformSetting[] }>("/admin/settings", data, token),
 };
 
 // ── Courses ───────────────────────────────────────────────────────────────────
 
 export const coursesApi = {
-  list: (params?: { category?: string; difficulty?: string; search?: string; page?: number; per_page?: number }) => {
-    const qs = params ? '?' + new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)]))
-    ).toString() : '';
-    return api.get<{ courses: Course[]; total: number; page: number; per_page: number; total_pages: number }>(`/courses${qs}`);
+  list: (params?: {
+    category?: string;
+    difficulty?: string;
+    search?: string;
+    page?: number;
+    per_page?: number;
+  }) => {
+    const qs = params
+      ? "?" +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params)
+              .filter(([_, v]) => v != null)
+              .map(([k, v]) => [k, String(v)]),
+          ),
+        ).toString()
+      : "";
+    return api.get<{
+      courses: Course[];
+      total: number;
+      page: number;
+      per_page: number;
+      total_pages: number;
+    }>(`/courses${qs}`);
   },
   get: (id: string) => api.get<Course>(`/courses/${id}`),
   enroll: (id: string, token: string) =>
@@ -319,7 +359,7 @@ export const coursesApi = {
   unenroll: (id: string, token: string) =>
     api.delete(`/courses/${id}/unenroll`, token),
   myCourses: (token: string) =>
-    api.get<{ courses: MyCourse[] }>('/my/courses', token),
+    api.get<{ courses: MyCourse[] }>("/my/courses", token),
 };
 
 // ── Labs ──────────────────────────────────────────────────────────────────────
@@ -330,7 +370,11 @@ export const labsApi = {
   get: (courseId: string, labId: string, token: string) =>
     api.get<LabWithProgress>(`/courses/${courseId}/labs/${labId}`, token),
   submit: (courseId: string, labId: string, answer: unknown, token: string) =>
-    api.post<SubmissionResult>(`/courses/${courseId}/labs/${labId}/submit`, { answer }, token),
+    api.post<SubmissionResult>(
+      `/courses/${courseId}/labs/${labId}/submit`,
+      { answer },
+      token,
+    ),
   progress: (courseId: string, token: string) =>
     api.get<CourseProgress>(`/courses/${courseId}/progress`, token),
 };
@@ -339,13 +383,13 @@ export const labsApi = {
 
 export interface QuizQuestion {
   id: string;
-  type: 'single' | 'multiple' | 'boolean' | 'order';
+  type: "single" | "multiple" | "boolean" | "order";
   difficulty?: string;
   points: number;
   question: string;
   answers?: { id: string; text: string }[];
   items?: { id: string; text: string }[];
-  source_refs?: SourceRef[];
+  sourceRefs?: SourceRef[];
 }
 
 export interface SourceRef {
@@ -363,27 +407,27 @@ export interface QuizUserAnswer {
 }
 
 export interface QuizQuestionResult {
-  question_id: string;
+  questionId: string;
   type: string;
-  is_correct: boolean;
-  points_earned: number;
-  points_max: number;
-  correct_answer?: unknown;
+  isCorrect: boolean;
+  pointsEarned: number;
+  pointsMax: number;
+  correctAnswer?: unknown;
   feedback?: string;
-  source_refs?: SourceRef[];
+  sourceRefs?: SourceRef[];
 }
 
 export interface QuizCooldown {
-  remaining_seconds: number;
+  remainingSeconds: number;
   attempts: number;
   locked: boolean;
 }
 
 export interface QuizSubmitResponse {
-  total_score: number;
-  max_score: number;
+  totalScore: number;
+  maxScore: number;
   passed: boolean;
-  question_results: QuizQuestionResult[];
+  questionResults: QuizQuestionResult[];
   cooldowns?: Record<string, QuizCooldown>;
 }
 
@@ -398,16 +442,16 @@ export interface ModuleSummary {
   index: number;
   name: string;
   slug: string;
-  type: 'text' | 'video' | 'image' | 'quiz' | 'lab' | 'modules';
+  type: "text" | "video" | "image" | "quiz" | "lab" | "modules";
   viewed: boolean;
   hidden: boolean;
   locked: boolean;
   prerequisites?: string[];
-  best_score: number;
-  max_score: number;
+  bestScore: number;
+  maxScore: number;
   passed: boolean;
   attempts: number;
-  lab_url?: string;
+  labUrl?: string;
   // Admin-only / git content
   src?: string;
   ref?: string;
@@ -415,28 +459,28 @@ export interface ModuleSummary {
 }
 
 export interface ModuleQuizConfig {
-  passing_score: number;
+  passingScore: number;
   cooldown?: {
     strategy: string;
-    base_seconds: number;
+    baseSeconds: number;
     multiplier: number;
-    max_seconds: number;
+    maxSeconds: number;
   };
-  max_attempts_per_question: number | null;
-  lock_on_max_attempts: boolean;
+  maxAttemptsPerQuestion: number | null;
+  lockOnMaxAttempts: boolean;
 }
 
 export interface ModuleDetail {
   index: number;
   name: string;
   slug: string;
-  type: 'text' | 'video' | 'image' | 'quiz' | 'lab';
+  type: "text" | "video" | "image" | "quiz" | "lab";
   content: string | null;
   viewed: boolean;
   hidden: boolean;
-  has_check?: boolean;
+  hasCheck?: boolean;
   questions?: QuizQuestion[];
-  quiz_config?: ModuleQuizConfig;
+  quizConfig?: ModuleQuizConfig;
   cooldowns?: Record<string, QuizCooldown>;
 }
 
@@ -447,36 +491,60 @@ export interface CheckResult {
 
 export const lessonsApi = {
   markComplete: (courseSlug: string, lessonSlug: string, token: string) =>
-    api.post<{ message: string }>(`/courses/${courseSlug}/lessons/${lessonSlug}/complete`, {}, token),
+    api.post<{ message: string }>(
+      `/courses/${courseSlug}/lessons/${lessonSlug}/complete`,
+      {},
+      token,
+    ),
 };
 
 export const modulesApi = {
   list: (courseSlug: string, token: string) =>
-    api.get<{ modules: ModuleSummary[] }>(`/courses/${courseSlug}/modules`, token),
+    api.get<{ modules: ModuleSummary[] }>(
+      `/courses/${courseSlug}/modules`,
+      token,
+    ),
   get: (courseSlug: string, index: number, token: string) =>
     api.get<ModuleDetail>(`/courses/${courseSlug}/modules/${index}`, token),
-  submit: (courseSlug: string, index: number, answers: Record<string, QuizUserAnswer>, token: string) =>
-    api.post<QuizSubmitResponse>(`/courses/${courseSlug}/modules/${index}/submit`, { answers }, token),
+  submit: (
+    courseSlug: string,
+    index: number,
+    answers: Record<string, QuizUserAnswer>,
+    token: string,
+  ) =>
+    api.post<QuizSubmitResponse>(
+      `/courses/${courseSlug}/modules/${index}/submit`,
+      { answers },
+      token,
+    ),
   check: (courseSlug: string, index: number, token: string) =>
-    api.post<CheckResult>(`/courses/${courseSlug}/modules/${index}/check`, {}, token),
+    api.post<CheckResult>(
+      `/courses/${courseSlug}/modules/${index}/check`,
+      {},
+      token,
+    ),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const adminApi = {
   clearCache: (token: string) =>
-    api.post<{ status: string }>('/admin/cache/clear', {}, token),
+    api.post<{ status: string }>("/admin/cache/clear", {}, token),
 
-  stats: (token: string) =>
-    api.get<AdminStats>('/admin/stats', token),
+  stats: (token: string) => api.get<AdminStats>("/admin/stats", token),
   leaderboard: (token: string) =>
-    api.get<{ leaderboard: LeaderboardEntry[] }>('/admin/leaderboard', token),
+    api.get<{ leaderboard: LeaderboardEntry[] }>("/admin/leaderboard", token),
 
   authProviders: (token: string) =>
-    api.get<{ providers: { provider: string; count: number }[] }>('/admin/users/providers', token),
+    api.get<{ providers: { provider: string; count: number }[] }>(
+      "/admin/users/providers",
+      token,
+    ),
   users: (token: string, provider?: string) =>
     api.get<{ users: AdminUser[]; total: number }>(
-      provider ? `/admin/users?provider=${encodeURIComponent(provider)}` : '/admin/users',
+      provider
+        ? `/admin/users?provider=${encodeURIComponent(provider)}`
+        : "/admin/users",
       token,
     ),
   getUser: (id: string, token: string) =>
@@ -486,28 +554,73 @@ export const adminApi = {
   deleteUser: (id: string, token: string) =>
     api.delete(`/admin/users/${id}`, token),
 
-  adminCourses: (token: string, params?: { page?: number; per_page?: number; search?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)]))
-    ).toString() : '';
-    return api.get<{ courses: Course[]; total: number; page: number; per_page: number }>(`/admin/courses${qs}`, token);
+  adminCourses: (
+    token: string,
+    params?: { page?: number; per_page?: number; search?: string },
+  ) => {
+    const qs = params
+      ? "?" +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params)
+              .filter(([_, v]) => v != null)
+              .map(([k, v]) => [k, String(v)]),
+          ),
+        ).toString()
+      : "";
+    return api.get<{
+      courses: Course[];
+      total: number;
+      page: number;
+      per_page: number;
+    }>(`/admin/courses${qs}`, token);
   },
 
   listEnrollments: (courseId: string, token: string) =>
-    api.get<{ enrollments: CourseEnrollment[] }>(`/admin/courses/${courseId}/enrollments`, token),
+    api.get<{ enrollments: CourseEnrollment[] }>(
+      `/admin/courses/${courseId}/enrollments`,
+      token,
+    ),
   enrollUser: (courseId: string, userId: string, token: string) =>
-    api.post(`/admin/courses/${courseId}/enrollments`, { user_id: userId }, token),
+    api.post(
+      `/admin/courses/${courseId}/enrollments`,
+      { userId: userId },
+      token,
+    ),
   unenrollUser: (courseId: string, userId: string, token: string) =>
     api.delete(`/admin/courses/${courseId}/enrollments/${userId}`, token),
   listGroupEnrollments: (courseId: string, token: string) =>
-    api.get<{ groups: { id: string; name: string; source: string; member_count: number; enrolled_at: string }[] }>(`/admin/courses/${courseId}/enrollments/groups`, token),
+    api.get<{
+      groups: {
+        id: string;
+        name: string;
+        source: string;
+        memberCount: number;
+        enrolledAt: string;
+      }[];
+    }>(`/admin/courses/${courseId}/enrollments/groups`, token),
   enrollGroup: (courseId: string, groupId: string, token: string) =>
-    api.post<{ message: string; enrolled: number }>(`/admin/courses/${courseId}/enrollments/groups`, { group_id: groupId }, token),
+    api.post<{ message: string; enrolled: number }>(
+      `/admin/courses/${courseId}/enrollments/groups`,
+      { groupId: groupId },
+      token,
+    ),
   unenrollGroup: (courseId: string, groupId: string, token: string) =>
-    api.delete(`/admin/courses/${courseId}/enrollments/groups/${groupId}`, token),
+    api.delete(
+      `/admin/courses/${courseId}/enrollments/groups/${groupId}`,
+      token,
+    ),
 
   clearCourseCache: (courseSlug: string, token: string) =>
-    api.post<{ status: string; repos_cleared: number }>(`/admin/courses/${courseSlug}/cache/clear`, {}, token),
+    api.post<{ status: string; reposCleared: number }>(
+      `/admin/courses/${courseSlug}/cache/clear`,
+      {},
+      token,
+    ),
   clearModuleCache: (courseSlug: string, index: number, token: string) =>
-    api.post<{ status: string; repos_cleared: number }>(`/admin/courses/${courseSlug}/modules/${index}/cache/clear`, {}, token),
+    api.post<{ status: string; reposCleared: number }>(
+      `/admin/courses/${courseSlug}/modules/${index}/cache/clear`,
+      {},
+      token,
+    ),
 };

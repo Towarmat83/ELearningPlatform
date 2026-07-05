@@ -27,19 +27,19 @@ Database-backed micro-service for the e-learning platform. Handles all user-faci
 | | PUT | `/api/auth/password` | JWT |
 | | POST | `/api/courses/{slug}/enroll` | JWT |
 | | DELETE | `/api/courses/{slug}/unenroll` | JWT |
-| | POST | `/api/courses/{slug}/lessons/{lesson_slug}/complete` | JWT |
+| | POST | `/api/courses/{slug}/lessons/{lessonSlug}/complete` | JWT |
 | | GET | `/api/my/courses` | JWT |
 | **Admin** | GET | `/api/admin/settings` | Admin |
 | | PUT | `/api/admin/settings` | Admin |
 | | GET | `/api/admin/stats` | Admin |
 | | GET | `/api/admin/users` | Admin |
 | | GET | `/api/admin/users/search` | Admin |
-| | GET | `/api/admin/users/{user_id}` | Admin |
-| | PUT | `/api/admin/users/{user_id}` | Admin |
-| | DELETE | `/api/admin/users/{user_id}` | Admin |
+| | GET | `/api/admin/users/{userId}` | Admin |
+| | PUT | `/api/admin/users/{userId}` | Admin |
+| | DELETE | `/api/admin/users/{userId}` | Admin |
 | | GET | `/api/admin/courses/{slug}/enrollments` | Admin |
 | | POST | `/api/admin/courses/{slug}/enrollments` | Admin |
-| | DELETE | `/api/admin/courses/{slug}/enrollments/{user_id}` | Admin |
+| | DELETE | `/api/admin/courses/{slug}/enrollments/{userId}` | Admin |
 | | POST | `/api/admin/sync-progress` | Admin |
 | **Internal** | GET | `/internal/enrollments/check` | Network policy |
 | | GET | `/internal/progress/viewed` | Network policy |

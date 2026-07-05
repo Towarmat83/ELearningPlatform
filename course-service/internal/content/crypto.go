@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -13,6 +14,7 @@ import (
 // DeriveKey derives a 32-byte AES key from an arbitrary-length secret.
 func DeriveKey(secret string) []byte {
 	h := sha256.Sum256([]byte(secret))
+
 	return h[:]
 }
 
@@ -21,41 +23,53 @@ func DeriveKey(secret string) []byte {
 func EncryptToken(plaintext string, key []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating AES cipher: %w", err)
 	}
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating GCM mode: %w", err)
 	}
+
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
+
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
+		return "", fmt.Errorf("generating nonce: %w", err)
 	}
+
 	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+
 	return hex.EncodeToString(ciphertext), nil
 }
 
-// DecryptToken decrypts a hex-encoded token previously encrypted with EncryptToken.
+// DecryptToken decrypts a hex-encoded token previously encrypted with
+// EncryptToken.
 func DecryptToken(ciphertextHex string, key []byte) (string, error) {
 	ciphertext, err := hex.DecodeString(ciphertextHex)
 	if err != nil {
 		return "", fmt.Errorf("invalid hex: %w", err)
 	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating AES cipher: %w", err)
 	}
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating GCM mode: %w", err)
 	}
+
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
+		return "", errors.New("ciphertext too short")
 	}
+
 	plaintext, err := gcm.Open(nil, ciphertext[:nonceSize], ciphertext[nonceSize:], nil)
 	if err != nil {
 		return "", fmt.Errorf("decryption failed: %w", err)
 	}
+
 	return string(plaintext), nil
 }

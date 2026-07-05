@@ -39,7 +39,7 @@ import Admin from '../../layouts/Admin.astro';
 
     const STAT_LABELS: Record<string, { label: string; color: string }> = {
       total_users:       { label: 'Utilisateurs',   color: 'var(--blue)'  },
-      total_courses:     { label: 'Cours',           color: 'var(--blue)'  },
+      totalCourses:     { label: 'Cours',           color: 'var(--blue)'  },
       total_labs:        { label: 'Labs',            color: 'var(--blue)'  },
       total_enrollments: { label: 'Inscriptions',    color: 'var(--orange)'},
       total_submissions: { label: 'Soumissions',     color: 'var(--ink)'   },
@@ -73,9 +73,9 @@ import Admin from '../../layouts/Admin.astro';
             <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--blue);font-size:.82rem;flex-shrink:0">${(e.username||'?')[0].toUpperCase()}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.username}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${e.passed_modules} modules · ${e.enrolled_courses} cours</div>
+              <div style="font-size:.75rem;color:var(--ink-soft)">${e.passedModules} modules · ${e.enrolledCourses} cours</div>
             </div>
-            <span style="font-weight:700;color:var(--blue);flex-shrink:0">${e.total_score} pts</span>
+            <span style="font-weight:700;color:var(--blue);flex-shrink:0">${e.totalScore} pts</span>
           </div>
         `).join('');
       } catch {

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,81 +15,115 @@ import (
 	coursev1 "github.com/elearning/course-service/api/v1"
 )
 
-func k8sClient(kubeconfig string) (client.Client, error) {
-	var cfg *rest.Config
-	var err error
+// k8sClient builds a controller-runtime client for the Course CRD, using
+// the given kubeconfig path or falling back to in-cluster configuration.
+func k8sClient(kubeconfig string) (client.Client, error) { //nolint:ireturn // controller-runtime's constructor is interface-typed
+	var (
+		cfg *rest.Config
+		err error
+	)
+
 	if kubeconfig != "" {
 		cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
 		cfg, err = rest.InClusterConfig()
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)
 	}
+
 	scheme := runtime.NewScheme()
-	if err := coursev1.AddToScheme(scheme); err != nil {
+
+	err = coursev1.AddToScheme(scheme)
+	if err != nil {
 		return nil, fmt.Errorf("register scheme: %w", err)
 	}
-	return client.New(cfg, client.Options{Scheme: scheme})
+
+	cl, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("build k8s client: %w", err)
+	}
+
+	return cl, nil
 }
 
 // CreateCourseCRD godoc
 // @Summary  Create a Course CRD (admin)
 // @Tags     Admin - Courses
 // @Security BearerAuth
-// @Router   /api/admin/courses [post]
-func (s *State) CreateCourseCRD(w http.ResponseWriter, r *http.Request) {
+// @Router   /api/admin/courses [post].
+func (s *State) CreateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	var body map[string]any
-	if err := decode(r, &body); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+
+	err := decode(req, &body)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
+
 		return
 	}
 
-	slug, _ := body["slug"].(string)
+	slug, _ := body[slugJSONKey].(string)
 	if slug == "" {
-		s.Error(w, http.StatusBadRequest, "slug is required")
+		s.Error(writer, http.StatusBadRequest, "slug is required")
+
 		return
 	}
+
 	spec, err := courseSpecFromBody(body)
 	if err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid spec: "+err.Error())
+		s.Error(writer, http.StatusBadRequest, "Invalid spec: "+err.Error())
+
 		return
 	}
 
-	c, err := k8sClient(s.Config.Kubeconfig)
+	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, err.Error())
+		s.Error(writer, http.StatusInternalServerError, err.Error())
+
 		return
 	}
 
-	cr := &coursev1.Course{
+	courseCR := &coursev1.Course{
 		ObjectMeta: metav1.ObjectMeta{Name: slug, Namespace: s.Config.K8sNamespace},
 		Spec:       spec,
 	}
-	if err := c.Create(context.Background(), cr); err != nil {
-		s.Error(w, http.StatusConflict, "Failed to create CRD: "+err.Error())
+
+	err = kubeClient.Create(req.Context(), courseCR)
+	if err != nil {
+		s.Error(writer, http.StatusConflict, "Failed to create CRD: "+err.Error())
+
 		return
 	}
-	s.JSON(w, http.StatusCreated, map[string]any{"slug": slug})
+
+	s.JSON(writer, http.StatusCreated, map[string]any{slugJSONKey: slug})
 }
 
 // GetCourseCRD returns the raw CRD spec for a course.
-func (s *State) GetCourseCRD(w http.ResponseWriter, r *http.Request) {
-	slug := param(r, "slug")
-	c, err := k8sClient(s.Config.Kubeconfig)
+func (s *State) GetCourseCRD(writer http.ResponseWriter, req *http.Request) {
+	slug := param(req, "slug")
+
+	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, err.Error())
+		s.Error(writer, http.StatusInternalServerError, err.Error())
+
 		return
 	}
-	var cr coursev1.Course
+
+	var courseCR coursev1.Course
+
 	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
-	if err := c.Get(context.Background(), key, &cr); err != nil {
-		s.Error(w, http.StatusNotFound, "Course not found")
+
+	err = kubeClient.Get(req.Context(), key, &courseCR)
+	if err != nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
+
 		return
 	}
-	s.JSON(w, http.StatusOK, map[string]any{
-		"slug": slug,
-		"spec": cr.Spec,
+
+	s.JSON(writer, http.StatusOK, map[string]any{
+		slugJSONKey: slug,
+		"spec":      courseCR.Spec,
 	})
 }
 
@@ -98,85 +131,116 @@ func (s *State) GetCourseCRD(w http.ResponseWriter, r *http.Request) {
 // @Summary  Update a Course CRD (admin)
 // @Tags     Admin - Courses
 // @Security BearerAuth
-// @Router   /api/admin/courses/{slug}/crd [put]
-func (s *State) UpdateCourseCRD(w http.ResponseWriter, r *http.Request) {
-	slug := param(r, "slug")
+// @Router   /api/admin/courses/{slug}/crd [put].
+func (s *State) UpdateCourseCRD(writer http.ResponseWriter, req *http.Request) {
+	slug := param(req, "slug")
+
 	var body map[string]any
-	if err := decode(r, &body); err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid JSON")
+
+	err := decode(req, &body)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
+
 		return
 	}
 
 	spec, err := courseSpecFromBody(body)
 	if err != nil {
-		s.Error(w, http.StatusBadRequest, "Invalid spec: "+err.Error())
+		s.Error(writer, http.StatusBadRequest, "Invalid spec: "+err.Error())
+
 		return
 	}
 
-	c, err := k8sClient(s.Config.Kubeconfig)
+	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, err.Error())
+		s.Error(writer, http.StatusInternalServerError, err.Error())
+
 		return
 	}
 
-	ctx := context.Background()
+	ctx := req.Context()
+
 	var existing coursev1.Course
+
 	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
-	if err := c.Get(ctx, key, &existing); err != nil {
-		s.Error(w, http.StatusNotFound, "Course not found")
+
+	err = kubeClient.Get(ctx, key, &existing)
+	if err != nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
+
 		return
 	}
+
 	existing.Spec = spec
 
-	if err := c.Update(ctx, &existing); err != nil {
-		s.Error(w, http.StatusInternalServerError, "Failed to update CRD: "+err.Error())
+	err = kubeClient.Update(ctx, &existing)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Failed to update CRD: "+err.Error())
+
 		return
 	}
-	s.JSON(w, http.StatusOK, map[string]string{"slug": slug})
+
+	s.JSON(writer, http.StatusOK, map[string]string{slugJSONKey: slug})
 }
 
 // DeleteCourseCRD godoc
 // @Summary  Delete a Course CRD (admin)
 // @Tags     Admin - Courses
 // @Security BearerAuth
-// @Router   /api/admin/courses/{slug}/crd [delete]
-func (s *State) DeleteCourseCRD(w http.ResponseWriter, r *http.Request) {
-	slug := param(r, "slug")
-	c, err := k8sClient(s.Config.Kubeconfig)
+// @Router   /api/admin/courses/{slug}/crd [delete].
+func (s *State) DeleteCourseCRD(writer http.ResponseWriter, req *http.Request) {
+	slug := param(req, "slug")
+
+	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		s.Error(w, http.StatusInternalServerError, err.Error())
+		s.Error(writer, http.StatusInternalServerError, err.Error())
+
 		return
 	}
-	cr := &coursev1.Course{
+
+	courseCR := &coursev1.Course{
 		ObjectMeta: metav1.ObjectMeta{Name: slug, Namespace: s.Config.K8sNamespace},
 	}
-	if err := c.Delete(context.Background(), cr); err != nil {
+
+	err = kubeClient.Delete(req.Context(), courseCR)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
-			s.Error(w, http.StatusNotFound, "Failed to delete CRD: "+err.Error())
+			s.Error(writer, http.StatusNotFound, "Failed to delete CRD: "+err.Error())
+
 			return
 		}
-		s.Error(w, http.StatusNotFound, "Failed to delete CRD: "+err.Error())
+
+		s.Error(writer, http.StatusNotFound, "Failed to delete CRD: "+err.Error())
+
 		return
 	}
-	s.JSON(w, http.StatusOK, map[string]string{"message": "Course deleted"})
+
+	s.JSON(writer, http.StatusOK, map[string]string{messageJSONKey: "Course deleted"})
 }
 
+// buildCourseSpec extracts recognized CourseSpec fields from a flat
+// top-level request body map.
 func buildCourseSpec(body map[string]any) map[string]any {
 	spec := map[string]any{}
+
 	for _, k := range []string{"title", "description", "category", "difficulty"} {
 		if v, ok := body[k]; ok {
 			spec[k] = v
 		}
 	}
+
 	if v, ok := body["public"]; ok {
 		spec["public"] = v
 	}
+
 	if v, ok := body["modules"]; ok {
 		spec["modules"] = v
 	}
+
 	if v, ok := body["prerequisites"]; ok {
 		spec["prerequisites"] = v
 	}
+
 	return spec
 }
 
@@ -187,13 +251,18 @@ func courseSpecFromBody(body map[string]any) (coursev1.CourseSpec, error) {
 	if rawSpec == nil {
 		rawSpec = buildCourseSpec(body)
 	}
+
 	var spec coursev1.CourseSpec
+
 	data, err := json.Marshal(rawSpec)
 	if err != nil {
-		return spec, err
+		return spec, fmt.Errorf("marshal course spec: %w", err)
 	}
-	if err := json.Unmarshal(data, &spec); err != nil {
-		return spec, err
+
+	err = json.Unmarshal(data, &spec)
+	if err != nil {
+		return spec, fmt.Errorf("unmarshal course spec: %w", err)
 	}
+
 	return spec, nil
 }

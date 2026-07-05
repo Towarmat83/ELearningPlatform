@@ -214,7 +214,7 @@ import Admin from '../../../layouts/Admin.astro';
                 <span class="course-slug">${escHtml(c.id)}</span>
                 ${c.difficulty ? `<span class="badge ${DIFF[c.difficulty] || 'badge-gray'}" style="font-size:.7rem">${c.difficulty}</span>` : ''}
                 ${c.category ? `<span class="badge badge-blue" style="font-size:.7rem">${escHtml(c.category)}</span>` : ''}
-                <span class="badge ${c.is_public ? 'badge-green' : 'badge-gray'}" style="font-size:.7rem">${c.is_public ? 'Public' : 'Privé'}</span>
+                <span class="badge ${c.isPublic ? 'badge-green' : 'badge-gray'}" style="font-size:.7rem">${c.isPublic ? 'Public' : 'Privé'}</span>
               </div>
             </div>
             <div class="course-actions">
@@ -241,7 +241,7 @@ import Admin from '../../../layouts/Admin.astro';
       const desc = spec.description ?? '';
       const cat = spec.category ?? c.category ?? '';
       const diff = spec.difficulty ?? c.difficulty ?? 'beginner';
-      const pub = spec.public !== undefined ? spec.public : !!c.is_public;
+      const pub = spec.public !== undefined ? spec.public : !!c.isPublic;
       return `
         <div class="course-inline-form">
           <p style="font-size:.78rem;font-weight:700;color:var(--blue);margin-bottom:14px">Modifier — ${escHtml(c.id)}</p>
@@ -338,7 +338,7 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
         <div id="mf-quizref-row" style="margin-bottom:10px;display:${moduleDraft.type === 'quiz' ? 'block' : 'none'}">
           <label class="label" style="font-size:.78rem">Quiz ref</label>
-          <input class="input" id="mf-quizref" type="text" style="font-size:.78rem;font-family:monospace" value="${escHtml(moduleDraft.quiz_ref || '')}" placeholder="quizzes/01-intro.yaml" />
+          <input class="input" id="mf-quizref" type="text" style="font-size:.78rem;font-family:monospace" value="${escHtml(moduleDraft.quizRef || '')}" placeholder="quizzes/01-intro.yaml" />
         </div>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:8px;font-size:.82rem">
           <input type="checkbox" id="mf-hidden" ${moduleDraft.hidden ? 'checked' : ''} style="width:14px;height:14px;accent-color:var(--blue)" />
@@ -431,7 +431,7 @@ import Admin from '../../../layouts/Admin.astro';
             ${groups.length ? `<div class="stack-sm" style="margin-bottom:10px">${groups.map((g: any) => `
               <div class="enroll-row">
                 <span style="font-size:.875rem"><strong>${escHtml(g.name)}</strong>
-                  <span class="text-soft text-sm" style="margin-left:6px">${g.member_count} membre${g.member_count !== 1 ? 's' : ''}</span>
+                  <span class="text-soft text-sm" style="margin-left:6px">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''}</span>
                 </span>
                 <button class="link-btn red" data-action="unenroll-group" data-course="${courseId}" data-gid="${g.id}" data-gname="${escHtml(g.name)}">Retirer</button>
               </div>
@@ -440,7 +440,7 @@ import Admin from '../../../layouts/Admin.astro';
               <div class="flex-row">
                 <select id="enroll-group-sel" class="input" style="flex:1;font-size:.85rem;height:auto;padding:8px 12px">
                   <option value="">— Ajouter un groupe —</option>
-                  ${availGroups.map((g: any) => `<option value="${g.id}">${escHtml(g.name)} (${g.member_count} membres)</option>`).join('')}
+                  ${availGroups.map((g: any) => `<option value="${g.id}">${escHtml(g.name)} (${g.memberCount} membres)</option>`).join('')}
                 </select>
                 <button class="btn btn-primary btn-sm" data-action="enroll-group" data-course="${courseId}">Ajouter</button>
               </div>
@@ -462,8 +462,8 @@ import Admin from '../../../layouts/Admin.astro';
                     <span class="text-soft text-sm" style="margin-left:6px">${escHtml(e.email)}</span>
                   </div>
                   <div style="display:flex;align-items:center;gap:12px">
-                    <span class="text-soft text-sm">${new Date(e.enrolled_at).toLocaleDateString('fr')}</span>
-                    <button class="link-btn red" data-action="unenroll-user" data-course="${courseId}" data-uid="${e.user_id}" data-uname="${escHtml(e.username)}">Retirer</button>
+                    <span class="text-soft text-sm">${new Date(e.enrolledAt).toLocaleDateString('fr')}</span>
+                    <button class="link-btn red" data-action="unenroll-user" data-course="${courseId}" data-uid="${e.userId}" data-uname="${escHtml(e.username)}">Retirer</button>
                   </div>
                 </div>
               `).join('')}</div>
@@ -542,7 +542,7 @@ import Admin from '../../../layouts/Admin.astro';
       }
     });
 
-    // ── Toggle quiz_ref field when type select changes ──
+    // ── Toggle quizRef field when type select changes ──
     document.getElementById('courses-list')!.addEventListener('change', (e: Event) => {
       const target = e.target as HTMLElement;
       if (target.id === 'mf-type') {
@@ -572,7 +572,7 @@ import Admin from '../../../layouts/Admin.astro';
         else if (action === 'delete')           await deleteCourse(actionBtn.dataset.id!, actionBtn.dataset.title!);
         else if (action === 'cache')            await clearCourseCache(actionBtn.dataset.id!);
         else if (action === 'course-cache')     await clearCourseCache(courseId);
-        else if (action === 'mod-add')      { moduleDraft = { name:'',type:'text',src:'',ref:'main',path:'',hidden:false,inline:false,quiz_ref:'' }; moduleDraftIdx = null; moduleDraftCourseId = courseId; render(); }
+        else if (action === 'mod-add')      { moduleDraft = { name:'',type:'text',src:'',ref:'main',path:'',hidden:false,inline:false,quizRef:'' }; moduleDraftIdx = null; moduleDraftCourseId = courseId; render(); }
         else if (action === 'mod-edit')     await startEditModule(courseId, parseInt(actionBtn.dataset.idx!));
         else if (action === 'mod-delete')   await deleteModule(courseId, parseInt(actionBtn.dataset.idx!), actionBtn.dataset.modname!);
         else if (action === 'mod-cache')    await clearModuleCache(courseId, parseInt(actionBtn.dataset.idx!));
@@ -640,7 +640,7 @@ import Admin from '../../../layouts/Admin.astro';
     async function startEditModule(courseId: string, idx: number) {
       const mod = panelModules?.find((m: any) => m.index === idx);
       if (!mod) return;
-      moduleDraft = { name: mod.name, type: mod.type, src: mod.src || '', ref: mod.ref || 'main', path: mod.path || '', hidden: !!mod.hidden, inline: !!mod.inline, quiz_ref: mod.quiz_ref || '' };
+      moduleDraft = { name: mod.name, type: mod.type, src: mod.src || '', ref: mod.ref || 'main', path: mod.path || '', hidden: !!mod.hidden, inline: !!mod.inline, quizRef: mod.quizRef || '' };
       moduleDraftIdx = idx;
       moduleDraftCourseId = courseId;
       render();
@@ -654,7 +654,7 @@ import Admin from '../../../layouts/Admin.astro';
       const path = (document.getElementById('mf-path') as HTMLInputElement)?.value.trim() || '';
       const hidden = (document.getElementById('mf-hidden') as HTMLInputElement)?.checked || false;
       const inline = (document.getElementById('mf-inline') as HTMLInputElement)?.checked || false;
-      const quiz_ref = (document.getElementById('mf-quizref') as HTMLInputElement)?.value.trim() || '';
+      const quizRef = (document.getElementById('mf-quizref') as HTMLInputElement)?.value.trim() || '';
       if (!name) { (window as any).showToast?.('Le nom est requis', 'error'); return; }
 
       const saveBtn = document.querySelector<HTMLButtonElement>('[data-action="mf-save"]');
@@ -667,7 +667,7 @@ import Admin from '../../../layouts/Admin.astro';
 
         const isUpdate = moduleDraftIdx !== null;
         if (isUpdate) {
-          // Preserve existing CRD fields not shown in the form (passing_score, cooldown, prerequisites, etc.)
+          // Preserve existing CRD fields not shown in the form (passingScore, cooldown, prerequisites, etc.)
           const existing = mods[moduleDraftIdx!] ?? {};
           const modSpec: any = { ...existing, name, type };
           if (src) modSpec.src = src; else delete modSpec.src;
@@ -675,7 +675,7 @@ import Admin from '../../../layouts/Admin.astro';
           if (path) modSpec.path = path; else delete modSpec.path;
           if (hidden) modSpec.hidden = true; else delete modSpec.hidden;
           if (inline && type === 'quiz') modSpec.inline = true; else delete modSpec.inline;
-          if (quiz_ref && type === 'quiz') modSpec.quiz_ref = quiz_ref; else delete modSpec.quiz_ref;
+          if (quizRef && type === 'quiz') modSpec.quizRef = quizRef; else delete modSpec.quizRef;
           mods[moduleDraftIdx!] = modSpec;
         } else {
           const modSpec: any = { name, type };
@@ -684,7 +684,7 @@ import Admin from '../../../layouts/Admin.astro';
           if (path) modSpec.path = path;
           if (hidden) modSpec.hidden = true;
           if (inline && type === 'quiz') modSpec.inline = true;
-          if (quiz_ref && type === 'quiz') modSpec.quiz_ref = quiz_ref;
+          if (quizRef && type === 'quiz') modSpec.quizRef = quizRef;
           mods.push(modSpec);
         }
         await api(`/admin/courses/${courseId}/crd`, { method: 'PUT', body: { spec: { ...spec, modules: mods } } });
@@ -737,7 +737,7 @@ import Admin from '../../../layouts/Admin.astro';
       const sel = document.getElementById('enroll-group-sel') as HTMLSelectElement;
       if (!sel?.value) return;
       try {
-        await api(`/admin/courses/${courseId}/enrollments/groups`, { method: 'POST', body: { group_id: sel.value } });
+        await api(`/admin/courses/${courseId}/enrollments/groups`, { method: 'POST', body: { groupId: sel.value } });
         (window as any).showToast?.('Groupe inscrit', 'success');
         await reloadEnrollments(courseId);
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
@@ -756,7 +756,7 @@ import Admin from '../../../layouts/Admin.astro';
       const uid = input?.value.trim();
       if (!uid) return;
       try {
-        await api(`/admin/courses/${courseId}/enrollments`, { method: 'POST', body: { user_id: uid } });
+        await api(`/admin/courses/${courseId}/enrollments`, { method: 'POST', body: { userId: uid } });
         (window as any).showToast?.('Utilisateur inscrit', 'success');
         await reloadEnrollments(courseId);
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }

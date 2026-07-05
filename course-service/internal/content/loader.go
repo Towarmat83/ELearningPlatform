@@ -28,6 +28,7 @@ func NewStore() *Store {
 func (s *Store) Get(slug string) *Course {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.courses[slug]
 }
 
@@ -35,13 +36,16 @@ func (s *Store) Get(slug string) *Course {
 func (s *Store) List() []*Course {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	out := make([]*Course, 0, len(s.courses))
 	for _, c := range s.courses {
 		if c.IsPublic {
 			out = append(out, c)
 		}
 	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
+
 	return out
 }
 
@@ -49,11 +53,14 @@ func (s *Store) List() []*Course {
 func (s *Store) All() []*Course {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	out := make([]*Course, 0, len(s.courses))
 	for _, c := range s.courses {
 		out = append(out, c)
 	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
+
 	return out
 }
 
@@ -61,6 +68,7 @@ func (s *Store) All() []*Course {
 func (s *Store) Put(c *Course) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.courses[c.Slug] = c
 }
 
@@ -68,6 +76,7 @@ func (s *Store) Put(c *Course) {
 func (s *Store) DeleteBySource(source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	for slug, c := range s.courses {
 		if c.Source == source {
 			delete(s.courses, slug)
@@ -90,17 +99,21 @@ func NewPathStore() *PathStore {
 func (s *PathStore) Get(slug string) *Path {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.paths[slug]
 }
 
-// List returns all paths. Order is undefined; sorting is the caller's responsibility.
+// List returns all paths. Order is undefined; sorting is the caller's
+// responsibility.
 func (s *PathStore) List() []*Path {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	out := make([]*Path, 0, len(s.paths))
 	for _, p := range s.paths {
 		out = append(out, p)
 	}
+
 	return out
 }
 
@@ -108,6 +121,7 @@ func (s *PathStore) List() []*Path {
 func (s *PathStore) Put(p *Path) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.paths[p.Slug] = p
 }
 
@@ -115,32 +129,38 @@ func (s *PathStore) Put(p *Path) {
 func (s *PathStore) DeleteBySource(source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	var toDelete []string
+
 	for slug, p := range s.paths {
 		if p.Source == source {
 			toDelete = append(toDelete, slug)
 		}
 	}
+
 	for _, slug := range toDelete {
 		delete(s.paths, slug)
 	}
 }
 
+// orderPrefix matches the leading "NN-" order prefix on lesson filenames.
 var orderPrefix = regexp.MustCompile(`^(\d+)-`)
 
 // ParseMarkdownLesson parses a markdown file with optional YAML front matter.
 func ParseMarkdownLesson(path string, order int) (Lesson, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return Lesson{}, err
+		return Lesson{}, fmt.Errorf("reading lesson file %s: %w", path, err)
 	}
 
 	title, body := extractFrontmatter(data)
 	base := filepath.Base(path)
+
 	slug := strings.TrimSuffix(base, ".md")
 	if m := orderPrefix.FindStringSubmatch(slug); m != nil {
 		slug = slug[len(m[0]):]
 	}
+
 	if title == "" {
 		title = slug
 	}
@@ -160,51 +180,69 @@ func FetchModuleIndex(gc *GitCache, parent Module, token string) ([]Module, erro
 	if err != nil {
 		return nil, err
 	}
+
 	var entries []ModuleIndexEntry
-	if err := yaml.Unmarshal(data, &entries); err != nil {
+
+	err = yaml.Unmarshal(data, &entries)
+	if err != nil {
 		return nil, fmt.Errorf("parse module index: %w", err)
 	}
+
 	modules := make([]Module, 0, len(entries))
-	for _, e := range entries {
-		src, ref, typ := e.Src, e.Ref, e.Type
+	for _, entry := range entries {
+		src, ref, typ := entry.Src, entry.Ref, entry.Type
 		if src == "" {
 			src = parent.Src
 		}
+
 		if ref == "" {
 			ref = parent.Ref
 		}
+
 		if typ == "" {
-			typ = "text"
+			typ = moduleTypeText
 		}
+
 		modules = append(modules, Module{
-			Name:          e.Name,
+			Name:          entry.Name,
 			Type:          typ,
 			Src:           src,
 			Ref:           ref,
-			Path:          e.Path,
-			Hidden:        e.Hidden,
-			Prerequisites: e.Prerequisites,
+			Path:          entry.Path,
+			Hidden:        entry.Hidden,
+			Prerequisites: entry.Prerequisites,
 		})
 	}
+
 	return modules, nil
 }
 
+// extractFrontmatter splits data into an optional YAML front matter title
+// and the remaining markdown body.
+//
+//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
 func extractFrontmatter(data []byte) (title, body string) {
 	data = bytes.TrimSpace(data)
 	if !bytes.HasPrefix(data, []byte("---")) {
 		return "", string(data)
 	}
+
 	rest := data[3:]
-	idx := bytes.Index(rest, []byte("---"))
-	if idx < 0 {
+
+	before, after, ok := bytes.Cut(rest, []byte("---"))
+	if !ok {
 		return "", string(data)
 	}
-	frontmatter := rest[:idx]
-	body = strings.TrimSpace(string(rest[idx+3:]))
+
+	frontmatter := before
+	body = strings.TrimSpace(string(after))
 
 	var fm lessonFrontmatter
-	if err := yaml.Unmarshal(frontmatter, &fm); err == nil {
+
+	err := yaml.Unmarshal(frontmatter, &fm)
+	if err == nil {
 		return fm.Title, body
 	}
+
 	return "", body
 }

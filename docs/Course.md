@@ -26,14 +26,14 @@ spec:
       src: "/uploads/architecture.mp4"
     - name: "Kubernetes Basics Quiz"
       type: "quiz"
-      passing_score: 80
-      max_attempts_per_question: 3
-      lock_on_max_attempts: true
+      passingScore: 80
+      maxAttemptsPerQuestion: 3
+      lockOnMaxAttempts: true
       cooldown:
         strategy: "exponential"
-        base_seconds: 30
+        baseSeconds: 30
         multiplier: 2.0
-        max_seconds: 600
+        maxSeconds: 600
       questions:
         - id: "q1"
           type: "single"

@@ -67,7 +67,7 @@
                         "required": true
                     },
                     {
-                        "description": "user_id (UUID)",
+                        "description": "userId (UUID)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -147,7 +147,7 @@
                         "required": true
                     },
                     {
-                        "description": "group_id (UUID)",
+                        "description": "groupId (UUID)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -176,7 +176,7 @@
                 }
             }
         },
-        "/api/admin/courses/{slug}/enrollments/groups/{group_id}": {
+        "/api/admin/courses/{slug}/enrollments/groups/{groupId}": {
             "delete": {
                 "security": [
                     {
@@ -201,7 +201,7 @@
                     {
                         "type": "string",
                         "description": "Group UUID",
-                        "name": "group_id",
+                        "name": "groupId",
                         "in": "path",
                         "required": true
                     }
@@ -219,7 +219,7 @@
                 }
             }
         },
-        "/api/admin/courses/{slug}/enrollments/{user_id}": {
+        "/api/admin/courses/{slug}/enrollments/{userId}": {
             "delete": {
                 "security": [
                     {
@@ -244,7 +244,7 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "path",
                         "required": true
                     }
@@ -386,7 +386,7 @@
                 "summary": "Create or update a group → role mapping",
                 "parameters": [
                     {
-                        "description": "group_name and platform_role",
+                        "description": "groupName and platformRole",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -417,7 +417,7 @@
                 }
             }
         },
-        "/api/admin/groups/mappings/{group_name}": {
+        "/api/admin/groups/mappings/{groupName}": {
             "delete": {
                 "security": [
                     {
@@ -435,7 +435,7 @@
                     {
                         "type": "string",
                         "description": "Group name",
-                        "name": "group_name",
+                        "name": "groupName",
                         "in": "path",
                         "required": true
                     }
@@ -462,7 +462,7 @@
                 }
             }
         },
-        "/api/admin/groups/{group_id}": {
+        "/api/admin/groups/{groupId}": {
             "delete": {
                 "security": [
                     {
@@ -480,7 +480,7 @@
                     {
                         "type": "string",
                         "description": "Group UUID",
-                        "name": "group_id",
+                        "name": "groupId",
                         "in": "path",
                         "required": true
                     }
@@ -650,7 +650,7 @@
                 "summary": "Sync lesson progress from Course Service (admin)",
                 "parameters": [
                     {
-                        "description": "user_id, course_slug, lesson_slug",
+                        "description": "userId, courseSlug, lessonSlug",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -773,7 +773,7 @@
                 }
             }
         },
-        "/api/admin/users/{user_id}": {
+        "/api/admin/users/{userId}": {
             "get": {
                 "security": [
                     {
@@ -791,7 +791,7 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "path",
                         "required": true
                     }
@@ -835,12 +835,12 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Fields: username, bio, avatar_url, is_active, role (all optional)",
+                        "description": "Fields: username, bio, avatarUrl, isActive, role (all optional)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -884,7 +884,7 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "path",
                         "required": true
                     }
@@ -1213,7 +1213,7 @@
                 "summary": "Change the current user's password",
                 "parameters": [
                     {
-                        "description": "old_password and new_password",
+                        "description": "oldPassword and newPassword",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1272,7 +1272,7 @@
                 "summary": "Update current user profile",
                 "parameters": [
                     {
-                        "description": "Fields: username, bio, avatar_url (all optional)",
+                        "description": "Fields: username, bio, avatarUrl (all optional)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1405,7 +1405,7 @@
                 }
             }
         },
-        "/api/courses/{slug}/lessons/{lesson_slug}/complete": {
+        "/api/courses/{slug}/lessons/{lessonSlug}/complete": {
             "post": {
                 "security": [
                     {
@@ -1430,7 +1430,7 @@
                     {
                         "type": "string",
                         "description": "Lesson slug",
-                        "name": "lesson_slug",
+                        "name": "lessonSlug",
                         "in": "path",
                         "required": true
                     }
@@ -1567,7 +1567,7 @@
                 "summary": "Auto-enroll a user in a public course (internal)",
                 "parameters": [
                     {
-                        "description": "user_id, course_slug",
+                        "description": "userId, courseSlug",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1602,14 +1602,14 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Course slug",
-                        "name": "course_slug",
+                        "name": "courseSlug",
                         "in": "query",
                         "required": true
                     }
@@ -1641,7 +1641,7 @@
                 "summary": "Mark a lesson complete (internal)",
                 "parameters": [
                     {
-                        "description": "user_id, course_slug, lesson_slug",
+                        "description": "userId, courseSlug, lessonSlug",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1676,14 +1676,14 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Course slug",
-                        "name": "course_slug",
+                        "name": "courseSlug",
                         "in": "query",
                         "required": true
                     }
@@ -1713,7 +1713,7 @@
                 "summary": "Record quiz result for a module (internal)",
                 "parameters": [
                     {
-                        "description": "user_id, course_slug, module_index, score, max_score, passed",
+                        "description": "userId, courseSlug, moduleIndex, score, maxScore, passed",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1748,14 +1748,14 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Course slug",
-                        "name": "course_slug",
+                        "name": "courseSlug",
                         "in": "query",
                         "required": true
                     }
@@ -1784,14 +1784,14 @@
                     {
                         "type": "string",
                         "description": "User UUID",
-                        "name": "user_id",
+                        "name": "userId",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Course slug",
-                        "name": "course_slug",
+                        "name": "courseSlug",
                         "in": "query",
                         "required": true
                     }
@@ -1848,16 +1848,16 @@
         "handlers.userPublicRow": {
             "type": "object",
             "properties": {
-                "auth_provider": {
+                "authProvider": {
                     "type": "string"
                 },
-                "avatar_url": {
+                "avatarUrl": {
                     "type": "string"
                 },
                 "bio": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
                 "email": {
@@ -1866,7 +1866,7 @@
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
+                "isActive": {
                     "type": "boolean"
                 },
                 "role": {

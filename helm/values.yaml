@@ -208,7 +208,7 @@ frontend:
 #
 # In BOTH cases client secrets are sourced from a Kubernetes Secret, never
 # hardcoded in the chart. For dev you may put the secret inline (clientSecret /
-# client_secret) and the chart renders it into the release Secret; for production
+# clientSecret) and the chart renders it into the release Secret; for production
 # point at an existingSecret you manage (Vault / External Secrets / SOPS).
 sso:
   enabled: false
@@ -247,26 +247,26 @@ sso:
 
   # ── OAuth2 / OIDC providers ───────────────────────────────────────────────
   # Each provider's client secret is injected from a Secret (env var), not the
-  # ConfigMap. Supply it inline via client_secret (rendered into the release
+  # ConfigMap. Supply it inline via clientSecret (rendered into the release
   # Secret) OR reference an existingSecret/existingSecretKey you manage.
   #
-  #   - id: github          # OAuth2 — no issuer_url needed
+  #   - id: github          # OAuth2 — no issuerUrl needed
   #     name: GitHub
-  #     client_id: "..."
-  #     client_secret: "..."           # dev: rendered into the release Secret
+  #     clientId: "..."
+  #     clientSecret: "..."           # dev: rendered into the release Secret
   #
   #   - id: gitlab
   #     name: GitLab
-  #     client_id: "..."
-  #     issuer_url: "https://gitlab.com"
+  #     clientId: "..."
+  #     issuerUrl: "https://gitlab.com"
   #     existingSecret: gitlab-oauth    # prod: secret you manage
-  #     existingSecretKey: client_secret
+  #     existingSecretKey: clientSecret
   #
   #   - id: google
   #     name: Google
-  #     client_id: "..."
-  #     client_secret: "..."
-  #     issuer_url: "https://accounts.google.com"
+  #     clientId: "..."
+  #     clientSecret: "..."
+  #     issuerUrl: "https://accounts.google.com"
   providers: []
 
 # ── Ingress ───────────────────────────────────────────────────────────────────

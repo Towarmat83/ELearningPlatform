@@ -18,7 +18,7 @@ const testSecret = "test-signing-secret-32bytes-long!!"
 func TestCreateToken(t *testing.T) {
 	t.Parallel()
 
-	token, err := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
+	token, err := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestCreateToken(t *testing.T) {
 func TestVerifyToken_Valid(t *testing.T) {
 	t.Parallel()
 
-	token, err := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
+	token, err := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestVerifyToken_Valid(t *testing.T) {
 func TestVerifyToken_WrongSecret(t *testing.T) {
 	t.Parallel()
 
-	token, _ := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
+	token, _ := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 
 	_, err := VerifyToken(token, "wrong-secret")
 	if err == nil {
@@ -153,7 +153,7 @@ func TestGetClaims_Missing(t *testing.T) {
 func TestAuth_Valid(t *testing.T) {
 	t.Parallel()
 
-	token, _ := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
+	token, _ := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 
 	mw := Auth(nil, testSecret)
 
@@ -257,7 +257,7 @@ func TestAuth_MissingSubject(t *testing.T) {
 func TestAdmin_ValidAdminToken(t *testing.T) {
 	t.Parallel()
 
-	token, _ := CreateToken("admin-1", "admin@example.com", "admin", testSecret, 24)
+	token, _ := CreateToken("admin-1", "admin@example.com", "admin", "admin-1", testSecret, 24)
 
 	mw := Admin(nil, testSecret)
 
@@ -288,7 +288,7 @@ func TestAdmin_ValidAdminToken(t *testing.T) {
 func TestAdmin_StudentForbidden(t *testing.T) {
 	t.Parallel()
 
-	token, _ := CreateToken("user-1", "user@example.com", "student", testSecret, 24)
+	token, _ := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 
 	mw := Admin(nil, testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

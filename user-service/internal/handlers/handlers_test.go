@@ -65,7 +65,7 @@ func newTestRouter(pool *fake.Pool) http.Handler {
 func htAuthHeader(t *testing.T, role string) string {
 	t.Helper()
 
-	tok, err := apimiddleware.CreateToken("user-uuid-1", "user@test.com", role, htSecret, htExpiry)
+	tok, err := apimiddleware.CreateToken("user-uuid-1", "user@test.com", role, "testuser", htSecret, htExpiry)
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
 	}

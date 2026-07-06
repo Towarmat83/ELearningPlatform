@@ -157,6 +157,35 @@ fn check_distrobox_lab3_container(params: DistroboxContainerParams) -> Result<Lo
 }
 
 #[tauri::command]
+fn check_distrobox_lab3_install(params: DistroboxLab3Params) -> Result<LocalCheckResult, String> {
+    if !distrobox_container_exists(&params.container_name) {
+        return Ok(LocalCheckResult {
+            allow: false,
+            violations: vec![format!(
+                "Distrobox '{}' introuvable. Créez-le d'abord.",
+                params.container_name
+            )],
+        });
+    }
+    let installed = Command::new(podman_bin())
+        .args(["exec", &params.container_name, "which", &params.app])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if installed {
+        Ok(LocalCheckResult { allow: true, violations: vec![] })
+    } else {
+        Ok(LocalCheckResult {
+            allow: false,
+            violations: vec![format!(
+                "'{}' n'est pas installé dans la Distrobox. Avez-vous bien exécuté 'sudo dnf install {}' depuis la Distrobox ?",
+                params.app, params.app
+            )],
+        })
+    }
+}
+
+#[tauri::command]
 fn check_distrobox_lab3_export(params: DistroboxLab3Params) -> Result<LocalCheckResult, String> {
     let mut violations = vec![];
     if !distrobox_container_exists(&params.container_name) {
@@ -219,6 +248,11 @@ fn local_check(
                 .map_err(|e| format!("Params invalides : {e}"))?;
             check_distrobox_lab3_container(p)
         }
+        "distrobox_lab3_install" => {
+            let p: DistroboxLab3Params = serde_json::from_value(params)
+                .map_err(|e| format!("Params invalides : {e}"))?;
+            check_distrobox_lab3_install(p)
+        }
         "distrobox_lab3_export" => {
             let p: DistroboxLab3Params = serde_json::from_value(params)
                 .map_err(|e| format!("Params invalides : {e}"))?;
@@ -238,6 +272,7 @@ pub fn run() {
             check_podman_lab2,
             check_distrobox_lab3,
             check_distrobox_lab3_container,
+            check_distrobox_lab3_install,
             check_distrobox_lab3_export
         ])
         .setup(|app| {

@@ -52,6 +52,9 @@ const moduleTypeText = "text"
 // moduleTypeImage identifies a module whose content is an image.
 const moduleTypeImage = "image"
 
+// checkProviderLocal identifies a lab module verified locally via Tauri.
+const checkProviderLocal = "local"
+
 // labTypeForm is the legacy labType reported for text-content modules.
 const labTypeForm = "form"
 

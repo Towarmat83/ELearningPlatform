@@ -269,13 +269,14 @@ type CourseSpec struct {
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
 }
 
+// Course is the Schema for the courses API.
+//
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=course
 // +kubebuilder:printcolumn:name="Title",type=string,JSONPath=`.spec.title`
 // +kubebuilder:printcolumn:name="Category",type=string,JSONPath=`.spec.category`
 // +kubebuilder:printcolumn:name="Public",type=boolean,JSONPath=`.spec.public`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-// Course is the Schema for the courses API.
 type Course struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -284,8 +285,9 @@ type Course struct {
 	Spec CourseSpec `json:"spec,omitempty"`
 }
 
-// +kubebuilder:object:root=true
 // CourseList contains a list of Course.
+//
+// +kubebuilder:object:root=true
 type CourseList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

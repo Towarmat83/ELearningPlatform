@@ -168,7 +168,7 @@ func (s *State) GetLab(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	for _, mod := range s.visibleModules(course, req) { //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	for _, mod := range s.visibleModules(course, req) {
 		if mod.Slug() == labID {
 			s.JSON(writer, http.StatusOK, map[string]any{
 				moduleTypeLab: labResponse{
@@ -212,7 +212,7 @@ func (s *State) ListLabs(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	labs := make([]labResponse, 0, len(modules))
 	for pos, mod := range modules {
@@ -247,7 +247,7 @@ func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request)
 
 	total := 0
 	if course != nil {
-		total = len(s.visibleModules(course, req)) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+		total = len(s.visibleModules(course, req))
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{

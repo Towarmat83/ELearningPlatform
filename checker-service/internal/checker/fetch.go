@@ -3,6 +3,8 @@ package checker
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strconv"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
@@ -14,10 +16,55 @@ type GitLabFetcher struct {
 	client *gitlab.Client
 }
 
+// redirectRewriteTransport rewrites redirect URLs that point to the external
+// GitLab host back to the internal cluster host, so that 301 redirects from
+// GitLab (e.g. gitlab.local:8880 → path-based project lookup) are followed
+// correctly from inside the cluster.
+type redirectRewriteTransport struct {
+	externalHost string // e.g. "gitlab.local:8880"
+	internalHost string // e.g. "gitlab-http.gitlab.svc.cluster.local"
+	base         http.RoundTripper
+}
+
+// RoundTrip rewrites the request host when it matches the external GitLab
+// hostname, then delegates to the base transport.
+func (t *redirectRewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Host == t.externalHost {
+		cloned := req.Clone(req.Context())
+		cloned.URL.Host = t.internalHost
+		req = cloned
+	}
+
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return nil, fmt.Errorf("round trip: %w", err)
+	}
+
+	return resp, nil
+}
+
 // NewFetcher creates a GitLabFetcher authenticated against the given GitLab
-// instance.
+// instance. It installs a redirect-rewriting transport so that GitLab's 301
+// redirects (which use its external hostname) are resolved via the internal
+// cluster service instead.
 func NewFetcher(token, baseURL string) (*GitLabFetcher, error) {
-	client, err := gitlab.NewClient(token, gitlab.WithBaseURL(baseURL+"/api/v4"))
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse base URL: %w", err)
+	}
+
+	transport := &redirectRewriteTransport{
+		externalHost: "gitlab.local:8880",
+		internalHost: parsedURL.Host,
+		base:         http.DefaultTransport,
+	}
+
+	httpClient := &http.Client{Transport: transport}
+
+	client, err := gitlab.NewClient(token,
+		gitlab.WithBaseURL(baseURL+"/api/v4"),
+		gitlab.WithHTTPClient(httpClient),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("gitlab new client: %w", err)
 	}
@@ -73,10 +120,8 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 // fetchOpenMRs returns open merge requests for the project, enriched with
 // pipeline status and commits.
 func (f *GitLabFetcher) fetchOpenMRs(project string) []openMRInfo {
-	opened := "opened"
-
 	openMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
-		State: &opened,
+		State: mrOpened(),
 	})
 	if err != nil {
 		return nil

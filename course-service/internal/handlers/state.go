@@ -55,6 +55,9 @@ const moduleTypeImage = "image"
 // checkProviderLocal identifies a lab module verified locally via Tauri.
 const checkProviderLocal = "local"
 
+// checkProviderGitLab identifies a lab module verified via GitLab step checks.
+const checkProviderGitLab = "gitlab"
+
 // labTypeForm is the legacy labType reported for text-content modules.
 const labTypeForm = "form"
 
@@ -257,7 +260,7 @@ func (s *State) ClearModuleCache(writer http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	idx, err := strconv.Atoi(param(req, "index"))
 	if err != nil || idx < 0 || idx >= len(modules) {

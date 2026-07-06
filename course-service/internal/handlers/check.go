@@ -65,12 +65,12 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 		displayName = username
 	}
 
-	mod, idx, success := s.resolveLabModule(writer, req, course, indexStr) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	mod, idx, success := s.resolveLabModule(writer, req, course, indexStr)
 	if !success {
 		return
 	}
 
-	spec, policyData, success := s.fetchCheckSpec(writer, mod) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	spec, policyData, success := s.fetchCheckSpec(writer, mod)
 	if !success {
 		return
 	}
@@ -162,6 +162,122 @@ func (s *State) fetchCheckSpec(writer http.ResponseWriter, mod content.Module) (
 // the decoded response, writing an HTTP error and returning ok=false on
 // any failure.
 func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body evaluateRequest) (CheckResponse, bool) {
+	return s.callCheckerRoute(writer, req, "/evaluate", body)
+}
+
+// storeLabCheck persists a lab check result for later review, logging a
+// warning on failure without interrupting the response to the client.
+func (s *State) storeLabCheck(
+	ctx context.Context, username, courseSlug string, moduleIndex int, moduleName string, result CheckResponse,
+) {
+	if s.DB == nil {
+		return
+	}
+
+	violations := result.Violations
+	if violations == nil {
+		violations = []string{}
+	}
+
+	_, err := s.DB.Exec(ctx,
+		`INSERT INTO lab_checks (username, courseSlug, moduleIndex, moduleName, allow, violations)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		username, courseSlug, moduleIndex, moduleName, result.Allow, violations,
+	)
+	if err != nil {
+		slog.Warn("failed to store lab check", "err", err)
+	}
+}
+
+// stepCheckRequest is sent to checker-service's /check-step route.
+type stepCheckRequest struct {
+	Username    string         `json:"username"`
+	Project     string         `json:"project"`
+	CheckType   string         `json:"checkType"`
+	CheckParams map[string]any `json:"checkParams"`
+}
+
+// CheckModuleStep runs a single named step check for a lab module.
+// POST /api/courses/{slug}/modules/{index}/steps/{stepIndex}/check.
+func (s *State) CheckModuleStep(writer http.ResponseWriter, req *http.Request) { //nolint:gocyclo,cyclop,funlen // single-responsibility handler with multiple early-exit guard clauses
+	courseSlug := param(req, "slug")
+	indexStr := param(req, "index")
+	stepIndexStr := param(req, "stepIndex")
+	claims := s.claims(req)
+
+	course := s.Content.Get(courseSlug)
+	if course == nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
+
+		return
+	}
+
+	username := claims.PreferredUsername
+	if username == "" {
+		username = claims.Subject
+	}
+
+	mod, _, success := s.resolveLabModule(writer, req, course, indexStr)
+	if !success {
+		return
+	}
+
+	if mod.CheckProvider != checkProviderGitLab || len(mod.Steps) == 0 {
+		s.Error(writer, http.StatusBadRequest, "Module does not have GitLab step checks")
+
+		return
+	}
+
+	stepIdx, err := strconv.Atoi(stepIndexStr)
+	if err != nil || stepIdx < 0 || stepIdx >= len(mod.Steps) {
+		s.Error(writer, http.StatusNotFound, "Step not found")
+
+		return
+	}
+
+	step := mod.Steps[stepIdx]
+
+	// Resolve {{ .Username }} template in every string value of checkParams.
+	resolved := make(map[string]any, len(step.CheckParams))
+	for k, v := range step.CheckParams {
+		if sv, ok := v.(string); ok {
+			resolved[k] = strings.ReplaceAll(sv, "{{ .Username }}", username)
+		} else {
+			resolved[k] = v
+		}
+	}
+
+	// Derive project from checkParams if present; otherwise skip.
+	project, _ := resolved["project"].(string)
+	if project == "" {
+		s.Error(writer, http.StatusBadRequest, "Step checkParams missing project")
+
+		return
+	}
+
+	result, success := s.callCheckerStep(writer, req, stepCheckRequest{
+		Username:    username,
+		Project:     project,
+		CheckType:   step.CheckType,
+		CheckParams: resolved,
+	})
+	if !success {
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, result)
+}
+
+// callCheckerStep sends a step check request to checker-service's /check-step
+// route and returns the decoded response.
+func (s *State) callCheckerStep(writer http.ResponseWriter, req *http.Request, body stepCheckRequest) (CheckResponse, bool) {
+	return s.callCheckerRoute(writer, req, "/check-step", body)
+}
+
+// callCheckerRoute marshals body, POSTs it to checker-service at the given
+// path, and decodes the CheckResponse. Writes an HTTP error and returns
+// ok=false on any failure.
+func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, route string, body any) (CheckResponse, bool) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Failed to build checker request")
@@ -170,7 +286,7 @@ func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body 
 	}
 
 	httpReq, err := http.NewRequestWithContext(
-		req.Context(), http.MethodPost, s.Config.CheckerServiceURL+"/evaluate", bytes.NewReader(payload),
+		req.Context(), http.MethodPost, s.Config.CheckerServiceURL+route, bytes.NewReader(payload),
 	)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Failed to build checker request")
@@ -186,6 +302,7 @@ func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body 
 
 		return CheckResponse{}, false
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -213,30 +330,6 @@ func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body 
 	}
 
 	return result, true
-}
-
-// storeLabCheck persists a lab check result for later review, logging a
-// warning on failure without interrupting the response to the client.
-func (s *State) storeLabCheck(
-	ctx context.Context, username, courseSlug string, moduleIndex int, moduleName string, result CheckResponse,
-) {
-	if s.DB == nil {
-		return
-	}
-
-	violations := result.Violations
-	if violations == nil {
-		violations = []string{}
-	}
-
-	_, err := s.DB.Exec(ctx,
-		`INSERT INTO lab_checks (username, courseSlug, moduleIndex, moduleName, allow, violations)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		username, courseSlug, moduleIndex, moduleName, result.Allow, violations,
-	)
-	if err != nil {
-		slog.Warn("failed to store lab check", "err", err)
-	}
 }
 
 // RecordLocalCheck persists the result of a Tauri-side local check

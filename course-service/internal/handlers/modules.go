@@ -476,7 +476,7 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 	userID := claims.Subject
 
 	viewed := s.viewedLessons(req, courseSlug, userID)
@@ -617,7 +617,7 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	idx, ok := resolveModuleIndex(indexStr, len(modules))
 	if !ok {
@@ -629,12 +629,12 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 	mod := modules[idx]
 	resp := s.buildModuleDetailResponse(req, mod, idx, courseSlug, claims.Subject)
 
-	if !s.populateModuleContent(writer, &resp, mod, isAdmin, claims.Subject, courseSlug, idx) { //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	if !s.populateModuleContent(writer, &resp, mod, isAdmin, claims.Subject, courseSlug, idx) { //nolint:contextcheck // populateModuleContent does not accept context (pre-existing architecture)
 		return
 	}
 
 	// If the next module is an inline quiz, embed it in the response.
-	resp.InlineQuiz = s.buildInlineQuizResponse(req, modules, idx, courseSlug, claims.Subject, isAdmin) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	resp.InlineQuiz = s.buildInlineQuizResponse(req, modules, idx, courseSlug, claims.Subject, isAdmin)
 
 	s.JSON(writer, http.StatusOK, resp)
 }
@@ -669,6 +669,11 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 		resp.CheckProvider = mod.CheckProvider
 		resp.CheckType = mod.CheckType
 		resp.CheckParams = mod.CheckParams
+		resp.Steps = mod.Steps
+	}
+	// GitLab step-based labs expose steps so the frontend can render per-step buttons.
+	if mod.CheckProvider == checkProviderGitLab && len(mod.Steps) > 0 {
+		resp.CheckProvider = mod.CheckProvider
 		resp.Steps = mod.Steps
 	}
 
@@ -905,7 +910,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	indexStr := param(req, "index")
 
@@ -924,7 +929,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	// Resolve questions: fetch from git repo first, then fallback to inline.
-	questions, passingScore, cooldownSpec, quizResolved := s.resolveSubmitQuiz(writer, mod) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	questions, passingScore, cooldownSpec, quizResolved := s.resolveSubmitQuiz(writer, mod)
 	if !quizResolved {
 		return
 	}

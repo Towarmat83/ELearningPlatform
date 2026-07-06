@@ -1,19 +1,20 @@
 package content
 
 import (
-	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
 // gitCacheFailureBackoff is how long a failed clone blocks retries for
@@ -177,12 +178,12 @@ func (gc *GitCache) awaitClone(key, rawURL, branch, token string, wait chan stru
 	return gc.getOrClone(key, rawURL, branch, token)
 }
 
-// cloneAndCache clones rawURL/branch into the cache directory, records
-// the outcome under key, and wakes any goroutines waiting on done.
+// cloneAndCache clones rawURL/branch into the cache directory using
+// go-git (pure Go, no external git binary required), records the outcome
+// under key, and wakes any goroutines waiting on done.
 // gc.mu must not be held on entry.
 func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan struct{}) (string, error) {
 	repoDir := filepath.Join(gc.cacheDir, key)
-	authURL := buildAuthURL(rawURL, token)
 
 	slog.Debug("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
 
@@ -191,15 +192,17 @@ func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan s
 		_ = os.RemoveAll(repoDir)
 	}
 
-	var stderr bytes.Buffer
+	cloneOpts := &gogit.CloneOptions{
+		URL:           rawURL,
+		Depth:         1,
+		ReferenceName: plumbing.NewBranchReferenceName(branch),
+		SingleBranch:  true,
+	}
+	if token != "" {
+		cloneOpts.Auth = &githttp.BasicAuth{Username: "oauth2", Password: token}
+	}
 
-	//nolint:gosec // rawURL/branch are operator-supplied course sources;
-	// args are passed discretely to exec, not through a shell.
-	cmd := exec.CommandContext(context.Background(), "git", "clone", "--depth=1", "--branch="+branch, authURL, repoDir)
-
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
+	_, err := gogit.PlainClone(repoDir, false, cloneOpts)
 	if err != nil {
 		_ = os.RemoveAll(repoDir)
 
@@ -209,9 +212,9 @@ func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan s
 		gc.mu.Unlock()
 		close(done)
 
-		slog.Error("git clone failed", "stderr", stderr.String())
+		slog.Error("git clone failed", "url", rawURL, "err", err)
 
-		return "", fmt.Errorf("git clone failed: %s", sanitizeGitOutput(stderr.String(), token))
+		return "", fmt.Errorf("git clone failed: %w", err)
 	}
 
 	gc.mu.Lock()

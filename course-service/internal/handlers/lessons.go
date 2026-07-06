@@ -153,13 +153,13 @@ func (s *State) ListLessons(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
+	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
 		return
 	}
 
 	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	if len(course.Lessons) > 0 {
 		out := make([]lessonSummary, 0, len(course.Lessons))
@@ -262,12 +262,12 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
+	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
 		return
 	}
 
 	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	if detail, found := findStoredLesson(course, lessonSlug, viewed); found {
 		s.JSON(writer, http.StatusOK, map[string]any{lessonJSONKey: detail})
@@ -293,7 +293,7 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 		Title:   mod.Name,
 		Order:   pos + 1,
 		Type:    mod.Type,
-		Content: s.moduleLessonBody(mod), //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+		Content: s.moduleLessonBody(mod), //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
 		Viewed:  viewed[mod.Slug()],
 	}})
 }
@@ -443,7 +443,7 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Not enrolled") { //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
+	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Not enrolled") { //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
 		return
 	}
 

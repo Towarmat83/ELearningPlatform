@@ -563,6 +563,15 @@ func buildModuleListEntry(mod content.Module, idx int, isAdmin, locked bool, vie
 		resp.LabURL = mod.LabURL
 	}
 
+	if mod.Type == moduleTypeLab && mod.HasGitContent() {
+		resp.HasCheck = true
+	}
+
+	if mod.CheckProvider == checkProviderLocal {
+		resp.HasCheck = true
+		resp.CheckProvider = mod.CheckProvider
+	}
+
 	if mod.Type == moduleTypeQuiz {
 		if mod.HasQuestions() {
 			resp.QuestionCount = len(mod.Questions)
@@ -655,7 +664,7 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 		resp.LabURL = mod.LabURL
 	}
 	// Local check modules (Tauri) expose check meta to the frontend.
-	if mod.CheckProvider == "local" {
+	if mod.CheckProvider == checkProviderLocal {
 		resp.HasCheck = true
 		resp.CheckProvider = mod.CheckProvider
 		resp.CheckType = mod.CheckType

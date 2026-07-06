@@ -423,22 +423,19 @@ import App from '../../../../layouts/App.astro';
 
     function addCopyButtons(container: HTMLElement) {
       container.querySelectorAll('pre').forEach(pre => {
-        if (pre.previousElementSibling?.classList.contains('code-toolbar')) return;
-        const toolbar = document.createElement('div');
-        toolbar.className = 'code-toolbar';
+        if (pre.querySelector('.copy-btn')) return;
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
-        btn.textContent = '📋 Copier';
+        btn.textContent = 'Copier';
         btn.addEventListener('click', () => {
           const text = pre.querySelector('code')?.innerText ?? pre.innerText;
           navigator.clipboard.writeText(text).then(() => {
-            btn.textContent = '✓ Copié !';
+            btn.textContent = '✓ Copié';
             btn.classList.add('copied');
-            setTimeout(() => { btn.textContent = '📋 Copier'; btn.classList.remove('copied'); }, 2000);
+            setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 2000);
           });
         });
-        toolbar.appendChild(btn);
-        pre.parentNode!.insertBefore(toolbar, pre);
+        pre.appendChild(btn);
       });
     }
 

@@ -275,6 +275,7 @@ type CourseSpec struct {
 // +kubebuilder:printcolumn:name="Category",type=string,JSONPath=`.spec.category`
 // +kubebuilder:printcolumn:name="Public",type=boolean,JSONPath=`.spec.public`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+
 // Course is the Schema for the courses API.
 type Course struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -285,6 +286,7 @@ type Course struct {
 }
 
 // +kubebuilder:object:root=true
+
 // CourseList contains a list of Course.
 type CourseList struct {
 	metav1.TypeMeta `json:",inline"`

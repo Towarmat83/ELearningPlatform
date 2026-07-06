@@ -81,6 +81,8 @@ spec:
 
         Télécharge la dernière version de l'image nginx sur ta machine.
 
+        <!-- check:0 -->
+
         ### 4. Exécuter le conteneur
 
         Exécute avec ces options :
@@ -96,6 +98,8 @@ spec:
         | `--rm` | supprimer | Supprime automatiquement le conteneur à la sortie |
 
         Lance un conteneur interactif `my-nginx`. Sors avec **CTRL + C**.
+
+        <!-- check:1 -->
 
         ### 5. Valider
 

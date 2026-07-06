@@ -18,6 +18,11 @@ spec:
           checkType: distrobox_lab3_container
           checkParams:
             container_name: lab
+        - title: "xcowfortune installé dans la Distrobox"
+          checkType: distrobox_lab3_install
+          checkParams:
+            container_name: lab
+            app: xcowfortune
         - title: "Application xcowfortune exportée"
           checkType: distrobox_lab3_export
           checkParams:
@@ -55,6 +60,8 @@ spec:
 
         Cette commande créera un Distrobox nommé `lab` à partir de l'image Fedora la plus récente.
 
+        <!-- check:0 -->
+
         ### 2. Installer xcowfortune
 
         Une fois la Distrobox créé, démarrez-le et installez le paquet `xcowfortune` à l'aide du gestionnaire de paquets `dnf`.
@@ -68,6 +75,8 @@ spec:
         ```bash
         sudo dnf install xcowfortune
         ```
+
+        <!-- check:1 -->
 
         ### 3. Exécuter l'application
 
@@ -90,6 +99,8 @@ spec:
         ```
 
         Cette commande exporte l'application, la rendant accessible depuis votre environnement de bureau comme si elle était installée nativement.
+
+        <!-- check:2 -->
 
         ### Nettoyage *(optionnel)*
 

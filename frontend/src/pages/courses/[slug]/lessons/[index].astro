@@ -556,11 +556,6 @@ import App from '../../../../layouts/App.astro';
       // Render content
       const contentBody = document.getElementById('content-body')!;
       if (mod.type === 'lab') {
-        // Render markdown content directly in the page
-        let mdHtml = '';
-        if (mod.content) {
-          try { mdHtml = await renderMarkdown(mod.content); } catch { mdHtml = mod.content; }
-        }
         const isLocal = mod.checkProvider === 'local';
         const inTauri = typeof window !== 'undefined' && ('__TAURI__' in window || '__TAURI_INTERNALS__' in window);
         const deepLinkUrl = `pupitre://courses/${slug}/modules/${mod.index}`;

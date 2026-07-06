@@ -53,6 +53,7 @@ sso:
 
 ingress:
   enabled: false
+  host: localhost:3000
 
 postgresql:
   enabled: true

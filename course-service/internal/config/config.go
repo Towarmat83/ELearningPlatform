@@ -52,6 +52,10 @@ type Config struct {
 	CheckerServiceURL string `yaml:"checkerServiceUrl"`
 
 	DatabaseURL string `yaml:"databaseUrl"`
+
+	// InternalSecret is the shared secret sent in X-Internal-Secret on calls to
+	// user-service /internal/* routes.
+	InternalSecret string `yaml:"-"`
 }
 
 // Load builds a Config from built-in defaults, then overlays an optional
@@ -75,6 +79,7 @@ func Load() *Config {
 	cfg.GitCacheTTL = positiveIntFromEnv("GIT_CACHE_TTL", cfg.GitCacheTTL)
 	cfg.CheckerServiceURL = stringFromEnv("CHECKER_SERVICE_URL", cfg.CheckerServiceURL)
 	cfg.DatabaseURL = stringFromEnv("DATABASE_URL", cfg.DatabaseURL)
+	cfg.InternalSecret = stringFromEnv("INTERNAL_SERVICE_SECRET", cfg.InternalSecret)
 
 	return cfg
 }

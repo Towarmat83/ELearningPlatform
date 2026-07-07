@@ -62,6 +62,7 @@ func (s *State) autoEnroll(userID, courseSlug string) {
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	s.setInternalHeader(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err == nil {
@@ -86,6 +87,8 @@ func (s *State) isEnrolled(req *http.Request, courseSlug, userID string) bool {
 	if err != nil {
 		return false
 	}
+
+	s.setInternalHeader(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
@@ -359,6 +362,7 @@ func (s *State) postLessonComplete(
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	s.setInternalHeader(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
@@ -380,9 +384,6 @@ func (s *State) postLessonComplete(
 // notifyCourseComplete notifies the user-service that userID completed
 // courseSlug. Failures are only logged: the lesson itself was already
 // recorded as complete, so they must not affect the HTTP response.
-//
-// Follow-up(security): unauthenticated internal call, see the equivalent
-// note in user-service/internal/handlers/router.go — flagged in PR #74 review.
 func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug string) {
 	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
 
@@ -405,6 +406,7 @@ func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug strin
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	s.setInternalHeader(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {

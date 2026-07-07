@@ -22,8 +22,9 @@ const roleAdmin = "admin"
 type Claims struct {
 	jwt.RegisteredClaims
 
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email             string `json:"email"`
+	Role              string `json:"role"`
+	PreferredUsername string `json:"preferred_username,omitempty"` //nolint:tagliatelle // preferred_username is the standard OIDC claim name
 }
 
 // contextKey is the type used for context values set by this package.
@@ -33,10 +34,11 @@ type contextKey string
 const ClaimsKey contextKey = "claims"
 
 // CreateToken issues a signed JWT for the given user identity.
-func CreateToken(userID, email, role, secret string, expiryHours int) (string, error) {
+func CreateToken(userID, email, role, username, secret string, expiryHours int) (string, error) {
 	claims := Claims{
-		Email: email,
-		Role:  role,
+		Email:             email,
+		Role:              role,
+		PreferredUsername: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

@@ -264,7 +264,7 @@ func (s *State) oauthFinishLogin(writer http.ResponseWriter, request *http.Reque
 	addToDefaultGroup(request.Context(), s.Pool, user.ID)
 	syncGroupEnrollments(request.Context(), s.Pool, user.ID)
 
-	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, s.Config.JWTSecret, s.Config.JWTExpiryH)
+	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Token error")
 
@@ -638,7 +638,7 @@ func (s *State) completeSSOLogin(
 	addToDefaultGroup(ctx, s.Pool, user.ID)
 	syncGroupEnrollments(ctx, s.Pool, user.ID)
 
-	token, err := middleware.CreateToken(user.ID, user.Email, role, s.Config.JWTSecret, s.Config.JWTExpiryH)
+	token, err := middleware.CreateToken(user.ID, user.Email, role, user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Token error")
 

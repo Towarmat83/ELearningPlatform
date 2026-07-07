@@ -260,7 +260,7 @@ func (s *State) Register(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, s.Config.JWTSecret, s.Config.JWTExpiryH)
+	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Token error")
 
@@ -344,7 +344,7 @@ func (s *State) Login(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	token, err := middleware.CreateToken(row.user.ID, row.user.Email, row.user.Role, s.Config.JWTSecret, s.Config.JWTExpiryH)
+	token, err := middleware.CreateToken(row.user.ID, row.user.Email, row.user.Role, row.user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Token error")
 

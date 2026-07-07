@@ -3,6 +3,7 @@ package content
 import (
 	"testing"
 
+	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	coursev1 "github.com/elearning/course-service/api/v1"
@@ -18,57 +19,49 @@ func TestSourceK8s(t *testing.T) {
 	}
 }
 
-// TestBuildAuthURL_NoToken checks build auth URL no token.
-func TestBuildAuthURL_NoToken(t *testing.T) {
+// TestBuildAuth_NoToken checks build auth returns nil with no token.
+func TestBuildAuth_NoToken(t *testing.T) {
 	t.Parallel()
 
-	result := buildAuthURL("https://github.com/org/repo", "")
-	if result != "https://github.com/org/repo" {
-		t.Errorf("expected unchanged URL for empty token, got %q", result)
+	result := buildAuth("https://github.com/org/repo", "")
+	if result != nil {
+		t.Errorf("expected nil auth for empty token, got %#v", result)
 	}
 }
 
-// TestBuildAuthURL_WithToken checks build auth URL with token.
-func TestBuildAuthURL_WithToken(t *testing.T) {
+// TestBuildAuth_WithToken checks build auth with token.
+func TestBuildAuth_WithToken(t *testing.T) {
 	t.Parallel()
 
-	result := buildAuthURL("https://github.com/org/repo", "mytoken")
+	result := buildAuth("https://github.com/org/repo", "mytoken")
 
-	expected := "https://oauth2:mytoken@github.com/org/repo"
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	basicAuth, ok := result.(*githttp.BasicAuth)
+	if !ok {
+		t.Fatalf("expected *githttp.BasicAuth, got %#v", result)
+	}
+
+	if basicAuth.Username != "oauth2" || basicAuth.Password != "mytoken" {
+		t.Errorf("expected oauth2/mytoken, got %s/%s", basicAuth.Username, basicAuth.Password)
 	}
 }
 
-// TestBuildAuthURL_NonHTTP checks build auth URL non HTTP.
-func TestBuildAuthURL_NonHTTP(t *testing.T) {
+// TestBuildAuth_NonHTTP checks build auth returns nil for non-HTTP URLs.
+func TestBuildAuth_NonHTTP(t *testing.T) {
 	t.Parallel()
 
-	result := buildAuthURL("git@github.com:org/repo.git", "token")
-	// Non-http scheme should return unchanged
-	if result != "git@github.com:org/repo.git" {
-		t.Errorf("expected unchanged for non-http, got %q", result)
+	result := buildAuth("git@github.com:org/repo.git", "token")
+	if result != nil {
+		t.Errorf("expected nil auth for non-http, got %#v", result)
 	}
 }
 
-// TestBuildAuthURL_InvalidURL checks build auth URL invalid URL.
-func TestBuildAuthURL_InvalidURL(t *testing.T) {
+// TestBuildAuth_NoScheme checks build auth returns nil for scheme-less URLs.
+func TestBuildAuth_NoScheme(t *testing.T) {
 	t.Parallel()
 
-	result := buildAuthURL(":::invalid:::", "token")
-	if result != ":::invalid:::" {
-		t.Errorf("expected unchanged for invalid URL, got %q", result)
-	}
-}
-
-// TestBuildAuthURL_NoScheme checks build auth URL no scheme.
-func TestBuildAuthURL_NoScheme(t *testing.T) {
-	t.Parallel()
-
-	// URL parses successfully but has no scheme → return unchanged.
-	result := buildAuthURL("github.com/org/repo", "mytoken")
-	if result != "github.com/org/repo" {
-		t.Errorf("expected unchanged for no-scheme URL, got %q", result)
+	result := buildAuth("github.com/org/repo", "mytoken")
+	if result != nil {
+		t.Errorf("expected nil auth for no-scheme URL, got %#v", result)
 	}
 }
 

@@ -50,8 +50,10 @@ type StepResponse = EvaluateResponse
 // stepState holds pre-fetched GitLab data shared across all check functions
 // for a single CheckStep call.
 type stepState struct {
-	branches []*gitlab.Branch
-	openMRs  []*gitlab.BasicMergeRequest
+	branches       []*gitlab.Branch
+	openMRs        []*gitlab.BasicMergeRequest
+	pipelineStatus map[int64]string               // IID -> pipeline status
+	mrFullData     map[int64]*gitlab.MergeRequest // IID -> full MR (for pipeline)
 }
 
 // CheckStep validates that the project belongs to the requesting user, fetches
@@ -110,7 +112,25 @@ func (f *GitLabFetcher) fetchStepState(project string) (*stepState, error) {
 		return nil, err
 	}
 
-	return &stepState{branches: branches, openMRs: openMRs}, nil
+	state := &stepState{
+		branches:       branches,
+		openMRs:        openMRs,
+		pipelineStatus: make(map[int64]string),
+		mrFullData:     make(map[int64]*gitlab.MergeRequest),
+	}
+
+	// Pre-fetch pipeline status for each MR to avoid duplicate API calls in checkPipelinePassed
+	for _, mr := range openMRs {
+		fullMR, _, err := f.client.MergeRequests.GetMergeRequest(project, mr.IID, nil)
+		if err == nil {
+			state.mrFullData[mr.IID] = fullMR
+			if fullMR.HeadPipeline != nil {
+				state.pipelineStatus[mr.IID] = fullMR.HeadPipeline.Status
+			}
+		}
+	}
+
+	return state, nil
 }
 
 // listAllBranches returns every branch for a project, iterating over all pages.
@@ -302,7 +322,7 @@ func (f *GitLabFetcher) listAllMRCommits(project string, mrIID int64) ([]*gitlab
 }
 
 // checkPipelinePassed verifies that the pipeline on the open MR passed.
-func (f *GitLabFetcher) checkPipelinePassed(req StepRequest, state *stepState) (*StepResponse, error) {
+func (f *GitLabFetcher) checkPipelinePassed(_ StepRequest, state *stepState) (*StepResponse, error) {
 	if len(state.openMRs) == 0 {
 		return &StepResponse{
 			Allow:      false,
@@ -311,8 +331,8 @@ func (f *GitLabFetcher) checkPipelinePassed(req StepRequest, state *stepState) (
 	}
 
 	for _, mr := range state.openMRs {
-		fullMR, _, err := f.client.MergeRequests.GetMergeRequest(req.Project, mr.IID, nil)
-		if err != nil {
+		fullMR, ok := state.mrFullData[mr.IID]
+		if !ok {
 			continue
 		}
 

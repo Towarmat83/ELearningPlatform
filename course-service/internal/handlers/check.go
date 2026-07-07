@@ -70,7 +70,7 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	spec, policyData, success := s.fetchCheckSpec(writer, mod)
+	spec, policyData, success := s.fetchCheckSpec(req.Context(), writer, mod)
 	if !success {
 		return
 	}
@@ -126,12 +126,12 @@ func (s *State) resolveLabModule(
 
 // fetchCheckSpec fetches and parses check.yaml plus its Rego policy file
 // from the same git directory as the module content.
-func (s *State) fetchCheckSpec(writer http.ResponseWriter, mod content.Module) (checkSpec, []byte, bool) {
+func (s *State) fetchCheckSpec(ctx context.Context, writer http.ResponseWriter, mod content.Module) (checkSpec, []byte, bool) {
 	token := s.tokenForRepo(mod.Src)
 	checkDir := path.Dir(mod.Path)
 
 	// Fetch check.yaml co-located with module content
-	specData, err := s.GitCache.FetchModuleContent(mod.Src, mod.Ref, path.Join(checkDir, "check.yaml"), token)
+	specData, err := s.GitCache.FetchModuleContent(ctx, mod.Src, mod.Ref, path.Join(checkDir, "check.yaml"), token)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "No check.yaml found for this lab")
 
@@ -148,7 +148,7 @@ func (s *State) fetchCheckSpec(writer http.ResponseWriter, mod content.Module) (
 	}
 
 	// Fetch Rego policy from same directory
-	policyData, err := s.GitCache.FetchModuleContent(mod.Src, mod.Ref, path.Join(checkDir, spec.Policy), token)
+	policyData, err := s.GitCache.FetchModuleContent(ctx, mod.Src, mod.Ref, path.Join(checkDir, spec.Policy), token)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "Policy file not found: "+spec.Policy)
 

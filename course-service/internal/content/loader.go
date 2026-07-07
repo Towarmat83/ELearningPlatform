@@ -2,6 +2,7 @@ package content
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -175,8 +176,8 @@ func ParseMarkdownLesson(path string, order int) (Lesson, error) {
 
 // FetchModuleIndex fetches and parses a module index YAML file from git.
 // Index entries that omit src or ref inherit them from the parent module.
-func FetchModuleIndex(gc *GitCache, parent Module, token string) ([]Module, error) {
-	data, err := gc.FetchModuleContent(parent.Src, parent.Ref, parent.Path, token)
+func FetchModuleIndex(ctx context.Context, gc *GitCache, parent Module, token string) ([]Module, error) {
+	data, err := gc.FetchModuleContent(ctx, parent.Src, parent.Ref, parent.Path, token)
 	if err != nil {
 		return nil, err
 	}

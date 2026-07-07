@@ -1,19 +1,20 @@
 package content
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
@@ -28,6 +29,10 @@ const gitCacheDirPerm = 0o750
 // gitNoCloneOutput is returned by sanitizeGitOutput when git produced no
 // output at all.
 const gitNoCloneOutput = "(no output)"
+
+// gitOAuth2Username is the conventional basic-auth username paired with an
+// OAuth2 token when authenticating over HTTPS (GitHub/GitLab convention).
+const gitOAuth2Username = "oauth2"
 
 // cachedRepo tracks the on-disk location and health of a single cloned
 // repository.
@@ -64,10 +69,10 @@ func NewGitCache(cacheDir string, ttl time.Duration) *GitCache {
 
 // FetchModuleContent clones (or reuses a cached clone of) rawURL at
 // branch and returns the contents of filePath within it.
-func (gc *GitCache) FetchModuleContent(rawURL, branch, filePath, token string) ([]byte, error) {
+func (gc *GitCache) FetchModuleContent(ctx context.Context, rawURL, branch, filePath, token string) ([]byte, error) {
 	key := gc.cacheKey(rawURL, branch)
 
-	repoDir, err := gc.getOrClone(key, rawURL, branch, token)
+	repoDir, err := gc.getOrClone(ctx, key, rawURL, branch, token)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +126,7 @@ func (gc *GitCache) cacheKey(rawURL, branch string) string {
 
 // getOrClone returns the local path for rawURL/branch, cloning it first
 // if it is not already cached and fresh.
-func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error) {
+func (gc *GitCache) getOrClone(ctx context.Context, key, rawURL, branch, token string) (string, error) {
 	gc.mu.Lock()
 
 	if cached, ok := gc.repos[key]; ok {
@@ -140,19 +145,19 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 	}
 
 	if wait, waiting := gc.cloning[key]; waiting {
-		return gc.awaitClone(key, rawURL, branch, token, wait)
+		return gc.awaitClone(ctx, key, rawURL, branch, token, wait)
 	}
 
 	done := make(chan struct{})
 	gc.cloning[key] = done
 	gc.mu.Unlock()
 
-	return gc.cloneAndCache(key, rawURL, branch, token, done)
+	return gc.cloneAndCache(ctx, key, rawURL, branch, token, done)
 }
 
 // awaitClone blocks until an in-flight clone of key finishes, then reuses
 // its result or retries getOrClone. gc.mu must be held on entry.
-func (gc *GitCache) awaitClone(key, rawURL, branch, token string, wait chan struct{}) (string, error) {
+func (gc *GitCache) awaitClone(ctx context.Context, key, rawURL, branch, token string, wait chan struct{}) (string, error) {
 	gc.mu.Unlock()
 	<-wait
 	gc.mu.Lock()
@@ -175,14 +180,14 @@ func (gc *GitCache) awaitClone(key, rawURL, branch, token string, wait chan stru
 
 	gc.mu.Unlock()
 
-	return gc.getOrClone(key, rawURL, branch, token)
+	return gc.getOrClone(ctx, key, rawURL, branch, token)
 }
 
 // cloneAndCache clones rawURL/branch into the cache directory using
 // go-git (pure Go, no external git binary required), records the outcome
 // under key, and wakes any goroutines waiting on done.
 // gc.mu must not be held on entry.
-func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan struct{}) (string, error) {
+func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, token string, done chan struct{}) (string, error) {
 	repoDir := filepath.Join(gc.cacheDir, key)
 
 	slog.Debug("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
@@ -192,17 +197,14 @@ func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan s
 		_ = os.RemoveAll(repoDir)
 	}
 
-	cloneOpts := &gogit.CloneOptions{
+	_, err := git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{
 		URL:           rawURL,
-		Depth:         1,
+		Auth:          buildAuth(rawURL, token),
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		SingleBranch:  true,
-	}
-	if token != "" {
-		cloneOpts.Auth = &githttp.BasicAuth{Username: "oauth2", Password: token}
-	}
-
-	_, err := gogit.PlainClone(repoDir, false, cloneOpts)
+		Depth:         1,
+		Tags:          git.NoTags,
+	})
 	if err != nil {
 		_ = os.RemoveAll(repoDir)
 
@@ -212,9 +214,11 @@ func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan s
 		gc.mu.Unlock()
 		close(done)
 
-		slog.Error("git clone failed", "url", rawURL, "err", err)
+		msg := sanitizeGitOutput(err.Error(), token)
 
-		return "", fmt.Errorf("git clone failed: %w", err)
+		slog.Error("git clone failed", "error", msg)
+
+		return "", fmt.Errorf("git clone failed: %s", msg)
 	}
 
 	gc.mu.Lock()
@@ -246,25 +250,20 @@ func recentCloneFailure(cached *cachedRepo) error {
 	return nil
 }
 
-// buildAuthURL embeds token as an OAuth2 basic-auth credential in rawURL
-// when it is a plain HTTP(S) URL.
-func buildAuthURL(rawURL, token string) string {
-	if token == "" {
-		return rawURL
+// buildAuth returns an OAuth2 basic-auth credential for rawURL when it is a
+// plain HTTP(S) URL and a token is supplied; nil otherwise (e.g. SSH URLs,
+// which are left to the transport's default auth resolution).
+//
+//nolint:ireturn // go-git's CloneOptions.Auth field is interface-typed.
+func buildAuth(rawURL, token string) transport.AuthMethod {
+	if token == "" || !strings.HasPrefix(rawURL, "http") {
+		return nil
 	}
 
-	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme == "" {
-		return rawURL
+	return &githttp.BasicAuth{
+		Username: gitOAuth2Username,
+		Password: token,
 	}
-
-	if !strings.HasPrefix(parsed.Scheme, "http") {
-		return rawURL
-	}
-
-	parsed.User = url.UserPassword("oauth2", token)
-
-	return parsed.String()
 }
 
 // sanitizeGitOutput trims output and redacts token from it, if present.

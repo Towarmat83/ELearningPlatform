@@ -1,6 +1,7 @@
 package content
 
 import (
+	"context"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -10,8 +11,8 @@ import (
 
 // FetchQuizContent clones a git repo at src/ref, reads the YAML file at path,
 // and returns the parsed in-memory Quiz.
-func FetchQuizContent(gc *GitCache, src, ref, path, token string) (*Quiz, error) {
-	data, err := gc.FetchModuleContent(src, ref, path, token)
+func FetchQuizContent(ctx context.Context, gc *GitCache, src, ref, path, token string) (*Quiz, error) {
+	data, err := gc.FetchModuleContent(ctx, src, ref, path, token)
 	if err != nil {
 		return nil, fmt.Errorf("fetch quiz content: %w", err)
 	}

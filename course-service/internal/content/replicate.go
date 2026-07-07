@@ -29,7 +29,7 @@ const maxReplicateExtLength = 5
 // For text modules or when replication is false, it returns the original
 // Src unchanged. The downloaded file is cached on disk; subsequent calls
 // skip the download.
-func ReplicatedPath(mod Module, uploadsDir string) string {
+func ReplicatedPath(ctx context.Context, mod Module, uploadsDir string) string {
 	if !mod.Replication || mod.Type == moduleTypeText {
 		return mod.Src
 	}
@@ -48,7 +48,7 @@ func ReplicatedPath(mod Module, uploadsDir string) string {
 		return replicatedPrefix + filename
 	}
 
-	err = downloadFile(mod.Src, localPath)
+	err = downloadFile(ctx, mod.Src, localPath)
 	if err != nil {
 		slog.Error("replication: download failed — returning local path anyway",
 			"src", mod.Src, "dest", localPath, "err", err)
@@ -63,8 +63,8 @@ func ReplicatedPath(mod Module, uploadsDir string) string {
 
 // downloadFile downloads the resource at rawURL and writes it to dest,
 // creating any missing parent directories.
-func downloadFile(rawURL, dest string) error {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawURL, http.NoBody)
+func downloadFile(ctx context.Context, rawURL, dest string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}

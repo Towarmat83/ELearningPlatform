@@ -32,6 +32,9 @@ const noOpenMRMessage = "Aucune MR ouverte. Ouvrez d'abord une Merge Request."
 // line of a commit message.
 const commitMessageParts = 2
 
+// gitLabPageSize is the number of items fetched per page in paginated calls.
+const gitLabPageSize = 100
+
 // conventionalCommitRe matches the first line of a conventional commit message.
 var conventionalCommitRe = regexp.MustCompile(
 	`^(feat|fix|chore|docs|style|refactor|test|perf|ci|build|revert)(\([^)]+\))?: .+`,
@@ -48,29 +51,122 @@ type StepRequest struct {
 // StepResponse is returned by POST /check-step.
 type StepResponse = EvaluateResponse
 
-// CheckStep dispatches to the appropriate named step check.
+// stepState holds pre-fetched GitLab data shared across all check functions
+// for a single CheckStep call.
+type stepState struct {
+	branches []*gitlab.Branch
+	openMRs  []*gitlab.BasicMergeRequest
+}
+
+// CheckStep validates that the project belongs to the requesting user, fetches
+// GitLab state once, then dispatches to the appropriate check.
+//
+//nolint:cyclop // dispatch switch over 7 check types; each case is a single delegating call
 func (f *GitLabFetcher) CheckStep(req StepRequest) (*StepResponse, error) {
+	parts := strings.Split(req.Project, "/")
+	if parts[len(parts)-1] != req.Username {
+		return &StepResponse{
+			Allow:      false,
+			Violations: []string{"Le projet ne correspond pas à votre compte GitLab."},
+		}, nil
+	}
+
+	state, err := f.fetchStepState(req.Project)
+	if err != nil {
+		return nil, err
+	}
+
 	switch req.CheckType {
 	case StepGitLabBranch:
-		return f.checkBranch(req)
+		return checkBranch(req, state)
 	case StepGitLabMROpen:
-		return f.checkMROpen(req)
+		return checkMROpen(state)
 	case StepGitLabConventionalCommit:
-		return f.checkConventionalCommit(req)
+		return f.checkConventionalCommit(req, state)
 	case StepGitLabPipelinePassed:
-		return f.checkPipelinePassed(req)
+		return f.checkPipelinePassed(req, state)
 	case StepGitLabCommitOnBranch:
-		return f.checkCommitOnBranch(req)
+		return checkCommitOnBranch(req, state)
 	case StepGitLabFileOnBranch:
-		return f.checkFileOnBranch(req)
+		return f.checkFileOnBranch(req, state)
 	case StepGitLabConventionalCommitOnBranch:
-		return f.checkConventionalCommitOnBranch(req)
+		return f.checkConventionalCommitOnBranch(req, state)
 	default:
 		return &StepResponse{
 			Allow:      false,
 			Violations: []string{"Type de vérification inconnu : " + req.CheckType},
 		}, nil
 	}
+}
+
+// fetchStepState pre-fetches branches and open MRs for a project so that
+// individual check functions do not each issue their own list calls.
+func (f *GitLabFetcher) fetchStepState(project string) (*stepState, error) {
+	branches, err := f.listAllBranches(project)
+	if err != nil {
+		return nil, err
+	}
+
+	openMRs, err := f.listAllOpenMRs(project)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stepState{branches: branches, openMRs: openMRs}, nil
+}
+
+// listAllBranches returns every branch for a project, iterating over all pages.
+func (f *GitLabFetcher) listAllBranches(project string) ([]*gitlab.Branch, error) {
+	var all []*gitlab.Branch
+
+	opts := &gitlab.ListBranchesOptions{
+		ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: 1},
+	}
+
+	for {
+		branches, resp, err := f.client.Branches.ListBranches(project, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list branches: %w", err)
+		}
+
+		all = append(all, branches...)
+
+		if resp.NextPage == 0 {
+			break
+		}
+
+		opts.Page = resp.NextPage
+	}
+
+	return all, nil
+}
+
+// listAllOpenMRs returns every open merge request for a project, iterating
+// over all pages.
+func (f *GitLabFetcher) listAllOpenMRs(project string) ([]*gitlab.BasicMergeRequest, error) {
+	var all []*gitlab.BasicMergeRequest
+
+	opts := &gitlab.ListProjectMergeRequestsOptions{
+		State:       mrOpened(),
+		ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: 1},
+	}
+
+	for {
+		mrs, resp, err := f.client.MergeRequests.ListProjectMergeRequests(project, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list open MRs: %w", err)
+		}
+
+		all = append(all, mrs...)
+
+		if resp.NextPage == 0 {
+			break
+		}
+
+		opts.Page = resp.NextPage
+	}
+
+	return all, nil
 }
 
 // strParam reads a string value from params.
@@ -91,19 +187,23 @@ func mrOpened() *string {
 	return &s
 }
 
-// checkBranch verifies that at least one branch matching pattern exists.
-func (f *GitLabFetcher) checkBranch(req StepRequest) (*StepResponse, error) {
-	pattern := strParam(req.CheckParams, "pattern")
-
-	branches, _, err := f.client.Branches.ListBranches(req.Project, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list branches: %w", err)
-	}
-
+// branchByPattern returns the first branch whose name starts with pattern.
+func branchByPattern(branches []*gitlab.Branch, pattern string) string {
 	for _, b := range branches {
 		if strings.HasPrefix(b.Name, pattern) {
-			return &StepResponse{Allow: true}, nil
+			return b.Name
 		}
+	}
+
+	return ""
+}
+
+// checkBranch verifies that at least one branch matching pattern exists.
+func checkBranch(req StepRequest, state *stepState) (*StepResponse, error) {
+	pattern := strParam(req.CheckParams, "pattern")
+
+	if branchByPattern(state.branches, pattern) != "" {
+		return &StepResponse{Allow: true}, nil
 	}
 
 	return &StepResponse{
@@ -116,43 +216,29 @@ func (f *GitLabFetcher) checkBranch(req StepRequest) (*StepResponse, error) {
 }
 
 // checkMROpen verifies that at least one MR is open in the project.
-func (f *GitLabFetcher) checkMROpen(req StepRequest) (*StepResponse, error) {
-	mrs, _, err := f.client.MergeRequests.ListProjectMergeRequests(req.Project, &gitlab.ListProjectMergeRequestsOptions{
-		State: mrOpened(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list MRs: %w", err)
+func checkMROpen(state *stepState) (*StepResponse, error) {
+	if len(state.openMRs) > 0 {
+		return &StepResponse{Allow: true}, nil
 	}
 
-	if len(mrs) == 0 {
-		return &StepResponse{
-			Allow:      false,
-			Violations: []string{"Aucune Merge Request ouverte trouvée. Créez une MR sans la fusionner."},
-		}, nil
-	}
-
-	return &StepResponse{Allow: true}, nil
+	return &StepResponse{
+		Allow:      false,
+		Violations: []string{"Aucune Merge Request ouverte trouvée. Créez une MR sans la fusionner."},
+	}, nil
 }
 
 // checkConventionalCommit verifies that at least one commit on an open MR
 // follows conventional format.
-func (f *GitLabFetcher) checkConventionalCommit(req StepRequest) (*StepResponse, error) {
-	mrs, _, err := f.client.MergeRequests.ListProjectMergeRequests(req.Project, &gitlab.ListProjectMergeRequestsOptions{
-		State: mrOpened(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list MRs: %w", err)
-	}
-
-	if len(mrs) == 0 {
+func (f *GitLabFetcher) checkConventionalCommit(req StepRequest, state *stepState) (*StepResponse, error) {
+	if len(state.openMRs) == 0 {
 		return &StepResponse{
 			Allow:      false,
 			Violations: []string{noOpenMRMessage},
 		}, nil
 	}
 
-	for _, mr := range mrs {
-		commits, _, err := f.client.MergeRequests.GetMergeRequestCommits(req.Project, mr.IID, nil)
+	for _, mr := range state.openMRs {
+		commits, err := f.listAllMRCommits(req.Project, mr.IID)
 		if err != nil {
 			continue
 		}
@@ -171,23 +257,43 @@ func (f *GitLabFetcher) checkConventionalCommit(req StepRequest) (*StepResponse,
 	}, nil
 }
 
-// checkPipelinePassed verifies that the pipeline on the open MR passed.
-func (f *GitLabFetcher) checkPipelinePassed(req StepRequest) (*StepResponse, error) {
-	mrs, _, err := f.client.MergeRequests.ListProjectMergeRequests(req.Project, &gitlab.ListProjectMergeRequestsOptions{
-		State: mrOpened(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list MRs: %w", err)
+// listAllMRCommits returns every commit for a merge request, iterating over
+// all pages.
+func (f *GitLabFetcher) listAllMRCommits(project string, mrIID int64) ([]*gitlab.Commit, error) {
+	var all []*gitlab.Commit
+
+	opts := &gitlab.GetMergeRequestCommitsOptions{
+		ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: 1},
 	}
 
-	if len(mrs) == 0 {
+	for {
+		commits, resp, err := f.client.MergeRequests.GetMergeRequestCommits(project, mrIID, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list MR commits: %w", err)
+		}
+
+		all = append(all, commits...)
+
+		if resp.NextPage == 0 {
+			break
+		}
+
+		opts.Page = resp.NextPage
+	}
+
+	return all, nil
+}
+
+// checkPipelinePassed verifies that the pipeline on the open MR passed.
+func (f *GitLabFetcher) checkPipelinePassed(req StepRequest, state *stepState) (*StepResponse, error) {
+	if len(state.openMRs) == 0 {
 		return &StepResponse{
 			Allow:      false,
 			Violations: []string{noOpenMRMessage},
 		}, nil
 	}
 
-	for _, mr := range mrs {
+	for _, mr := range state.openMRs {
 		fullMR, _, err := f.client.MergeRequests.GetMergeRequest(req.Project, mr.IID, nil)
 		if err != nil {
 			continue
@@ -218,18 +324,13 @@ func (f *GitLabFetcher) checkPipelinePassed(req StepRequest) (*StepResponse, err
 
 // checkCommitOnBranch verifies that a branch matching pattern has at least
 // one commit.
-func (f *GitLabFetcher) checkCommitOnBranch(req StepRequest) (*StepResponse, error) {
+func checkCommitOnBranch(req StepRequest, state *stepState) (*StepResponse, error) {
 	pattern := strParam(req.CheckParams, "pattern")
 	if pattern == "" {
 		pattern = "feature/"
 	}
 
-	branches, _, err := f.client.Branches.ListBranches(req.Project, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list branches: %w", err)
-	}
-
-	for _, b := range branches {
+	for _, b := range state.branches {
 		if strings.HasPrefix(b.Name, pattern) && b.Commit != nil {
 			return &StepResponse{Allow: true}, nil
 		}
@@ -244,26 +345,10 @@ func (f *GitLabFetcher) checkCommitOnBranch(req StepRequest) (*StepResponse, err
 	}, nil
 }
 
-// findBranchByPattern returns the first branch whose name starts with pattern.
-func (f *GitLabFetcher) findBranchByPattern(project, pattern string) (string, error) {
-	branches, _, err := f.client.Branches.ListBranches(project, nil)
-	if err != nil {
-		return "", fmt.Errorf("list branches: %w", err)
-	}
-
-	for _, b := range branches {
-		if strings.HasPrefix(b.Name, pattern) {
-			return b.Name, nil
-		}
-	}
-
-	return "", nil
-}
-
 // checkFileOnBranch verifies that a specific file was modified on a branch
 // vs the base branch.
 // checkParams: pattern (branch prefix), file (path), base (default: "main").
-func (f *GitLabFetcher) checkFileOnBranch(req StepRequest) (*StepResponse, error) {
+func (f *GitLabFetcher) checkFileOnBranch(req StepRequest, state *stepState) (*StepResponse, error) {
 	pattern := strParam(req.CheckParams, "pattern")
 	file := strParam(req.CheckParams, "file")
 
@@ -272,11 +357,7 @@ func (f *GitLabFetcher) checkFileOnBranch(req StepRequest) (*StepResponse, error
 		base = defaultBaseBranch
 	}
 
-	branch, err := f.findBranchByPattern(req.Project, pattern)
-	if err != nil {
-		return nil, err
-	}
-
+	branch := branchByPattern(state.branches, pattern)
 	if branch == "" {
 		return &StepResponse{
 			Allow:      false,
@@ -307,7 +388,7 @@ func (f *GitLabFetcher) checkFileOnBranch(req StepRequest) (*StepResponse, error
 // checkConventionalCommitOnBranch verifies that all commits on a branch
 // (vs base) follow conventional format.
 // checkParams: pattern (branch prefix), base (default: "main").
-func (f *GitLabFetcher) checkConventionalCommitOnBranch(req StepRequest) (*StepResponse, error) {
+func (f *GitLabFetcher) checkConventionalCommitOnBranch(req StepRequest, state *stepState) (*StepResponse, error) {
 	pattern := strParam(req.CheckParams, "pattern")
 
 	base := strParam(req.CheckParams, "base")
@@ -315,11 +396,7 @@ func (f *GitLabFetcher) checkConventionalCommitOnBranch(req StepRequest) (*StepR
 		base = defaultBaseBranch
 	}
 
-	branch, err := f.findBranchByPattern(req.Project, pattern)
-	if err != nil {
-		return nil, err
-	}
-
+	branch := branchByPattern(state.branches, pattern)
 	if branch == "" {
 		return &StepResponse{
 			Allow:      false,

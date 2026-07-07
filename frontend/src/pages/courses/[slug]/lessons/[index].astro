@@ -627,7 +627,7 @@ import App from '../../../../layouts/App.astro';
             return false;
           }
           // GitLab step check — call the step endpoint
-          if (mod.check_provider === 'gitlab' && stepIndex >= 0) {
+          if (mod.checkProvider === 'gitlab' && stepIndex >= 0) {
             try {
               const checkToken = localStorage.getItem('token') || '';
               const resp = await fetch(`/api/courses/${slug}/modules/${mod.index}/steps/${stepIndex}/check`, {

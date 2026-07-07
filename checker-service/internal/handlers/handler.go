@@ -46,6 +46,7 @@ func (h *Handler) BuildRouter() *chi.Mux {
 	})
 
 	router.Post("/evaluate", h.Evaluate)
+	router.Post("/check-step", h.CheckStep)
 
 	return router
 }
@@ -103,6 +104,54 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 	err = json.NewEncoder(resp).Encode(result)
 	if err != nil {
 		slog.Error("encode evaluate response", "err", err)
+	}
+}
+
+// CheckStep handles POST /check-step: runs a single named GitLab check
+// without a full OPA policy evaluation.
+func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
+	var req checker.StepRequest
+
+	err := json.NewDecoder(httpReq.Body).Decode(&req)
+	if err != nil {
+		httpErr(resp, http.StatusBadRequest, "invalid request body")
+
+		return
+	}
+
+	if req.Username == "" || req.Project == "" || req.CheckType == "" {
+		httpErr(resp, http.StatusBadRequest, "username, project and checkType are required")
+
+		return
+	}
+
+	if h.config.GitLabToken == "" {
+		httpErr(resp, http.StatusInternalServerError, "GITLAB_TOKEN not configured")
+
+		return
+	}
+
+	fetcher, err := checker.NewFetcher(h.config.GitLabToken, h.config.GitLabBaseURL)
+	if err != nil {
+		slog.Error("gitlab client init", "err", err)
+		httpErr(resp, http.StatusInternalServerError, "gitlab client error")
+
+		return
+	}
+
+	result, err := fetcher.CheckStep(req)
+	if err != nil {
+		slog.Error("step check", "checkType", req.CheckType, "project", req.Project, "err", err)
+		httpErr(resp, http.StatusInternalServerError, "step check error: "+err.Error())
+
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+
+	encErr := json.NewEncoder(resp).Encode(result)
+	if encErr != nil {
+		slog.Error("encode check-step response", "err", encErr)
 	}
 }
 

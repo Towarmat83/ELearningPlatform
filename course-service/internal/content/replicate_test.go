@@ -45,7 +45,7 @@ func TestReplicatedPath_NoReplication(t *testing.T) {
 		Replication: false,
 	}
 
-	result := ReplicatedPath(m, "/tmp/uploads")
+	result := ReplicatedPath(t.Context(), m, "/tmp/uploads")
 	if result != "https://example.com/video.mp4" {
 		t.Errorf("expected original Src, got %q", result)
 	}
@@ -60,7 +60,7 @@ func TestReplicatedPath_TextType(t *testing.T) {
 		Src:         "https://example.com/content.md",
 		Replication: true,
 	}
-	result := ReplicatedPath(m, "/tmp/uploads")
+	result := ReplicatedPath(t.Context(), m, "/tmp/uploads")
 	// text type returns Src unchanged even with replication
 	if result != "https://example.com/content.md" {
 		t.Errorf("expected original Src for text type, got %q", result)
@@ -77,7 +77,7 @@ func TestReplicatedPath_EmptySrc(t *testing.T) {
 		Replication: true,
 	}
 
-	result := ReplicatedPath(m, "/tmp/uploads")
+	result := ReplicatedPath(t.Context(), m, "/tmp/uploads")
 	if result != "" {
 		t.Errorf("expected empty string for empty Src, got %q", result)
 	}
@@ -93,7 +93,7 @@ func TestReplicatedPath_ReplicationEnabled(t *testing.T) {
 		Replication: true,
 	}
 	// Returns a path starting with /uploads/ (file may not actually be downloaded in test)
-	result := ReplicatedPath(m, "/tmp/uploads-test")
+	result := ReplicatedPath(t.Context(), m, "/tmp/uploads-test")
 	if result == "" {
 		t.Error("expected non-empty result")
 	}
@@ -118,7 +118,7 @@ func TestDownloadFile_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	dest := filepath.Join(tmpDir, "downloaded.txt")
 
-	err := downloadFile(srv.URL, dest)
+	err := downloadFile(t.Context(), srv.URL, dest)
 	if err != nil {
 		t.Fatalf("downloadFile: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestDownloadFile_Non200Status(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	err := downloadFile(srv.URL, filepath.Join(tmpDir, "file.txt"))
+	err := downloadFile(t.Context(), srv.URL, filepath.Join(tmpDir, "file.txt"))
 	if err == nil {
 		t.Error("expected error for 404 response")
 	}
@@ -154,7 +154,7 @@ func TestDownloadFile_Non200Status(t *testing.T) {
 func TestDownloadFile_BadURL(t *testing.T) {
 	t.Parallel()
 
-	err := downloadFile("http://127.0.0.1:0/invalid", "/tmp/nowhere.txt")
+	err := downloadFile(t.Context(), "http://127.0.0.1:0/invalid", "/tmp/nowhere.txt")
 	if err == nil {
 		t.Error("expected error for bad URL")
 	}
@@ -172,7 +172,7 @@ func TestDownloadFile_DestInSubdir(t *testing.T) {
 	tmpDir := t.TempDir()
 	dest := filepath.Join(tmpDir, "subdir", "nested", "file.txt")
 
-	err := downloadFile(srv.URL, dest)
+	err := downloadFile(t.Context(), srv.URL, dest)
 	if err != nil {
 		t.Fatalf("downloadFile to nested dest: %v", err)
 	}
@@ -199,12 +199,12 @@ func TestReplicatedPath_AlreadyCached(t *testing.T) {
 		Replication: true,
 	}
 
-	result1 := ReplicatedPath(m, tmpDir)
+	result1 := ReplicatedPath(t.Context(), m, tmpDir)
 	if result1 == "" {
 		t.Fatal("expected non-empty result from first call")
 	}
 	// Second call should hit the cached file
-	result2 := ReplicatedPath(m, tmpDir)
+	result2 := ReplicatedPath(t.Context(), m, tmpDir)
 	if result2 != result1 {
 		t.Errorf("expected same path from cache, got %q vs %q", result1, result2)
 	}

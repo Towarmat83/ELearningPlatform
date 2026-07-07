@@ -69,10 +69,10 @@ func NewGitCache(cacheDir string, ttl time.Duration) *GitCache {
 
 // FetchModuleContent clones (or reuses a cached clone of) rawURL at
 // branch and returns the contents of filePath within it.
-func (gc *GitCache) FetchModuleContent(rawURL, branch, filePath, token string) ([]byte, error) {
+func (gc *GitCache) FetchModuleContent(ctx context.Context, rawURL, branch, filePath, token string) ([]byte, error) {
 	key := gc.cacheKey(rawURL, branch)
 
-	repoDir, err := gc.getOrClone(key, rawURL, branch, token)
+	repoDir, err := gc.getOrClone(ctx, key, rawURL, branch, token)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (gc *GitCache) cacheKey(rawURL, branch string) string {
 
 // getOrClone returns the local path for rawURL/branch, cloning it first
 // if it is not already cached and fresh.
-func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error) {
+func (gc *GitCache) getOrClone(ctx context.Context, key, rawURL, branch, token string) (string, error) {
 	gc.mu.Lock()
 
 	if cached, ok := gc.repos[key]; ok {
@@ -145,19 +145,19 @@ func (gc *GitCache) getOrClone(key, rawURL, branch, token string) (string, error
 	}
 
 	if wait, waiting := gc.cloning[key]; waiting {
-		return gc.awaitClone(key, rawURL, branch, token, wait)
+		return gc.awaitClone(ctx, key, rawURL, branch, token, wait)
 	}
 
 	done := make(chan struct{})
 	gc.cloning[key] = done
 	gc.mu.Unlock()
 
-	return gc.cloneAndCache(key, rawURL, branch, token, done)
+	return gc.cloneAndCache(ctx, key, rawURL, branch, token, done)
 }
 
 // awaitClone blocks until an in-flight clone of key finishes, then reuses
 // its result or retries getOrClone. gc.mu must be held on entry.
-func (gc *GitCache) awaitClone(key, rawURL, branch, token string, wait chan struct{}) (string, error) {
+func (gc *GitCache) awaitClone(ctx context.Context, key, rawURL, branch, token string, wait chan struct{}) (string, error) {
 	gc.mu.Unlock()
 	<-wait
 	gc.mu.Lock()
@@ -180,13 +180,14 @@ func (gc *GitCache) awaitClone(key, rawURL, branch, token string, wait chan stru
 
 	gc.mu.Unlock()
 
-	return gc.getOrClone(key, rawURL, branch, token)
+	return gc.getOrClone(ctx, key, rawURL, branch, token)
 }
 
-// cloneAndCache clones rawURL/branch into the cache directory, records
-// the outcome under key, and wakes any goroutines waiting on done.
+// cloneAndCache clones rawURL/branch into the cache directory using
+// go-git (pure Go, no external git binary required), records the outcome
+// under key, and wakes any goroutines waiting on done.
 // gc.mu must not be held on entry.
-func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan struct{}) (string, error) {
+func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, token string, done chan struct{}) (string, error) {
 	repoDir := filepath.Join(gc.cacheDir, key)
 
 	slog.Debug("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
@@ -196,7 +197,7 @@ func (gc *GitCache) cloneAndCache(key, rawURL, branch, token string, done chan s
 		_ = os.RemoveAll(repoDir)
 	}
 
-	_, err := git.PlainCloneContext(context.Background(), repoDir, false, &git.CloneOptions{
+	_, err := git.PlainCloneContext(ctx, repoDir, false, &git.CloneOptions{
 		URL:           rawURL,
 		Auth:          buildAuth(rawURL, token),
 		ReferenceName: plumbing.NewBranchReferenceName(branch),

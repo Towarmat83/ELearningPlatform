@@ -476,7 +476,7 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 	userID := claims.Subject
 
 	viewed := s.viewedLessons(req, courseSlug, userID)
@@ -617,7 +617,7 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	idx, ok := resolveModuleIndex(indexStr, len(modules))
 	if !ok {
@@ -629,12 +629,12 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 	mod := modules[idx]
 	resp := s.buildModuleDetailResponse(req, mod, idx, courseSlug, claims.Subject)
 
-	if !s.populateModuleContent(writer, &resp, mod, isAdmin, claims.Subject, courseSlug, idx) { //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	if !s.populateModuleContent(req.Context(), writer, &resp, mod, isAdmin, claims.Subject, courseSlug, idx) {
 		return
 	}
 
 	// If the next module is an inline quiz, embed it in the response.
-	resp.InlineQuiz = s.buildInlineQuizResponse(req, modules, idx, courseSlug, claims.Subject, isAdmin) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	resp.InlineQuiz = s.buildInlineQuizResponse(req, modules, idx, courseSlug, claims.Subject, isAdmin)
 
 	s.JSON(writer, http.StatusOK, resp)
 }
@@ -671,6 +671,11 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 		resp.CheckParams = mod.CheckParams
 		resp.Steps = mod.Steps
 	}
+	// GitLab step-based labs expose steps so the frontend can render per-step buttons.
+	if mod.CheckProvider == checkProviderGitLab && len(mod.Steps) > 0 {
+		resp.CheckProvider = mod.CheckProvider
+		resp.Steps = mod.Steps
+	}
 
 	return resp
 }
@@ -678,12 +683,12 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 // populateModuleContent resolves and attaches a module's body content
 // (replicated media path, lab/text markdown, or quiz questions) onto resp.
 // It writes an error response and returns false if content resolution fails.
-func (s *State) populateModuleContent(writer http.ResponseWriter, resp *moduleResponse, mod content.Module, isAdmin bool, userID, courseSlug string, idx int) bool {
+func (s *State) populateModuleContent(ctx context.Context, writer http.ResponseWriter, resp *moduleResponse, mod content.Module, isAdmin bool, userID, courseSlug string, idx int) bool {
 	switch mod.Type {
 	case moduleTypeVideo, moduleTypeImage:
-		resp.Content = content.ReplicatedPath(mod, s.Config.UploadsDir)
+		resp.Content = content.ReplicatedPath(ctx, mod, s.Config.UploadsDir)
 	case moduleTypeLab:
-		text, err := s.moduleGitOrInlineContent(mod)
+		text, err := s.moduleGitOrInlineContent(ctx, mod)
 		if err != nil {
 			s.Error(writer, http.StatusInternalServerError, "Failed to fetch lab content")
 
@@ -692,7 +697,7 @@ func (s *State) populateModuleContent(writer http.ResponseWriter, resp *moduleRe
 
 		resp.Content = text
 	case moduleTypeText:
-		text, err := s.moduleGitOrInlineContent(mod)
+		text, err := s.moduleGitOrInlineContent(ctx, mod)
 		if err != nil {
 			s.Error(writer, http.StatusInternalServerError, "Failed to fetch module content")
 
@@ -701,7 +706,7 @@ func (s *State) populateModuleContent(writer http.ResponseWriter, resp *moduleRe
 
 		resp.Content = text
 	case moduleTypeQuiz:
-		if !s.populateQuizContent(writer, resp, mod, isAdmin, userID, courseSlug, idx) {
+		if !s.populateQuizContent(ctx, writer, resp, mod, isAdmin, userID, courseSlug, idx) {
 			return false
 		}
 	}
@@ -711,12 +716,12 @@ func (s *State) populateModuleContent(writer http.ResponseWriter, resp *moduleRe
 
 // moduleGitOrInlineContent returns a module's markdown body, fetching it from
 // the git source when the module references external content.
-func (s *State) moduleGitOrInlineContent(mod content.Module) (string, error) {
+func (s *State) moduleGitOrInlineContent(ctx context.Context, mod content.Module) (string, error) {
 	if !mod.HasGitContent() {
 		return mod.Content(), nil
 	}
 
-	data, err := s.GitCache.FetchModuleContent(mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
+	data, err := s.GitCache.FetchModuleContent(ctx, mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
 	if err != nil {
 		return "", fmt.Errorf("fetch module content: %w", err)
 	}
@@ -727,12 +732,12 @@ func (s *State) moduleGitOrInlineContent(mod content.Module) (string, error) {
 // populateQuizContent resolves quiz questions (from git or inline), attaches
 // the sanitized questions/config to resp, and reports current per-question
 // cooldowns. It writes an error response and returns false on fetch failure.
-func (s *State) populateQuizContent(writer http.ResponseWriter, resp *moduleResponse, mod content.Module, isAdmin bool, userID, courseSlug string, idx int) bool {
+func (s *State) populateQuizContent(ctx context.Context, writer http.ResponseWriter, resp *moduleResponse, mod content.Module, isAdmin bool, userID, courseSlug string, idx int) bool {
 	var quizQuestions []content.Question
 
 	switch {
 	case mod.HasGitContent():
-		quiz, err := content.FetchQuizContent(s.GitCache, mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
+		quiz, err := content.FetchQuizContent(ctx, s.GitCache, mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
 		if err != nil {
 			s.Error(writer, http.StatusInternalServerError, "Failed to fetch quiz content")
 
@@ -809,7 +814,7 @@ func (s *State) buildInlineQuizResponse(req *http.Request, modules []content.Mod
 		PassingScore: next.PassingScore,
 	}
 
-	quizQuestions := s.populateInlineQuizQuestions(inlineQuiz, next, isAdmin)
+	quizQuestions := s.populateInlineQuizQuestions(req.Context(), inlineQuiz, next, isAdmin)
 	if len(quizQuestions) == 0 {
 		return nil
 	}
@@ -835,10 +840,10 @@ func (s *State) buildInlineQuizResponse(req *http.Request, modules []content.Mod
 
 // populateInlineQuizQuestions resolves next's quiz questions (from git or
 // inline) into inlineQuiz and returns them for scoring/metadata purposes.
-func (s *State) populateInlineQuizQuestions(inlineQuiz *inlineQuizResponse, next content.Module, isAdmin bool) []content.Question {
+func (s *State) populateInlineQuizQuestions(ctx context.Context, inlineQuiz *inlineQuizResponse, next content.Module, isAdmin bool) []content.Question {
 	switch {
 	case next.HasGitContent():
-		quiz, err := content.FetchQuizContent(s.GitCache, next.Src, next.Ref, next.Path, s.tokenForRepo(next.Src))
+		quiz, err := content.FetchQuizContent(ctx, s.GitCache, next.Src, next.Ref, next.Path, s.tokenForRepo(next.Src))
 		if err != nil {
 			return nil
 		}
@@ -905,7 +910,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	modules := s.visibleModules(course, req) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	modules := s.visibleModules(course, req)
 
 	indexStr := param(req, "index")
 
@@ -924,7 +929,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	// Resolve questions: fetch from git repo first, then fallback to inline.
-	questions, passingScore, cooldownSpec, quizResolved := s.resolveSubmitQuiz(writer, mod) //nolint:contextcheck // content.GitCache fetch helpers don't accept a context param
+	questions, passingScore, cooldownSpec, quizResolved := s.resolveSubmitQuiz(req.Context(), writer, mod)
 	if !quizResolved {
 		return
 	}
@@ -995,10 +1000,10 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 // for a quiz module, fetching from git when the module references external
 // content and falling back to inline questions otherwise. It writes an error
 // response and returns ok=false when no questions can be resolved.
-func (s *State) resolveSubmitQuiz(writer http.ResponseWriter, mod content.Module) ([]content.Question, int, content.CooldownSpec, bool) {
+func (s *State) resolveSubmitQuiz(ctx context.Context, writer http.ResponseWriter, mod content.Module) ([]content.Question, int, content.CooldownSpec, bool) {
 	switch {
 	case mod.HasGitContent():
-		quiz, err := content.FetchQuizContent(s.GitCache, mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
+		quiz, err := content.FetchQuizContent(ctx, s.GitCache, mod.Src, mod.Ref, mod.Path, s.tokenForRepo(mod.Src))
 		if err != nil {
 			s.Error(writer, http.StatusInternalServerError, "Failed to fetch quiz content")
 

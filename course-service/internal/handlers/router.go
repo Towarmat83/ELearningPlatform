@@ -81,6 +81,7 @@ func registerAdminRoutes(router chi.Router, state *State) {
 	router.Get("/api/courses/{slug}/modules/{index}", state.GetModule)
 	router.Post("/api/courses/{slug}/modules/{index}/submit", state.SubmitModule)
 	router.Post("/api/courses/{slug}/modules/{index}/check", state.CheckModule)
+	router.Post("/api/courses/{slug}/modules/{index}/steps/{stepIndex}/check", state.CheckModuleStep)
 	router.Post("/api/courses/{slug}/modules/{index}/record", state.RecordLocalCheck)
 
 	router.Get("/api/courses/{slug}/labs", state.ListLabs)

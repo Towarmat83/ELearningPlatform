@@ -686,7 +686,7 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 func (s *State) populateModuleContent(ctx context.Context, writer http.ResponseWriter, resp *moduleResponse, mod content.Module, isAdmin bool, userID, courseSlug string, idx int) bool {
 	switch mod.Type {
 	case moduleTypeVideo, moduleTypeImage:
-		resp.Content = content.ReplicatedPath(mod, s.Config.UploadsDir)
+		resp.Content = content.ReplicatedPath(ctx, mod, s.Config.UploadsDir)
 	case moduleTypeLab:
 		text, err := s.moduleGitOrInlineContent(ctx, mod)
 		if err != nil {

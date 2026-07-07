@@ -212,7 +212,7 @@ func findStoredLesson(course *content.Course, lessonSlug string, viewed map[stri
 func (s *State) moduleLessonBody(ctx context.Context, mod content.Module) string {
 	body := mod.Content()
 	if mod.Type != moduleTypeText {
-		body = content.ReplicatedPath(mod, s.Config.UploadsDir)
+		body = content.ReplicatedPath(ctx, mod, s.Config.UploadsDir)
 	}
 
 	if mod.HasGitContent() {

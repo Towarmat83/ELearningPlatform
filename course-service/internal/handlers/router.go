@@ -15,10 +15,11 @@ import (
 const routerCORSMaxAgeSeconds = 300
 
 // BuildRouter constructs the course-service chi router, wiring public
-// routes, admin routes behind the auth middleware, and CORS/logging
-// middleware.
+// routes, user-authenticated routes, and admin-only routes behind their
+// respective middleware, plus CORS/logging middleware.
 func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(cfg.JWTSecret)
+	adminMW := apimiddleware.Admin(cfg.JWTSecret)
 
 	corsOptions := cors.New(cors.Options{
 		AllowedOrigins:   cfg.CORSOrigins,
@@ -43,7 +44,11 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 
 	router.Group(func(group chi.Router) {
 		group.Use(authMW)
+		registerAuthRoutes(group, state)
+	})
 
+	router.Group(func(group chi.Router) {
+		group.Use(adminMW)
 		registerAdminRoutes(group, state)
 	})
 
@@ -64,19 +69,9 @@ func registerPublicRoutes(router chi.Router, state *State) {
 	router.Get("/uploads/{filename}", state.ServeUpload)
 }
 
-// registerAdminRoutes wires the authenticated admin and course-content
-// endpoints behind the auth middleware group.
-func registerAdminRoutes(router chi.Router, state *State) {
-	router.Get("/api/admin/courses", state.ListAdminCourses)
-	router.Post("/api/admin/courses", state.CreateCourseCRD)
-	router.Get("/api/admin/courses/{slug}/crd", state.GetCourseCRD)
-	router.Put("/api/admin/courses/{slug}/crd", state.UpdateCourseCRD)
-	router.Delete("/api/admin/courses/{slug}/crd", state.DeleteCourseCRD)
-	router.Get("/api/admin/lab-checks", state.GetLabResults)
-	router.Post("/api/admin/cache/clear", state.ClearCache)
-	router.Post("/api/admin/courses/{slug}/cache/clear", state.ClearCourseCache)
-	router.Post("/api/admin/courses/{slug}/modules/{index}/cache/clear", state.ClearModuleCache)
-
+// registerAuthRoutes wires the course-content endpoints that require a valid
+// JWT (any authenticated user).
+func registerAuthRoutes(router chi.Router, state *State) {
 	router.Get("/api/courses/{slug}/modules", state.ListModules)
 	router.Get("/api/courses/{slug}/modules/{index}", state.GetModule)
 	router.Post("/api/courses/{slug}/modules/{index}/submit", state.SubmitModule)
@@ -90,4 +85,18 @@ func registerAdminRoutes(router chi.Router, state *State) {
 	router.Get("/api/courses/{slug}/lessons", state.ListLessons)
 	router.Get("/api/courses/{slug}/lessons/{lessonSlug}", state.GetLesson)
 	router.Post("/api/courses/{slug}/lessons/{lessonSlug}/complete", state.MarkLessonComplete)
+}
+
+// registerAdminRoutes wires the admin-only endpoints behind the Admin
+// middleware, which enforces role == "admin" in addition to JWT validity.
+func registerAdminRoutes(router chi.Router, state *State) {
+	router.Get("/api/admin/courses", state.ListAdminCourses)
+	router.Post("/api/admin/courses", state.CreateCourseCRD)
+	router.Get("/api/admin/courses/{slug}/crd", state.GetCourseCRD)
+	router.Put("/api/admin/courses/{slug}/crd", state.UpdateCourseCRD)
+	router.Delete("/api/admin/courses/{slug}/crd", state.DeleteCourseCRD)
+	router.Get("/api/admin/lab-checks", state.GetLabResults)
+	router.Post("/api/admin/cache/clear", state.ClearCache)
+	router.Post("/api/admin/courses/{slug}/cache/clear", state.ClearCourseCache)
+	router.Post("/api/admin/courses/{slug}/modules/{index}/cache/clear", state.ClearModuleCache)
 }

@@ -27,11 +27,16 @@ type checkSpec struct {
 }
 
 // evaluateRequest is the payload sent to checker-service's /evaluate route.
+// Raw Rego text is no longer included: checker-service fetches the policy
+// directly from the course git repository using the reference fields below.
 type evaluateRequest struct {
-	Username string   `json:"username"`
-	Project  string   `json:"project"`
-	Files    []string `json:"files"`
-	Policy   string   `json:"policy"`
+	Username    string   `json:"username"`
+	Project     string   `json:"project"`
+	Files       []string `json:"files"`
+	PolicySrc   string   `json:"policySrc"`   // git repository URL
+	PolicyRef   string   `json:"policyRef"`   // branch / tag / commit
+	PolicyPath  string   `json:"policyPath"`  // relative path to the .rego file
+	PolicyToken string   `json:"policyToken"` // optional git authentication token
 }
 
 // CheckResponse mirrors checker.EvaluateResponse.
@@ -71,19 +76,24 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	spec, policyData, success := s.fetchCheckSpec(req.Context(), writer, mod)
+	spec, success := s.fetchCheckSpec(req.Context(), writer, mod)
 	if !success {
 		return
 	}
+
+	token := s.tokenForRepo(mod.Src)
 
 	// Resolve username template in project path
 	project := strings.ReplaceAll(spec.Project, "{{ .Username }}", username)
 
 	result, success := s.callChecker(writer, req, evaluateRequest{
-		Username: username,
-		Project:  project,
-		Files:    spec.Files,
-		Policy:   string(policyData),
+		Username:    username,
+		Project:     project,
+		Files:       spec.Files,
+		PolicySrc:   mod.Src,
+		PolicyRef:   mod.Ref,
+		PolicyPath:  path.Join(path.Dir(mod.Path), spec.Policy),
+		PolicyToken: token,
 	})
 	if !success {
 		return
@@ -125,18 +135,18 @@ func (s *State) resolveLabModule(
 	return mod, idx, true
 }
 
-// fetchCheckSpec fetches and parses check.yaml plus its Rego policy file
-// from the same git directory as the module content.
-func (s *State) fetchCheckSpec(ctx context.Context, writer http.ResponseWriter, mod content.Module) (checkSpec, []byte, bool) {
+// fetchCheckSpec fetches and parses check.yaml from the same git directory
+// as the module content. The Rego policy itself is not fetched here:
+// checker-service retrieves it from git via the reference in evaluateRequest.
+func (s *State) fetchCheckSpec(ctx context.Context, writer http.ResponseWriter, mod content.Module) (checkSpec, bool) {
 	token := s.tokenForRepo(mod.Src)
 	checkDir := path.Dir(mod.Path)
 
-	// Fetch check.yaml co-located with module content
 	specData, err := s.GitCache.FetchModuleContent(ctx, mod.Src, mod.Ref, path.Join(checkDir, "check.yaml"), token)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "No check.yaml found for this lab")
 
-		return checkSpec{}, nil, false
+		return checkSpec{}, false
 	}
 
 	var spec checkSpec
@@ -145,18 +155,10 @@ func (s *State) fetchCheckSpec(ctx context.Context, writer http.ResponseWriter, 
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Failed to parse check.yaml")
 
-		return checkSpec{}, nil, false
+		return checkSpec{}, false
 	}
 
-	// Fetch Rego policy from same directory
-	policyData, err := s.GitCache.FetchModuleContent(ctx, mod.Src, mod.Ref, path.Join(checkDir, spec.Policy), token)
-	if err != nil {
-		s.Error(writer, http.StatusNotFound, "Policy file not found: "+spec.Policy)
-
-		return checkSpec{}, nil, false
-	}
-
-	return spec, policyData, true
+	return spec, true
 }
 
 // callChecker sends req to checker-service's /evaluate route and returns
@@ -296,6 +298,7 @@ func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, 
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	s.setInternalHeader(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {

@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -17,6 +18,13 @@ import (
 	"github.com/go-chi/httprate"
 )
 
+// internalSecretHeader is the HTTP header used to authenticate
+// service-to-service calls on /evaluate and /check-step.
+const internalSecretHeader = "X-Internal-Secret"
+
+// maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
+const maxRequestBodyBytes = 1 << 20
+
 // remoteIP extracts the IP from r.RemoteAddr (already set to the real client
 // IP by chiMiddleware.RealIP) to use as the rate-limit key.
 func remoteIP(r *http.Request) (string, error) {
@@ -27,9 +35,6 @@ func remoteIP(r *http.Request) (string, error) {
 
 	return ip, nil
 }
-
-// maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
-const maxRequestBodyBytes = 1 << 20
 
 // Handler serves the checker-service HTTP API.
 type Handler struct {
@@ -56,7 +61,7 @@ func (h *Handler) BuildRouter() *chi.Mux {
 
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins: h.config.CORSOrigins,
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}).Handler)
 
@@ -69,27 +74,23 @@ func (h *Handler) BuildRouter() *chi.Mux {
 		}
 	})
 
-	router.Post("/evaluate", h.Evaluate)
-	router.Post("/check-step", h.CheckStep)
+	router.Group(func(r chi.Router) {
+		r.Use(h.internalAuth)
+		r.Post("/evaluate", h.Evaluate)
+		r.Post("/check-step", h.CheckStep)
+	})
 
 	return router
 }
 
-// Evaluate handles POST /evaluate: it fetches GitLab state for the request
-// and evaluates it against the request's OPA policy.
+// Evaluate handles POST /evaluate: it fetches the Rego policy from the
+// course git repository, fetches GitLab state for the request, then
+// precompiles and evaluates the policy with restricted OPA capabilities.
 func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
-	var req checker.EvaluateRequest
+	httpReq.Body = http.MaxBytesReader(resp, httpReq.Body, maxRequestBodyBytes)
 
-	err := json.NewDecoder(httpReq.Body).Decode(&req)
-	if err != nil {
-		httpErr(resp, http.StatusBadRequest, "invalid request body")
-
-		return
-	}
-
-	if req.Username == "" || req.Project == "" || req.Policy == "" {
-		httpErr(resp, http.StatusBadRequest, "username, project and policy are required")
-
+	req, valid := decodeEvaluateRequest(resp, httpReq)
+	if !valid {
 		return
 	}
 
@@ -99,23 +100,17 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 		return
 	}
 
-	fetcher, err := checker.NewFetcher(h.config.GitLabToken, h.config.GitLabBaseURL)
-	if err != nil {
-		zap.L().Error("gitlab client init", zap.Error(err))
-		httpErr(resp, http.StatusInternalServerError, "gitlab client error")
-
+	policy, valid := h.fetchPolicy(resp, httpReq, req)
+	if !valid {
 		return
 	}
 
-	state, err := fetcher.Fetch(req.Project, req.Files)
-	if err != nil {
-		zap.L().Error("gitlab fetch", zap.String("project", req.Project), zap.Error(err))
-		httpErr(resp, http.StatusBadGateway, "failed to fetch GitLab state")
-
+	state, valid := h.fetchGitLabState(resp, req)
+	if !valid {
 		return
 	}
 
-	result, err := checker.Evaluate(httpReq.Context(), req.Policy, state)
+	result, err := checker.Evaluate(httpReq.Context(), policy, state)
 	if err != nil {
 		zap.L().Error("rego eval", zap.Error(err))
 		httpErr(resp, http.StatusInternalServerError, "policy evaluation error")
@@ -177,6 +172,83 @@ func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
 	if encErr != nil {
 		zap.L().Error("encode check-step response", zap.Error(encErr))
 	}
+}
+
+// internalAuth is middleware that rejects requests whose X-Internal-Secret
+// header does not match the configured shared secret.
+func (h *Handler) internalAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		got := req.Header.Get(internalSecretHeader)
+		if subtle.ConstantTimeCompare([]byte(got), []byte(h.config.InternalSecret)) != 1 {
+			httpErr(resp, http.StatusUnauthorized, "invalid internal secret")
+
+			return
+		}
+
+		next.ServeHTTP(resp, req)
+	})
+}
+
+// decodeEvaluateRequest decodes and validates the JSON body of POST /evaluate.
+// It writes an appropriate error response and returns false on failure.
+func decodeEvaluateRequest(resp http.ResponseWriter, httpReq *http.Request) (checker.EvaluateRequest, bool) {
+	var req checker.EvaluateRequest
+
+	err := json.NewDecoder(httpReq.Body).Decode(&req)
+	if err != nil {
+		httpErr(resp, http.StatusBadRequest, "invalid request body")
+
+		return checker.EvaluateRequest{}, false
+	}
+
+	if req.Username == "" || req.Project == "" {
+		httpErr(resp, http.StatusBadRequest, "username and project are required")
+
+		return checker.EvaluateRequest{}, false
+	}
+
+	if req.PolicySrc == "" || req.PolicyRef == "" || req.PolicyPath == "" {
+		httpErr(resp, http.StatusBadRequest, "policySrc, policyRef and policyPath are required")
+
+		return checker.EvaluateRequest{}, false
+	}
+
+	return req, true
+}
+
+// fetchPolicy fetches the Rego policy text from the course git repository.
+func (h *Handler) fetchPolicy(resp http.ResponseWriter, httpReq *http.Request, req checker.EvaluateRequest) (string, bool) {
+	policy, err := checker.FetchPolicyContent(httpReq.Context(), req.PolicySrc, req.PolicyRef, req.PolicyPath, req.PolicyToken)
+	if err != nil {
+		zap.L().Error("policy fetch", zap.String("src", req.PolicySrc), zap.String("ref", req.PolicyRef), zap.String("path", req.PolicyPath), zap.Error(err))
+		httpErr(resp, http.StatusInternalServerError, "failed to fetch policy")
+
+		return "", false
+	}
+
+	return policy, true
+}
+
+// fetchGitLabState fetches the student's GitLab project and MR state
+// using the checker-service's GitLab token.
+func (h *Handler) fetchGitLabState(resp http.ResponseWriter, req checker.EvaluateRequest) (*checker.GitLabState, bool) {
+	fetcher, err := checker.NewFetcher(h.config.GitLabToken, h.config.GitLabBaseURL)
+	if err != nil {
+		zap.L().Error("gitlab client init", zap.Error(err))
+		httpErr(resp, http.StatusInternalServerError, "gitlab client error")
+
+		return nil, false
+	}
+
+	state, err := fetcher.Fetch(req.Project, req.Files)
+	if err != nil {
+		zap.L().Error("gitlab fetch", zap.String("project", req.Project), zap.Error(err))
+		httpErr(resp, http.StatusInternalServerError, "failed to fetch GitLab state")
+
+		return nil, false
+	}
+
+	return state, true
 }
 
 // httpErr writes a JSON error response with the given status and message.

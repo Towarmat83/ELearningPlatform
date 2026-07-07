@@ -1,12 +1,58 @@
 package checker
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
+	"strings"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
+
+// maxPolicyBytes is the maximum size of a Rego policy file fetched from git.
+const maxPolicyBytes = 128 * 1024 // 128 KB
+
+// gitOAuth2Username is the conventional basic-auth username for OAuth2 tokens.
+const gitOAuth2Username = "oauth2"
+
+// FetchPolicyContent fetches a Rego policy file from a GitLab repository.
+// src is the git clone URL (e.g. https://gitlab.example.com/group/repo.git),
+// ref is the branch/tag, filePath is the relative path to the .rego file,
+// and token is the optional OAuth2 access token.
+func FetchPolicyContent(ctx context.Context, src, ref, filePath, token string) (string, error) {
+	// Build GitLab raw file URL: strip .git suffix, append /-/raw/ref/path
+	base := strings.TrimSuffix(strings.TrimRight(src, "/"), ".git")
+	rawURL := base + "/-/raw/" + ref + "/" + strings.TrimLeft(filePath, "/")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
+	if err != nil {
+		return "", fmt.Errorf("build policy request: %w", err)
+	}
+
+	if token != "" {
+		req.SetBasicAuth(gitOAuth2Username, token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch policy: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("policy fetch returned HTTP %d for %s", resp.StatusCode, rawURL)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxPolicyBytes))
+	if err != nil {
+		return "", fmt.Errorf("read policy body: %w", err)
+	}
+
+	return string(data), nil
+}
 
 // GitLabFetcher fetches project, merge request, and file state from GitLab
 // for policy evaluation.
@@ -27,8 +73,8 @@ func NewFetcher(token, baseURL string) (*GitLabFetcher, error) {
 
 // Fetch gathers project info, merge request state, and file contents for the
 // given project from GitLab.
-func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, error) {
-	state := &gitLabState{Files: make(map[string]string)}
+func (f *GitLabFetcher) Fetch(project string, files []string) (*GitLabState, error) {
+	state := &GitLabState{Files: make(map[string]string)}
 
 	proj, _, err := f.client.Projects.GetProject(project, &gitlab.GetProjectOptions{})
 	if err != nil {

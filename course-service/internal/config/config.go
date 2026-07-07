@@ -54,7 +54,7 @@ type Config struct {
 	DatabaseURL string `yaml:"databaseUrl"`
 
 	// InternalSecret is the shared secret sent in X-Internal-Secret on calls to
-	// user-service /internal/* routes.
+	// user-service and checker-service internal routes.
 	InternalSecret string `yaml:"-"`
 }
 

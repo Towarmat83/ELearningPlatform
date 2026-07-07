@@ -354,7 +354,7 @@ func (s *State) claims(r *http.Request) *middleware.Claims {
 }
 
 // setInternalHeader attaches the X-Internal-Secret header to outgoing
-// service-to-service requests targeting user-service /internal/* routes.
+// service-to-service requests.
 func (s *State) setInternalHeader(req *http.Request) {
 	if s.Config.InternalSecret != "" {
 		req.Header.Set("X-Internal-Secret", s.Config.InternalSecret)

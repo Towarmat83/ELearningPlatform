@@ -16,6 +16,9 @@ const defaultRateLimitRequests = 20
 // defaultRateLimitWindowSeconds is the default rate-limit window in seconds.
 const defaultRateLimitWindowSeconds = 60
 
+// defaultInternalSecret is the fallback service-to-service shared secret.
+const defaultInternalSecret = "change-me-internal-secret"
+
 // Config holds checker-service runtime configuration.
 type Config struct {
 	Port                   int
@@ -24,6 +27,7 @@ type Config struct {
 	GitLabBaseURL          string
 	RateLimitRequests      int
 	RateLimitWindowSeconds int
+	InternalSecret         string
 }
 
 // Load builds a Config from environment variables, falling back to defaults.
@@ -34,6 +38,7 @@ func Load() *Config {
 		GitLabBaseURL:          "http://gitlab.local:8880",
 		RateLimitRequests:      defaultRateLimitRequests,
 		RateLimitWindowSeconds: defaultRateLimitWindowSeconds,
+		InternalSecret:         defaultInternalSecret,
 	}
 
 	if v := os.Getenv("PORT"); v != "" {
@@ -57,6 +62,10 @@ func Load() *Config {
 
 	cfg.RateLimitRequests = rateLimitFromEnv("RATE_LIMIT_REQUESTS", cfg.RateLimitRequests)
 	cfg.RateLimitWindowSeconds = rateLimitFromEnv("RATE_LIMIT_WINDOW_SECONDS", cfg.RateLimitWindowSeconds)
+
+	if v := os.Getenv("INTERNAL_SERVICE_SECRET"); v != "" {
+		cfg.InternalSecret = v
+	}
 
 	return cfg
 }

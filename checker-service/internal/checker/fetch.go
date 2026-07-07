@@ -56,26 +56,38 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 	return state, nil
 }
 
-// countMergedMRs returns the number of merged merge requests for the project.
+// countMergedMRs returns the total number of merged merge requests for the
+// project, paginating to ensure an accurate count.
 func (f *GitLabFetcher) countMergedMRs(project string) int {
 	merged := "merged"
+	total := 0
+	page := int64(1)
 
-	mergedMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
-		State: &merged,
-	})
-	if err != nil {
-		return 0
+	for {
+		mrs, resp, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
+			State:       &merged,
+			ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: page},
+		})
+		if err != nil {
+			break
+		}
+
+		total += len(mrs)
+
+		if resp.NextPage == 0 {
+			break
+		}
+
+		page = resp.NextPage
 	}
 
-	return len(mergedMRs)
+	return total
 }
 
-// fetchOpenMRs returns open merge requests for the project, enriched with
-// pipeline status and commits.
+// fetchOpenMRs returns all open merge requests for the project, enriched with
+// pipeline status and commits, paginating to retrieve every result.
 func (f *GitLabFetcher) fetchOpenMRs(project string) []openMRInfo {
-	openMRs, _, err := f.client.MergeRequests.ListProjectMergeRequests(project, &gitlab.ListProjectMergeRequestsOptions{
-		State: mrOpened(),
-	})
+	openMRs, err := f.listAllOpenMRs(project)
 	if err != nil {
 		return nil
 	}

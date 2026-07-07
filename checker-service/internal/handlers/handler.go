@@ -142,7 +142,7 @@ func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
 	result, err := fetcher.CheckStep(req)
 	if err != nil {
 		slog.Error("step check", "checkType", req.CheckType, "project", req.Project, "err", err)
-		httpErr(resp, http.StatusBadGateway, "step check error: "+err.Error())
+		httpErr(resp, http.StatusInternalServerError, "step check error: "+err.Error())
 
 		return
 	}

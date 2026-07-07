@@ -8,7 +8,7 @@ import (
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// Step check type identifiers.
+// Step check type identifiers and shared constants.
 const (
 	StepGitLabBranch                     = "gitlab_branch"
 	StepGitLabMROpen                     = "gitlab_mr_open"
@@ -17,23 +17,19 @@ const (
 	StepGitLabCommitOnBranch             = "gitlab_commit_on_branch"
 	StepGitLabFileOnBranch               = "gitlab_file_on_branch"
 	StepGitLabConventionalCommitOnBranch = "gitlab_conventional_commit_on_branch"
+
+	// mrStateOpened is the GitLab MR state filter for open merge requests.
+	mrStateOpened = "opened"
+	// defaultBaseBranch is used when no base branch is specified in checkParams.
+	defaultBaseBranch = "main"
+	// noOpenMRMessage is returned when a check requires an open MR but none exists.
+	noOpenMRMessage = "Aucune MR ouverte. Ouvrez d'abord une Merge Request."
+	// commitMessageParts is the limit passed to SplitN when extracting the first
+	// line of a commit message.
+	commitMessageParts = 2
+	// gitLabPageSize is the number of items fetched per page in paginated calls.
+	gitLabPageSize = 100
 )
-
-// mrStateOpened is the GitLab MR state filter for open merge requests.
-const mrStateOpened = "opened"
-
-// defaultBaseBranch is used when no base branch is specified in checkParams.
-const defaultBaseBranch = "main"
-
-// noOpenMRMessage is returned when a check requires an open MR but none exists.
-const noOpenMRMessage = "Aucune MR ouverte. Ouvrez d'abord une Merge Request."
-
-// commitMessageParts is the limit passed to SplitN when extracting the first
-// line of a commit message.
-const commitMessageParts = 2
-
-// gitLabPageSize is the number of items fetched per page in paginated calls.
-const gitLabPageSize = 100
 
 // conventionalCommitRe matches the first line of a conventional commit message.
 var conventionalCommitRe = regexp.MustCompile(
@@ -75,6 +71,8 @@ func (f *GitLabFetcher) CheckStep(req StepRequest) (*StepResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	state.openMRs = mrsByAuthor(state.openMRs, req.Username)
 
 	switch req.CheckType {
 	case StepGitLabBranch:
@@ -187,6 +185,26 @@ func mrOpened() *string {
 	return &s
 }
 
+// mrsByAuthor returns only MRs whose author matches the given username.
+func mrsByAuthor(mrs []*gitlab.BasicMergeRequest, username string) []*gitlab.BasicMergeRequest {
+	filtered := make([]*gitlab.BasicMergeRequest, 0, len(mrs))
+
+	for _, mr := range mrs {
+		if mr.Author != nil && mr.Author.Username == username {
+			filtered = append(filtered, mr)
+		}
+	}
+
+	return filtered
+}
+
+// isConventionalMessage reports whether msg is a conventional commit.
+func isConventionalMessage(msg string) bool {
+	firstLine := strings.SplitN(msg, "\n", commitMessageParts)[0]
+
+	return conventionalCommitRe.MatchString(firstLine)
+}
+
 // branchByPattern returns the first branch whose name starts with pattern.
 func branchByPattern(branches []*gitlab.Branch, pattern string) string {
 	for _, b := range branches {
@@ -244,8 +262,7 @@ func (f *GitLabFetcher) checkConventionalCommit(req StepRequest, state *stepStat
 		}
 
 		for _, commit := range commits {
-			firstLine := strings.SplitN(commit.Message, "\n", commitMessageParts)[0]
-			if conventionalCommitRe.MatchString(firstLine) {
+			if isConventionalMessage(commit.Message) {
 				return &StepResponse{Allow: true}, nil
 			}
 		}
@@ -420,8 +437,9 @@ func (f *GitLabFetcher) checkConventionalCommitOnBranch(req StepRequest, state *
 	}
 
 	for _, commit := range cmp.Commits {
-		firstLine := strings.SplitN(commit.Message, "\n", commitMessageParts)[0]
-		if !conventionalCommitRe.MatchString(firstLine) {
+		if !isConventionalMessage(commit.Message) {
+			firstLine := strings.SplitN(commit.Message, "\n", commitMessageParts)[0]
+
 			return &StepResponse{
 				Allow:      false,
 				Violations: []string{fmt.Sprintf("Commit non conventionnel : %q. Format attendu : feat: description, fix: description, etc.", firstLine)},

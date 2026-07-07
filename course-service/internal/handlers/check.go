@@ -248,8 +248,8 @@ func (s *State) CheckModuleStep(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	// Derive project from checkParams if present; otherwise skip.
-	project, _ := resolved["project"].(string)
-	if project == "" {
+	project, ok := resolved["project"].(string)
+	if !ok || project == "" {
 		s.Error(writer, http.StatusBadRequest, "Step checkParams missing project")
 
 		return

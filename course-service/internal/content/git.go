@@ -77,9 +77,14 @@ func (gc *GitCache) FetchModuleContent(ctx context.Context, rawURL, branch, file
 		return nil, err
 	}
 
-	fullPath := filepath.Join(repoDir, filePath)
+	fullPath := filepath.Clean(filepath.Join(repoDir, filePath))
+	repoRoot := filepath.Clean(repoDir) + string(os.PathSeparator)
 
-	data, err := os.ReadFile(filepath.Clean(fullPath))
+	if !strings.HasPrefix(fullPath, repoRoot) {
+		return nil, fmt.Errorf("path traversal detected: %q escapes repository root", filePath)
+	}
+
+	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s from cached repo: %w", filePath, err)
 	}

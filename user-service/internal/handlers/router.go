@@ -21,6 +21,7 @@ const corsMaxAgeSeconds = 300
 func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(pool, cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(pool, cfg.JWTSecret)
+	internalMW := apimiddleware.InternalAuth(cfg.InternalSecret)
 
 	router := chi.NewRouter()
 	router.Use(chiMiddleware.RequestID)
@@ -37,7 +38,7 @@ func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool
 	registerAuthenticatedRoutes(router, state, authMW)
 	registerAdminRoutes(router, state, adminMW)
 	registerPatternRoutes(router, state, authMW, adminMW)
-	registerInternalRoutes(router, state)
+	registerInternalRoutes(router, state, internalMW)
 
 	return router
 }
@@ -46,7 +47,7 @@ func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool
 func corsHandler(cfg *config.Config) *cors.Cors {
 	return cors.New(cors.Options{
 		AllowedOrigins:   cfg.CORSOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 		MaxAge:           corsMaxAgeSeconds,
@@ -149,22 +150,19 @@ func registerPatternRoutes(router chi.Router, state *State, authMW, adminMW func
 	})
 }
 
-// registerInternalRoutes wires routes reserved for Course Service, which rely
-// on network policy rather than authentication for access control.
-//
-//nolint:godox // tracked security follow-up, see PR #74 review comment
-func registerInternalRoutes(router chi.Router, state *State) {
-	// TODO(security): these routes accept no service-to-service authentication.
-	// Any caller that can reach this port can forge enrollment/progress data for
-	// any user_id. Flagged in PR #74 review as requiring a dedicated follow-up
-	// PR (e.g. a shared INTERNAL_SERVICE_SECRET header, mirroring the existing
-	// JWT_SECRET pattern in helm/templates/secret.yaml).
-	router.Post("/internal/enrollments/auto", state.InternalAutoEnroll)
-	router.Get("/internal/enrollments/check", state.InternalCheckEnrollment)
-	router.Get("/internal/progress/viewed", state.InternalViewedLessons)
-	router.Post("/internal/progress/complete", state.InternalMarkComplete)
-	router.Post("/internal/progress/course-complete", state.InternalMarkCourseComplete)
-	router.Post("/internal/progress/module", state.InternalRecordModuleProgress)
-	router.Get("/internal/progress/modules", state.InternalGetModuleProgress)
-	router.Get("/internal/progress/course-summary", state.InternalCourseSummary)
+// registerInternalRoutes wires routes reserved for Course Service behind the
+// shared-secret middleware (X-Internal-Secret header).
+func registerInternalRoutes(router chi.Router, state *State, internalMW func(http.Handler) http.Handler) {
+	router.Group(func(group chi.Router) {
+		group.Use(internalMW)
+
+		group.Post("/internal/enrollments/auto", state.InternalAutoEnroll)
+		group.Get("/internal/enrollments/check", state.InternalCheckEnrollment)
+		group.Get("/internal/progress/viewed", state.InternalViewedLessons)
+		group.Post("/internal/progress/complete", state.InternalMarkComplete)
+		group.Post("/internal/progress/course-complete", state.InternalMarkCourseComplete)
+		group.Post("/internal/progress/module", state.InternalRecordModuleProgress)
+		group.Get("/internal/progress/modules", state.InternalGetModuleProgress)
+		group.Get("/internal/progress/course-summary", state.InternalCourseSummary)
+	})
 }

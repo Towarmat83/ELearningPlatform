@@ -345,3 +345,11 @@ func (s *State) tokenForRepo(repoURL string) string {
 func (s *State) claims(r *http.Request) *middleware.Claims {
 	return middleware.GetClaims(r)
 }
+
+// setInternalHeader attaches the X-Internal-Secret header to outgoing
+// service-to-service requests targeting user-service /internal/* routes.
+func (s *State) setInternalHeader(req *http.Request) {
+	if s.Config.InternalSecret != "" {
+		req.Header.Set("X-Internal-Secret", s.Config.InternalSecret)
+	}
+}

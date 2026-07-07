@@ -44,6 +44,11 @@ spec:
             secretKeyRef:
               name: {{ include "elearning.jwtSecretName" . }}
               key: {{ include "elearning.jwtSecretKey" . }}
+        - name: INTERNAL_SERVICE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "elearning.internalSecretName" . }}
+              key: {{ include "elearning.internalSecretKey" . }}
         - name: OAUTH_REDIRECT_BASE
           value: {{ .Values.sso.redirectBase | default (include "elearning.publicUrl" .) | quote }}
         {{- if .Values.sso.oidc.enabled }}

@@ -27,6 +27,8 @@ const (
 	htSecret = "test-jwt-signing-secret-32bytes!!"
 	// htExpiry is the JWT expiry, in hours, used by handler tests.
 	htExpiry = 24
+	// htInternalSecret is the shared service-to-service secret used in tests.
+	htInternalSecret = "test-internal-secret"
 )
 
 //nolint:gochecknoglobals // shared fixture, seeded once in TestMain
@@ -52,13 +54,39 @@ func TestMain(m *testing.M) {
 // newTestRouter builds a router wired to pool for handler tests.
 func newTestRouter(pool *fake.Pool) http.Handler {
 	cfg := &config.Config{
-		JWTSecret:   htSecret,
-		JWTExpiryH:  htExpiry,
-		CORSOrigins: []string{"*"},
+		JWTSecret:      htSecret,
+		JWTExpiryH:     htExpiry,
+		CORSOrigins:    []string{"*"},
+		InternalSecret: htInternalSecret,
 	}
 	s := &State{Pool: pool, Config: cfg}
 
 	return BuildRouter(s, cfg, pool, false)
+}
+
+// htDoInternal issues a request to an /internal/* route, attaching the
+// shared secret header required by InternalAuth middleware.
+func htDoInternal(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	var buf *bytes.Reader
+	if body != "" {
+		buf = bytes.NewReader([]byte(body))
+	} else {
+		buf = bytes.NewReader(nil)
+	}
+
+	req := httptest.NewRequestWithContext(t.Context(), method, path, buf)
+	req.Header.Set("X-Internal-Secret", htInternalSecret)
+
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	return rec
 }
 
 // htAuthHeader builds a "Bearer <token>" header value for role.
@@ -2136,6 +2164,41 @@ func TestMyCourses_WithCourseData(t *testing.T) {
 
 // ── Internal: Enrollments ─────────────────────────────────────────────────────
 
+// TestInternalRoutes_Unauthorized verifies that /internal/* routes reject
+// requests missing the X-Internal-Secret header with 401.
+func TestInternalRoutes_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	r := newTestRouter(pool)
+
+	routes := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{"POST", "/internal/enrollments/auto", `{"userId":"u","courseSlug":"c"}`},
+		{"GET", "/internal/enrollments/check?userId=u&courseSlug=c", ""},
+		{"GET", "/internal/progress/viewed?userId=u&courseSlug=c", ""},
+		{"POST", "/internal/progress/complete", `{"userId":"u","courseSlug":"c","lessonSlug":"l"}`},
+		{"POST", "/internal/progress/course-complete", `{"userId":"u","courseSlug":"c"}`},
+		{"POST", "/internal/progress/module", `{"userId":"u","courseSlug":"c","moduleIndex":0,"score":0,"maxScore":10,"passed":false}`},
+		{"GET", "/internal/progress/modules?userId=u&courseSlug=c", ""},
+		{"GET", "/internal/progress/course-summary?userId=u&courseSlug=c", ""},
+	}
+
+	for _, tc := range routes {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			t.Parallel()
+
+			rec := htDo(t, r, tc.method, tc.path, tc.body, "")
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("want 401 without secret, got %d", rec.Code)
+			}
+		})
+	}
+}
+
 // TestInternalAutoEnroll_InvalidJSON verifies internal auto enroll invalid
 // JSON behavior.
 func TestInternalAutoEnroll_InvalidJSON(t *testing.T) {
@@ -2144,7 +2207,7 @@ func TestInternalAutoEnroll_InvalidJSON(t *testing.T) {
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/internal/enrollments/auto", "bad", "")
+	rec := htDoInternal(t, r, "POST", "/internal/enrollments/auto", "bad")
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -2160,7 +2223,7 @@ func TestInternalAutoEnroll_DBError(t *testing.T) {
 	r := newTestRouter(pool)
 	body := `{"userId":"user-uuid-1","courseSlug":"my-course"}`
 
-	rec := htDo(t, r, "POST", "/internal/enrollments/auto", body, "")
+	rec := htDoInternal(t, r, "POST", "/internal/enrollments/auto", body)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2175,7 +2238,7 @@ func TestInternalAutoEnroll_Success(t *testing.T) {
 	r := newTestRouter(pool)
 	body := `{"userId":"user-uuid-1","courseSlug":"my-course"}`
 
-	rec := htDo(t, r, "POST", "/internal/enrollments/auto", body, "")
+	rec := htDoInternal(t, r, "POST", "/internal/enrollments/auto", body)
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2190,7 +2253,7 @@ func TestInternalCheckEnrollment_Enrolled(t *testing.T) {
 	pool.PushRow(nil, true)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2212,7 +2275,7 @@ func TestInternalCheckEnrollment_NotEnrolled(t *testing.T) {
 	pool.PushRow(nil, false)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2233,7 +2296,7 @@ func TestInternalCheckEnrollment_DBError(t *testing.T) {
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/enrollments/check?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2250,7 +2313,7 @@ func TestInternalViewedLessons_Empty(t *testing.T) {
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/viewed?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/viewed?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2273,7 +2336,7 @@ func TestInternalViewedLessons_WithData(t *testing.T) {
 	pool.PushRows(nil, []any{"intro"}, []any{"part-2"})
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/viewed?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/viewed?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2295,7 +2358,7 @@ func TestInternalMarkComplete_InvalidJSON(t *testing.T) {
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/internal/progress/complete", "bad", "")
+	rec := htDoInternal(t, r, "POST", "/internal/progress/complete", "bad")
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -2310,7 +2373,7 @@ func TestInternalMarkComplete_Success(t *testing.T) {
 	r := newTestRouter(pool)
 	body := `{"userId":"uuid-1","courseSlug":"my-course","lessonSlug":"intro"}`
 
-	rec := htDo(t, r, "POST", "/internal/progress/complete", body, "")
+	rec := htDoInternal(t, r, "POST", "/internal/progress/complete", body)
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2324,7 +2387,7 @@ func TestInternalRecordModuleProgress_InvalidJSON(t *testing.T) {
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/internal/progress/module", "bad", "")
+	rec := htDoInternal(t, r, "POST", "/internal/progress/module", "bad")
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -2339,7 +2402,7 @@ func TestInternalRecordModuleProgress_Success(t *testing.T) {
 	r := newTestRouter(pool)
 	body := `{"userId":"uuid-1","courseSlug":"my-course","moduleIndex":0,"score":80,"maxScore":100,"passed":true}`
 
-	rec := htDo(t, r, "POST", "/internal/progress/module", body, "")
+	rec := htDoInternal(t, r, "POST", "/internal/progress/module", body)
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2354,7 +2417,7 @@ func TestInternalGetModuleProgress_Empty(t *testing.T) {
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/modules?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2372,7 +2435,7 @@ func TestInternalGetModuleProgress_WithData(t *testing.T) {
 	)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/modules?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -2394,7 +2457,7 @@ func TestInternalCourseSummary_DBError(t *testing.T) {
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2414,7 +2477,7 @@ func TestInternalCourseSummary_Success(t *testing.T) {
 	pool.PushRow(nil, 5) // viewedCount
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -3956,7 +4019,7 @@ func TestInternalMarkComplete_DBError(t *testing.T) {
 	pool.PushExec(0, errors.New("db error"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "POST", "/internal/progress/complete", `{"userId":"uid","courseSlug":"c","lessonSlug":"l"}`, "")
+	rec := htDoInternal(t, r, "POST", "/internal/progress/complete", `{"userId":"uid","courseSlug":"c","lessonSlug":"l"}`)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -3972,7 +4035,7 @@ func TestInternalRecordModuleProgress_DBError(t *testing.T) {
 	r := newTestRouter(pool)
 	body := `{"userId":"uid","courseSlug":"c","moduleIndex":0,"score":10,"maxScore":10,"passed":true}`
 
-	rec := htDo(t, r, "POST", "/internal/progress/module", body, "")
+	rec := htDoInternal(t, r, "POST", "/internal/progress/module", body)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -3987,7 +4050,7 @@ func TestInternalGetModuleProgress_NoProgress(t *testing.T) {
 	pool.PushRows(nil)
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uid&courseSlug=c", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/modules?userId=uid&courseSlug=c", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -4490,7 +4553,7 @@ func TestInternalCourseSummary_QueryError(t *testing.T) {
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/course-summary?userId=uuid-1&courseSlug=my-course", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -4507,7 +4570,7 @@ func TestInternalGetModuleProgress_DBError(t *testing.T) {
 	pool.PushRows(errors.New("db error"))
 	r := newTestRouter(pool)
 
-	rec := htDo(t, r, "GET", "/internal/progress/modules?userId=uid&courseSlug=c", "", "")
+	rec := htDoInternal(t, r, "GET", "/internal/progress/modules?userId=uid&courseSlug=c", "")
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}

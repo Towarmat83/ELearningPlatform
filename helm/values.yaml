@@ -21,6 +21,12 @@ jwtSecret: "change-me-in-production-use-a-long-random-string"
 jwtExistingSecret: ""
 jwtExistingSecretKey: "JWT_SECRET"
 
+# Shared service-to-service secret — sent as X-Internal-Secret by course-service
+# when calling user-service /internal/* routes. Same three modes as jwtSecret.
+internalServiceSecret: "change-me-internal-secret"
+internalServiceExistingSecret: ""
+internalServiceExistingSecretKey: "INTERNAL_SERVICE_SECRET"
+
 # Image pull secrets — for private registries.
 # imagePullSecrets:
 #   - name: ghcr-credentials

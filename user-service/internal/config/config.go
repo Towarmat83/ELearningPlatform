@@ -16,6 +16,9 @@ const (
 	// defaultJWTSecret is the fallback JWT signing secret; it must be
 	// overridden in production via the JWT_SECRET env var or config file.
 	defaultJWTSecret = "change-me-in-production-use-a-long-random-string"
+	// defaultInternalSecret is the fallback service-to-service shared secret;
+	// it must be overridden in production via the INTERNAL_SERVICE_SECRET env var.
+	defaultInternalSecret = "change-me-internal-secret"
 	// defaultJWTExpiryHours is the default JWT token lifetime, in hours.
 	defaultJWTExpiryHours = 24
 	// defaultPort is the default HTTP listen port.
@@ -97,6 +100,10 @@ type Config struct {
 
 	CourseServiceURL string `yaml:"courseServiceUrl"`
 
+	// InternalSecret is the shared secret used to authenticate service-to-service
+	// calls on /internal/* routes (X-Internal-Secret header).
+	InternalSecret string `yaml:"-"`
+
 	K8sNamespace string `yaml:"k8sNamespace"`
 	Kubeconfig   string `yaml:"kubeconfig"`
 	// AdminPassword is the password (or pre-computed bcrypt hash) for the
@@ -142,6 +149,7 @@ func Load() *Config {
 	cfg.CORSOrigins = sliceFromEnv("CORS_ORIGINS", cfg.CORSOrigins)
 	cfg.OAuthRedirectBase = stringFromEnv("OAUTH_REDIRECT_BASE", cfg.OAuthRedirectBase)
 	cfg.CourseServiceURL = stringFromEnv("COURSE_SERVICE_URL", cfg.CourseServiceURL)
+	cfg.InternalSecret = stringFromEnv("INTERNAL_SERVICE_SECRET", cfg.InternalSecret)
 	cfg.K8sNamespace = stringFromEnv("K8S_NAMESPACE", cfg.K8sNamespace)
 	cfg.Kubeconfig = stringFromEnv("KUBECONFIG", cfg.Kubeconfig)
 
@@ -160,6 +168,7 @@ func defaultConfig() *Config {
 	return &Config{
 		DatabaseURL:       "postgres://elearning:elearning@localhost:5432/elearning",
 		JWTSecret:         defaultJWTSecret,
+		InternalSecret:    defaultInternalSecret,
 		JWTExpiryH:        defaultJWTExpiryHours,
 		Port:              defaultPort,
 		CORSOrigins:       []string{defaultLocalOrigin, "http://localhost:5173"},

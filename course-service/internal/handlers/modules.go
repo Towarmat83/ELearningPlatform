@@ -184,6 +184,8 @@ func (s *State) viewedLessons(httpReq *http.Request, courseSlug, userID string) 
 		return nil
 	}
 
+	s.setInternalHeader(req)
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil
@@ -231,6 +233,8 @@ func (s *State) fetchModuleProgress(httpReq *http.Request, courseSlug, userID st
 	if err != nil {
 		return nil
 	}
+
+	s.setInternalHeader(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -313,6 +317,7 @@ func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug string, idx,
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+		s.setInternalHeader(req)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
@@ -384,6 +389,8 @@ func (s *State) fetchCoursePrereqSummary(ctx context.Context, userID, courseSlug
 	if err != nil {
 		return emptyCoursePrereqSummary()
 	}
+
+	s.setInternalHeader(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

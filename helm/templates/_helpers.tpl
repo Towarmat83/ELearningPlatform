@@ -183,6 +183,22 @@ JWT_SECRET
 {{- end -}}
 {{- end }}
 
+{{- define "elearning.internalSecretName" -}}
+{{- if .Values.internalServiceExistingSecret -}}
+{{ .Values.internalServiceExistingSecret }}
+{{- else -}}
+{{ include "elearning.fullname" . }}-secrets
+{{- end -}}
+{{- end }}
+
+{{- define "elearning.internalSecretKey" -}}
+{{- if .Values.internalServiceExistingSecret -}}
+{{ .Values.internalServiceExistingSecretKey }}
+{{- else -}}
+INTERNAL_SERVICE_SECRET
+{{- end -}}
+{{- end }}
+
 {{/*
 Ingress scheme (http or https)
 */}}

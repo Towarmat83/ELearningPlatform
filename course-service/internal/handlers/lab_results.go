@@ -15,6 +15,7 @@ type labCheckRow struct {
 	ModuleName  string    `json:"moduleName"`
 	Allow       bool      `json:"allow"`
 	Violations  []string  `json:"violations"`
+	Verified    bool      `json:"verified"`
 	CheckedAt   time.Time `json:"checkedAt"`
 }
 
@@ -42,11 +43,11 @@ func (s *State) GetLabResults(writer http.ResponseWriter, req *http.Request) {
 	)
 
 	if courseSlug != "" {
-		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, checkedAt
+		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, verified, checkedAt
 		          FROM lab_checks WHERE courseSlug = $1 ORDER BY checkedAt DESC LIMIT 500`
 		args = []any{courseSlug}
 	} else {
-		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, checkedAt
+		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, verified, checkedAt
 		          FROM lab_checks ORDER BY checkedAt DESC LIMIT 500`
 	}
 
@@ -64,7 +65,7 @@ func (s *State) GetLabResults(writer http.ResponseWriter, req *http.Request) {
 		var row labCheckRow
 
 		err := rows.Scan(&row.ID, &row.Username, &row.CourseSlug, &row.ModuleIndex,
-			&row.ModuleName, &row.Allow, &row.Violations, &row.CheckedAt)
+			&row.ModuleName, &row.Allow, &row.Violations, &row.Verified, &row.CheckedAt)
 		if err != nil {
 			continue
 		}

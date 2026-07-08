@@ -64,7 +64,7 @@ func TestFetchModuleContent_PathTraversal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := gc.FetchModuleContent("https://fake.example.com/repo", "main", tc.filePath, "")
+			_, err := gc.FetchModuleContent(t.Context(), "https://fake.example.com/repo", "main", tc.filePath, "")
 			if tc.wantErr && err == nil {
 				t.Errorf("expected error for filePath %q, got nil", tc.filePath)
 			}

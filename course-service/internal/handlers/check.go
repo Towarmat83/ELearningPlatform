@@ -88,7 +88,7 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.storeLabCheck(req.Context(), displayName, courseSlug, idx, mod.Name, result)
+	s.storeLabCheck(req.Context(), displayName, courseSlug, idx, mod.Name, result, true)
 
 	s.JSON(writer, http.StatusOK, result)
 }
@@ -168,7 +168,7 @@ func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body 
 // storeLabCheck persists a lab check result for later review, logging a
 // warning on failure without interrupting the response to the client.
 func (s *State) storeLabCheck(
-	ctx context.Context, username, courseSlug string, moduleIndex int, moduleName string, result CheckResponse,
+	ctx context.Context, username, courseSlug string, moduleIndex int, moduleName string, result CheckResponse, verified bool,
 ) {
 	if s.DB == nil {
 		return
@@ -180,9 +180,9 @@ func (s *State) storeLabCheck(
 	}
 
 	_, err := s.DB.Exec(ctx,
-		`INSERT INTO lab_checks (username, courseSlug, moduleIndex, moduleName, allow, violations)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		username, courseSlug, moduleIndex, moduleName, result.Allow, violations,
+		`INSERT INTO lab_checks (username, courseSlug, moduleIndex, moduleName, allow, violations, verified)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		username, courseSlug, moduleIndex, moduleName, result.Allow, violations, verified,
 	)
 	if err != nil {
 		slog.Warn("failed to store lab check", "err", err)
@@ -370,6 +370,6 @@ func (s *State) RecordLocalCheck(writer http.ResponseWriter, req *http.Request) 
 		displayName = "unknown"
 	}
 
-	s.storeLabCheck(req.Context(), displayName, courseSlug, idx, mod.Name, result)
+	s.storeLabCheck(req.Context(), displayName, courseSlug, idx, mod.Name, result, false)
 	s.JSON(writer, http.StatusOK, result)
 }

@@ -19,6 +19,9 @@ import (
 	"github.com/elearning/course-service/internal/middleware"
 )
 
+// maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
+const maxRequestBodyBytes = 1 << 20
+
 // statusOKValue is the JSON value reported for successful status fields.
 const statusOKValue = "ok"
 

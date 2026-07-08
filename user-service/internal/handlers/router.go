@@ -32,6 +32,7 @@ func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool
 	}
 
 	router.Use(chiMiddleware.Recoverer)
+	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsHandler(cfg).Handler)
 
 	registerPublicRoutes(router, state)

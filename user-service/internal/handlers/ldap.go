@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -82,7 +83,8 @@ func (s *State) LDAPLogin(writer http.ResponseWriter, httpReq *http.Request) {
 
 	cfg, err := s.loadLDAPSettings(ctx)
 	if err != nil {
-		s.Error(writer, http.StatusBadRequest, err.Error())
+		slog.Error("load LDAP settings", "err", err)
+		s.Error(writer, http.StatusBadRequest, "LDAP not configured")
 
 		return
 	}
@@ -109,7 +111,8 @@ func (s *State) LDAPLogin(writer http.ResponseWriter, httpReq *http.Request) {
 func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*ldap.Conn, bool) {
 	conn, err := ldap.DialURL(cfg.ServerURL)
 	if err != nil {
-		s.Error(writer, http.StatusBadGateway, "Cannot connect to LDAP server: "+err.Error())
+		slog.Error("LDAP dial failed", "err", err)
+		s.Error(writer, http.StatusBadGateway, "LDAP server unavailable")
 
 		return nil, false
 	}
@@ -119,7 +122,8 @@ func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*l
 		if err != nil {
 			_ = conn.Close()
 
-			s.Error(writer, http.StatusBadGateway, "LDAP service bind failed: "+err.Error())
+			slog.Error("LDAP service bind failed", "err", err)
+			s.Error(writer, http.StatusBadGateway, "LDAP server unavailable")
 
 			return nil, false
 		}

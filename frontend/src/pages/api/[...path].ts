@@ -52,7 +52,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       body: body ?? undefined,
     });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: `Upstream unreachable: ${err.message}` }), {
+    console.error('Upstream fetch error', err);
+    return new Response(JSON.stringify({ error: 'Upstream unavailable' }), {
       status: 502,
       headers: { 'content-type': 'application/json' },
     });

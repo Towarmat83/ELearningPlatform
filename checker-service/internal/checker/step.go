@@ -74,8 +74,6 @@ func (f *GitLabFetcher) CheckStep(req StepRequest) (*StepResponse, error) {
 		return nil, err
 	}
 
-	state.openMRs = mrsByAuthor(state.openMRs, req.Username)
-
 	switch req.CheckType {
 	case StepGitLabBranch:
 		return checkBranch(req, state)
@@ -203,19 +201,6 @@ func mrOpened() *string {
 	s := mrStateOpened
 
 	return &s
-}
-
-// mrsByAuthor returns only MRs whose author matches the given username.
-func mrsByAuthor(mrs []*gitlab.BasicMergeRequest, username string) []*gitlab.BasicMergeRequest {
-	filtered := make([]*gitlab.BasicMergeRequest, 0, len(mrs))
-
-	for _, mr := range mrs {
-		if mr.Author != nil && mr.Author.Username == username {
-			filtered = append(filtered, mr)
-		}
-	}
-
-	return filtered
 }
 
 // isConventionalMessage reports whether msg is a conventional commit.

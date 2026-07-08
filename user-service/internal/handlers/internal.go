@@ -53,7 +53,8 @@ type moduleProgressRow struct {
 func internalDecodeOrBadRequest(s *State, writer http.ResponseWriter, req *http.Request, dst any) bool {
 	err := decode(req, dst)
 	if err != nil {
-		s.Error(writer, http.StatusBadRequest, "error when decoding JSON body: "+err.Error())
+		slog.Error("JSON decode failed", "err", err)
+		s.Error(writer, http.StatusBadRequest, "Invalid request body")
 
 		return false
 	}

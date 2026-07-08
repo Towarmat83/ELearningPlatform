@@ -33,7 +33,7 @@ import App from '../layouts/App.astro';
     .detail-desc   { font-size: .83rem; color: var(--ink-soft); margin-top: 4px; line-height: 1.45; }
     .detail-prog   { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; background: var(--fill); border-radius: 10px; font-size: .82rem; color: var(--ink-soft); }
     .detail-prog-pct { font-weight: 700; font-size: 1rem; }
-    .snake-wrap { width: 100%; padding: 8px 0; display: flex; justify-content: center; }
+    .snake-wrap { width: 100%; padding: 8px 0; display: flex; justify-content: flex-start; }
     .snake-wrap svg { display: block; height: auto; overflow: visible; max-width: 100%; }
 
     .mp-empty { text-align: center; padding: 80px 24px; }
@@ -157,30 +157,29 @@ import App from '../layouts/App.astro';
       const pct   = total>0 ? Math.round(done/total*100) : 0;
       const allDone = done===total && total>0;
 
-      // Layout: 1 column when ≤3 courses, 2 columns (snake) when 4+
-      const COLS  = total <= 3 ? 1 : 2;
-      const NR    = 24;   // node radius
-      const HG    = 160;  // horizontal gap between columns (COLS=2 only)
-      const VG    = COLS === 1 ? 100 : 120;
-      const ROAD  = 8;    // road stroke width
-      const CR    = 26;   // corner rounding radius
-      const LABEL = COLS === 1 ? 0 : 52;
+      // Horizontal snake: up to CPR nodes per row, then wrap
+      const CPR   = 4;    // columns per row
+      const NR    = 30;   // node radius
+      const HG    = 300;  // horizontal gap between node centers
+      const VG    = 150;  // vertical gap between rows
+      const ROAD  = 10;   // road stroke width
+      const CR    = 50;   // corner rounding radius
+      const LABEL = 60;   // space below node for name + badge
 
-      // 1-col: node on the left, text on the right
-      const PX = COLS === 1 ? 44 : 46;
-      const PY = 44;
+      const PX = 50;
+      const PY = 60;
 
-      const numRows = COLS === 1 ? total : Math.ceil(total / COLS);
-      const VB_W = COLS === 1 ? 280 : PX * 2 + HG;
-      const VB_H = PY * 2 + VG * Math.max(numRows - 1, 0) + LABEL;
-      const SVG_W = COLS === 1 ? 290 : 360;
+      const numRows = Math.ceil(total / CPR);
+      const effectiveCols = Math.min(total, CPR);
+      const VB_W = PX * 2 + HG * (effectiveCols - 1);
+      const VB_H = PY + VG * Math.max(numRows - 1, 0) + NR + LABEL + 20;
+      const SVG_W = '100%';
 
       function nodePos(i: number): {x:number; y:number} {
-        if (COLS === 1) return { x: PX, y: PY + i * VG };
-        const row = Math.floor(i / COLS);
-        const col = i % COLS;
+        const row = Math.floor(i / CPR);
+        const col = i % CPR;
         // Even rows: L→R; odd rows: R→L
-        const xIdx = (row % 2 === 0) ? col : (COLS - 1 - col);
+        const xIdx = (row % 2 === 0) ? col : (CPR - 1 - col);
         return { x: PX + xIdx * HG, y: PY + row * VG };
       }
 
@@ -213,36 +212,21 @@ import App from '../layouts/App.astro';
 
         // Number label inside circle
         const icon = c.status === 'completed' ? '✓' : String(num);
-        const fontSize = c.status === 'completed' ? 15 : 13;
+        const fontSize = c.status === 'completed' ? 20 : 17;
 
         // Name + badge: right of node (1-col) or below (2-col)
-        const lines = wrapSVG(sName(c.slug), 14);
-        const BW = 62, BH = 15;
-        let nameEls: string;
-        let badgeEl: string;
-        if (COLS === 1) {
-          const tx = x + NR + 16;
-          nameEls = lines.map((ln: string, li: number) =>
-            `<text x="${tx}" y="${y + (li - (lines.length - 1) / 2) * 14}" text-anchor="start" dominant-baseline="middle"
-              font-size="11" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
-          ).join('');
-          const by = y + Math.ceil(lines.length / 2) * 14 + 3;
-          badgeEl = `
-            <rect x="${tx}" y="${by}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
-            <text x="${tx + BW/2}" y="${by + BH/2}" text-anchor="middle" dominant-baseline="middle"
-              font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
-        } else {
-          const nameY0 = y + NR + 12;
-          nameEls = lines.map((ln: string, li: number) =>
-            `<text x="${x}" y="${nameY0 + li*12}" text-anchor="middle" dominant-baseline="hanging"
-              font-size="10" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
-          ).join('');
-          const badgeY = nameY0 + lines.length * 12 + 4;
-          badgeEl = `
-            <rect x="${x-BW/2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
-            <text x="${x}" y="${badgeY+BH/2}" text-anchor="middle" dominant-baseline="middle"
-              font-size="8.5" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
-        }
+        const lines = wrapSVG(sName(c.slug), 13);
+        const BW = 76, BH = 18;
+        const nameY0 = y + NR + 14;
+        const nameEls = lines.map((ln: string, li: number) =>
+          `<text x="${x}" y="${nameY0 + li*15}" text-anchor="middle" dominant-baseline="hanging"
+            font-size="13" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
+        ).join('');
+        const badgeY = nameY0 + lines.length * 15 + 5;
+        const badgeEl = `
+          <rect x="${x-BW/2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
+          <text x="${x}" y="${badgeY+BH/2}" text-anchor="middle" dominant-baseline="middle"
+            font-size="10" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
 
         // Lock badge overlay (top-right of circle) for locked nodes
         const lockBadge = isLocked ? `
@@ -267,7 +251,8 @@ import App from '../layouts/App.astro';
       const lastPt = pts[pts.length - 1];
       const trophyEl = '';
 
-      const svgEl = `<svg width="${SVG_W}" viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg">
+      const svgStyle = effectiveCols < CPR ? `style="max-width:${VB_W}px"` : '';
+      const svgEl = `<svg width="${SVG_W}" ${svgStyle} viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg">
         <path d="${grayD}" fill="none" stroke="#e2e8f0" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>
         ${progD ? `<path d="${progD}" fill="none" stroke="${progCol}" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
         ${trophyEl}

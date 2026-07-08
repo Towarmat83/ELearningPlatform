@@ -10,3 +10,6 @@ spec:
     - linux-intro
     - networking-basics
     - cybersecurity-intro
+    - networking-essentials
+    - python-basics
+    - git-advanced

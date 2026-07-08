@@ -10,3 +10,4 @@ spec:
     - linux-intro
     - docker-fundamentals
     - kubernetes-basics
+    - gitlab-cicd

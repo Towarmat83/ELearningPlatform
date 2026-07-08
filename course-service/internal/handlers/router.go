@@ -38,6 +38,7 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	}
 
 	router.Use(chiMiddleware.Recoverer)
+	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsOptions.Handler)
 
 	registerPublicRoutes(router, state)

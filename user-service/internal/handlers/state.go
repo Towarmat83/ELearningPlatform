@@ -13,6 +13,9 @@ import (
 	"github.com/elearning/user-service/internal/middleware"
 )
 
+// maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
+const maxRequestBodyBytes = 1 << 20
+
 // State holds the shared dependencies used by every HTTP handler in
 // this package, such as the database pool and application config.
 type State struct {

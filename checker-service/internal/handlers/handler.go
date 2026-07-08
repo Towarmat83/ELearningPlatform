@@ -13,6 +13,9 @@ import (
 	"github.com/go-chi/cors"
 )
 
+// maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
+const maxRequestBodyBytes = 1 << 20
+
 // Handler serves the checker-service HTTP API.
 type Handler struct {
 	config *config.Config
@@ -30,6 +33,7 @@ func (h *Handler) BuildRouter() *chi.Mux {
 	router.Use(chiMiddleware.RealIP)
 	router.Use(chiMiddleware.Logger)
 	router.Use(chiMiddleware.Recoverer)
+	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins: h.config.CORSOrigins,
 		AllowedMethods: []string{"GET", "POST", "OPTIONS"},

@@ -14,8 +14,16 @@ import (
 	"github.com/elearning/checker-service/internal/handlers"
 )
 
-// readHeaderTimeout bounds how long the server waits to read request headers.
-const readHeaderTimeout = 10 * time.Second
+const (
+	// readHeaderTimeout bounds how long the server waits to read request headers.
+	readHeaderTimeout = 10 * time.Second
+	// readTimeout bounds the total time to read the request (headers + body).
+	readTimeout = 30 * time.Second
+	// writeTimeout bounds the time to write the response.
+	writeTimeout = 30 * time.Second
+	// idleTimeout bounds how long an idle keep-alive connection is kept open.
+	idleTimeout = 60 * time.Second
+)
 
 // main starts the checker-service HTTP server.
 func main() {
@@ -33,6 +41,9 @@ func main() {
 		Addr:              addr,
 		Handler:           handler.BuildRouter(),
 		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	err := srv.ListenAndServe()

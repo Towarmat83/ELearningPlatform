@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: gitlab-db
+  namespace: gitlab
+spec:
+  instances: 1
+  storage:
+    size: 10Gi
+  bootstrap:
+    initdb:
+      database: gitlabhq_production
+      owner: gitlab
+      # CNPG creates secret "gitlab-db-app" with keys: username, password, uri, host, port

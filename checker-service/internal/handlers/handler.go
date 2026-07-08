@@ -3,7 +3,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -12,10 +14,28 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 )
+
+// remoteIP extracts the IP from r.RemoteAddr (already set to the real client
+// IP by chiMiddleware.RealIP) to use as the rate-limit key.
+func remoteIP(r *http.Request) (string, error) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr, nil //nolint:nilerr // best-effort: fall back to raw addr
+	}
+
+	return ip, nil
+}
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
 const maxRequestBodyBytes = 1 << 20
+
+// checkerRateLimit is the maximum number of requests allowed per IP per window.
+const checkerRateLimit = 20
+
+// checkerRateWindow is the time window for the checker rate limiter.
+const checkerRateWindow = time.Minute
 
 // Handler serves the checker-service HTTP API.
 type Handler struct {
@@ -35,6 +55,7 @@ func (h *Handler) BuildRouter() *chi.Mux {
 	router.Use(chiMiddleware.Logger)
 	router.Use(chiMiddleware.Recoverer)
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
+	router.Use(httprate.LimitBy(checkerRateLimit, checkerRateWindow, remoteIP))
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins: h.config.CORSOrigins,
 		AllowedMethods: []string{"GET", "POST", "OPTIONS"},

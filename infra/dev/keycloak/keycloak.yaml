@@ -1,0 +1,65 @@
+---
+# Keycloak instance — managed by the Keycloak Operator (k8s.keycloak.org/v2alpha1)
+# Needs: CNPG cluster "keycloak-db" in the same namespace
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  instances: 1
+
+  # HTTP only in dev (no TLS termination in-cluster)
+  http:
+    httpEnabled: true
+    httpPort: 8080
+
+  hostname:
+    hostname: keycloak.local
+    # strict=false: Keycloak uses the Host header for the iss claim.
+    # CoreDNS resolves keycloak.local → keycloak-ext service (port 8884→8080) inside the cluster,
+    # so all pods send Host: keycloak.local:8884 → iss matches the configured issuer.
+    strict: false
+    strictBackchannel: false
+
+  db:
+    vendor: postgres
+    host: keycloak-db-rw.keycloak.svc.cluster.local
+    port: 5432
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-app
+      key: username
+    passwordSecret:
+      name: keycloak-db-app
+      key: password
+
+  # NodePort so Kind can expose port 30884 → host 8884
+  # The operator creates a Service; we patch it to NodePort via the service spec below
+  additionalOptions:
+    - name: http-relative-path
+      value: /
+    # Pin the external port so the `iss` claim in tokens is always
+    # http://keycloak.local:8884/realms/<realm> regardless of which
+    # URL hits Keycloak internally (hostname-url was removed in KC 26).
+    - name: hostname-port
+      value: "8884"
+
+---
+# NodePort Service to expose Keycloak through Kind's port mapping
+# (the operator creates its own service; this one supplements it for local access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-nodeport
+  namespace: keycloak
+spec:
+  type: NodePort
+  selector:
+    app: keycloak
+    app.kubernetes.io/managed-by: keycloak-operator
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30884

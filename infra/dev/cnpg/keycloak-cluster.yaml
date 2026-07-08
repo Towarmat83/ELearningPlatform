@@ -1,0 +1,16 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keycloak-db
+  namespace: keycloak
+spec:
+  instances: 1
+  storage:
+    size: 2Gi
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+      # CNPG creates a secret named "keycloak-db-app" with keys:
+      #   username, password, uri, host, port, dbname
+      # The Keycloak CR reads this via spec.db.usernameSecret / passwordSecret

@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 
 	"github.com/elearning/user-service/internal/config"
 	"github.com/elearning/user-service/internal/db"
@@ -13,8 +16,25 @@ import (
 	apimiddleware "github.com/elearning/user-service/internal/middleware"
 )
 
+// remoteIP extracts the IP from r.RemoteAddr (already set to the real client
+// IP by chiMiddleware.RealIP) to use as the rate-limit key.
+func remoteIP(r *http.Request) (string, error) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr, nil //nolint:nilerr // best-effort: fall back to raw addr
+	}
+
+	return ip, nil
+}
+
 // corsMaxAgeSeconds bounds CORS preflight cache duration, in seconds.
 const corsMaxAgeSeconds = 300
+
+// authRateLimit is the max auth requests per IP per window.
+const authRateLimit = 10
+
+// authRateWindow is the time window for the auth rate limiter.
+const authRateWindow = time.Minute
 
 // BuildRouter assembles the HTTP router, wiring public, authenticated, admin,
 // pattern, and internal routes with their respective middleware.
@@ -61,18 +81,19 @@ func registerPublicRoutes(router chi.Router, state *State) {
 	router.Get("/metrics", metrics.Handler())
 
 	router.Get("/api/settings/public", state.PublicSettings)
-
-	router.Post("/api/auth/register", state.Register)
-	router.Post("/api/auth/login", state.Login)
-
 	router.Get("/api/auth/oauth/providers", state.ListProviders)
 	router.Get("/api/auth/oauth/{provider}/authorize", state.OAuthAuthorize)
-	router.Post("/api/auth/oauth/callback", state.OAuthCallback)
-
 	router.Get("/api/auth/oidc/authorize", state.OIDCAuthorize)
-	router.Post("/api/auth/oidc/callback", state.OIDCCallback)
 
-	router.Post("/api/auth/ldap/login", state.LDAPLogin)
+	// Rate-limited auth endpoints — 10 requests per IP per minute.
+	router.Group(func(group chi.Router) {
+		group.Use(httprate.LimitBy(authRateLimit, authRateWindow, remoteIP))
+		group.Post("/api/auth/register", state.Register)
+		group.Post("/api/auth/login", state.Login)
+		group.Post("/api/auth/oauth/callback", state.OAuthCallback)
+		group.Post("/api/auth/oidc/callback", state.OIDCCallback)
+		group.Post("/api/auth/ldap/login", state.LDAPLogin)
+	})
 }
 
 // registerAuthenticatedRoutes wires routes that require a valid session.

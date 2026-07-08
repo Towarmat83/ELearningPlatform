@@ -1,0 +1,74 @@
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: wks-main
+  namespace: keycloak
+spec:
+  keycloakCRName: keycloak
+  realm:
+    id: wks-main
+    realm: wks-main
+    displayName: "WKS — Main"
+    enabled: true
+    registrationAllowed: false
+    loginWithEmailAllowed: true
+    duplicateEmailsAllowed: false
+    resetPasswordAllowed: false
+    editUsernameAllowed: false
+
+    # ── Users ─────────────────────────────────────────────────────────────────
+    users:
+      - username: bellinil
+        email: belliniloan@gmail.com
+        firstName: Loan
+        lastName: Bellinil
+        enabled: true
+        emailVerified: true
+        credentials:
+          - type: password
+            value: "bellinil"
+            temporary: false
+
+    # ── Clients ───────────────────────────────────────────────────────────────
+    clients:
+      # elearning platform — confidential: user-service exchanges code server-side
+      - clientId: elearning
+        name: "ELearning Platform"
+        enabled: true
+        publicClient: false
+        secret: "elearning-keycloak-dev-secret"
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        protocol: openid-connect
+        redirectUris:
+          - "http://localhost:4321/*"
+          - "http://elearning.local/*"
+        webOrigins:
+          - "http://localhost:4321"
+          - "http://elearning.local"
+        defaultClientScopes:
+          - openid
+          - profile
+          - email
+
+      # GitLab CE — confidential: server-side token exchange
+      - clientId: gitlab
+        name: "GitLab CE"
+        enabled: true
+        publicClient: false
+        secret: "gitlab-keycloak-dev-secret"
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        protocol: openid-connect
+        redirectUris:
+          - "http://gitlab.local:8880/users/auth/openid_connect/callback"
+        webOrigins:
+          - "http://gitlab.local:8880"
+        defaultClientScopes:
+          - openid
+          - profile
+          - email

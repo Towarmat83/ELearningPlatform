@@ -11,3 +11,7 @@ spec:
     - docker-fundamentals
     - kubernetes-basics
     - gitlab-cicd
+    - infrastructure-as-code
+    - monitoring-observability
+    - secrets-management
+    - container-security

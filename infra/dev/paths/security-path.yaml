@@ -13,3 +13,7 @@ spec:
     - networking-essentials
     - python-basics
     - git-advanced
+    - secrets-management
+    - container-security
+    - devsecops
+    - pentesting-basics

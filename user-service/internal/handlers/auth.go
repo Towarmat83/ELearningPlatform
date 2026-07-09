@@ -270,7 +270,7 @@ func (s *State) Register(writer http.ResponseWriter, request *http.Request) {
 	addToDefaultGroup(ctx, s.Pool, user.ID)
 	syncGroupEnrollments(ctx, s.Pool, user.ID)
 	metrics.ActiveUsers.Inc()
-	s.JSON(writer, http.StatusOK, authResponse{Token: token, User: user})
+	s.JSON(writer, http.StatusCreated, authResponse{Token: token, User: user})
 }
 
 // loginUserRow holds a local-login lookup result: the user's public

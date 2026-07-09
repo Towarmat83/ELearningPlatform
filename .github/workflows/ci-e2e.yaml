@@ -1,0 +1,101 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "user-service/**"
+      - "checker-service/**"
+      - "e2e/**"
+      - ".github/workflows/ci-e2e.yaml"
+  pull_request:
+    paths:
+      - "user-service/**"
+      - "checker-service/**"
+      - "e2e/**"
+      - ".github/workflows/ci-e2e.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (user-service + checker-service)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: elearning
+          POSTGRES_PASSWORD: elearning
+          POSTGRES_DB: elearning
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://elearning:elearning@localhost:5432/elearning?sslmode=disable
+      JWT_SECRET: ci-jwt-secret-e2e-only
+      INTERNAL_SERVICE_SECRET: ci-internal-secret-e2e-only
+      ADMIN_PASSWORD: admin-e2e-password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: user-service/go.mod
+          cache-dependency-path: |
+            user-service/go.sum
+            checker-service/go.sum
+            e2e/go.mod
+
+      - name: Build user-service
+        working-directory: user-service
+        run: go build -o ../bin/user-service ./...
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Build checker-service
+        working-directory: checker-service
+        run: go build -o ../bin/checker-service ./...
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Start user-service
+        run: |
+          mkdir -p bin
+          ./bin/user-service &
+          echo "USER_SERVICE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Start checker-service
+        run: |
+          PORT=8083 ./bin/checker-service &
+          echo "CHECKER_SERVICE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Run e2e tests
+        working-directory: e2e
+        run: |
+          go test -tags e2e -v -timeout 120s ./...
+        env:
+          USER_SERVICE_URL: http://localhost:8081
+          CHECKER_SERVICE_URL: http://localhost:8083
+          ADMIN_EMAIL: admin@elearning.local
+          ADMIN_PASSWORD: admin-e2e-password
+
+      - name: Stop services
+        if: always()
+        run: |
+          kill "$USER_SERVICE_PID" 2>/dev/null || true
+          kill "$CHECKER_SERVICE_PID" 2>/dev/null || true

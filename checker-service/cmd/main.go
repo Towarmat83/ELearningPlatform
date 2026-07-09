@@ -58,15 +58,22 @@ func main() {
 	_ = logger.Sync()
 }
 
-// initLogger builds a zap production logger with the level controlled by the
-// LOG_LEVEL environment variable (debug/info/warn/error, default: info).
+// initLogger builds a zap logger driven by two environment variables:
+//   - LOG_LEVEL  — debug/info/warn/error (default: info)
+//   - LOG_FORMAT — json (default) or text (human-readable, for local dev)
 func initLogger() *zap.Logger {
 	level := zap.NewAtomicLevel()
 	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
 		_ = level.UnmarshalText([]byte(lvl))
 	}
 
-	cfg := zap.NewProductionConfig()
+	var cfg zap.Config
+	if os.Getenv("LOG_FORMAT") == "text" {
+		cfg = zap.NewDevelopmentConfig()
+	} else {
+		cfg = zap.NewProductionConfig()
+	}
+
 	cfg.Level = level
 
 	return zap.Must(cfg.Build())

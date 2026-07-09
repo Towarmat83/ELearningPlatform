@@ -20,7 +20,7 @@ const (
 	// it must be overridden in production via the INTERNAL_SERVICE_SECRET env var.
 	defaultInternalSecret = "change-me-internal-secret"
 	// defaultJWTExpiryHours is the default JWT token lifetime, in hours.
-	defaultJWTExpiryHours = 24
+	defaultJWTExpiryHours = 8
 	// defaultPort is the default HTTP listen port.
 	defaultPort = 8081
 	// defaultLocalOrigin is the default local frontend origin, used as a
@@ -90,6 +90,10 @@ type Config struct {
 
 	JWTSecret string `yaml:"jwtSecret"`
 
+	// OAuthStateSecret signs OAuth CSRF state JWTs. When empty, JWTSecret is
+	// used as fallback so existing deployments without this env var keep working.
+	OAuthStateSecret string `yaml:"oauthStateSecret"`
+
 	JWTExpiryH int `yaml:"jwtExpiryHours"`
 	Port       int `yaml:"port"`
 
@@ -144,6 +148,7 @@ func Load() *Config {
 
 	cfg.DatabaseURL = stringFromEnv("DATABASE_URL", cfg.DatabaseURL)
 	cfg.JWTSecret = stringFromEnv("JWT_SECRET", cfg.JWTSecret)
+	cfg.OAuthStateSecret = stringFromEnv("OAUTH_STATE_SECRET", cfg.JWTSecret)
 	cfg.JWTExpiryH = intFromEnv("JWT_EXPIRY_HOURS", cfg.JWTExpiryH)
 	cfg.Port = intFromEnv("PORT", cfg.Port)
 	cfg.CORSOrigins = sliceFromEnv("CORS_ORIGINS", cfg.CORSOrigins)

@@ -17,6 +17,12 @@ import (
 // roleAdmin is the Role value required to access admin-only endpoints.
 const roleAdmin = "admin"
 
+// jwtIssuer is the iss claim expected on every session token.
+const jwtIssuer = "user-service"
+
+// jwtAudience is the aud claim expected on every session token.
+const jwtAudience = "elearning-api"
+
 // Claims holds the JWT claims used by course-service, combining the
 // standard registered claims with the application-specific user fields.
 type Claims struct {
@@ -45,6 +51,8 @@ func CreateToken(userID, email, role, secret string, expiryHours int) (string, e
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expiryHours) * time.Hour)),
+			Issuer:    jwtIssuer,
+			Audience:  jwt.ClaimStrings{jwtAudience},
 		},
 	}
 
@@ -64,7 +72,7 @@ func VerifyToken(tokenStr, secret string) (*Claims, error) {
 		}
 
 		return []byte(secret), nil
-	})
+	}, jwt.WithAudience(jwtAudience), jwt.WithIssuer(jwtIssuer))
 	if err != nil {
 		return nil, fmt.Errorf("parse jwt: %w", err)
 	}

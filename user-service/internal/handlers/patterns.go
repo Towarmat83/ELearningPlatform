@@ -3,10 +3,11 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
@@ -96,7 +97,7 @@ func LoadPatternsFromConfig(ctx context.Context, pool db.Pool, path string) erro
 		}
 	}
 
-	slog.Info("markdown patterns loaded from config", "path", path, "count", len(cfg.Patterns))
+	zap.S().Infow("markdown patterns loaded from config", "path", path, "count", len(cfg.Patterns))
 
 	return nil
 }

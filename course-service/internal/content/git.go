@@ -5,12 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -195,7 +196,7 @@ func (gc *GitCache) awaitClone(ctx context.Context, key, rawURL, branch, token s
 func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, token string, done chan struct{}) (string, error) {
 	repoDir := filepath.Join(gc.cacheDir, key)
 
-	slog.Debug("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
+	zap.S().Debugw("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
 
 	_, statErr := os.Stat(repoDir)
 	if statErr == nil {
@@ -221,7 +222,7 @@ func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, toke
 
 		msg := sanitizeGitOutput(err.Error(), token)
 
-		slog.Error("git clone failed", "error", msg)
+		zap.S().Errorw("git clone failed", "error", msg)
 
 		return "", fmt.Errorf("git clone failed: %s", msg)
 	}

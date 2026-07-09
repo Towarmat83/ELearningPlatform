@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"go.uber.org/zap"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -110,7 +111,7 @@ func extractURLBase(rawURL string) string {
 func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request) {
 	cfg, err := s.loadOIDCSettings(request.Context())
 	if err != nil {
-		slog.Error("load OIDC settings", "err", err)
+		zap.S().Errorw("load OIDC settings", "err", err)
 		s.Error(writer, http.StatusBadRequest, "OIDC not configured")
 
 		return
@@ -129,7 +130,7 @@ func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request)
 
 	provider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
-		slog.Error("OIDC provider unreachable", "err", err)
+		zap.S().Errorw("OIDC provider unreachable", "err", err)
 		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return
@@ -196,7 +197,7 @@ func (s *State) exchangeOIDCToken(
 
 	oidcProvider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
-		slog.Error("OIDC provider unreachable", "err", err)
+		zap.S().Errorw("OIDC provider unreachable", "err", err)
 		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return nil, "", false
@@ -213,7 +214,7 @@ func (s *State) exchangeOIDCToken(
 
 	token, err := oauth2Cfg.Exchange(ctx, code)
 	if err != nil {
-		slog.Error("OIDC token exchange failed", "err", err)
+		zap.S().Errorw("OIDC token exchange failed", "err", err)
 		s.Error(writer, http.StatusUnauthorized, "Token exchange failed")
 
 		return nil, "", false
@@ -230,7 +231,7 @@ func (s *State) exchangeOIDCToken(
 
 	idToken, err := verifier.Verify(providerCtx, rawIDToken)
 	if err != nil {
-		slog.Error("OIDC ID token verification failed", "err", err)
+		zap.S().Errorw("OIDC ID token verification failed", "err", err)
 		s.Error(writer, http.StatusUnauthorized, "Token verification failed")
 
 		return nil, "", false
@@ -283,7 +284,7 @@ func (s *State) OIDCCallback(writer http.ResponseWriter, request *http.Request) 
 
 	cfg, err := s.loadOIDCSettings(ctx)
 	if err != nil {
-		slog.Error("load OIDC settings", "err", err)
+		zap.S().Errorw("load OIDC settings", "err", err)
 		s.Error(writer, http.StatusBadRequest, "OIDC not configured")
 
 		return

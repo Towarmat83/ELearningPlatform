@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Course-status literals shared by buildCourseStatuses and its callers,
@@ -183,7 +184,7 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 		 LIMIT $2 OFFSET $3`,
 		claims.Subject, limit, offset)
 	if err != nil {
-		slog.Error("failed to query path enrollments", "err", err)
+		zap.S().Errorw("failed to query path enrollments", "err", err)
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
@@ -205,7 +206,7 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 	for _, enr := range enrollments {
 		detail, err := s.fetchPathDetail(request, enr.slug)
 		if err != nil {
-			slog.Warn("failed to fetch path detail", "slug", enr.slug, "err", err)
+			zap.S().Warnw("failed to fetch path detail", "slug", enr.slug, "err", err)
 			result = append(result, myPath{
 				Slug:       enr.slug,
 				Title:      enr.slug,
@@ -250,7 +251,7 @@ func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs 
 		 ) sub`,
 		userID, slugs)
 	if err != nil {
-		slog.Error("failed to query completed courses", "userID", userID, "err", err)
+		zap.S().Errorw("failed to query completed courses", "userID", userID, "err", err)
 
 		return nil
 	}
@@ -283,7 +284,7 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 
 	detail, err := s.fetchPathDetail(request, slug)
 	if err != nil {
-		slog.Warn("failed to fetch path detail for enrollments", "slug", slug, "err", err)
+		zap.S().Warnw("failed to fetch path detail for enrollments", "slug", slug, "err", err)
 	}
 
 	rows, err := s.Pool.Query(request.Context(), `
@@ -293,7 +294,7 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 		WHERE pe.path_slug = $1
 		ORDER BY pe.enrolledAt DESC`, slug)
 	if err != nil {
-		slog.Error("failed to query path enrollments", "slug", slug, "err", err)
+		zap.S().Errorw("failed to query path enrollments", "slug", slug, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
@@ -362,7 +363,7 @@ func (s *State) AdminEnrollUserInPath(writer http.ResponseWriter, request *http.
 		`INSERT INTO path_enrollments (userId, path_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		body.UserID, slug)
 	if err != nil {
-		slog.Error("failed to enroll user in path", "slug", slug, "userID", body.UserID, "err", err)
+		zap.S().Errorw("failed to enroll user in path", "slug", slug, "userID", body.UserID, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
@@ -388,7 +389,7 @@ func (s *State) AdminUnenrollUserFromPath(writer http.ResponseWriter, request *h
 		`DELETE FROM path_enrollments WHERE userId = $1::uuid AND path_slug = $2`,
 		userID, slug)
 	if err != nil {
-		slog.Error("failed to unenroll user from path", "slug", slug, "userID", userID, "err", err)
+		zap.S().Errorw("failed to unenroll user from path", "slug", slug, "userID", userID, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return

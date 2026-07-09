@@ -1,8 +1,9 @@
 package handlers
 
 import (
-	"log/slog"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 // courseBody is the request body for endpoints keyed by user+course.
@@ -53,7 +54,7 @@ type moduleProgressRow struct {
 func internalDecodeOrBadRequest(s *State, writer http.ResponseWriter, req *http.Request, dst any) bool {
 	err := decode(req, dst)
 	if err != nil {
-		slog.Error("JSON decode failed", "err", err)
+		zap.S().Errorw("JSON decode failed", "err", err)
 		s.Error(writer, http.StatusBadRequest, "Invalid request body")
 
 		return false
@@ -66,7 +67,7 @@ func internalDecodeOrBadRequest(s *State, writer http.ResponseWriter, req *http.
 // writes the {"ok": bool} response shared by internal write endpoints.
 func internalRespondExecResult(state *State, writer http.ResponseWriter, execErr error, logMsg string, logArgs ...any) {
 	if execErr != nil {
-		slog.Error(logMsg, append(logArgs, "err", execErr)...)
+		zap.S().Errorw(logMsg, append(logArgs, "err", execErr)...)
 		state.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
@@ -114,7 +115,7 @@ func (s *State) InternalCheckEnrollment(writer http.ResponseWriter, req *http.Re
 		`SELECT COUNT(*) > 0 FROM enrollments WHERE userId = $1::uuid AND courseSlug = $2`,
 		userID, courseSlug).Scan(&enrolled)
 	if err != nil {
-		slog.Error("failed to check enrollment", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.S().Errorw("failed to check enrollment", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
@@ -139,7 +140,7 @@ func (s *State) InternalViewedLessons(writer http.ResponseWriter, req *http.Requ
 		`SELECT lessonSlug FROM lesson_progress WHERE userId = $1::uuid AND courseSlug = $2`,
 		userID, courseSlug)
 	if err != nil {
-		slog.Error("failed to query viewed lessons", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.S().Errorw("failed to query viewed lessons", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
@@ -257,7 +258,7 @@ func (s *State) InternalCourseSummary(writer http.ResponseWriter, req *http.Requ
 		 WHERE userId = $1::uuid AND courseSlug = $2`,
 		userID, courseSlug).Scan(&totalScore)
 	if err != nil {
-		slog.Error("failed to query course score", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.S().Errorw("failed to query course score", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
@@ -269,7 +270,7 @@ func (s *State) InternalCourseSummary(writer http.ResponseWriter, req *http.Requ
 		   AND passed = true AND moduleSlug IS NOT NULL`,
 		userID, courseSlug)
 	if err != nil {
-		slog.Error("failed to query passed modules", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.S().Errorw("failed to query passed modules", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
@@ -318,7 +319,7 @@ func (s *State) InternalGetModuleProgress(writer http.ResponseWriter, req *http.
 		 WHERE userId = $1::uuid AND courseSlug = $2`,
 		userID, courseSlug)
 	if err != nil {
-		slog.Error("failed to query module progress", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.S().Errorw("failed to query module progress", "userID", userID, "courseSlug", courseSlug, "err", err)
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return

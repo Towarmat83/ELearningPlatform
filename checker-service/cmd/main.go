@@ -5,10 +5,11 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/elearning/checker-service/internal/config"
 	"github.com/elearning/checker-service/internal/handlers"
@@ -27,15 +28,14 @@ const (
 
 // main starts the checker-service HTTP server.
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
+	logger := initLogger()
+	zap.ReplaceGlobals(logger)
 
 	cfg := config.Load()
 	handler := handlers.New(cfg)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	slog.Info("checker-service starting", "addr", addr, "gitlab_base_url", cfg.GitLabBaseURL)
+	zap.L().Info("checker-service starting", zap.String("addr", addr), zap.String("gitlab_base_url", cfg.GitLabBaseURL))
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -48,7 +48,26 @@ func main() {
 
 	err := srv.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("server error", "err", err)
+		zap.L().Error("server error", zap.Error(err))
+
+		_ = logger.Sync()
+
 		os.Exit(1)
 	}
+
+	_ = logger.Sync()
+}
+
+// initLogger builds a zap production logger with the level controlled by the
+// LOG_LEVEL environment variable (debug/info/warn/error, default: info).
+func initLogger() *zap.Logger {
+	level := zap.NewAtomicLevel()
+	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+		_ = level.UnmarshalText([]byte(lvl))
+	}
+
+	cfg := zap.NewProductionConfig()
+	cfg.Level = level
+
+	return zap.Must(cfg.Build())
 }

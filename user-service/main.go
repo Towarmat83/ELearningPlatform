@@ -6,12 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/elearning/user-service/internal/config"
 	"github.com/elearning/user-service/internal/db"
@@ -49,11 +50,19 @@ const (
 // @in             header
 // @name           Authorization.
 func main() {
+	logger := initLogger()
+	zap.ReplaceGlobals(logger)
+
 	err := run()
 	if err != nil {
-		slog.Error("fatal startup error", "err", err)
+		zap.L().Error("fatal startup error", zap.Error(err))
+
+		_ = logger.Sync()
+
 		os.Exit(1)
 	}
+
+	_ = logger.Sync()
 }
 
 // run wires up the database, background watchers, and HTTP server, then
@@ -63,10 +72,6 @@ func main() {
 func run() error {
 	cfg := config.Load()
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
-
 	ctx := context.Background()
 
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
@@ -75,7 +80,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	slog.Info("database connected")
+	zap.L().Info("database connected")
 
 	err = seedDatabase(ctx, pool, cfg)
 	if err != nil {
@@ -122,7 +127,7 @@ func seedDatabase(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) e
 		return fmt.Errorf("run migrations: %w", err)
 	}
 
-	slog.Info("migrations applied")
+	zap.L().Info("migrations applied")
 
 	// Seed default admin (idempotent — safe to run on every startup).
 	err = db.SeedAdmin(ctx, pool, cfg.AdminPassword)
@@ -140,7 +145,7 @@ func seedDatabase(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) e
 	if os.Getenv("SEED_MOCK_DATA") == seedMockDataValue {
 		err := db.SeedMockData(ctx, pool)
 		if err != nil {
-			slog.Error("failed to seed mock data", "err", err)
+			zap.L().Error("failed to seed mock data", zap.Error(err))
 		}
 	}
 
@@ -160,19 +165,19 @@ func startPatternWatcher(ctx context.Context, cfg *config.Config, pool *pgxpool.
 
 	patternWatcher, err := handlers.NewPatternWatcher(db.NewAdapter(pool), cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
-		slog.Warn("pattern CRD watcher disabled", "reason", err)
+		zap.L().Warn("pattern CRD watcher disabled", zap.NamedError("reason", err))
 
 		return cancel
 	}
 
 	err = patternWatcher.Start(watchCtx)
 	if err != nil {
-		slog.Warn("pattern CRD watcher failed to start", "err", err)
+		zap.L().Warn("pattern CRD watcher failed to start", zap.Error(err))
 
 		return cancel
 	}
 
-	slog.Info("pattern CRD watcher started", "namespace", cfg.K8sNamespace)
+	zap.L().Info("pattern CRD watcher started", zap.String("namespace", cfg.K8sNamespace))
 
 	return cancel
 }
@@ -187,7 +192,7 @@ func serve(srv *http.Server) error {
 	serveErr := make(chan error, 1)
 
 	go func() {
-		slog.Info("API listening", "addr", srv.Addr)
+		zap.L().Info("API listening", zap.String("addr", srv.Addr))
 
 		err := srv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -205,7 +210,7 @@ func serve(srv *http.Server) error {
 	case <-quit:
 	}
 
-	slog.Info("shutting down...")
+	zap.L().Info("shutting down...")
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
@@ -215,7 +220,21 @@ func serve(srv *http.Server) error {
 		return fmt.Errorf("forced shutdown: %w", err)
 	}
 
-	slog.Info("server stopped")
+	zap.L().Info("server stopped")
 
 	return nil
+}
+
+// initLogger builds a zap production logger with the level controlled by the
+// LOG_LEVEL environment variable (debug/info/warn/error, default: info).
+func initLogger() *zap.Logger {
+	level := zap.NewAtomicLevel()
+	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+		_ = level.UnmarshalText([]byte(lvl))
+	}
+
+	cfg := zap.NewProductionConfig()
+	cfg.Level = level
+
+	return zap.Must(cfg.Build())
 }

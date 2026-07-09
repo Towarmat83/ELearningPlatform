@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -114,7 +115,7 @@ func Auth(secret string) func(http.Handler) http.Handler {
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				slog.Error("token verification failed", "err", err)
+				zap.S().Errorw("token verification failed", "err", err)
 				httpErr(resp, http.StatusUnauthorized, "Invalid token")
 
 				return
@@ -139,7 +140,7 @@ func Admin(secret string) func(http.Handler) http.Handler {
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				slog.Error("token verification failed", "err", err)
+				zap.S().Errorw("token verification failed", "err", err)
 				httpErr(resp, http.StatusUnauthorized, "Invalid token")
 
 				return

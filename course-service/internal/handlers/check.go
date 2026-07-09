@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"gopkg.in/yaml.v3"
 
@@ -185,7 +186,7 @@ func (s *State) storeLabCheck(
 		username, courseSlug, moduleIndex, moduleName, result.Allow, violations, verified,
 	)
 	if err != nil {
-		slog.Warn("failed to store lab check", "err", err)
+		zap.S().Warnw("failed to store lab check", "err", err)
 	}
 }
 
@@ -298,7 +299,7 @@ func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, 
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		slog.Error("checker-service call failed", "err", err)
+		zap.S().Errorw("checker-service call failed", "err", err)
 		s.Error(writer, http.StatusInternalServerError, "error when reaching for checker service")
 
 		return CheckResponse{}, false

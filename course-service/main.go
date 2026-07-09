@@ -6,12 +6,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/elearning/course-service/internal/config"
 	"github.com/elearning/course-service/internal/content"
@@ -42,11 +43,10 @@ const (
 // @in             header
 // @name           Authorization.
 func main() {
-	cfg := config.Load()
+	logger := initLogger()
+	zap.ReplaceGlobals(logger)
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
+	cfg := config.Load()
 
 	ctx := context.Background()
 
@@ -59,7 +59,7 @@ func main() {
 	connectDatabase(ctx, cfg, state)
 	startWatchers(ctx, cfg, store, pathStore)
 
-	slog.Info("K8s CRD watchers started", "namespace", cfg.K8sNamespace)
+	zap.L().Info("K8s CRD watchers started", zap.String("namespace", cfg.K8sNamespace))
 
 	r := handlers.BuildRouter(state, cfg, true)
 
@@ -76,27 +76,29 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		slog.Info("API listening", "addr", addr)
+		zap.L().Info("API listening", zap.String("addr", addr))
 
 		err := srv.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
+			zap.L().Error("server error", zap.Error(err))
 			os.Exit(1)
 		}
 	}()
 
 	<-quit
-	slog.Info("shutting down...")
+	zap.L().Info("shutting down...")
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	err := srv.Shutdown(shutCtx)
 	if err != nil {
-		slog.Error("forced shutdown", "err", err)
+		zap.L().Error("forced shutdown", zap.Error(err))
 	}
 
-	slog.Info("server stopped")
+	zap.L().Info("server stopped")
+
+	_ = logger.Sync()
 }
 
 // connectDatabase connects to the database configured via cfg.DatabaseURL,
@@ -110,21 +112,21 @@ func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.St
 
 	pool, err := coursedb.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
-		slog.Warn("database unavailable, lab result tracking disabled", "err", err)
+		zap.L().Warn("database unavailable, lab result tracking disabled", zap.Error(err))
 
 		return
 	}
 
 	err = coursedb.RunMigrations(ctx, pool, migrations.FS)
 	if err != nil {
-		slog.Warn("db migration failed", "err", err)
+		zap.L().Warn("db migration failed", zap.Error(err))
 
 		return
 	}
 
 	state.DB = pool
 
-	slog.Info("database connected, lab tracking enabled")
+	zap.L().Info("database connected, lab tracking enabled")
 }
 
 // startWatchers starts the Kubernetes CRD watchers that keep store and
@@ -134,25 +136,39 @@ func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.St
 func startWatchers(ctx context.Context, cfg *config.Config, store *content.Store, pathStore *content.PathStore) {
 	watcher, err := content.NewK8sWatcher(store, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
-		slog.Error("failed to create K8s watcher", "err", err)
+		zap.L().Error("failed to create K8s watcher", zap.Error(err))
 		os.Exit(1)
 	}
 
 	err = watcher.Start(ctx)
 	if err != nil {
-		slog.Error("failed to start K8s watcher", "err", err)
+		zap.L().Error("failed to start K8s watcher", zap.Error(err))
 		os.Exit(1)
 	}
 
 	pathWatcher, err := content.NewPathWatcher(pathStore, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
-		slog.Warn("failed to create Path watcher, paths disabled", "err", err)
+		zap.L().Warn("failed to create Path watcher, paths disabled", zap.Error(err))
 
 		return
 	}
 
 	err = pathWatcher.Start(ctx)
 	if err != nil {
-		slog.Warn("failed to start Path watcher", "err", err)
+		zap.L().Warn("failed to start Path watcher", zap.Error(err))
 	}
+}
+
+// initLogger builds a zap production logger with the level controlled by the
+// LOG_LEVEL environment variable (debug/info/warn/error, default: info).
+func initLogger() *zap.Logger {
+	level := zap.NewAtomicLevel()
+	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+		_ = level.UnmarshalText([]byte(lvl))
+	}
+
+	cfg := zap.NewProductionConfig()
+	cfg.Level = level
+
+	return zap.Must(cfg.Build())
 }

@@ -3,7 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
-	"log/slog"
+
+	"go.uber.org/zap"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -77,7 +78,7 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		}
 	}
 
-	slog.Info("OIDC settings bootstrapped from deploy-time config", "keys", seeded)
+	zap.S().Infow("OIDC settings bootstrapped from deploy-time config", "keys", seeded)
 
 	return nil
 }

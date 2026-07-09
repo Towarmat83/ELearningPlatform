@@ -7,9 +7,10 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"sort"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -143,7 +144,7 @@ func applyMigration(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.
 		return fmt.Errorf("record %s: %w", name, err)
 	}
 
-	slog.Info("migration applied", "file", name)
+	zap.S().Infow("migration applied", "file", name)
 
 	return nil
 }

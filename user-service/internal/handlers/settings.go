@@ -17,6 +17,9 @@ const (
 	settingKeyPasswordRequireNumber    = "password_require_number"
 	settingKeyOIDCEnabled              = "oidc_enabled"
 	settingKeyLDAPEnabled              = "ldap_enabled"
+	settingKeyOIDCClientSecret         = "oidc_client_secret"
+	settingKeyLDAPBindPassword         = "ldap_bind_password"
+	settingRedactedValue               = "********"
 )
 
 // allowedSettingKeys is the set of platform setting keys clients may write.
@@ -31,26 +34,35 @@ var allowedSettingKeys = map[string]bool{
 	settingKeyPasswordRequireNumber:    true,
 	"profile_allow_username_change":    true,
 	settingKeySSOLocalLoginEnabled:     true,
-	// OIDC
-	settingKeyOIDCEnabled:       true,
-	"oidc_provider_url":         true,
-	"oidc_issuer_url":           true,
-	"oidc_redirect_base":        true,
-	"oidc_browser_base_url":     true,
-	"oidc_client_id":            true,
-	"oidc_client_secret":        true,
-	"oidc_scopes":               true,
-	"oidc_group_claim":          true,
-	"oidc_insecure_skip_verify": true,
+	// OIDC — oidc_insecure_skip_verify is intentionally absent: it must not be
+	// toggled at runtime via the API (deploy-time env var only).
+	settingKeyOIDCEnabled:      true,
+	"oidc_provider_url":        true,
+	"oidc_issuer_url":          true,
+	"oidc_redirect_base":       true,
+	"oidc_browser_base_url":    true,
+	"oidc_client_id":           true,
+	settingKeyOIDCClientSecret: true,
+	"oidc_scopes":              true,
+	"oidc_group_claim":         true,
 	// LDAP
-	settingKeyLDAPEnabled: true,
-	"ldap_server_url":     true,
-	"ldap_bind_dn":        true,
-	"ldap_bind_password":  true,
-	"ldap_user_base_dn":   true,
-	"ldap_user_filter":    true,
-	"ldap_group_base_dn":  true,
-	"ldap_group_filter":   true,
+	settingKeyLDAPEnabled:      true,
+	"ldap_server_url":          true,
+	"ldap_bind_dn":             true,
+	settingKeyLDAPBindPassword: true,
+	"ldap_user_base_dn":        true,
+	"ldap_user_filter":         true,
+	"ldap_group_base_dn":       true,
+	"ldap_group_filter":        true,
+}
+
+// secretSettingKeys holds setting keys whose values must be redacted in API
+// responses to avoid leaking credentials stored in platform_settings.
+//
+//nolint:gochecknoglobals // static set, read-only
+var secretSettingKeys = map[string]bool{
+	settingKeyOIDCClientSecret: true,
+	settingKeyLDAPBindPassword: true,
 }
 
 // ReadSetting reads a platform setting value by key, returning fallback when
@@ -120,6 +132,10 @@ func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
 			s.Error(writer, http.StatusInternalServerError, "Scan error")
 
 			return
+		}
+
+		if secretSettingKeys[current.Key] && current.Value != "" {
+			current.Value = settingRedactedValue
 		}
 
 		settings = append(settings, current)

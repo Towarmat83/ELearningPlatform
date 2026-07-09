@@ -1147,6 +1147,62 @@ func TestGetSettings_WithData(t *testing.T) {
 	}
 }
 
+// TestGetSettings_SecretRedacted verifies that secret setting values are
+// replaced with "********" in the GET response.
+func TestGetSettings_SecretRedacted(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	pool.PushRows(nil,
+		[]any{"oidc_client_secret", "super-secret", nil},
+		[]any{"ldap_bind_password", "hunter2", nil},
+		[]any{"oidc_enabled", "true", nil},
+	)
+	r := newTestRouter(pool)
+
+	rec := htDo(t, r, "GET", "/api/admin/settings", "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+
+	var resp map[string]any
+
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	settings := htSliceField(t, resp, "settings")
+	for _, raw := range settings {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		key, _ := item["key"].(string)
+		val, _ := item["value"].(string)
+
+		if (key == "oidc_client_secret" || key == "ldap_bind_password") && val != settingRedactedValue {
+			t.Errorf("key %q: want redacted value, got %q", key, val)
+		}
+
+		if key == "oidc_enabled" && val != "true" {
+			t.Errorf("key %q: want plain value, got %q", key, val)
+		}
+	}
+}
+
+// TestUpdateSettings_InsecureSkipVerifyRejected verifies that
+// oidc_insecure_skip_verify cannot be set via the API.
+func TestUpdateSettings_InsecureSkipVerifyRejected(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	r := newTestRouter(pool)
+
+	rec := htDo(t, r, "PUT", "/api/admin/settings", `{"oidc_insecure_skip_verify":"true"}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400 (key not allowed), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // ── UpdateSettings ────────────────────────────────────────────────────────────
 
 // TestUpdateSettings_EmptyBody verifies update settings empty body behavior.

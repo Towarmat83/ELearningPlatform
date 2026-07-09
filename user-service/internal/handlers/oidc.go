@@ -77,7 +77,7 @@ func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
 		insecureClient := &http.Client{
 			Transport: &http.Transport{
 				//nolint:gosec // operator opt-in via oidc_insecure_skip_verify setting, for internal/self-signed CAs
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
 			},
 		}
 		ctx = gooidc.ClientContext(ctx, insecureClient)

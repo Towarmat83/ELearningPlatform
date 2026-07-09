@@ -158,16 +158,16 @@ import App from '../layouts/App.astro';
       const allDone = done===total && total>0;
 
       // Horizontal snake: up to CPR nodes per row, then wrap
-      const CPR   = 4;    // columns per row
-      const NR    = 30;   // node radius
-      const HG    = 300;  // horizontal gap between node centers
-      const VG    = 150;  // vertical gap between rows
-      const ROAD  = 10;   // road stroke width
-      const CR    = 50;   // corner rounding radius
-      const LABEL = 60;   // space below node for name + badge
+      const CPR   = 5;    // columns per row — snake wraps at node 6+
+      const NR    = 18;   // node radius
+      const HG    = 200;  // horizontal gap between node centers
+      const VG    = 125;  // vertical gap between rows
+      const ROAD  = 6;    // road stroke width
+      const CR    = 28;   // corner rounding radius
+      const LABEL = 38;   // space below node for name + badge
 
-      const PX = 50;
-      const PY = 60;
+      const PX = 40;
+      const PY = 45;
 
       const numRows = Math.ceil(total / CPR);
       const effectiveCols = Math.min(total, CPR);
@@ -212,21 +212,23 @@ import App from '../layouts/App.astro';
 
         // Number label inside circle
         const icon = c.status === 'completed' ? '✓' : String(num);
-        const fontSize = c.status === 'completed' ? 20 : 17;
+        const fontSize = c.status === 'completed' ? 14 : 12;
 
         // Name + badge: right of node (1-col) or below (2-col)
-        const lines = wrapSVG(sName(c.slug), 13);
-        const BW = 76, BH = 18;
-        const nameY0 = y + NR + 14;
+        const lines = wrapSVG(sName(c.slug), 16);
+        const BW = 64, BH = 14;
+        const LINE_H = 11;  // line-height in viewBox units
+        const NAME_ROWS = 2; // always reserve 2 lines so badges align across all nodes
+        const nameY0 = y + NR + 10;
         const nameEls = lines.map((ln: string, li: number) =>
-          `<text x="${x}" y="${nameY0 + li*15}" text-anchor="middle" dominant-baseline="hanging"
-            font-size="13" font-weight="600" fill="#1e293b" font-family="system-ui,sans-serif">${ln}</text>`
+          `<text x="${x}" y="${nameY0 + li*LINE_H}" text-anchor="middle" dominant-baseline="hanging"
+            font-size="9" font-weight="500" fill="#334155" font-family="system-ui,sans-serif">${ln}</text>`
         ).join('');
-        const badgeY = nameY0 + lines.length * 15 + 5;
+        const badgeY = nameY0 + NAME_ROWS * LINE_H + 3;
         const badgeEl = `
           <rect x="${x-BW/2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH/2}" fill="${th.badge}"/>
           <text x="${x}" y="${badgeY+BH/2}" text-anchor="middle" dominant-baseline="middle"
-            font-size="10" font-weight="700" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+            font-size="7" font-weight="600" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
 
         // Lock badge overlay (top-right of circle) for locked nodes
         const lockBadge = isLocked ? `
@@ -245,13 +247,13 @@ import App from '../layouts/App.astro';
 
         nodesSVG += isLocked
           ? `<g>${inner}</g>`
-          : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths')" style="cursor:pointer">${inner}</a>`;
+          : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')" style="cursor:pointer">${inner}</a>`;
       });
 
       const lastPt = pts[pts.length - 1];
       const trophyEl = '';
 
-      const svgStyle = effectiveCols < CPR ? `style="max-width:${VB_W}px"` : '';
+      const svgStyle = '';
       const svgEl = `<svg width="${SVG_W}" ${svgStyle} viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg">
         <path d="${grayD}" fill="none" stroke="#e2e8f0" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>
         ${progD ? `<path d="${progD}" fill="none" stroke="${progCol}" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
@@ -310,6 +312,12 @@ import App from '../layouts/App.astro';
           card.addEventListener('click', () => showDetail(card.dataset.slug!));
         });
         document.getElementById('btn-back')!.addEventListener('click', showList);
+
+        const returnPath = localStorage.getItem('courseReturnPath');
+        if (returnPath) {
+          localStorage.removeItem('courseReturnPath');
+          showDetail(returnPath);
+        }
       } catch {
         document.getElementById('loading')!.style.display = 'none';
         (window as any).showToast?.('Erreur lors du chargement des parcours', 'error');

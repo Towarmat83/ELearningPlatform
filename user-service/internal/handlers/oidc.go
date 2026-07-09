@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -109,7 +110,8 @@ func extractURLBase(rawURL string) string {
 func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request) {
 	cfg, err := s.loadOIDCSettings(request.Context())
 	if err != nil {
-		s.Error(writer, http.StatusBadRequest, err.Error())
+		slog.Error("load OIDC settings", "err", err)
+		s.Error(writer, http.StatusBadRequest, "OIDC not configured")
 
 		return
 	}
@@ -127,7 +129,8 @@ func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request)
 
 	provider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
-		s.Error(writer, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
+		slog.Error("OIDC provider unreachable", "err", err)
+		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return
 	}
@@ -193,7 +196,8 @@ func (s *State) exchangeOIDCToken(
 
 	oidcProvider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
-		s.Error(writer, http.StatusBadGateway, "Cannot reach OIDC provider: "+err.Error())
+		slog.Error("OIDC provider unreachable", "err", err)
+		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return nil, "", false
 	}
@@ -209,7 +213,8 @@ func (s *State) exchangeOIDCToken(
 
 	token, err := oauth2Cfg.Exchange(ctx, code)
 	if err != nil {
-		s.Error(writer, http.StatusUnauthorized, "Token exchange failed: "+err.Error())
+		slog.Error("OIDC token exchange failed", "err", err)
+		s.Error(writer, http.StatusUnauthorized, "Token exchange failed")
 
 		return nil, "", false
 	}
@@ -225,7 +230,8 @@ func (s *State) exchangeOIDCToken(
 
 	idToken, err := verifier.Verify(providerCtx, rawIDToken)
 	if err != nil {
-		s.Error(writer, http.StatusUnauthorized, "ID token verification failed: "+err.Error())
+		slog.Error("OIDC ID token verification failed", "err", err)
+		s.Error(writer, http.StatusUnauthorized, "Token verification failed")
 
 		return nil, "", false
 	}
@@ -277,7 +283,8 @@ func (s *State) OIDCCallback(writer http.ResponseWriter, request *http.Request) 
 
 	cfg, err := s.loadOIDCSettings(ctx)
 	if err != nil {
-		s.Error(writer, http.StatusBadRequest, err.Error())
+		slog.Error("load OIDC settings", "err", err)
+		s.Error(writer, http.StatusBadRequest, "OIDC not configured")
 
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -105,7 +106,8 @@ func Auth(secret string) func(http.Handler) http.Handler {
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				httpErr(resp, http.StatusUnauthorized, "Invalid token: "+err.Error())
+				slog.Error("token verification failed", "err", err)
+				httpErr(resp, http.StatusUnauthorized, "Invalid token")
 
 				return
 			}
@@ -129,7 +131,8 @@ func Admin(secret string) func(http.Handler) http.Handler {
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				httpErr(resp, http.StatusUnauthorized, "Invalid token: "+err.Error())
+				slog.Error("token verification failed", "err", err)
+				httpErr(resp, http.StatusUnauthorized, "Invalid token")
 
 				return
 			}

@@ -90,7 +90,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 	state, err := fetcher.Fetch(req.Project, req.Files)
 	if err != nil {
 		slog.Error("gitlab fetch", "project", req.Project, "err", err)
-		httpErr(resp, http.StatusBadGateway, "failed to fetch GitLab state: "+err.Error())
+		httpErr(resp, http.StatusBadGateway, "failed to fetch GitLab state")
 
 		return
 	}
@@ -98,7 +98,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 	result, err := checker.Evaluate(httpReq.Context(), req.Policy, state)
 	if err != nil {
 		slog.Error("rego eval", "err", err)
-		httpErr(resp, http.StatusInternalServerError, "policy evaluation error: "+err.Error())
+		httpErr(resp, http.StatusInternalServerError, "policy evaluation error")
 
 		return
 	}
@@ -146,7 +146,7 @@ func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
 	result, err := fetcher.CheckStep(req)
 	if err != nil {
 		slog.Error("step check", "checkType", req.CheckType, "project", req.Project, "err", err)
-		httpErr(resp, http.StatusInternalServerError, "step check error: "+err.Error())
+		httpErr(resp, http.StatusInternalServerError, "step check error")
 
 		return
 	}

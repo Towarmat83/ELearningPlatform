@@ -63,13 +63,13 @@ jobs:
 
       - name: Build user-service
         working-directory: user-service
-        run: go build -o ../bin/user-service ./...
+        run: go build -o ../bin/user-service .
         env:
           CGO_ENABLED: "0"
 
       - name: Build checker-service
         working-directory: checker-service
-        run: go build -o ../bin/checker-service ./...
+        run: go build -o ../bin/checker-service ./cmd/
         env:
           CGO_ENABLED: "0"
 

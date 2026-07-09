@@ -68,17 +68,20 @@ func (s *State) oauthStateSecret() string {
 type oauthStateClaims struct {
 	jwt.RegisteredClaims
 
-	Provider string `json:"provider"`
+	Provider     string `json:"provider"`
+	PKCEVerifier string `json:"pkceVerifier,omitempty"`
 }
 
 // makeOAuthState creates a short-lived, signed JWT to use as the OAuth
-// "state" parameter for the given provider.
-func makeOAuthState(provider, secret string) (string, error) {
+// "state" parameter for the given provider. pkceVerifier is embedded so the
+// callback can recover it without server-side storage.
+func makeOAuthState(provider, pkceVerifier, secret string) (string, error) {
 	claims := oauthStateClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(oauthStateTokenTTL)),
 		},
-		Provider: provider,
+		Provider:     provider,
+		PKCEVerifier: pkceVerifier,
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
@@ -90,8 +93,10 @@ func makeOAuthState(provider, secret string) (string, error) {
 }
 
 // decodeOAuthState verifies and parses an OAuth state JWT, returning the
-// provider id it was issued for and whether it is valid.
-func decodeOAuthState(stateToken, secret string) (string, bool) {
+// provider id, the embedded PKCE verifier, and whether the token is valid.
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func decodeOAuthState(stateToken, secret string) (string, string, bool) {
 	token, err := jwt.ParseWithClaims(stateToken, &oauthStateClaims{},
 		func(t *jwt.Token) (any, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -101,14 +106,14 @@ func decodeOAuthState(stateToken, secret string) (string, bool) {
 			return []byte(secret), nil
 		})
 	if err != nil || !token.Valid {
-		return "", false
+		return "", "", false
 	}
 
 	if c, ok := token.Claims.(*oauthStateClaims); ok {
-		return c.Provider, true
+		return c.Provider, c.PKCEVerifier, true
 	}
 
-	return "", false
+	return "", "", false
 }
 
 // ListProviders godoc
@@ -151,7 +156,9 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	stateToken, err := makeOAuthState(providerID, s.oauthStateSecret())
+	verifier := oauth2.GenerateVerifier()
+
+	stateToken, err := makeOAuthState(providerID, verifier, s.oauthStateSecret())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "State token error")
 
@@ -164,12 +171,14 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 
 	if providerID == oauthProviderGitHub {
 		parsedURL, _ := url.Parse("https://github.com/login/oauth/authorize")
-		q := url.Values{}
-		q.Set("client_id", providerCfg.ClientID)
-		q.Set("redirect_uri", redirectURI)
-		q.Set("scope", "user:email read:user")
-		q.Set(oauthStateKey, stateToken)
-		parsedURL.RawQuery = q.Encode()
+		params := url.Values{}
+		params.Set("client_id", providerCfg.ClientID)
+		params.Set("redirect_uri", redirectURI)
+		params.Set("scope", "user:email read:user")
+		params.Set(oauthStateKey, stateToken)
+		params.Set("code_challenge", oauth2.S256ChallengeFromVerifier(verifier))
+		params.Set("code_challenge_method", "S256")
+		parsedURL.RawQuery = params.Encode()
 		authURL = parsedURL.String()
 	} else {
 		issuerURL := resolveIssuerURL(providerCfg)
@@ -194,7 +203,7 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 			Endpoint:     oidcProvider.Endpoint(),
 			Scopes:       []string{gooidc.ScopeOpenID, oauthFieldEmail, oauthScopeProfile},
 		}
-		authURL = oauth2Cfg.AuthCodeURL(stateToken, oauth2.AccessTypeOnline)
+		authURL = oauth2Cfg.AuthCodeURL(stateToken, oauth2.AccessTypeOnline, oauth2.S256ChallengeOption(verifier))
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]string{oauthJSONKeyURL: authURL, oauthStateKey: stateToken})
@@ -222,7 +231,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 
-	providerID, ok := decodeOAuthState(body.State, s.oauthStateSecret())
+	providerID, pkceVerifier, ok := decodeOAuthState(body.State, s.oauthStateSecret())
 	if !ok {
 		s.Error(writer, http.StatusUnauthorized, "Invalid or expired OAuth state")
 
@@ -239,7 +248,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 	redirectURI := s.Config.OAuthRedirectBase + "/auth/callback"
 
 	email, displayName, avatarURL, bioStr, providerUserID, err := fetchOAuthProfile(
-		request.Context(), providerID, providerCfg, body.Code, redirectURI)
+		request.Context(), providerID, providerCfg, body.Code, redirectURI, pkceVerifier)
 	if err != nil {
 		zap.L().Error("OAuth profile fetch failed", zap.String("provider", providerID), zap.Error(err))
 		s.Error(writer, http.StatusUnauthorized, "Authentication failed")
@@ -264,13 +273,13 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func fetchOAuthProfile(
-	ctx context.Context, providerID string, providerCfg *config.ProviderConfig, code, redirectURI string,
+	ctx context.Context, providerID string, providerCfg *config.ProviderConfig, code, redirectURI, pkceVerifier string,
 ) (string, string, *string, *string, string, error) {
 	if providerID == oauthProviderGitHub {
-		return fetchGitHub(ctx, providerCfg, code, redirectURI)
+		return fetchGitHub(ctx, providerCfg, code, redirectURI, pkceVerifier)
 	}
 
-	return fetchOIDCProvider(ctx, providerCfg, code, redirectURI)
+	return fetchOIDCProvider(ctx, providerCfg, code, redirectURI, pkceVerifier)
 }
 
 // oauthFinishLogin enrolls the user in their default/group courses, issues
@@ -313,7 +322,7 @@ func resolveIssuerURL(providerCfg *config.ProviderConfig) string {
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func fetchOIDCProvider(
-	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI string,
+	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI, pkceVerifier string,
 ) (string, string, *string, *string, string, error) {
 	oidcProvider, err := gooidc.NewProvider(ctx, resolveIssuerURL(providerCfg))
 	if err != nil {
@@ -328,7 +337,7 @@ func fetchOIDCProvider(
 		Scopes:       []string{gooidc.ScopeOpenID, oauthFieldEmail, oauthScopeProfile},
 	}
 
-	token, err := oauth2Cfg.Exchange(ctx, code)
+	token, err := oauth2Cfg.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
 	if err != nil {
 		return "", "", nil, nil, "", fmt.Errorf("token exchange failed: %w", err)
 	}
@@ -422,11 +431,11 @@ func oidcBioFromClaims(claims map[string]any) *string {
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func fetchGitHub(
-	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI string,
+	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI, pkceVerifier string,
 ) (string, string, *string, *string, string, error) {
 	client := &http.Client{}
 
-	accessToken, err := githubAccessToken(ctx, client, providerCfg, code, redirectURI)
+	accessToken, err := githubAccessToken(ctx, client, providerCfg, code, redirectURI, pkceVerifier)
 	if err != nil {
 		return "", "", nil, nil, "", err
 	}
@@ -461,17 +470,23 @@ func fetchGitHub(
 }
 
 // githubAccessToken exchanges an OAuth2 authorization code for a GitHub
-// access token.
+// access token. pkceVerifier is sent as code_verifier when non-empty.
 func githubAccessToken(
-	ctx context.Context, client *http.Client, providerCfg *config.ProviderConfig, code, redirectURI string,
+	ctx context.Context, client *http.Client, providerCfg *config.ProviderConfig, code, redirectURI, pkceVerifier string,
 ) (string, error) {
+	formValues := url.Values{
+		"client_id":     {providerCfg.ClientID},
+		"client_secret": {providerCfg.ClientSecret},
+		"code":          {code},
+		"redirect_uri":  {redirectURI},
+	}
+
+	if pkceVerifier != "" {
+		formValues.Set("code_verifier", pkceVerifier)
+	}
+
 	tokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://github.com/login/oauth/access_token",
-		strings.NewReader(url.Values{
-			"client_id":     {providerCfg.ClientID},
-			"client_secret": {providerCfg.ClientSecret},
-			"code":          {code},
-			"redirect_uri":  {redirectURI},
-		}.Encode()))
+		strings.NewReader(formValues.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("build github token request: %w", err)
 	}

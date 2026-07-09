@@ -136,7 +136,9 @@ func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 
-	stateToken, err := makeOAuthState(oidcProviderKey, s.oauthStateSecret())
+	verifier := oauth2.GenerateVerifier()
+
+	stateToken, err := makeOAuthState(oidcProviderKey, verifier, s.oauthStateSecret())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "State token error")
 
@@ -163,7 +165,7 @@ func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request)
 		Scopes:       cfg.Scopes,
 	}
 
-	authURL := oauth2Cfg.AuthCodeURL(stateToken, oauth2.AccessTypeOnline)
+	authURL := oauth2Cfg.AuthCodeURL(stateToken, oauth2.AccessTypeOnline, oauth2.S256ChallengeOption(verifier))
 
 	// If oidc_browser_base_url is set, rewrite the internal base URL in authURL
 	// to the browser-accessible one (split-horizon: pod uses internal DNS, browser uses external).
@@ -210,7 +212,7 @@ func oidcGroupsFromClaims(claims map[string]any, groupClaim string) []string {
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func (s *State) exchangeOIDCToken(
-	writer http.ResponseWriter, ctx context.Context, cfg oidcSettings, code string,
+	writer http.ResponseWriter, ctx context.Context, cfg oidcSettings, code, pkceVerifier string,
 ) (map[string]any, string, bool) {
 	providerCtx := oidcContext(ctx, cfg)
 
@@ -231,7 +233,7 @@ func (s *State) exchangeOIDCToken(
 		Scopes:       cfg.Scopes,
 	}
 
-	token, err := oauth2Cfg.Exchange(ctx, code)
+	token, err := oauth2Cfg.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
 	if err != nil {
 		zap.L().Error("OIDC token exchange failed", zap.Error(err))
 		s.Error(writer, http.StatusUnauthorized, "Token exchange failed")
@@ -292,7 +294,7 @@ func (s *State) OIDCCallback(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	provider, validState := decodeOAuthState(req.State, s.oauthStateSecret())
+	provider, pkceVerifier, validState := decodeOAuthState(req.State, s.oauthStateSecret())
 	if !validState || provider != oidcProviderKey {
 		s.Error(writer, http.StatusUnauthorized, "Invalid or expired OIDC state")
 
@@ -309,7 +311,7 @@ func (s *State) OIDCCallback(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	claims, sub, ok := s.exchangeOIDCToken(writer, ctx, cfg, req.Code)
+	claims, sub, ok := s.exchangeOIDCToken(writer, ctx, cfg, req.Code, pkceVerifier)
 	if !ok {
 		return
 	}

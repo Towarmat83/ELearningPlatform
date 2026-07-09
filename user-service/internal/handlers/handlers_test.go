@@ -2953,7 +2953,7 @@ func TestDeletePattern_NotFound(t *testing.T) {
 func TestMakeOAuthState(t *testing.T) {
 	t.Parallel()
 
-	tok, err := makeOAuthState("github", htSecret)
+	tok, err := makeOAuthState("github", "", htSecret)
 	if err != nil {
 		t.Fatalf("makeOAuthState: %v", err)
 	}
@@ -2967,12 +2967,12 @@ func TestMakeOAuthState(t *testing.T) {
 func TestDecodeOAuthState_Valid(t *testing.T) {
 	t.Parallel()
 
-	tok, err := makeOAuthState("github", htSecret)
+	tok, err := makeOAuthState("github", "", htSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	provider, ok := decodeOAuthState(tok, htSecret)
+	provider, _, ok := decodeOAuthState(tok, htSecret)
 	if !ok {
 		t.Error("expected ok=true for valid state token")
 	}
@@ -2987,9 +2987,9 @@ func TestDecodeOAuthState_Valid(t *testing.T) {
 func TestDecodeOAuthState_WrongSecret(t *testing.T) {
 	t.Parallel()
 
-	tok, _ := makeOAuthState("github", htSecret)
+	tok, _ := makeOAuthState("github", "", htSecret)
 
-	_, ok := decodeOAuthState(tok, "wrong-secret-key-32-bytes-long!!!")
+	_, _, ok := decodeOAuthState(tok, "wrong-secret-key-32-bytes-long!!!")
 	if ok {
 		t.Error("expected ok=false for wrong secret")
 	}
@@ -3000,7 +3000,7 @@ func TestDecodeOAuthState_WrongSecret(t *testing.T) {
 func TestDecodeOAuthState_Garbage(t *testing.T) {
 	t.Parallel()
 
-	_, ok := decodeOAuthState("not.a.valid.token", htSecret)
+	_, _, ok := decodeOAuthState("not.a.valid.token", htSecret)
 	if ok {
 		t.Error("expected ok=false for garbage token")
 	}
@@ -3010,7 +3010,7 @@ func TestDecodeOAuthState_Garbage(t *testing.T) {
 func TestDecodeOAuthState_Empty(t *testing.T) {
 	t.Parallel()
 
-	_, ok := decodeOAuthState("", htSecret)
+	_, _, ok := decodeOAuthState("", htSecret)
 	if ok {
 		t.Error("expected ok=false for empty token")
 	}
@@ -3709,7 +3709,7 @@ func TestOAuthCallback_GithubProviderFetchFails(t *testing.T) {
 	}
 	r := BuildRouter(s, s.Config, pool, false)
 
-	state, err := makeOAuthState("github", htSecret)
+	state, err := makeOAuthState("github", "", htSecret)
 	if err != nil {
 		t.Fatalf("makeOAuthState: %v", err)
 	}
@@ -3742,7 +3742,7 @@ func TestOAuthCallback_ValidStateUnknownProvider(t *testing.T) {
 	r := BuildRouter(s, cfg, pool, false)
 
 	// Create a valid state token for an unknown provider
-	stateToken, _ := makeOAuthState("unknown-provider", htSecret)
+	stateToken, _ := makeOAuthState("unknown-provider", "", htSecret)
 	body := fmt.Sprintf(`{"code":"test-code","state":%q}`, stateToken)
 
 	rec := htDo(t, r, "POST", "/api/auth/oauth/callback", body, "")
@@ -4411,7 +4411,7 @@ func TestOIDCCallback_OIDCDisabled(t *testing.T) {
 
 	pool := &fake.Pool{}
 	r := newTestRouter(pool)
-	state, _ := makeOAuthState("oidc", htSecret)
+	state, _ := makeOAuthState("oidc", "", htSecret)
 	body := fmt.Sprintf(`{"code":"auth-code","state":%q}`, state)
 
 	rec := htDo(t, r, "POST", "/api/auth/oidc/callback", body, "")
@@ -4441,7 +4441,7 @@ func TestOIDCCallback_ProviderUnreachable(t *testing.T) {
 	pool.PushRow(nil, "")
 	pool.PushRow(nil, "openid email profile")
 	r := newTestRouter(pool)
-	state, _ := makeOAuthState("oidc", htSecret)
+	state, _ := makeOAuthState("oidc", "", htSecret)
 	body := fmt.Sprintf(`{"code":"code","state":%q}`, state)
 
 	rec := htDo(t, r, "POST", "/api/auth/oidc/callback", body, "")
@@ -4800,7 +4800,7 @@ func TestOIDCAuthorize_ProviderUnreachable(t *testing.T) {
 func TestDecodeOAuthState_Invalid(t *testing.T) {
 	t.Parallel()
 
-	_, ok := decodeOAuthState("not-a-jwt", htSecret)
+	_, _, ok := decodeOAuthState("not-a-jwt", htSecret)
 	if ok {
 		t.Error("expected invalid state to fail")
 	}

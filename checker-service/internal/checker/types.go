@@ -9,10 +9,10 @@ type EvaluateRequest struct {
 	Username    string   `json:"username"`
 	Project     string   `json:"project"`
 	Files       []string `json:"files"`
-	PolicySrc   string   `json:"policySrc"`   // git repository URL
-	PolicyRef   string   `json:"policyRef"`   // branch / tag / commit
-	PolicyPath  string   `json:"policyPath"`  // relative path to the .rego file
-	PolicyToken string   `json:"policyToken"` // optional git authentication token
+	PolicySrc   string   `json:"policySrc"`             // git repository URL
+	PolicyRef   string   `json:"policyRef"`             // branch / tag / commit
+	PolicyPath  string   `json:"policyPath"`            // relative path to the .rego file
+	PolicyToken *string  `json:"policyToken,omitempty"` // optional git authentication token
 }
 
 // EvaluateResponse is returned to course-service.

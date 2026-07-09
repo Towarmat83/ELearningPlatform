@@ -4,8 +4,11 @@ package handlers
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -100,12 +103,19 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 		return
 	}
 
-	policy, valid := h.fetchPolicy(resp, httpReq, req)
+	err := h.validateEvaluateRequest(req)
+	if err != nil {
+		httpErr(resp, http.StatusBadRequest, err.Error())
+
+		return
+	}
+
+	policy, valid := h.fetchCourseCheckPolicy(resp, httpReq, req)
 	if !valid {
 		return
 	}
 
-	state, valid := h.fetchGitLabState(resp, req)
+	state, valid := h.fetchStudentGitLabProjectState(resp, req)
 	if !valid {
 		return
 	}
@@ -216,9 +226,33 @@ func decodeEvaluateRequest(resp http.ResponseWriter, httpReq *http.Request) (che
 	return req, true
 }
 
-// fetchPolicy fetches the Rego policy text from the course git repository.
-func (h *Handler) fetchPolicy(resp http.ResponseWriter, httpReq *http.Request, req checker.EvaluateRequest) (string, bool) {
-	policy, err := checker.FetchPolicyContent(httpReq.Context(), req.PolicySrc, req.PolicyRef, req.PolicyPath, req.PolicyToken)
+// validateEvaluateRequest guards against SSRF by ensuring the policy source
+// points to the configured GitLab instance and that ref/path are safe.
+func (h *Handler) validateEvaluateRequest(req checker.EvaluateRequest) error {
+	if !strings.HasPrefix(req.PolicySrc, h.config.GitLabBaseURL) {
+		return errors.New("policySrc must point to the configured GitLab instance")
+	}
+
+	if strings.Contains(req.PolicyRef, "..") {
+		return errors.New("policyRef must not contain path traversal sequences")
+	}
+
+	cleaned := path.Clean(req.PolicyPath)
+	if strings.HasPrefix(cleaned, "..") {
+		return errors.New("policyPath must not escape the repository root")
+	}
+
+	return nil
+}
+
+// fetchCourseCheckPolicy fetches the Rego policy from the course git repo.
+func (h *Handler) fetchCourseCheckPolicy(resp http.ResponseWriter, httpReq *http.Request, req checker.EvaluateRequest) (string, bool) {
+	token := ""
+	if req.PolicyToken != nil {
+		token = *req.PolicyToken
+	}
+
+	policy, err := checker.FetchCourseCheckPolicyContent(httpReq.Context(), req.PolicySrc, req.PolicyRef, req.PolicyPath, token)
 	if err != nil {
 		zap.L().Error("policy fetch", zap.String("src", req.PolicySrc), zap.String("ref", req.PolicyRef), zap.String("path", req.PolicyPath), zap.Error(err))
 		httpErr(resp, http.StatusInternalServerError, "failed to fetch policy")
@@ -229,9 +263,9 @@ func (h *Handler) fetchPolicy(resp http.ResponseWriter, httpReq *http.Request, r
 	return policy, true
 }
 
-// fetchGitLabState fetches the student's GitLab project and MR state
-// using the checker-service's GitLab token.
-func (h *Handler) fetchGitLabState(resp http.ResponseWriter, req checker.EvaluateRequest) (*checker.GitLabState, bool) {
+// fetchStudentGitLabProjectState fetches the student's GitLab project and MR
+// state using the checker-service's GitLab token.
+func (h *Handler) fetchStudentGitLabProjectState(resp http.ResponseWriter, req checker.EvaluateRequest) (*checker.GitLabState, bool) {
 	fetcher, err := checker.NewFetcher(h.config.GitLabToken, h.config.GitLabBaseURL)
 	if err != nil {
 		zap.L().Error("gitlab client init", zap.Error(err))

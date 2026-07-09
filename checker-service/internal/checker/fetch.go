@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,11 +19,11 @@ const maxPolicyBytes = 128 * 1024 // 128 KB
 // gitOAuth2Username is the conventional basic-auth username for OAuth2 tokens.
 const gitOAuth2Username = "oauth2"
 
-// FetchPolicyContent fetches a Rego policy file from a GitLab repository.
+// FetchCourseCheckPolicyContent fetches a Rego policy file from a git repo.
 // src is the git clone URL (e.g. https://gitlab.example.com/group/repo.git),
 // ref is the branch/tag, filePath is the relative path to the .rego file,
 // and token is the optional OAuth2 access token.
-func FetchPolicyContent(ctx context.Context, src, ref, filePath, token string) (string, error) {
+func FetchCourseCheckPolicyContent(ctx context.Context, src, ref, filePath, token string) (string, error) {
 	// Build GitLab raw file URL: strip .git suffix, append /-/raw/ref/path
 	base := strings.TrimSuffix(strings.TrimRight(src, "/"), ".git")
 	rawURL := base + "/-/raw/" + ref + "/" + strings.TrimLeft(filePath, "/")
@@ -40,9 +41,9 @@ func FetchPolicyContent(ctx context.Context, src, ref, filePath, token string) (
 	if err != nil {
 		return "", fmt.Errorf("fetch policy: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck // response body close error is non-actionable
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return "", fmt.Errorf("policy fetch returned HTTP %d for %s", resp.StatusCode, rawURL)
 	}
 
@@ -115,6 +116,8 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 			ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: page},
 		})
 		if err != nil {
+			slog.Warn("list merged MRs failed", "project", project, "err", err)
+
 			break
 		}
 
@@ -135,6 +138,8 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 func (f *GitLabFetcher) fetchOpenMRs(project string) []openMRInfo {
 	openMRs, err := f.listAllOpenMRs(project)
 	if err != nil {
+		slog.Warn("list open MRs failed", "project", project, "err", err)
+
 		return nil
 	}
 
@@ -180,6 +185,8 @@ func (f *GitLabFetcher) fetchFiles(project, ref string, files []string) map[stri
 			Ref: &ref,
 		})
 		if err != nil {
+			slog.Warn("fetch file failed", "project", project, "path", filePath, "err", err)
+
 			continue
 		}
 

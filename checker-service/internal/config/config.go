@@ -19,6 +19,15 @@ const defaultRateLimitWindowSeconds = 60
 // defaultInternalSecret is the fallback service-to-service shared secret.
 const defaultInternalSecret = "change-me-internal-secret"
 
+// defaultFrontendURL is the default local frontend origin for CORS.
+const defaultFrontendURL = "http://localhost:3000"
+
+// defaultViteDevURL is the Vite development server origin for CORS.
+const defaultViteDevURL = "http://localhost:5173"
+
+// defaultGitLabBaseURL is the default GitLab instance base URL.
+const defaultGitLabBaseURL = "http://gitlab.local:8880"
+
 // Config holds checker-service runtime configuration.
 type Config struct {
 	Port                   int
@@ -34,8 +43,8 @@ type Config struct {
 func Load() *Config {
 	cfg := &Config{
 		Port:                   defaultPort,
-		CORSOrigins:            []string{"http://localhost:3000", "http://localhost:5173"},
-		GitLabBaseURL:          "http://gitlab.local:8880",
+		CORSOrigins:            []string{defaultFrontendURL, defaultViteDevURL},
+		GitLabBaseURL:          defaultGitLabBaseURL,
 		RateLimitRequests:      defaultRateLimitRequests,
 		RateLimitWindowSeconds: defaultRateLimitWindowSeconds,
 		InternalSecret:         defaultInternalSecret,

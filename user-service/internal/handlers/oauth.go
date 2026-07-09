@@ -170,7 +170,7 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 		oidcProvider, err := gooidc.NewProvider(request.Context(), issuerURL)
 		if err != nil {
 			slog.Error("OIDC provider unreachable", "err", err)
-			s.Error(writer, http.StatusBadGateway, "OIDC provider unavailable")
+			s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 			return
 		}
@@ -238,7 +238,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 	user, err := upsertSSOUser(request.Context(), s.Pool, email, displayName, avatarURL, bioStr, providerID, providerUserID)
 	if err != nil {
 		slog.Error("upsert SSO user failed", "err", err)
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		s.Error(writer, http.StatusInternalServerError, "failed to update user identity from SSO")
 
 		return
 	}
@@ -629,7 +629,7 @@ func (s *State) completeSSOLogin(
 	user, err := upsertSSOUser(ctx, s.Pool, email, displayName, avatarURL, bio, provider, providerUserID)
 	if err != nil {
 		slog.Error("upsert SSO user failed", "err", err)
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		s.Error(writer, http.StatusInternalServerError, "failed to update user identity from SSO")
 
 		return
 	}

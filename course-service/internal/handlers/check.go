@@ -299,7 +299,7 @@ func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		slog.Error("checker-service call failed", "err", err)
-		s.Error(writer, http.StatusBadGateway, "Checker service unavailable")
+		s.Error(writer, http.StatusInternalServerError, "error when reaching for checker service")
 
 		return CheckResponse{}, false
 	}

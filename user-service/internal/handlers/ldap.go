@@ -112,7 +112,7 @@ func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*l
 	conn, err := ldap.DialURL(cfg.ServerURL)
 	if err != nil {
 		slog.Error("LDAP dial failed", "err", err)
-		s.Error(writer, http.StatusBadGateway, "LDAP server unavailable")
+		s.Error(writer, http.StatusInternalServerError, "LDAP server call failed")
 
 		return nil, false
 	}
@@ -123,7 +123,7 @@ func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*l
 			_ = conn.Close()
 
 			slog.Error("LDAP service bind failed", "err", err)
-			s.Error(writer, http.StatusBadGateway, "LDAP server unavailable")
+			s.Error(writer, http.StatusInternalServerError, "LDAP server call failed")
 
 			return nil, false
 		}

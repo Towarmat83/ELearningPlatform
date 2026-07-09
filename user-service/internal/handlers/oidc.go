@@ -130,7 +130,7 @@ func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request)
 	provider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
 		slog.Error("OIDC provider unreachable", "err", err)
-		s.Error(writer, http.StatusBadGateway, "OIDC provider unavailable")
+		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return
 	}
@@ -197,7 +197,7 @@ func (s *State) exchangeOIDCToken(
 	oidcProvider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
 		slog.Error("OIDC provider unreachable", "err", err)
-		s.Error(writer, http.StatusBadGateway, "OIDC provider unavailable")
+		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return nil, "", false
 	}

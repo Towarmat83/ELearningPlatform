@@ -82,7 +82,7 @@ func (s *State) CreateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		slog.Error("k8s client init failed", "err", err)
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
 	}
@@ -95,7 +95,7 @@ func (s *State) CreateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	err = kubeClient.Create(req.Context(), courseCR)
 	if err != nil {
 		slog.Error("create course CRD failed", "slug", slug, "err", err)
-		s.Error(writer, http.StatusConflict, "Failed to create course")
+		s.Error(writer, http.StatusInternalServerError, "Failed to create course")
 
 		return
 	}
@@ -110,7 +110,7 @@ func (s *State) GetCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		slog.Error("k8s client init failed", "err", err)
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
 	}
@@ -160,7 +160,7 @@ func (s *State) UpdateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		slog.Error("k8s client init failed", "err", err)
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
 	}
@@ -202,7 +202,7 @@ func (s *State) DeleteCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
 		slog.Error("k8s client init failed", "err", err)
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
 	}
@@ -215,13 +215,13 @@ func (s *State) DeleteCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			slog.Error("delete course CRD failed", "slug", slug, "err", err)
-			s.Error(writer, http.StatusNotFound, "Failed to delete course")
+			s.Error(writer, http.StatusInternalServerError, "Failed to delete course")
 
 			return
 		}
 
 		slog.Error("delete course CRD failed", "slug", slug, "err", err)
-		s.Error(writer, http.StatusNotFound, "Failed to delete course")
+		s.Error(writer, http.StatusInternalServerError, "Failed to delete course")
 
 		return
 	}

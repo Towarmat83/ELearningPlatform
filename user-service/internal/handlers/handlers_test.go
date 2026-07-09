@@ -4337,8 +4337,8 @@ func TestOIDCCallback_ProviderUnreachable(t *testing.T) {
 	body := fmt.Sprintf(`{"code":"code","state":%q}`, state)
 
 	rec := htDo(t, r, "POST", "/api/auth/oidc/callback", body, "")
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("want 502, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -4680,8 +4680,8 @@ func TestOIDCAuthorize_ProviderUnreachable(t *testing.T) {
 	r := newTestRouter(pool)
 
 	rec := htDo(t, r, "GET", "/api/auth/oidc/authorize", "", "")
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("want 502, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

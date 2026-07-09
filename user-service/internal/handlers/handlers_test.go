@@ -4019,6 +4019,58 @@ func TestLoadOIDCSettings_MissingClientID(t *testing.T) {
 	}
 }
 
+// TestLoadOIDCSettings_InsecureSkipVerifyForbiddenWithoutIssuerURL verifies
+// that insecure_skip_verify is rejected when no oidc_issuer_url is set.
+func TestLoadOIDCSettings_InsecureSkipVerifyForbiddenWithoutIssuerURL(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	pool.PushRow(nil, "true")                    // oidc_enabled
+	pool.PushRow(nil, "https://sso.example.com") // oidc_provider_url
+	pool.PushRow(errors.New("no row"))           // oidc_issuer_url → empty (no split-horizon)
+	pool.PushRow(nil, "my-client")               // oidc_client_id
+	pool.PushRow(nil, "my-secret")               // oidc_client_secret
+	pool.PushRow(errors.New("no row"))           // oidc_group_claim → default
+	pool.PushRow(errors.New("no row"))           // oidc_redirect_base → default
+	pool.PushRow(errors.New("no row"))           // oidc_browser_base_url → empty
+	pool.PushRow(nil, "true")                    // oidc_insecure_skip_verify → true
+	pool.PushRow(errors.New("no row"))           // oidc_scopes → default
+	s := &State{Pool: pool, Config: &config.Config{OAuthRedirectBase: "http://localhost:3000"}}
+
+	_, err := s.loadOIDCSettings(context.Background())
+	if err == nil {
+		t.Error("expected error: insecure_skip_verify without issuer_url must be rejected")
+	}
+}
+
+// TestLoadOIDCSettings_InsecureSkipVerifyAllowedWithIssuerURL verifies that
+// insecure_skip_verify is accepted when oidc_issuer_url is set (split-horizon).
+func TestLoadOIDCSettings_InsecureSkipVerifyAllowedWithIssuerURL(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	pool.PushRow(nil, "true")                                    // oidc_enabled
+	pool.PushRow(nil, "https://keycloak.internal/realms/master") // oidc_provider_url
+	pool.PushRow(nil, "https://sso.example.com/realms/master")   // oidc_issuer_url (split-horizon)
+	pool.PushRow(nil, "my-client")                               // oidc_client_id
+	pool.PushRow(nil, "my-secret")                               // oidc_client_secret
+	pool.PushRow(errors.New("no row"))                           // oidc_group_claim → default
+	pool.PushRow(errors.New("no row"))                           // oidc_redirect_base → default
+	pool.PushRow(errors.New("no row"))                           // oidc_browser_base_url → empty
+	pool.PushRow(nil, "true")                                    // oidc_insecure_skip_verify → true
+	pool.PushRow(errors.New("no row"))                           // oidc_scopes → default
+	s := &State{Pool: pool, Config: &config.Config{OAuthRedirectBase: "http://localhost:3000"}}
+
+	cfg, err := s.loadOIDCSettings(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error for split-horizon setup: %v", err)
+	}
+
+	if !cfg.InsecureSkipVerify {
+		t.Error("expected InsecureSkipVerify=true for split-horizon internal CA")
+	}
+}
+
 // ── More groups handler tests ─────────────────────────────────────────────────
 
 // TestUpsertGroupMapping_InvalidPlatformRole verifies upsert group mapping

@@ -97,7 +97,7 @@ func LoadPatternsFromConfig(ctx context.Context, pool db.Pool, path string) erro
 		}
 	}
 
-	zap.S().Infow("markdown patterns loaded from config", "path", path, "count", len(cfg.Patterns))
+	zap.L().Info("markdown patterns loaded from config", zap.String("path", path), zap.Int("count", len(cfg.Patterns)))
 
 	return nil
 }

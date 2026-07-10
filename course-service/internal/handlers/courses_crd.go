@@ -74,7 +74,7 @@ func (s *State) CreateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	spec, err := courseSpecFromBody(body)
 	if err != nil {
-		zap.S().Errorw("invalid course spec", "err", err)
+		zap.L().Error("invalid course spec", zap.Error(err))
 		s.Error(writer, http.StatusBadRequest, "Invalid course spec")
 
 		return
@@ -82,7 +82,7 @@ func (s *State) CreateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		zap.S().Errorw("k8s client init failed", "err", err)
+		zap.L().Error("k8s client init failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
@@ -95,7 +95,7 @@ func (s *State) CreateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	err = kubeClient.Create(req.Context(), courseCR)
 	if err != nil {
-		zap.S().Errorw("create course CRD failed", "slug", slug, "err", err)
+		zap.L().Error("create course CRD failed", zap.String("slug", slug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Failed to create course")
 
 		return
@@ -110,7 +110,7 @@ func (s *State) GetCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		zap.S().Errorw("k8s client init failed", "err", err)
+		zap.L().Error("k8s client init failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
@@ -152,7 +152,7 @@ func (s *State) UpdateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	spec, err := courseSpecFromBody(body)
 	if err != nil {
-		zap.S().Errorw("invalid course spec", "err", err)
+		zap.L().Error("invalid course spec", zap.Error(err))
 		s.Error(writer, http.StatusBadRequest, "Invalid course spec")
 
 		return
@@ -160,7 +160,7 @@ func (s *State) UpdateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		zap.S().Errorw("k8s client init failed", "err", err)
+		zap.L().Error("k8s client init failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
@@ -183,7 +183,7 @@ func (s *State) UpdateCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	err = kubeClient.Update(ctx, &existing)
 	if err != nil {
-		zap.S().Errorw("update course CRD failed", "slug", slug, "err", err)
+		zap.L().Error("update course CRD failed", zap.String("slug", slug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Failed to update course")
 
 		return
@@ -202,7 +202,7 @@ func (s *State) DeleteCourseCRD(writer http.ResponseWriter, req *http.Request) {
 
 	kubeClient, err := k8sClient(s.Config.Kubeconfig)
 	if err != nil {
-		zap.S().Errorw("k8s client init failed", "err", err)
+		zap.L().Error("k8s client init failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Internal error when connecting to kubernetes")
 
 		return
@@ -215,13 +215,13 @@ func (s *State) DeleteCourseCRD(writer http.ResponseWriter, req *http.Request) {
 	err = kubeClient.Delete(req.Context(), courseCR)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			zap.S().Errorw("delete course CRD failed", "slug", slug, "err", err)
+			zap.L().Error("delete course CRD failed", zap.String("slug", slug), zap.Error(err))
 			s.Error(writer, http.StatusInternalServerError, "Failed to delete course")
 
 			return
 		}
 
-		zap.S().Errorw("delete course CRD failed", "slug", slug, "err", err)
+		zap.L().Error("delete course CRD failed", zap.String("slug", slug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Failed to delete course")
 
 		return

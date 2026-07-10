@@ -45,7 +45,7 @@ func (s *State) JSON(w http.ResponseWriter, status int, v any) {
 
 	err := json.NewEncoder(w).Encode(v)
 	if err != nil {
-		zap.S().Errorw("failed to encode JSON response", "err", err)
+		zap.L().Error("failed to encode JSON response", zap.Error(err))
 	}
 }
 

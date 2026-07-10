@@ -181,7 +181,7 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 
 		oidcProvider, err := gooidc.NewProvider(request.Context(), issuerURL)
 		if err != nil {
-			zap.S().Errorw("OIDC provider unreachable", "err", err)
+			zap.L().Error("OIDC provider unreachable", zap.Error(err))
 			s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 			return
@@ -241,7 +241,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 	email, displayName, avatarURL, bioStr, providerUserID, err := fetchOAuthProfile(
 		request.Context(), providerID, providerCfg, body.Code, redirectURI)
 	if err != nil {
-		zap.S().Errorw("OAuth profile fetch failed", "provider", providerID, "err", err)
+		zap.L().Error("OAuth profile fetch failed", zap.String("provider", providerID), zap.Error(err))
 		s.Error(writer, http.StatusUnauthorized, "Authentication failed")
 
 		return
@@ -249,7 +249,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 
 	user, err := upsertSSOUser(request.Context(), s.Pool, email, displayName, avatarURL, bioStr, providerID, providerUserID)
 	if err != nil {
-		zap.S().Errorw("upsert SSO user failed", "err", err)
+		zap.L().Error("upsert SSO user failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "failed to update user identity from SSO")
 
 		return
@@ -640,7 +640,7 @@ func (s *State) completeSSOLogin(
 ) {
 	user, err := upsertSSOUser(ctx, s.Pool, email, displayName, avatarURL, bio, provider, providerUserID)
 	if err != nil {
-		zap.S().Errorw("upsert SSO user failed", "err", err)
+		zap.L().Error("upsert SSO user failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "failed to update user identity from SSO")
 
 		return
@@ -687,7 +687,7 @@ func upsertSSOUserByProvider(
 		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
 		avatarURL, bio, existing.ID))
 	if err != nil {
-		zap.S().Warnw("upsertSSOUser: UPDATE by provider failed, using SELECT result", "err", err, "userId", existing.ID)
+		zap.L().Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", zap.Error(err), zap.String("userId", existing.ID))
 
 		return &existing
 	}
@@ -723,7 +723,7 @@ func upsertSSOUserByEmail(
 		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
 		provider, providerUserID, avatarURL, bio, existing.ID))
 	if err != nil {
-		zap.S().Warnw("upsertSSOUser: UPDATE by email failed, using SELECT result", "err", err, "userId", existing.ID)
+		zap.L().Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", zap.Error(err), zap.String("userId", existing.ID))
 
 		return &existing, nil
 	}

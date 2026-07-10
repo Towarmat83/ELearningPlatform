@@ -33,7 +33,7 @@ func (s *State) Enroll(writer http.ResponseWriter, r *http.Request) {
 		`INSERT INTO enrollments (userId, courseSlug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
 		claims.Subject, slug)
 	if err != nil {
-		zap.S().Errorw("enroll failed", "userId", claims.Subject, "courseSlug", slug, "err", err)
+		zap.L().Error("enroll failed", zap.String("userId", claims.Subject), zap.String("courseSlug", slug), zap.Error(err))
 
 		if strings.Contains(err.Error(), "foreign key constraint") {
 			s.Error(writer, http.StatusUnauthorized, "Session expired, please log in again")
@@ -213,7 +213,7 @@ func (s *State) buildMyCourses(ctx context.Context, enrolled []enrollmentRow) []
 	for _, row := range enrolled {
 		details, err := s.fetchCourseDetails(ctx, row.Slug)
 		if err != nil {
-			zap.S().Warnw("failed to fetch course details", "slug", row.Slug, "err", err)
+			zap.L().Warn("failed to fetch course details", zap.String("slug", row.Slug), zap.Error(err))
 			courses = append(courses, myCourse{
 				Slug:          row.Slug,
 				ID:            row.Slug,

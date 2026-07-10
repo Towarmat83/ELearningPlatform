@@ -78,7 +78,7 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		}
 	}
 
-	zap.S().Infow("OIDC settings bootstrapped from deploy-time config", "keys", seeded)
+	zap.L().Info("OIDC settings bootstrapped from deploy-time config", zap.Strings("keys", seeded))
 
 	return nil
 }

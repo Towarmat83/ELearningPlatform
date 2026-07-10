@@ -111,7 +111,7 @@ func extractURLBase(rawURL string) string {
 func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request) {
 	cfg, err := s.loadOIDCSettings(request.Context())
 	if err != nil {
-		zap.S().Errorw("load OIDC settings", "err", err)
+		zap.L().Error("load OIDC settings", zap.Error(err))
 		s.Error(writer, http.StatusBadRequest, "OIDC not configured")
 
 		return
@@ -130,7 +130,7 @@ func (s *State) OIDCAuthorize(writer http.ResponseWriter, request *http.Request)
 
 	provider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
-		zap.S().Errorw("OIDC provider unreachable", "err", err)
+		zap.L().Error("OIDC provider unreachable", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return
@@ -197,7 +197,7 @@ func (s *State) exchangeOIDCToken(
 
 	oidcProvider, err := gooidc.NewProvider(providerCtx, cfg.ProviderURL)
 	if err != nil {
-		zap.S().Errorw("OIDC provider unreachable", "err", err)
+		zap.L().Error("OIDC provider unreachable", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "OIDC provider call failed")
 
 		return nil, "", false
@@ -214,7 +214,7 @@ func (s *State) exchangeOIDCToken(
 
 	token, err := oauth2Cfg.Exchange(ctx, code)
 	if err != nil {
-		zap.S().Errorw("OIDC token exchange failed", "err", err)
+		zap.L().Error("OIDC token exchange failed", zap.Error(err))
 		s.Error(writer, http.StatusUnauthorized, "Token exchange failed")
 
 		return nil, "", false
@@ -231,7 +231,7 @@ func (s *State) exchangeOIDCToken(
 
 	idToken, err := verifier.Verify(providerCtx, rawIDToken)
 	if err != nil {
-		zap.S().Errorw("OIDC ID token verification failed", "err", err)
+		zap.L().Error("OIDC ID token verification failed", zap.Error(err))
 		s.Error(writer, http.StatusUnauthorized, "Token verification failed")
 
 		return nil, "", false
@@ -284,7 +284,7 @@ func (s *State) OIDCCallback(writer http.ResponseWriter, request *http.Request) 
 
 	cfg, err := s.loadOIDCSettings(ctx)
 	if err != nil {
-		zap.S().Errorw("load OIDC settings", "err", err)
+		zap.L().Error("load OIDC settings", zap.Error(err))
 		s.Error(writer, http.StatusBadRequest, "OIDC not configured")
 
 		return

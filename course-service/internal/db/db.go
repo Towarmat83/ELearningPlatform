@@ -144,7 +144,7 @@ func applyMigration(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.
 		return fmt.Errorf("record %s: %w", name, err)
 	}
 
-	zap.S().Infow("migration applied", "file", name)
+	zap.L().Info("migration applied", zap.String("file", name))
 
 	return nil
 }

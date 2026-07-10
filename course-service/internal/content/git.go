@@ -196,7 +196,7 @@ func (gc *GitCache) awaitClone(ctx context.Context, key, rawURL, branch, token s
 func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, token string, done chan struct{}) (string, error) {
 	repoDir := filepath.Join(gc.cacheDir, key)
 
-	zap.S().Debugw("cloning repo into cache", "url", rawURL, "branch", branch, "dir", repoDir)
+	zap.L().Debug("cloning repo into cache", zap.String("url", rawURL), zap.String("branch", branch), zap.String("dir", repoDir))
 
 	_, statErr := os.Stat(repoDir)
 	if statErr == nil {
@@ -222,7 +222,7 @@ func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, toke
 
 		msg := sanitizeGitOutput(err.Error(), token)
 
-		zap.S().Errorw("git clone failed", "error", msg)
+		zap.L().Error("git clone failed", zap.String("error", msg))
 
 		return "", fmt.Errorf("git clone failed: %s", msg)
 	}

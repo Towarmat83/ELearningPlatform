@@ -69,7 +69,7 @@ func (w *PatternWatcher) Start(ctx context.Context) error {
 	go func() {
 		err := w.cache.Start(ctx)
 		if err != nil {
-			zap.S().Errorw("pattern CRD cache stopped", "err", err)
+			zap.L().Error("pattern CRD cache stopped", zap.Error(err))
 		}
 	}()
 
@@ -77,7 +77,7 @@ func (w *PatternWatcher) Start(ctx context.Context) error {
 		return errors.New("cache sync failed")
 	}
 
-	zap.S().Info("markdown patterns synced from CRDs")
+	zap.L().Info("markdown patterns synced from CRDs")
 
 	return nil
 }
@@ -127,12 +127,12 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj any) {
 		scope,
 	)
 	if err != nil {
-		zap.S().Errorw("failed to upsert pattern from CRD", "name", name, "err", err)
+		zap.L().Error("failed to upsert pattern from CRD", zap.String("name", name), zap.Error(err))
 
 		return
 	}
 
-	zap.S().Infow("pattern upserted from CRD", "name", name, "scope", scope)
+	zap.L().Info("pattern upserted from CRD", zap.String("name", name), zap.String("scope", scope))
 }
 
 // delete removes the markdown_patterns row for a deleted MarkdownPattern CRD.
@@ -158,12 +158,12 @@ func (w *PatternWatcher) delete(ctx context.Context, obj any) {
 
 	_, err := w.pool.Exec(ctx, `DELETE FROM markdown_patterns WHERE name = $1 AND scope = $2 AND from_config = TRUE`, name, scope)
 	if err != nil {
-		zap.S().Errorw("failed to delete pattern from CRD", "name", name, "err", err)
+		zap.L().Error("failed to delete pattern from CRD", zap.String("name", name), zap.Error(err))
 
 		return
 	}
 
-	zap.S().Infow("pattern deleted from CRD", "name", name)
+	zap.L().Info("pattern deleted from CRD", zap.String("name", name))
 }
 
 // buildRestConfig loads a Kubernetes REST config from kubeconfig, or from the

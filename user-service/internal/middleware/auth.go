@@ -118,7 +118,7 @@ func Auth(_ db.Pool, secret string) func(http.Handler) http.Handler {
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				zap.S().Errorw("token verification failed", "err", err)
+				zap.L().Error("token verification failed", zap.Error(err))
 				httpErr(resp, http.StatusUnauthorized, "Invalid token")
 
 				return
@@ -150,7 +150,7 @@ func Admin(_ db.Pool, secret string) func(http.Handler) http.Handler {
 
 			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
 			if err != nil {
-				zap.S().Errorw("token verification failed", "err", err)
+				zap.L().Error("token verification failed", zap.Error(err))
 				httpErr(resp, http.StatusUnauthorized, "Invalid token")
 
 				return

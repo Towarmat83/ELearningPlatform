@@ -43,18 +43,18 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 	// Capture the current file content so we only act on real changes.
 	last, _ := os.ReadFile(filePath) //nolint:gosec // path is operator-controlled via ADMIN_PASSWORD_FILE, not user input
 
-	zap.S().Infow("admin password watcher started", "file", filePath)
+	zap.L().Info("admin password watcher started", zap.String("file", filePath))
 
 	for {
 		select {
 		case <-ctx.Done():
-			zap.S().Info("admin password watcher stopped")
+			zap.L().Info("admin password watcher stopped")
 
 			return
 		case <-ticker.C:
 			current, err := os.ReadFile(filePath) //nolint:gosec // path is operator-controlled via ADMIN_PASSWORD_FILE, not user input
 			if err != nil {
-				zap.S().Warnw("admin password file unreadable", "path", filePath, "err", err)
+				zap.L().Warn("admin password file unreadable", zap.String("path", filePath), zap.Error(err))
 
 				continue
 			}
@@ -66,13 +66,13 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 			last = current
 			password := strings.TrimSpace(string(current))
 
-			zap.S().Info("admin password file changed — re-seeding admin account")
+			zap.L().Info("admin password file changed — re-seeding admin account")
 
 			err = SeedAdmin(ctx, pool, password)
 			if err != nil {
-				zap.S().Errorw("re-seed admin failed", "err", err)
+				zap.L().Error("re-seed admin failed", zap.Error(err))
 			} else {
-				zap.S().Info("admin password updated successfully (no restart required)")
+				zap.L().Info("admin password updated successfully (no restart required)")
 			}
 		}
 	}
@@ -105,7 +105,7 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 		// Pre-computed bcrypt hash — use as-is.
 		hash = adminPassword
 
-		zap.S().Info("admin seeding: using pre-computed bcrypt hash from ADMIN_PASSWORD")
+		zap.L().Info("admin seeding: using pre-computed bcrypt hash from ADMIN_PASSWORD")
 
 	case adminPassword != "":
 		// Cleartext password — hash it now.
@@ -116,14 +116,14 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 
 		hash = string(h)
 
-		zap.S().Info("admin seeding: hashed ADMIN_PASSWORD, updating admin account")
+		zap.L().Info("admin seeding: hashed ADMIN_PASSWORD, updating admin account")
 
 	default:
 		// No password configured — fall back to the hardcoded default.
 		hash = defaultAdminHash
 		useDefault = true
 
-		zap.S().Warn("ADMIN_PASSWORD is not set — using the default password 'Admin@1234'. " +
+		zap.L().Warn("ADMIN_PASSWORD is not set — using the default password 'Admin@1234'. " +
 			"Set ADMIN_PASSWORD to a strong secret before going to production.")
 	}
 

@@ -147,7 +147,7 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 			student.username, student.email, passwordHash,
 		).Scan(&userID)
 		if err != nil {
-			zap.S().Errorw("mock seed: failed to upsert user", "username", student.username, "err", err)
+			zap.L().Error("mock seed: failed to upsert user", zap.String("username", student.username), zap.Error(err))
 
 			continue
 		}
@@ -160,12 +160,12 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 				userID, slug,
 			)
 			if err != nil {
-				zap.S().Errorw("mock seed: failed to enroll user", "username", student.username, "course", slug, "err", err)
+				zap.L().Error("mock seed: failed to enroll user", zap.String("username", student.username), zap.String("course", slug), zap.Error(err))
 			}
 		}
 	}
 
-	zap.S().Infow("mock seed: inserted students and enrollments", "count", len(mockUsers))
+	zap.L().Info("mock seed: inserted students and enrollments", zap.Int("count", len(mockUsers)))
 
 	return nil
 }

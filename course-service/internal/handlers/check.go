@@ -186,7 +186,7 @@ func (s *State) storeLabCheck(
 		username, courseSlug, moduleIndex, moduleName, result.Allow, violations, verified,
 	)
 	if err != nil {
-		zap.S().Warnw("failed to store lab check", "err", err)
+		zap.L().Warn("failed to store lab check", zap.Error(err))
 	}
 }
 
@@ -299,7 +299,7 @@ func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, 
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		zap.S().Errorw("checker-service call failed", "err", err)
+		zap.L().Error("checker-service call failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "error when reaching for checker service")
 
 		return CheckResponse{}, false

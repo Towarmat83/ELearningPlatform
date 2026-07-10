@@ -31,8 +31,8 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Errorf("unexpected default JWT secret: %q", c.JWTSecret)
 	}
 
-	if c.JWTExpiryH != 24 {
-		t.Errorf("default expiry: want 24h, got %d", c.JWTExpiryH)
+	if c.JWTExpiryH != 8 {
+		t.Errorf("default expiry: want 8h, got %d", c.JWTExpiryH)
 	}
 
 	if c.DatabaseURL == "" {
@@ -87,8 +87,8 @@ func TestLoad_InvalidIntegers(t *testing.T) {
 		t.Errorf("invalid PORT: want default 8081, got %d", c.Port)
 	}
 
-	if c.JWTExpiryH != 24 {
-		t.Errorf("invalid JWT_EXPIRY_HOURS: want default 24, got %d", c.JWTExpiryH)
+	if c.JWTExpiryH != 8 {
+		t.Errorf("invalid JWT_EXPIRY_HOURS: want default 8, got %d", c.JWTExpiryH)
 	}
 }
 

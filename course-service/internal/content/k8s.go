@@ -394,9 +394,7 @@ func restConfig(kubeconfig string) (*rest.Config, error) {
 //
 // crcache.Cache is controller-runtime's own interface; wrapping it in
 // a concrete type here would add no value.
-//
-//nolint:ireturn // third-party interface, no useful concrete wrapper.
-func newCRCache(kubeconfig, namespace string) (crcache.Cache, error) {
+func newCRCache(kubeconfig, namespace string) (crcache.Cache, error) { //nolint:ireturn // third-party interface, no useful concrete wrapper
 	cfg, err := restConfig(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)

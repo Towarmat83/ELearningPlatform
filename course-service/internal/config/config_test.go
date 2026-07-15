@@ -7,9 +7,7 @@ import (
 
 // TestLoad_Defaults verifies that Load returns the built-in default
 // configuration when no environment variables or config file are set.
-//
-//nolint:paralleltest // t.Setenv is called in a loop below; Go forbids t.Setenv with t.Parallel(), so this test cannot run in parallel
-func TestLoad_Defaults(t *testing.T) {
+func TestLoad_Defaults(t *testing.T) { //nolint:paralleltest // t.Setenv is called in a loop below; Go forbids t.Setenv with t.Parallel()
 	// Clear env vars that might affect defaults. t.Setenv (rather than
 	// os.Unsetenv) keeps this test's env mutation properly scoped and
 	// automatically restored, matching the other tests in this file.

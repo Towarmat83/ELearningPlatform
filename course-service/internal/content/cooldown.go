@@ -85,9 +85,7 @@ func intToString(num int) string {
 
 // Check reports the remaining cooldown and attempt count for the legacy
 // quiz-based key format.
-//
-//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
-func (ct *CooldownTracker) Check(userID, quizID, questionID string) (remaining time.Duration, attempts int) {
+func (ct *CooldownTracker) Check(userID, quizID, questionID string) (remaining time.Duration, attempts int) { //nolint:nonamedreturns // gocritic(unnamedResult) wants names here
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
 
@@ -103,9 +101,7 @@ func (ct *CooldownTracker) Check(userID, quizID, questionID string) (remaining t
 
 // CheckModule uses the module-index-based key format:
 // userID:courseSlug:moduleIndex:questionID.
-//
-//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
-func (ct *CooldownTracker) CheckModule(userID, courseSlug string, moduleIndex int, questionID string) (remaining time.Duration, attempts int) {
+func (ct *CooldownTracker) CheckModule(userID, courseSlug string, moduleIndex int, questionID string) (remaining time.Duration, attempts int) { //nolint:nonamedreturns // gocritic(unnamedResult) wants names here
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
 

@@ -258,9 +258,7 @@ func recentCloneFailure(cached *cachedRepo) error {
 // buildAuth returns an OAuth2 basic-auth credential for rawURL when it is a
 // plain HTTP(S) URL and a token is supplied; nil otherwise (e.g. SSH URLs,
 // which are left to the transport's default auth resolution).
-//
-//nolint:ireturn // go-git's CloneOptions.Auth field is interface-typed.
-func buildAuth(rawURL, token string) transport.AuthMethod {
+func buildAuth(rawURL, token string) transport.AuthMethod { //nolint:ireturn // go-git's CloneOptions.Auth field is interface-typed
 	if token == "" || !strings.HasPrefix(rawURL, "http") {
 		return nil
 	}

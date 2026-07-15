@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -14,52 +12,28 @@ import (
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// maxPolicyBytes is the maximum size of a Rego policy file fetched from git.
-const maxPolicyBytes = 128 * 1024 // 128 KB
-
-// gitOAuth2Username is the conventional basic-auth username for OAuth2 tokens.
-const gitOAuth2Username = "oauth2"
-
-// FetchCourseCheckPolicyContent fetches a Rego policy file from a git repo.
-// src is the git clone URL (e.g. https://gitlab.example.com/group/repo.git),
-// ref is the branch/tag, filePath is the relative path to the .rego file,
-// and token is the optional OAuth2 access token.
-func FetchCourseCheckPolicyContent(ctx context.Context, src, ref, filePath, token string) (string, error) {
-	// Reject non-HTTP(S) schemes to prevent SSRF via file://, gopher://, etc.
+// FetchCourseCheckPolicyContent fetches a Rego policy file from a GitLab repo
+// using the GitLab SDK. src is the git clone URL, ref is the branch/tag,
+// filePath is the relative path to the .rego file, and token is the OAuth2
+// access token. The context is accepted for API compatibility but the SDK
+// handles its own request lifecycle.
+func FetchCourseCheckPolicyContent(_ context.Context, src, ref, filePath, token string) (string, error) {
 	parsed, err := url.Parse(src)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", fmt.Errorf("invalid policy source URL: %q", src)
 	}
 
-	// Build GitLab raw file URL: strip .git suffix, append /-/raw/ref/path
-	base := strings.TrimSuffix(strings.TrimRight(src, "/"), ".git")
-	rawURL := base + "/-/raw/" + ref + "/" + strings.TrimLeft(filePath, "/")
+	baseURL := parsed.Scheme + "://" + parsed.Host
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
+	fetcher, err := NewFetcher(token, baseURL)
 	if err != nil {
-		return "", fmt.Errorf("build policy request: %w", err)
+		return "", fmt.Errorf("create gitlab client: %w", err)
 	}
 
-	if token != "" {
-		req.SetBasicAuth(gitOAuth2Username, token)
-	}
+	// Strip scheme+host prefix and optional .git suffix to obtain the project path.
+	projectPath := strings.TrimSuffix(strings.TrimPrefix(src, baseURL+"/"), ".git")
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch policy: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck // response body close error is non-actionable
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		return "", fmt.Errorf("policy fetch returned HTTP %d for %s", resp.StatusCode, rawURL)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxPolicyBytes))
-	if err != nil {
-		return "", fmt.Errorf("read policy body: %w", err)
-	}
-
-	return string(data), nil
+	return fetcher.FetchPolicy(projectPath, ref, filePath)
 }
 
 // GitLabFetcher fetches project, merge request, and file state from GitLab
@@ -108,6 +82,25 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*GitLabState, err
 	state.Files = f.fetchFiles(project, ref, files)
 
 	return state, nil
+}
+
+// FetchPolicy retrieves a Rego policy file from the given GitLab project at
+// the given ref using the SDK, avoiding any direct HTTP calls to user-supplied
+// URLs.
+func (f *GitLabFetcher) FetchPolicy(project, ref, filePath string) (string, error) {
+	file, _, err := f.client.RepositoryFiles.GetFile(project, filePath, &gitlab.GetFileOptions{
+		Ref: &ref,
+	})
+	if err != nil {
+		return "", fmt.Errorf("fetch policy %q at ref %q: %w", filePath, ref, err)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(file.Content)
+	if err != nil {
+		return "", fmt.Errorf("decode policy content: %w", err)
+	}
+
+	return string(decoded), nil
 }
 
 // countMergedMRs returns the total number of merged merge requests for the

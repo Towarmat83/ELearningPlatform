@@ -1,17 +1,31 @@
 package handlers
 
 import (
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 
 	"github.com/elearning/user-service/internal/config"
 	"github.com/elearning/user-service/internal/db"
 	"github.com/elearning/user-service/internal/metrics"
 	apimiddleware "github.com/elearning/user-service/internal/middleware"
 )
+
+// remoteIP extracts the IP from r.RemoteAddr (already set to the real client
+// IP by chiMiddleware.RealIP) to use as the rate-limit key.
+func remoteIP(r *http.Request) (string, error) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr, nil //nolint:nilerr // best-effort: fall back to raw addr
+	}
+
+	return ip, nil
+}
 
 // corsMaxAgeSeconds bounds CORS preflight cache duration, in seconds.
 const corsMaxAgeSeconds = 300
@@ -35,7 +49,7 @@ func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsHandler(cfg).Handler)
 
-	registerPublicRoutes(router, state)
+	registerPublicRoutes(router, state, cfg)
 	registerAuthenticatedRoutes(router, state, authMW)
 	registerAdminRoutes(router, state, adminMW)
 	registerPatternRoutes(router, state, authMW, adminMW)
@@ -56,23 +70,27 @@ func corsHandler(cfg *config.Config) *cors.Cors {
 }
 
 // registerPublicRoutes wires routes that require no authentication.
-func registerPublicRoutes(router chi.Router, state *State) {
+func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 	router.Get("/health", state.Health)
 	router.Get("/metrics", metrics.Handler())
 
 	router.Get("/api/settings/public", state.PublicSettings)
-
-	router.Post("/api/auth/register", state.Register)
-	router.Post("/api/auth/login", state.Login)
-
 	router.Get("/api/auth/oauth/providers", state.ListProviders)
 	router.Get("/api/auth/oauth/{provider}/authorize", state.OAuthAuthorize)
-	router.Post("/api/auth/oauth/callback", state.OAuthCallback)
-
 	router.Get("/api/auth/oidc/authorize", state.OIDCAuthorize)
-	router.Post("/api/auth/oidc/callback", state.OIDCCallback)
 
-	router.Post("/api/auth/ldap/login", state.LDAPLogin)
+	// Rate-limited auth endpoints — set AUTH_RATE_LIMIT_REQUESTS=0 to disable.
+	router.Group(func(group chi.Router) {
+		if cfg.AuthRateLimitRequests > 0 {
+			group.Use(httprate.LimitBy(cfg.AuthRateLimitRequests, time.Duration(cfg.AuthRateLimitWindowSeconds)*time.Second, remoteIP))
+		}
+
+		group.Post("/api/auth/register", state.Register)
+		group.Post("/api/auth/login", state.Login)
+		group.Post("/api/auth/oauth/callback", state.OAuthCallback)
+		group.Post("/api/auth/oidc/callback", state.OIDCCallback)
+		group.Post("/api/auth/ldap/login", state.LDAPLogin)
+	})
 }
 
 // registerAuthenticatedRoutes wires routes that require a valid session.

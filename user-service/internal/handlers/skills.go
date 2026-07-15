@@ -1,0 +1,157 @@
+package handlers
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+
+	"go.uber.org/zap"
+)
+
+const (
+	// skillModuleTypeQuiz identifies an assessable quiz module type.
+	skillModuleTypeQuiz = "quiz"
+	// skillModuleTypeLab identifies an assessable lab module type.
+	skillModuleTypeLab = "lab"
+)
+
+// skillModuleEntry is a module descriptor returned by course-service.
+type skillModuleEntry struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Index       int    `json:"index"`
+	Type        string `json:"type"`
+	CourseSlug  string `json:"courseSlug"`
+	CourseTitle string `json:"courseTitle"`
+}
+
+// skillModuleStatus extends skillModuleEntry with the user's completion status.
+type skillModuleStatus struct {
+	skillModuleEntry
+
+	Status string `json:"status"` // "completed" | "available"
+}
+
+// fetchSkillModules calls course-service to get all modules tagged with skill.
+func (s *State) fetchSkillModules(req *http.Request, skill string) ([]skillModuleEntry, error) {
+	if !slugRE.MatchString(skill) {
+		return nil, fmt.Errorf("invalid skill slug: %q", skill)
+	}
+
+	rawURL := fmt.Sprintf("%s/api/skills/%s/modules", s.Config.CourseServiceURL, skill)
+
+	//nolint:gosec // skill is validated against slugRE; CourseServiceURL is trusted server config
+	r, err := http.NewRequestWithContext(req.Context(), http.MethodGet, rawURL, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("build skill modules request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(r) //nolint:gosec // URL built from validated slug and trusted CourseServiceURL
+	if err != nil {
+		return nil, fmt.Errorf("fetch skill modules: %w", err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+
+		return nil, fmt.Errorf("course-service returned %d for skill %s: %s", resp.StatusCode, skill, body)
+	}
+
+	var body struct {
+		Modules []skillModuleEntry `json:"modules"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	if err != nil {
+		return nil, fmt.Errorf("decode skill modules: %w", err)
+	}
+
+	return body.Modules, nil
+}
+
+// passedModulesCtx returns the set of "courseSlug/moduleSlug" for all
+// quiz and lab modules the user has passed.
+func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bool {
+	rows, err := s.Pool.Query(req.Context(),
+		`SELECT courseSlug, moduleSlug FROM module_progress
+		 WHERE userId = $1::uuid AND passed = true AND moduleSlug IS NOT NULL`,
+		userID)
+	if err != nil {
+		zap.L().Error("failed to query module progress", zap.String("userID", userID), zap.Error(err))
+
+		return nil
+	}
+
+	defer rows.Close()
+
+	out := make(map[string]bool)
+
+	for rows.Next() {
+		var cs, ms string
+		if rows.Scan(&cs, &ms) == nil {
+			out[cs+"/"+ms] = true
+		}
+	}
+
+	return out
+}
+
+// skillIsCompleted returns true when all assessable (quiz/lab) modules in the
+// list have been passed by the user. Skills with no assessable modules are
+// never considered completed.
+func skillIsCompleted(modules []skillModuleEntry, passed map[string]bool) bool {
+	hasAssessable := false
+
+	for _, mod := range modules {
+		if mod.Type != skillModuleTypeQuiz && mod.Type != skillModuleTypeLab {
+			continue
+		}
+
+		hasAssessable = true
+
+		if !passed[mod.CourseSlug+"/"+mod.Slug] {
+			return false
+		}
+	}
+
+	return hasAssessable
+}
+
+// MySkillModules godoc
+// @Summary  List modules teaching a skill with the user's completion status
+// @Tags     Skills
+// @Security BearerAuth
+// @Produce  json
+// @Param    slug  path  string  true  "Skill slug"
+// @Success  200   {object}  map[string]interface{}
+// @Router   /api/my/skills/{slug} [get].
+func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request) {
+	claims := s.claims(request)
+	skill := param(request, "slug")
+
+	modules, err := s.fetchSkillModules(request, skill)
+	if err != nil {
+		zap.L().Warn("failed to fetch skill modules", zap.String("skill", skill), zap.Error(err))
+		s.Error(writer, http.StatusBadGateway, "failed to fetch skill modules")
+
+		return
+	}
+
+	passed := s.passedModulesCtx(request, claims.Subject)
+
+	result := make([]skillModuleStatus, 0, len(modules))
+
+	for _, mod := range modules {
+		status := pathStatusAvailable
+		if (mod.Type == skillModuleTypeQuiz || mod.Type == skillModuleTypeLab) && passed[mod.CourseSlug+"/"+mod.Slug] {
+			status = pathStatusCompleted
+		}
+
+		result = append(result, skillModuleStatus{skillModuleEntry: mod, Status: status})
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{pathKindSkill: skill, "modules": result})
+}

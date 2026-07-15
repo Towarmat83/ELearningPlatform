@@ -96,13 +96,13 @@ import App from '../layouts/App.astro';
     function renderList(): string {
       return allPaths.map((p:any) => {
         const isSkillPath = p.kind === 'skill';
-        const total = isSkillPath ? (p.skills?.length ?? 0) : (p.courses?.length ?? 0);
-        const done  = isSkillPath ? 0 : (p.courses??[]).filter((c:any)=>c.status==='completed').length;
+        const total = (p.courses?.length ?? 0);
+        const done  = (p.courses??[]).filter((c:any)=>c.status==='completed').length;
         const pct   = total>0 ? Math.round(done/total*100) : 0;
         const allDone = pct===100;
         const col = allDone?'var(--good)':pct>0?'var(--blue)':'var(--ink-soft)';
         const sub = isSkillPath
-          ? `${total} compétence${total>1?'s':''}`
+          ? `${total} compétence${total>1?'s':''} · ${allDone?'✓ Acquises':done>0?`${done}/${total} acquises`:'À commencer'}`
           : `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
         const colors = PATH_COLORS[p.slug] ?? DEFAULT_COLOR;
         return `<div class="path-list-card" data-slug="${p.slug}" style="border-color:${colors.accent}40">
@@ -156,15 +156,14 @@ import App from '../layouts/App.astro';
     function renderDetail(p: any): string {
       const isSkillPath = p.kind === 'skill';
 
-      // Skill paths: nodes are skill tags, all shown as "available"
-      const courses: any[] = isSkillPath
-        ? (p.skills ?? []).map((s: string) => ({ slug: s, status: 'available' }))
-        : (p.courses ?? []);
+      // Both path kinds: courses contains the ordered node statuses
+      // (course slugs for kind=course, skill slugs for kind=skill)
+      const courses: any[] = p.courses ?? [];
 
       const total = courses.length;
-      const done  = isSkillPath ? 0 : courses.filter((c:any)=>c.status==='completed').length;
+      const done  = courses.filter((c:any)=>c.status==='completed').length;
       const pct   = total>0 ? Math.round(done/total*100) : 0;
-      const allDone = !isSkillPath && done===total && total>0;
+      const allDone = done===total && total>0;
 
       // Horizontal snake: up to CPR nodes per row, then wrap
       const CPR   = 5;    // columns per row — snake wraps at node 6+
@@ -254,9 +253,15 @@ import App from '../layouts/App.astro';
           ${nameEls}
           ${badgeEl}`;
 
-        nodesSVG += (isLocked || isSkillPath)
+        const href = isSkillPath
+          ? `/skills/${c.slug}`
+          : `/courses/${c.slug}`;
+        const onclick = isSkillPath
+          ? ''
+          : `onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')"`;
+        nodesSVG += isLocked
           ? `<g>${inner}</g>`
-          : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')" style="cursor:pointer">${inner}</a>`;
+          : `<a href="${href}" ${onclick} style="cursor:pointer">${inner}</a>`;
       });
 
       const lastPt = pts[pts.length - 1];
@@ -275,13 +280,13 @@ import App from '../layouts/App.astro';
         <div class="detail-header">
           <div class="detail-title">${p.title||p.slug}</div>
           ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
+          ${p.skills?.length && !isSkillPath ? `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin:.4rem 0 .2rem">${(p.skills as string[]).map(sk=>`<a href="/skills/${sk}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none">🎯 ${sk}</a>`).join('')}</div>` : ''}
           <div class="detail-prog">
-            ${isSkillPath ? `<span>🎯 ${total} compétence${total>1?'s':''}</span>` : `
             <div class="progress-bar" style="flex:1">
               <div class="progress-bar-fill" style="width:${pct}%;background:${pBarCol}"></div>
             </div>
             <span class="detail-prog-pct" style="color:${pBarCol}">${pct}%</span>
-            <span>${done}/${total} cours</span>`}
+            <span>${done}/${total} ${isSkillPath ? `compétence${total>1?'s':''}` : `cours`}</span>
           </div>
         </div>
         <div class="snake-wrap">${svgEl}</div>

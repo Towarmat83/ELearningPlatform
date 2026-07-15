@@ -269,7 +269,7 @@ import App from '../../layouts/App.astro';
         ? `<span class="badge ${diffColors[c.difficulty] || 'badge-blue'}">${diffLabels[c.difficulty] || c.difficulty}</span>`
         : '';
       const skillChips = (c.skills ?? []).slice(0, 3).map((s: string) =>
-        `<span class="badge badge-purple" style="font-size:.65rem">🎯 ${s}</span>`).join('');
+        `<a href="/skills/${s}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none">🎯 ${s}</a>`).join('');
       const prog = enrolled
         ? `<div class="rail-card-prog"><div class="rail-card-prog-fill" style="width:100%"></div></div>`
         : '';

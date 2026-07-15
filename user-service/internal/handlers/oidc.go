@@ -77,10 +77,9 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 			)
 		}
 
-		slog.WarnContext(ctx,
-			"OIDC TLS verification is disabled (oidc_insecure_skip_verify); "+
-				"this is only valid for internal/self-signed CAs in non-production environments",
-			"provider_url", cfg.ProviderURL,
+		zap.L().Warn("OIDC TLS verification is disabled (oidc_insecure_skip_verify); "+
+			"this is only valid for internal/self-signed CAs in non-production environments",
+			zap.String("provider_url", cfg.ProviderURL),
 		)
 	}
 
@@ -92,8 +91,8 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 // supports split-horizon setups (e.g. KinD) where internal DNS != public URL.
 func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
 	if cfg.InsecureSkipVerify {
-		slog.WarnContext(ctx, "connecting to OIDC provider with TLS certificate verification disabled",
-			"provider_url", cfg.ProviderURL)
+		zap.L().Warn("connecting to OIDC provider with TLS certificate verification disabled",
+			zap.String("provider_url", cfg.ProviderURL))
 
 		insecureClient := &http.Client{
 			Transport: &http.Transport{

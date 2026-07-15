@@ -3,8 +3,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
+
+	"go.uber.org/zap"
 
 	"github.com/elearning/checker-service/internal/checker"
 	"github.com/elearning/checker-service/internal/config"
@@ -45,7 +46,7 @@ func (h *Handler) BuildRouter() *chi.Mux {
 
 		err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 		if err != nil {
-			slog.Error("encode health response", "err", err)
+			zap.L().Error("encode health response", zap.Error(err))
 		}
 	})
 
@@ -81,7 +82,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 
 	fetcher, err := checker.NewFetcher(h.config.GitLabToken, h.config.GitLabBaseURL)
 	if err != nil {
-		slog.Error("gitlab client init", "err", err)
+		zap.L().Error("gitlab client init", zap.Error(err))
 		httpErr(resp, http.StatusInternalServerError, "gitlab client error")
 
 		return
@@ -89,7 +90,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 
 	state, err := fetcher.Fetch(req.Project, req.Files)
 	if err != nil {
-		slog.Error("gitlab fetch", "project", req.Project, "err", err)
+		zap.L().Error("gitlab fetch", zap.String("project", req.Project), zap.Error(err))
 		httpErr(resp, http.StatusBadGateway, "failed to fetch GitLab state")
 
 		return
@@ -97,7 +98,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 
 	result, err := checker.Evaluate(httpReq.Context(), req.Policy, state)
 	if err != nil {
-		slog.Error("rego eval", "err", err)
+		zap.L().Error("rego eval", zap.Error(err))
 		httpErr(resp, http.StatusInternalServerError, "policy evaluation error")
 
 		return
@@ -107,7 +108,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 
 	err = json.NewEncoder(resp).Encode(result)
 	if err != nil {
-		slog.Error("encode evaluate response", "err", err)
+		zap.L().Error("encode evaluate response", zap.Error(err))
 	}
 }
 
@@ -137,7 +138,7 @@ func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
 
 	fetcher, err := checker.NewFetcher(h.config.GitLabToken, h.config.GitLabBaseURL)
 	if err != nil {
-		slog.Error("gitlab client init", "err", err)
+		zap.L().Error("gitlab client init", zap.Error(err))
 		httpErr(resp, http.StatusInternalServerError, "gitlab client error")
 
 		return
@@ -145,7 +146,7 @@ func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
 
 	result, err := fetcher.CheckStep(req)
 	if err != nil {
-		slog.Error("step check", "checkType", req.CheckType, "project", req.Project, "err", err)
+		zap.L().Error("step check", zap.String("checkType", req.CheckType), zap.String("project", req.Project), zap.Error(err))
 		httpErr(resp, http.StatusInternalServerError, "step check error")
 
 		return
@@ -155,7 +156,7 @@ func (h *Handler) CheckStep(resp http.ResponseWriter, httpReq *http.Request) {
 
 	encErr := json.NewEncoder(resp).Encode(result)
 	if encErr != nil {
-		slog.Error("encode check-step response", "err", encErr)
+		zap.L().Error("encode check-step response", zap.Error(encErr))
 	}
 }
 
@@ -166,6 +167,6 @@ func httpErr(w http.ResponseWriter, status int, msg string) {
 
 	err := json.NewEncoder(w).Encode(map[string]string{"error": msg})
 	if err != nil {
-		slog.Error("encode error response", "err", err)
+		zap.L().Error("encode error response", zap.Error(err))
 	}
 }

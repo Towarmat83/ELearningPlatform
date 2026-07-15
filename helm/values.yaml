@@ -93,6 +93,10 @@ courseService:
   env:
     JWT_EXPIRY_HOURS: "24"
     GIT_CACHE_TTL: "10"
+    # debug/info/warn/error
+    LOG_LEVEL: "info"
+    # json (default) or text (human-readable, for local dev)
+    LOG_FORMAT: "json"
   # Git token for private repository access.
   # gitTokenExistingSecret: "my-git-secret"   # preferred for production
   # gitTokenExistingSecretKey: "GIT_TOKEN"
@@ -127,6 +131,10 @@ checkerService:
       memory: "256Mi"
       cpu: "200m"
   env:
+    # debug/info/warn/error
+    LOG_LEVEL: "info"
+    # json (default) or text (human-readable, for local dev)
+    LOG_FORMAT: "json"
     GITLAB_BASE_URL: "http://gitlab.local:8880"
   # GitLab API token for checker-service (stored in the platform Secret as GITLAB_TOKEN)
   gitLabToken: ""
@@ -159,6 +167,10 @@ userService:
       cpu: "500m"
   env:
     JWT_EXPIRY_HOURS: "24"
+    # debug/info/warn/error
+    LOG_LEVEL: "info"
+    # json (default) or text (human-readable, for local dev)
+    LOG_FORMAT: "json"
   extraEnv: []
   extraVolumeMounts: []
   extraVolumes: []

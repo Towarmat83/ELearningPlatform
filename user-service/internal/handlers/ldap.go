@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	ldap "github.com/go-ldap/ldap/v3"
 )
@@ -83,7 +84,7 @@ func (s *State) LDAPLogin(writer http.ResponseWriter, httpReq *http.Request) {
 
 	cfg, err := s.loadLDAPSettings(ctx)
 	if err != nil {
-		slog.Error("load LDAP settings", "err", err)
+		zap.L().Error("load LDAP settings", zap.Error(err))
 		s.Error(writer, http.StatusBadRequest, "LDAP not configured")
 
 		return
@@ -111,7 +112,7 @@ func (s *State) LDAPLogin(writer http.ResponseWriter, httpReq *http.Request) {
 func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*ldap.Conn, bool) {
 	conn, err := ldap.DialURL(cfg.ServerURL)
 	if err != nil {
-		slog.Error("LDAP dial failed", "err", err)
+		zap.L().Error("LDAP dial failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "LDAP server call failed")
 
 		return nil, false
@@ -122,7 +123,7 @@ func (s *State) dialLDAPServer(writer http.ResponseWriter, cfg ldapSettings) (*l
 		if err != nil {
 			_ = conn.Close()
 
-			slog.Error("LDAP service bind failed", "err", err)
+			zap.L().Error("LDAP service bind failed", zap.Error(err))
 			s.Error(writer, http.StatusInternalServerError, "LDAP server call failed")
 
 			return nil, false

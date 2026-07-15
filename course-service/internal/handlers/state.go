@@ -3,13 +3,14 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -133,7 +134,7 @@ func NewState(cfg *config.Config, store *content.Store, paths *content.PathStore
 		case err == nil:
 			state.GitCreds = creds
 		case !os.IsNotExist(err):
-			slog.Warn("failed to load git credentials", "path", cfg.GitCredentialsPath, "err", err)
+			zap.L().Warn("failed to load git credentials", zap.String("path", cfg.GitCredentialsPath), zap.Error(err))
 		}
 	}
 
@@ -147,7 +148,7 @@ func (s *State) JSON(w http.ResponseWriter, status int, v any) {
 
 	err := json.NewEncoder(w).Encode(v)
 	if err != nil {
-		slog.Error("encode JSON response", "err", err)
+		zap.L().Error("encode JSON response", zap.Error(err))
 	}
 }
 
@@ -198,7 +199,7 @@ func derefStr(s *string) string {
 // @Router    /api/admin/cache/clear [post].
 func (s *State) ClearCache(w http.ResponseWriter, r *http.Request) {
 	s.GitCache.Clear()
-	slog.Info("git cache cleared by admin")
+	zap.L().Info("git cache cleared by admin")
 	s.JSON(w, http.StatusOK, map[string]string{statusJSONKey: statusOKValue})
 }
 
@@ -239,7 +240,7 @@ func (s *State) ClearCourseCache(writer http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	slog.Info("course cache cleared", "slug", slug, "repos", cleared)
+	zap.L().Info("course cache cleared", zap.String("slug", slug), zap.Int("repos", cleared))
 	s.JSON(writer, http.StatusOK, map[string]any{statusJSONKey: statusOKValue, reposClearedJSONKey: cleared})
 }
 
@@ -280,7 +281,7 @@ func (s *State) ClearModuleCache(writer http.ResponseWriter, req *http.Request) 
 	}
 
 	s.GitCache.ClearRepo(mod.Src, mod.Ref)
-	slog.Info("module cache cleared", "slug", slug, "index", idx, "module", mod.Name)
+	zap.L().Info("module cache cleared", zap.String("slug", slug), zap.Int("index", idx), zap.String("module", mod.Name))
 	s.JSON(writer, http.StatusOK, map[string]any{statusJSONKey: statusOKValue, reposClearedJSONKey: 1})
 }
 
@@ -308,7 +309,7 @@ func (s *State) visibleModules(c *content.Course, req *http.Request) []content.M
 		if mod.Type == modulesTypeValue {
 			subs, err := content.FetchModuleIndex(req.Context(), s.GitCache, mod, s.tokenForRepo(mod.Src))
 			if err != nil {
-				slog.Warn("failed to expand module index, skipping", "module", mod.Name, "err", err)
+				zap.L().Warn("failed to expand module index, skipping", zap.String("module", mod.Name), zap.Error(err))
 
 				continue
 			}

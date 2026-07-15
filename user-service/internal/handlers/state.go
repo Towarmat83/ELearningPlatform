@@ -3,8 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
+
+	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
 
@@ -44,7 +45,7 @@ func (s *State) JSON(w http.ResponseWriter, status int, v any) {
 
 	err := json.NewEncoder(w).Encode(v)
 	if err != nil {
-		slog.Error("failed to encode JSON response", "err", err)
+		zap.L().Error("failed to encode JSON response", zap.Error(err))
 	}
 }
 

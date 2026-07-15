@@ -172,11 +172,25 @@ Each service is configured via a **ConfigMap mounted as a file** in the containe
 
 | Service | Mounted file | Key variables |
 |---|---|---|
-| **course-service** | `/etc/course-service/config.yaml` | `JWT_SECRET`, `DATABASE_URL`, `CHECKER_SERVICE_URL`, `GIT_TOKEN` |
-| **user-service** | `/etc/user-service/config.yaml` | `JWT_SECRET`, `DATABASE_URL`, `OIDC_*` |
-
-| **checker-service** | env only | `GITLAB_TOKEN`, `GITLAB_BASE_URL` |
+| **course-service** | `/etc/course-service/config.yaml` | `JWT_SECRET`, `DATABASE_URL`, `CHECKER_SERVICE_URL`, `GIT_TOKEN`, `LOG_LEVEL`, `LOG_FORMAT` |
+| **user-service** | `/etc/user-service/config.yaml` | `JWT_SECRET`, `DATABASE_URL`, `OIDC_*`, `LOG_LEVEL`, `LOG_FORMAT` |
+| **checker-service** | env only | `GITLAB_TOKEN`, `GITLAB_BASE_URL`, `LOG_LEVEL`, `LOG_FORMAT` |
 | **frontend** | `/etc/frontend/config.env` | `COURSE_API`, `USER_API` |
+
+Logging is controlled per service via two environment variables:
+
+| Variable | Values | Default | Description |
+|---|---|---|---|
+| `LOG_LEVEL` | `debug` / `info` / `warn` / `error` | `info` | Log verbosity |
+| `LOG_FORMAT` | `json` / `text` | `json` | Output format — `json` for log aggregators (ELK, DataDog), `text` for local dev |
+
+```bash
+# Human-readable logs for local development
+LOG_LEVEL=debug LOG_FORMAT=text ./bin/user-service
+
+# JSON logs for production / log aggregation
+LOG_LEVEL=info LOG_FORMAT=json ./bin/user-service
+```
 
 ## Git credentials — course-repo-secret
 

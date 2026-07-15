@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+
+	"go.uber.org/zap"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -61,7 +62,7 @@ func (w *K8sWatcher) upsert(obj any) {
 
 	course := courseFromCR(cr)
 	w.store.Put(course)
-	slog.Debug("course upserted from K8s", "slug", course.Slug)
+	zap.L().Debug("course upserted from K8s", zap.String("slug", course.Slug))
 }
 
 // remove deletes the course backed by obj from the store, ignoring
@@ -77,7 +78,7 @@ func (w *K8sWatcher) remove(obj any) {
 	}
 
 	w.store.DeleteBySource(sourceK8s(course.Name))
-	slog.Debug("course removed from K8s", "slug", course.Name)
+	zap.L().Debug("course removed from K8s", zap.String("slug", course.Name))
 }
 
 // courseFromCR converts a typed Course custom resource into the
@@ -324,7 +325,7 @@ func (w *PathWatcher) upsert(obj any) {
 
 	learningPath := pathFromCR(cr)
 	w.store.Put(learningPath)
-	slog.Debug("path upserted from K8s", "slug", learningPath.Slug)
+	zap.L().Debug("path upserted from K8s", zap.String("slug", learningPath.Slug))
 }
 
 // remove deletes the path backed by obj from the store, ignoring objects
@@ -340,7 +341,7 @@ func (w *PathWatcher) remove(obj any) {
 	}
 
 	w.store.DeleteBySource(sourceK8s(pathCR.Name))
-	slog.Debug("path removed from K8s", "slug", pathCR.Name)
+	zap.L().Debug("path removed from K8s", zap.String("slug", pathCR.Name))
 }
 
 // pathFromCR converts a typed Path custom resource into the in-memory Path.
@@ -447,18 +448,18 @@ func watchCRD(
 	go func() {
 		err := cache.Start(ctx)
 		if err != nil {
-			slog.Error(stoppedMsg, "err", err)
+			zap.L().Error(stoppedMsg, zap.Error(err))
 		}
 	}()
 
 	go func() {
 		if !cache.WaitForCacheSync(ctx) {
-			slog.Error(syncFailedMsg)
+			zap.L().Error(syncFailedMsg)
 
 			return
 		}
 
-		slog.Info(syncedMsg)
+		zap.L().Info(syncedMsg)
 	}()
 
 	return nil

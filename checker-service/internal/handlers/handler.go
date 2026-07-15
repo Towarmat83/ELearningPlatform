@@ -3,7 +3,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -12,7 +14,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 )
+
+// remoteIP extracts the IP from r.RemoteAddr (already set to the real client
+// IP by chiMiddleware.RealIP) to use as the rate-limit key.
+func remoteIP(r *http.Request) (string, error) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr, nil //nolint:nilerr // best-effort: fall back to raw addr
+	}
+
+	return ip, nil
+}
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
 const maxRequestBodyBytes = 1 << 20
@@ -35,6 +49,11 @@ func (h *Handler) BuildRouter() *chi.Mux {
 	router.Use(chiMiddleware.Logger)
 	router.Use(chiMiddleware.Recoverer)
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
+
+	if h.config.RateLimitRequests > 0 {
+		router.Use(httprate.LimitBy(h.config.RateLimitRequests, time.Duration(h.config.RateLimitWindowSeconds)*time.Second, remoteIP))
+	}
+
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins: h.config.CORSOrigins,
 		AllowedMethods: []string{"GET", "POST", "OPTIONS"},

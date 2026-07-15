@@ -29,6 +29,10 @@ const (
 	// envValueTrue is the value a boolean env var (OIDC_ENABLED,
 	// OIDC_INSECURE_SKIP_VERIFY) must equal to be considered enabled.
 	envValueTrue = "true"
+	// defaultAuthRateLimitRequests is the default auth request cap per IP.
+	defaultAuthRateLimitRequests = 10
+	// defaultAuthRateLimitWindowSeconds is the auth rate-limit window length.
+	defaultAuthRateLimitWindowSeconds = 60
 )
 
 // ProviderConfig holds the configuration for a single SSO/OAuth provider
@@ -122,6 +126,11 @@ type Config struct {
 	// OIDC holds deploy-time OIDC configuration (Helm). Seeded into
 	// platform_settings on startup when Enabled.
 	OIDC OIDCBootstrap `yaml:"-"`
+
+	// AuthRateLimitRequests is the max number of auth requests allowed per IP
+	// per AuthRateLimitWindowSeconds. Set AUTH_RATE_LIMIT_REQUESTS=0 to disable.
+	AuthRateLimitRequests      int `yaml:"authRateLimitRequests"`
+	AuthRateLimitWindowSeconds int `yaml:"authRateLimitWindowSeconds"`
 }
 
 // FindProvider returns the ProviderConfig with the given id, or nil if no
@@ -157,6 +166,8 @@ func Load() *Config {
 	cfg.InternalSecret = stringFromEnv("INTERNAL_SERVICE_SECRET", cfg.InternalSecret)
 	cfg.K8sNamespace = stringFromEnv("K8S_NAMESPACE", cfg.K8sNamespace)
 	cfg.Kubeconfig = stringFromEnv("KUBECONFIG", cfg.Kubeconfig)
+	cfg.AuthRateLimitRequests = intFromEnv("AUTH_RATE_LIMIT_REQUESTS", cfg.AuthRateLimitRequests)
+	cfg.AuthRateLimitWindowSeconds = intFromEnv("AUTH_RATE_LIMIT_WINDOW_SECONDS", cfg.AuthRateLimitWindowSeconds)
 
 	loadAdminPassword(cfg)
 
@@ -171,14 +182,16 @@ func Load() *Config {
 // values.
 func defaultConfig() *Config {
 	return &Config{
-		DatabaseURL:       "postgres://elearning:elearning@localhost:5432/elearning",
-		JWTSecret:         defaultJWTSecret,
-		InternalSecret:    defaultInternalSecret,
-		JWTExpiryH:        defaultJWTExpiryHours,
-		Port:              defaultPort,
-		CORSOrigins:       []string{defaultLocalOrigin, "http://localhost:5173"},
-		OAuthRedirectBase: defaultLocalOrigin,
-		CourseServiceURL:  "http://course-service:8082",
+		DatabaseURL:                "postgres://elearning:elearning@localhost:5432/elearning",
+		JWTSecret:                  defaultJWTSecret,
+		InternalSecret:             defaultInternalSecret,
+		JWTExpiryH:                 defaultJWTExpiryHours,
+		Port:                       defaultPort,
+		CORSOrigins:                []string{defaultLocalOrigin, "http://localhost:5173"},
+		OAuthRedirectBase:          defaultLocalOrigin,
+		CourseServiceURL:           "http://course-service:8082",
+		AuthRateLimitRequests:      defaultAuthRateLimitRequests,
+		AuthRateLimitWindowSeconds: defaultAuthRateLimitWindowSeconds,
 	}
 }
 

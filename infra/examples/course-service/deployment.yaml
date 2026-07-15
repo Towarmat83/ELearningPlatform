@@ -26,6 +26,10 @@ spec:
           value: /etc/course-service/config.yaml
         - name: KUBECONFIG
           value: /var/run/secrets/kubernetes.io/serviceaccount/token
+        - name: LOG_LEVEL
+          value: info
+        - name: LOG_FORMAT
+          value: json
         volumeMounts:
         - name: config
           mountPath: /etc/course-service

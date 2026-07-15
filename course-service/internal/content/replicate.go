@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // replicatedPrefix is the URL path prefix under which replicated module
@@ -50,13 +51,13 @@ func ReplicatedPath(ctx context.Context, mod Module, uploadsDir string) string {
 
 	err = downloadFile(ctx, mod.Src, localPath)
 	if err != nil {
-		slog.Error("replication: download failed — returning local path anyway",
-			"src", mod.Src, "dest", localPath, "err", err)
+		zap.L().Error("replication: download failed — returning local path anyway",
+			zap.String("src", mod.Src), zap.String("dest", localPath), zap.Error(err))
 
 		return replicatedPrefix + filename
 	}
 
-	slog.Info("replication: resource cached", "src", mod.Src, "local", filename)
+	zap.L().Info("replication: resource cached", zap.String("src", mod.Src), zap.String("local", filename))
 
 	return replicatedPrefix + filename
 }

@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/url"
+
+	"go.uber.org/zap"
 
 	"github.com/elearning/course-service/internal/content"
 	"github.com/elearning/course-service/internal/middleware"
@@ -47,7 +48,7 @@ func (s *State) autoEnroll(userID, courseSlug string) {
 		courseSlugJSONKey: courseSlug,
 	})
 	if err != nil {
-		slog.Warn("failed to build auto-enroll request", "err", err)
+		zap.L().Warn("failed to build auto-enroll request", zap.Error(err))
 
 		return
 	}
@@ -56,7 +57,7 @@ func (s *State) autoEnroll(userID, courseSlug string) {
 		context.Background(), http.MethodPost, s.Config.UserServiceURL+"/internal/enrollments/auto", bytes.NewReader(body),
 	)
 	if err != nil {
-		slog.Warn("failed to build auto-enroll request", "err", err)
+		zap.L().Warn("failed to build auto-enroll request", zap.Error(err))
 
 		return
 	}
@@ -391,7 +392,8 @@ func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug strin
 
 	err := json.NewEncoder(&buf).Encode(payload)
 	if err != nil {
-		slog.Error("failed to build course-complete request", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.L().Error("failed to build course-complete request",
+			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 
 		return
 	}
@@ -400,7 +402,8 @@ func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug strin
 		req.Context(), http.MethodPost, s.Config.UserServiceURL+"/internal/progress/course-complete", &buf,
 	)
 	if err != nil {
-		slog.Error("failed to build course-complete request", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.L().Error("failed to build course-complete request",
+			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 
 		return
 	}
@@ -410,15 +413,16 @@ func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug strin
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		slog.Error("failed to mark course complete", "userID", userID, "courseSlug", courseSlug, "err", err)
+		zap.L().Error("failed to mark course complete",
+			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		slog.Error("user-service rejected course-complete request",
-			"userID", userID, "courseSlug", courseSlug, "status", resp.StatusCode)
+		zap.L().Error("user-service rejected course-complete request",
+			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Int("status", resp.StatusCode))
 	}
 }
 

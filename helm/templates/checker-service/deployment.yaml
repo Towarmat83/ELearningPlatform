@@ -34,6 +34,10 @@ spec:
         env:
         - name: PORT
           value: {{ .Values.checkerService.service.port | quote }}
+        - name: LOG_LEVEL
+          value: {{ .Values.checkerService.env.LOG_LEVEL | quote }}
+        - name: LOG_FORMAT
+          value: {{ .Values.checkerService.env.LOG_FORMAT | quote }}
         - name: GITLAB_BASE_URL
           value: {{ .Values.checkerService.env.GITLAB_BASE_URL | quote }}
         - name: CORS_ORIGINS

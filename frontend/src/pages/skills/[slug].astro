@@ -1,0 +1,218 @@
+---
+import App from '../../layouts/App.astro';
+const { slug } = Astro.params;
+---
+<App title={`Compétence : ${slug}`} activePage="">
+  <style is:global>
+    .skill-page { padding: 28px 24px 80px; max-width: 100%; }
+    .skill-header { margin-bottom: 24px; }
+    .skill-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 16px; background: none; border: none; padding: 0; text-decoration: none; }
+    .skill-back:hover { text-decoration: underline; }
+    .skill-chip { display: inline-flex; align-items: center; gap: 6px; background: #f3e8ff; color: #7c3aed; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: .95rem; margin-bottom: 8px; }
+    .skill-subtitle { font-size: .83rem; color: var(--ink-soft); margin-top: 4px; }
+    .skill-prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; background: var(--fill); border-radius: 10px; font-size: .82rem; color: var(--ink-soft); }
+    .skill-prog-pct { font-weight: 700; font-size: 1rem; }
+    .snake-wrap { width: 100%; max-width: 500px; padding: 8px 0; display: flex; justify-content: flex-start; }
+    .snake-wrap svg { display: block; height: auto; overflow: visible; max-width: 100%; }
+    .skill-empty { text-align: center; padding: 60px 24px; color: var(--ink-soft); }
+  </style>
+
+  <div class="skill-page">
+    <a href="javascript:history.back()" class="skill-back">◂ Retour</a>
+    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+    <div id="skill-content" style="display:none">
+      <div class="skill-header">
+        <div class="skill-chip">🎯 <span id="skill-name"></span></div>
+        <div class="skill-subtitle" id="skill-subtitle"></div>
+        <div class="skill-prog" id="skill-prog"></div>
+      </div>
+      <div id="skill-empty" class="skill-empty" style="display:none">
+        Aucun module trouvé pour cette compétence.
+      </div>
+      <div class="snake-wrap" id="snake-wrap" style="display:none">
+        <div id="snake-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <script define:vars={{ slug }}>
+    const token = localStorage.getItem('token');
+    if (!token) { window.location.href = `/login?redirect=/skills/${slug}`; }
+
+    // ── Snake view constants ──────────────────────────────────────────────
+    const CPR = 3, NR = 22, HG = 100, VG = 90, PX = 40, PY = 36;
+    const ROAD = 8, CR = 18, LABEL = 26;
+
+    const TH = {
+      completed: { fill: '#4ade80', text: 'white',   badge: '#dcfce7', badgeTxt: '#166534', label: 'Acquis'     },
+      available:  { fill: '#93c5fd', text: '#1e3a5f', badge: '#dbeafe', badgeTxt: '#1d4ed8', label: 'À faire'   },
+      locked:     { fill: '#f1f5f9', text: '#94a3b8', badge: '#f1f5f9', badgeTxt: '#94a3b8', label: 'Verrouillé' },
+    };
+
+    function wrapSVG(text, maxLen) {
+      if (text.length <= maxLen) return [text];
+      const sp = text.lastIndexOf(' ', maxLen);
+      return sp > 0 ? [text.slice(0, sp), text.slice(sp + 1)] : [text.slice(0, maxLen), text.slice(maxLen)];
+    }
+
+    function buildRoad(pts, cr) {
+      if (pts.length < 2) return '';
+      let d = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 1; i < pts.length; i++) {
+        const prev = pts[i - 1], curr = pts[i], next = i < pts.length - 1 ? pts[i + 1] : null;
+        const turns = next && !(
+          (curr.x - prev.x === 0 && next.x - curr.x === 0) ||
+          (curr.y - prev.y === 0 && next.y - curr.y === 0)
+        );
+        if (!turns) { d += ` L ${curr.x} ${curr.y}`; continue; }
+        const dxIn = curr.x - prev.x, dyIn = curr.y - prev.y;
+        const lenIn = Math.sqrt(dxIn * dxIn + dyIn * dyIn);
+        const r = Math.min(cr, lenIn / 2);
+        const ux = dxIn / lenIn, uy = dyIn / lenIn;
+        d += ` L ${curr.x - ux * r} ${curr.y - uy * r} Q ${curr.x} ${curr.y}`;
+        const dxOut = next.x - curr.x, dyOut = next.y - curr.y;
+        const lenOut = Math.sqrt(dxOut * dxOut + dyOut * dyOut);
+        const vx = dxOut / lenOut, vy = dyOut / lenOut;
+        d += ` ${curr.x + vx * r} ${curr.y + vy * r}`;
+      }
+      return d;
+    }
+
+    function nodePos(i) {
+      const row = Math.floor(i / CPR), col = i % CPR;
+      const xIdx = (row % 2 === 0) ? col : (CPR - 1 - col);
+      return { x: PX + xIdx * HG, y: PY + row * VG };
+    }
+
+    function shortName(name) {
+      if (name.length <= 18) return name;
+      const sp = name.lastIndexOf(' ', 18);
+      return sp > 0 ? name.slice(0, sp) + '…' : name.slice(0, 18) + '…';
+    }
+
+    function renderSnake(modules) {
+      const total = modules.length;
+      if (total === 0) return '';
+
+      const numRows = Math.ceil(total / CPR);
+      // Always use full 3-column viewBox width so nodes are the same visual size as my-paths
+      const VB_W = PX * 2 + HG * (CPR - 1);
+      const VB_H = PY + VG * Math.max(numRows - 1, 0) + NR + LABEL + 20;
+
+      const pts = modules.map((_, i) => nodePos(i));
+      const grayD = buildRoad(pts, CR);
+      const done = modules.filter(m => m.status === 'completed').length;
+      const progEnd = Math.min(done < total ? done : done - 1, total - 1);
+      const progPts = done > 0 ? pts.slice(0, progEnd + 1) : [];
+      const progD = buildRoad(progPts, CR);
+      const allDone = done === total;
+      const progCol = allDone ? '#4ade80' : '#93c5fd';
+
+      let nodesSVG = '';
+      modules.forEach((m, i) => {
+        const { x, y } = pts[i];
+        const th = TH[m.status] ?? TH.locked;
+        const isLocked = m.status === 'locked';
+
+        const pulse = m.status === 'available' ? `
+          <circle cx="${x}" cy="${y}" r="${NR + 5}" fill="none" stroke="${th.fill}" stroke-width="2.5" opacity="0">
+            <animate attributeName="r" values="${NR + 3};${NR + 20}" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.35;0" dur="2s" repeatCount="indefinite"/>
+          </circle>` : '';
+
+        const icon = m.status === 'completed' ? '✓' : String(i + 1);
+        const fontSize = m.status === 'completed' ? 14 : 12;
+        const lines = wrapSVG(shortName(m.name), 16);
+        const BW = 64, BH = 14, LINE_H = 11, NAME_ROWS = 2;
+        const nameY0 = y + NR + 10;
+        const nameEls = lines.map((ln, li) =>
+          `<text x="${x}" y="${nameY0 + li * LINE_H}" text-anchor="middle" dominant-baseline="hanging"
+            font-size="9" font-weight="500" fill="#334155" font-family="system-ui,sans-serif">${ln}</text>`
+        ).join('');
+        const badgeY = nameY0 + NAME_ROWS * LINE_H + 3;
+        const badgeEl = `
+          <rect x="${x - BW / 2}" y="${badgeY}" width="${BW}" height="${BH}" rx="${BH / 2}" fill="${th.badge}"/>
+          <text x="${x}" y="${badgeY + BH / 2}" text-anchor="middle" dominant-baseline="middle"
+            font-size="7" font-weight="600" fill="${th.badgeTxt}" font-family="system-ui,sans-serif">${th.label}</text>`;
+
+        const lockBadge = isLocked ? `
+          <circle cx="${x + NR - 5}" cy="${y - NR + 5}" r="9" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+          <text x="${x + NR - 5}" y="${y - NR + 5}" text-anchor="middle" dominant-baseline="middle" font-size="9">🔒</text>` : '';
+
+        const inner = `
+          ${pulse}
+          <circle cx="${x}" cy="${y}" r="${NR + 3}" fill="white"/>
+          <circle cx="${x}" cy="${y}" r="${NR}" fill="${th.fill}"/>
+          <text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle"
+            font-size="${fontSize}" font-weight="800" fill="${th.text}" font-family="system-ui,sans-serif">${icon}</text>
+          ${lockBadge}
+          ${nameEls}
+          ${badgeEl}`;
+
+        const courseLabel = m.courseTitle ? `<title>${m.courseTitle}</title>` : '';
+
+        nodesSVG += isLocked
+          ? `<g>${inner}</g>`
+          : `<a href="/courses/${m.courseSlug}/lessons/${m.index}" style="cursor:pointer">${courseLabel}${inner}</a>`;
+      });
+
+      return `<svg width="100%" viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg" style="display:block;height:auto;overflow:visible;max-width:100%">
+        <path d="${grayD}" fill="none" stroke="#e2e8f0" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>
+        ${progD ? `<path d="${progD}" fill="none" stroke="${progCol}" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+        ${nodesSVG}
+      </svg>`;
+    }
+
+    async function init() {
+      if (!token) return;
+      try {
+        const res = await fetch(`/api/my/skills/${slug}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) { localStorage.clear(); window.location.href = '/login'; return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { modules } = await res.json();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('skill-content').style.display = 'block';
+
+        const label = slug.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+        document.getElementById('skill-name').textContent = label;
+
+        if (!modules || modules.length === 0) {
+          document.getElementById('skill-empty').style.display = 'block';
+          return;
+        }
+
+        const done = modules.filter(m => m.status === 'completed').length;
+        const total = modules.length;
+        const pct = total > 0 ? Math.round(done / total * 100) : 0;
+        const allDone = pct === 100;
+        const pBarCol = allDone ? 'var(--good)' : 'var(--blue)';
+
+        document.getElementById('skill-subtitle').textContent =
+          `${total} module${total > 1 ? 's' : ''} · ${modules.map(m => m.courseTitle).filter((v, i, a) => a.indexOf(v) === i).join(', ')}`;
+
+        document.getElementById('skill-prog').innerHTML = `
+          <div class="progress-bar" style="flex:1">
+            <div class="progress-bar-fill" style="width:${pct}%;background:${pBarCol}"></div>
+          </div>
+          <span class="skill-prog-pct" style="color:${pBarCol}">${pct}%</span>
+          <span>${done}/${total} modules complétés</span>`;
+
+        const snakeEl = renderSnake(modules);
+        document.getElementById('snake-wrap').style.display = 'block';
+        document.getElementById('snake-content').innerHTML = snakeEl;
+
+        if (allDone) {
+          document.getElementById('snake-wrap').insertAdjacentHTML('afterend',
+            '<div style="text-align:center;padding:10px 0;font-size:1rem;font-weight:700;color:var(--good)">🏆 Compétence acquise !</div>');
+        }
+      } catch (e) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('skill-content').style.display = 'block';
+        document.getElementById('skill-empty').style.display = 'block';
+      }
+    }
+
+    init();
+  </script>
+</App>

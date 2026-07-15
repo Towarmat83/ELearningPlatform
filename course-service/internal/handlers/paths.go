@@ -8,6 +8,9 @@ import (
 	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
+// pathKindSkill identifies a learning path that groups modules by skill.
+const pathKindSkill = "skill"
+
 // ListPaths returns learning paths known to the service, optionally
 // paginated via the limit/offset query params. A zero, negative, or
 // omitted limit means unlimited — callers can pass e.g. limit=-1 to
@@ -55,6 +58,35 @@ func (s *State) GetPath(writer http.ResponseWriter, req *http.Request) {
 		s.Error(writer, http.StatusNotFound, fmt.Sprintf("Path %s not found", slug))
 
 		return
+	}
+
+	// For course-kind paths aggregate skills from member courses.
+	if path.Kind != pathKindSkill && len(path.Courses) > 0 {
+		seen := map[string]struct{}{}
+
+		var skills []string
+
+		for _, courseSlug := range path.Courses {
+			c := s.Content.Get(courseSlug)
+			if c == nil {
+				continue
+			}
+
+			for _, sk := range c.Skills {
+				if _, ok := seen[sk]; !ok {
+					seen[sk] = struct{}{}
+					skills = append(skills, sk)
+				}
+			}
+		}
+
+		if len(skills) > 0 {
+			pathCopy := *path
+			pathCopy.Skills = skills
+			s.JSON(writer, http.StatusOK, &pathCopy)
+
+			return
+		}
 	}
 
 	s.JSON(writer, http.StatusOK, path)

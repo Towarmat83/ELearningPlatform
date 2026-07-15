@@ -18,6 +18,8 @@ const (
 	pathStatusLocked    = "locked"
 	pathStatusCompleted = "completed"
 	pathStatusAvailable = "available"
+	// pathKindSkill identifies a skill-kind learning path.
+	pathKindSkill = "skill"
 )
 
 // parsePagination reads optional limit/offset query params. A zero,
@@ -185,34 +187,78 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 
 	result := make([]myPath, 0, len(rows))
 	for _, row := range rows {
-		detail, err := s.fetchPathDetail(request, row.Slug)
+		result = append(result, s.resolveEnrollment(request, claims.Subject, row.Slug, row.EnrolledAt))
+	}
+
+	s.JSON(writer, http.StatusOK, map[string][]myPath{"paths": result})
+}
+
+// resolveEnrollment fetches path detail for a single enrollment and returns the
+// myPath struct with per-course (or per-skill) completion statuses filled in.
+func (s *State) resolveEnrollment(req *http.Request, userID, pathSlug string, enrolledAt time.Time) myPath {
+	detail, err := s.fetchPathDetail(req, pathSlug)
+	if err != nil {
+		zap.L().Warn("failed to fetch path detail", zap.String("slug", pathSlug), zap.Error(err))
+
+		return myPath{
+			Slug:       pathSlug,
+			Title:      pathSlug,
+			EnrolledAt: enrolledAt,
+			Courses:    []courseStatus{},
+		}
+	}
+
+	var courses []courseStatus
+
+	if detail.Kind == pathKindSkill {
+		courses = s.buildSkillStatuses(req, userID, detail.Skills)
+	} else {
+		completed := s.completedCoursesCtx(req, userID, detail.Courses)
+		courses = buildCourseStatuses(detail.Courses, completed)
+	}
+
+	return myPath{
+		Slug:        detail.Slug,
+		Title:       detail.Title,
+		Description: detail.Description,
+		Kind:        detail.Kind,
+		EnrolledAt:  enrolledAt,
+		Courses:     courses,
+		Skills:      detail.Skills,
+	}
+}
+
+// buildSkillStatuses computes the ordered completion status for each skill in a
+// skill-kind learning path. A skill is "completed" when all its assessable
+// modules (quiz/lab) are passed; otherwise the first incomplete skill is
+// "available" and subsequent ones are "locked" (sequential ordering).
+func (s *State) buildSkillStatuses(req *http.Request, userID string, skills []string) []courseStatus {
+	passed := s.passedModulesCtx(req, userID)
+	out := make([]courseStatus, 0, len(skills))
+	sequential := true
+
+	for _, skill := range skills {
+		modules, err := s.fetchSkillModules(req, skill)
 		if err != nil {
-			zap.L().Warn("failed to fetch path detail", zap.String("slug", row.Slug), zap.Error(err))
-			result = append(result, myPath{
-				Slug:       row.Slug,
-				Title:      row.Slug,
-				EnrolledAt: row.EnrolledAt,
-				Courses:    []courseStatus{},
-			})
+			zap.L().Warn("failed to fetch skill modules for path", zap.String("skill", skill), zap.Error(err))
+			out = append(out, courseStatus{Slug: skill, Status: pathStatusLocked})
+			sequential = false
 
 			continue
 		}
 
-		completed := s.completedCoursesCtx(request, claims.Subject, detail.Courses)
-		courses := buildCourseStatuses(detail.Courses, completed)
-
-		result = append(result, myPath{
-			Slug:        detail.Slug,
-			Title:       detail.Title,
-			Description: detail.Description,
-			Kind:        detail.Kind,
-			EnrolledAt:  row.EnrolledAt,
-			Courses:     courses,
-			Skills:      detail.Skills,
-		})
+		switch {
+		case skillIsCompleted(modules, passed):
+			out = append(out, courseStatus{Slug: skill, Status: pathStatusCompleted})
+		case sequential:
+			out = append(out, courseStatus{Slug: skill, Status: pathStatusAvailable})
+			sequential = false
+		default:
+			out = append(out, courseStatus{Slug: skill, Status: pathStatusLocked})
+		}
 	}
 
-	s.JSON(writer, http.StatusOK, map[string][]myPath{"paths": result})
+	return out
 }
 
 // completedCoursesCtx returns the set of course slugs (from slugs) that

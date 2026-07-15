@@ -259,7 +259,6 @@ import App from '../../../layouts/App.astro';
       } else {
         if (m.viewed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ Vu</span>`);
       }
-      (m.skills ?? []).forEach((s: string) => parts.push(`<span class="badge badge-purple" style="font-size:.65rem">🎯 ${s}</span>`));
       return parts.join('');
     }
 
@@ -303,7 +302,7 @@ import App from '../../../layouts/App.astro';
           tagParts.push(`<span class="badge ${map[course.difficulty] || 'badge-blue'}">${labels[course.difficulty] || course.difficulty}</span>`);
         }
         if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
-        (course.skills ?? []).forEach((s: string) => tagParts.push(`<span class="badge badge-purple" style="font-size:.75rem">🎯 ${s}</span>`));
+        (course.skills ?? []).forEach((s: string) => tagParts.push(`<a href="/skills/${s}" class="badge badge-purple" style="font-size:.75rem;text-decoration:none">🎯 ${s}</a>`));
         tagsEl.innerHTML = tagParts.join('');
 
         document.getElementById('course-meta')!.style.display = 'none';

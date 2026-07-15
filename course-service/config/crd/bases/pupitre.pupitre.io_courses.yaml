@@ -416,6 +416,11 @@ spec:
                             - title
                           type: object
                         type: array
+                      skills:
+                        description: Skills lists the competency tags this module teaches.
+                        items:
+                          type: string
+                        type: array
                       type:
                         default: text
                         description: Type selects how this module is rendered and consumed.

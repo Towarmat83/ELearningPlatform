@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
+	"go.uber.org/zap"
 )
 
 // FetchCourseCheckPolicyContent fetches a Rego policy file from a GitLab repo
@@ -116,7 +116,7 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 			ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: page},
 		})
 		if err != nil {
-			slog.Warn("list merged MRs failed", "project", project, "err", err)
+			zap.L().Warn("list merged MRs failed", zap.String("project", project), zap.Error(err))
 
 			break
 		}
@@ -138,7 +138,7 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 func (f *GitLabFetcher) fetchOpenMRs(project string) []openMRInfo {
 	openMRs, err := f.listAllOpenMRs(project)
 	if err != nil {
-		slog.Warn("list open MRs failed", "project", project, "err", err)
+		zap.L().Warn("list open MRs failed", zap.String("project", project), zap.Error(err))
 
 		return nil
 	}
@@ -185,7 +185,7 @@ func (f *GitLabFetcher) fetchFiles(project, ref string, files []string) map[stri
 			Ref: &ref,
 		})
 		if err != nil {
-			slog.Warn("fetch file failed", "project", project, "path", filePath, "err", err)
+			zap.L().Warn("fetch file failed", zap.String("project", project), zap.String("path", filePath), zap.Error(err))
 
 			continue
 		}

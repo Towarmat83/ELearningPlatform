@@ -48,7 +48,9 @@ type pathDetail struct {
 	Slug        string   `json:"slug"`
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
-	Courses     []string `json:"courses"`
+	Kind        string   `json:"kind,omitempty"`
+	Courses     []string `json:"courses,omitempty"`
+	Skills      []string `json:"skills,omitempty"`
 }
 
 // courseStatus is a single course's completion state within a path.
@@ -63,8 +65,10 @@ type myPath struct {
 	Slug        string         `json:"slug"`
 	Title       string         `json:"title"`
 	Description string         `json:"description,omitempty"`
+	Kind        string         `json:"kind,omitempty"`
 	EnrolledAt  time.Time      `json:"enrolledAt"`
-	Courses     []courseStatus `json:"courses"`
+	Courses     []courseStatus `json:"courses,omitempty"`
+	Skills      []string       `json:"skills,omitempty"`
 }
 
 // enrolledUser represents a user enrolled in a learning path,
@@ -201,8 +205,10 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 			Slug:        detail.Slug,
 			Title:       detail.Title,
 			Description: detail.Description,
+			Kind:        detail.Kind,
 			EnrolledAt:  row.EnrolledAt,
 			Courses:     courses,
+			Skills:      detail.Skills,
 		})
 	}
 

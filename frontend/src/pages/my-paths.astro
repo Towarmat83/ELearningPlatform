@@ -95,12 +95,15 @@ import App from '../layouts/App.astro';
 
     function renderList(): string {
       return allPaths.map((p:any) => {
-        const total = p.courses?.length ?? 0;
-        const done  = (p.courses??[]).filter((c:any)=>c.status==='completed').length;
+        const isSkillPath = p.kind === 'skill';
+        const total = isSkillPath ? (p.skills?.length ?? 0) : (p.courses?.length ?? 0);
+        const done  = isSkillPath ? 0 : (p.courses??[]).filter((c:any)=>c.status==='completed').length;
         const pct   = total>0 ? Math.round(done/total*100) : 0;
         const allDone = pct===100;
         const col = allDone?'var(--good)':pct>0?'var(--blue)':'var(--ink-soft)';
-        const sub = `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
+        const sub = isSkillPath
+          ? `${total} compétence${total>1?'s':''}`
+          : `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
         const colors = PATH_COLORS[p.slug] ?? DEFAULT_COLOR;
         return `<div class="path-list-card" data-slug="${p.slug}" style="border-color:${colors.accent}40">
           <div class="path-list-banner" style="background:${colors.bg}">
@@ -151,11 +154,17 @@ import App from '../layouts/App.astro';
     }
 
     function renderDetail(p: any): string {
-      const courses: any[] = p.courses ?? [];
+      const isSkillPath = p.kind === 'skill';
+
+      // Skill paths: nodes are skill tags, all shown as "available"
+      const courses: any[] = isSkillPath
+        ? (p.skills ?? []).map((s: string) => ({ slug: s, status: 'available' }))
+        : (p.courses ?? []);
+
       const total = courses.length;
-      const done  = courses.filter((c:any)=>c.status==='completed').length;
+      const done  = isSkillPath ? 0 : courses.filter((c:any)=>c.status==='completed').length;
       const pct   = total>0 ? Math.round(done/total*100) : 0;
-      const allDone = done===total && total>0;
+      const allDone = !isSkillPath && done===total && total>0;
 
       // Horizontal snake: up to CPR nodes per row, then wrap
       const CPR   = 5;    // columns per row — snake wraps at node 6+
@@ -245,7 +254,7 @@ import App from '../layouts/App.astro';
           ${nameEls}
           ${badgeEl}`;
 
-        nodesSVG += isLocked
+        nodesSVG += (isLocked || isSkillPath)
           ? `<g>${inner}</g>`
           : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')" style="cursor:pointer">${inner}</a>`;
       });
@@ -267,11 +276,12 @@ import App from '../layouts/App.astro';
           <div class="detail-title">${p.title||p.slug}</div>
           ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
           <div class="detail-prog">
+            ${isSkillPath ? `<span>🎯 ${total} compétence${total>1?'s':''}</span>` : `
             <div class="progress-bar" style="flex:1">
               <div class="progress-bar-fill" style="width:${pct}%;background:${pBarCol}"></div>
             </div>
             <span class="detail-prog-pct" style="color:${pBarCol}">${pct}%</span>
-            <span>${done}/${total} cours</span>
+            <span>${done}/${total} cours</span>`}
           </div>
         </div>
         <div class="snake-wrap">${svgEl}</div>

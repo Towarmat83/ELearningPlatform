@@ -58,9 +58,7 @@ type stepState struct {
 
 // CheckStep validates that the project belongs to the requesting user, fetches
 // GitLab state once, then dispatches to the appropriate check.
-//
-//nolint:cyclop // dispatch switch over 7 check types; each case is a single delegating call
-func (f *GitLabFetcher) CheckStep(req StepRequest) (*StepResponse, error) {
+func (f *GitLabFetcher) CheckStep(req StepRequest) (*StepResponse, error) { //nolint:cyclop // dispatch switch over 7 check types; each case is a single delegating call
 	parts := strings.Split(req.Project, "/")
 	if parts[len(parts)-1] != req.Username {
 		return &StepResponse{

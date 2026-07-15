@@ -67,6 +67,22 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 		return cfg, errors.New("OIDC not fully configured (provider_url, clientId, clientSecret required)")
 	}
 
+	if cfg.InsecureSkipVerify {
+		// Forbid when no separate IssuerURL is set: the ProviderURL IS the public
+		// issuer, so a real certificate is expected and skipping TLS is wrong.
+		if cfg.IssuerURL == "" {
+			return cfg, errors.New(
+				"oidc_insecure_skip_verify cannot be used without oidc_issuer_url; " +
+					"supply a separate issuer URL (split-horizon setup) or disable TLS skip",
+			)
+		}
+
+		zap.L().Warn("OIDC TLS verification is disabled (oidc_insecure_skip_verify); "+
+			"this is only valid for internal/self-signed CAs in non-production environments",
+			zap.String("provider_url", cfg.ProviderURL),
+		)
+	}
+
 	return cfg, nil
 }
 
@@ -75,10 +91,13 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 // supports split-horizon setups (e.g. KinD) where internal DNS != public URL.
 func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
 	if cfg.InsecureSkipVerify {
+		zap.L().Warn("connecting to OIDC provider with TLS certificate verification disabled",
+			zap.String("provider_url", cfg.ProviderURL))
+
 		insecureClient := &http.Client{
 			Transport: &http.Transport{
 				//nolint:gosec // operator opt-in via oidc_insecure_skip_verify setting, for internal/self-signed CAs
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
 			},
 		}
 		ctx = gooidc.ClientContext(ctx, insecureClient)

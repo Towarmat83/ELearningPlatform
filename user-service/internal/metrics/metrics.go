@@ -17,41 +17,36 @@ const httpEndpointLabel = "endpoint"
 const httpMethodLabel = "method"
 
 // singletons registered once at init time; used by internal/handlers.
-//
-//nolint:gochecknoglobals // promauto collectors must be package-level
 var (
 	// HTTPRequestsTotal counts HTTP requests by method, endpoint and
 	// status.
-	HTTPRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	HTTPRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{ //nolint:gochecknoglobals // promauto collectors must be package-level
 		Name: "http_requests_total",
 		Help: "Total HTTP requests",
 	}, []string{httpMethodLabel, httpEndpointLabel, "status"})
 
 	// HTTPRequestDuration records HTTP request latency by method and
 	// endpoint.
-	HTTPRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	HTTPRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{ //nolint:gochecknoglobals // promauto collectors must be package-level
 		Name:    "http_request_duration_seconds",
 		Help:    "HTTP request duration in seconds",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0},
 	}, []string{httpMethodLabel, httpEndpointLabel})
 
 	// ActiveUsers is a gauge of currently registered users.
-	//nolint:promlinter // deployed metric name, see dashboards
-	ActiveUsers = promauto.NewGauge(prometheus.GaugeOpts{
+	ActiveUsers = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
 		Name: "elearning_active_users_total",
 		Help: "Total number of registered users",
 	})
 
 	// ActiveCourses is a gauge of currently published courses.
-	//nolint:promlinter // deployed metric name, see dashboards
-	ActiveCourses = promauto.NewGauge(prometheus.GaugeOpts{
+	ActiveCourses = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
 		Name: "elearning_active_courses_total",
 		Help: "Total number of published courses",
 	})
 
 	// EnrollmentsTotal is a gauge of current course enrollments.
-	//nolint:promlinter // deployed metric name, see dashboards
-	EnrollmentsTotal = promauto.NewGauge(prometheus.GaugeOpts{
+	EnrollmentsTotal = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
 		Name: "elearning_enrollments_total",
 		Help: "Total course enrollments",
 	})

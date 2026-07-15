@@ -96,9 +96,7 @@ func ScoreSingle(question Question, answer *string) QuestionResult {
 // tallyMultipleChoice counts how many of the selected answers are correct
 // (correctSelected) versus incorrect (falsePositives), and returns the set
 // of correct answer IDs for question.
-//
-//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
-func tallyMultipleChoice(question Question, answers []string) (correctIDs map[string]bool, correctSelected, falsePositives int) {
+func tallyMultipleChoice(question Question, answers []string) (correctIDs map[string]bool, correctSelected, falsePositives int) { //nolint:nonamedreturns // gocritic(unnamedResult) wants names here
 	correctIDs = make(map[string]bool)
 
 	for _, a := range question.Answers {

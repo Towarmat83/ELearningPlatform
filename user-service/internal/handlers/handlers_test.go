@@ -1147,6 +1147,62 @@ func TestGetSettings_WithData(t *testing.T) {
 	}
 }
 
+// TestGetSettings_SecretRedacted verifies that secret setting values are
+// replaced with "********" in the GET response.
+func TestGetSettings_SecretRedacted(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	pool.PushRows(nil,
+		[]any{"oidc_client_secret", "super-secret", nil},
+		[]any{"ldap_bind_password", "hunter2", nil},
+		[]any{"oidc_enabled", "true", nil},
+	)
+	r := newTestRouter(pool)
+
+	rec := htDo(t, r, "GET", "/api/admin/settings", "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+
+	var resp map[string]any
+
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	settings := htSliceField(t, resp, "settings")
+	for _, raw := range settings {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		key, _ := item["key"].(string)
+		val, _ := item["value"].(string)
+
+		if (key == "oidc_client_secret" || key == "ldap_bind_password") && val != settingRedactedValue {
+			t.Errorf("key %q: want redacted value, got %q", key, val)
+		}
+
+		if key == "oidc_enabled" && val != "true" {
+			t.Errorf("key %q: want plain value, got %q", key, val)
+		}
+	}
+}
+
+// TestUpdateSettings_InsecureSkipVerifyRejected verifies that
+// oidc_insecure_skip_verify cannot be set via the API.
+func TestUpdateSettings_InsecureSkipVerifyRejected(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	r := newTestRouter(pool)
+
+	rec := htDo(t, r, "PUT", "/api/admin/settings", `{"oidc_insecure_skip_verify":"true"}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400 (key not allowed), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // ── UpdateSettings ────────────────────────────────────────────────────────────
 
 // TestUpdateSettings_EmptyBody verifies update settings empty body behavior.
@@ -3960,6 +4016,58 @@ func TestLoadOIDCSettings_MissingClientID(t *testing.T) {
 	_, err := s.loadOIDCSettings(context.Background())
 	if err == nil {
 		t.Error("expected error for missing clientId")
+	}
+}
+
+// TestLoadOIDCSettings_InsecureSkipVerifyForbiddenWithoutIssuerURL verifies
+// that insecure_skip_verify is rejected when no oidc_issuer_url is set.
+func TestLoadOIDCSettings_InsecureSkipVerifyForbiddenWithoutIssuerURL(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	pool.PushRow(nil, "true")                    // oidc_enabled
+	pool.PushRow(nil, "https://sso.example.com") // oidc_provider_url
+	pool.PushRow(errors.New("no row"))           // oidc_issuer_url → empty (no split-horizon)
+	pool.PushRow(nil, "my-client")               // oidc_client_id
+	pool.PushRow(nil, "my-secret")               // oidc_client_secret
+	pool.PushRow(errors.New("no row"))           // oidc_group_claim → default
+	pool.PushRow(errors.New("no row"))           // oidc_redirect_base → default
+	pool.PushRow(errors.New("no row"))           // oidc_browser_base_url → empty
+	pool.PushRow(nil, "true")                    // oidc_insecure_skip_verify → true
+	pool.PushRow(errors.New("no row"))           // oidc_scopes → default
+	s := &State{Pool: pool, Config: &config.Config{OAuthRedirectBase: "http://localhost:3000"}}
+
+	_, err := s.loadOIDCSettings(context.Background())
+	if err == nil {
+		t.Error("expected error: insecure_skip_verify without issuer_url must be rejected")
+	}
+}
+
+// TestLoadOIDCSettings_InsecureSkipVerifyAllowedWithIssuerURL verifies that
+// insecure_skip_verify is accepted when oidc_issuer_url is set (split-horizon).
+func TestLoadOIDCSettings_InsecureSkipVerifyAllowedWithIssuerURL(t *testing.T) {
+	t.Parallel()
+
+	pool := &fake.Pool{}
+	pool.PushRow(nil, "true")                                    // oidc_enabled
+	pool.PushRow(nil, "https://keycloak.internal/realms/master") // oidc_provider_url
+	pool.PushRow(nil, "https://sso.example.com/realms/master")   // oidc_issuer_url (split-horizon)
+	pool.PushRow(nil, "my-client")                               // oidc_client_id
+	pool.PushRow(nil, "my-secret")                               // oidc_client_secret
+	pool.PushRow(errors.New("no row"))                           // oidc_group_claim → default
+	pool.PushRow(errors.New("no row"))                           // oidc_redirect_base → default
+	pool.PushRow(errors.New("no row"))                           // oidc_browser_base_url → empty
+	pool.PushRow(nil, "true")                                    // oidc_insecure_skip_verify → true
+	pool.PushRow(errors.New("no row"))                           // oidc_scopes → default
+	s := &State{Pool: pool, Config: &config.Config{OAuthRedirectBase: "http://localhost:3000"}}
+
+	cfg, err := s.loadOIDCSettings(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error for split-horizon setup: %v", err)
+	}
+
+	if !cfg.InsecureSkipVerify {
+		t.Error("expected InsecureSkipVerify=true for split-horizon internal CA")
 	}
 }
 

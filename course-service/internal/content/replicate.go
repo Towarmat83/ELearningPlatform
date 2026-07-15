@@ -93,9 +93,7 @@ func downloadFile(ctx context.Context, rawURL, dest string) error {
 		return fmt.Errorf("create file: %w", err)
 	}
 
-	//nolint:errcheck // closing the file post-write cannot recover from
-	// an error here; write success is already validated below.
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // closing the file post-write cannot recover from an error here; write success is already validated below
 
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {

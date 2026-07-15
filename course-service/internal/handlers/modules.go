@@ -112,6 +112,7 @@ type moduleResponse struct {
 	CheckType     string                   `json:"checkType,omitempty"`
 	CheckParams   map[string]any           `json:"checkParams,omitempty"`
 	Steps         []content.CheckStep      `json:"steps,omitempty"`
+	Skills        []string                 `json:"skills,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`
@@ -555,6 +556,7 @@ func buildModuleListEntry(mod content.Module, idx int, isAdmin, locked bool, vie
 		MaxScore:      prog.MaxScore,
 		Passed:        prog.Passed,
 		Attempts:      prog.Attempts,
+		Skills:        mod.Skills,
 	}
 	if isAdmin {
 		resp.Src = mod.Src
@@ -657,6 +659,7 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 		Type:   mod.Type,
 		Hidden: mod.Hidden,
 		Inline: mod.Inline,
+		Skills: mod.Skills,
 	}
 	if mod.Type == moduleTypeQuiz && mod.HasQuestions() {
 		resp.QuestionCount = len(mod.Questions)

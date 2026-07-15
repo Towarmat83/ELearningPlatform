@@ -237,6 +237,9 @@ type Module struct {
 	// QuizRef references an external quiz definition instead of inline Questions.
 	// +kubebuilder:validation:Optional
 	QuizRef string `json:"quizRef,omitempty"`
+	// Skills lists the competency tags this module teaches (free-form, e.g. "docker", "ci-cd").
+	// +kubebuilder:validation:Optional
+	Skills []string `json:"skills,omitempty"`
 }
 
 // CourseSpec defines the desired state of a Course.

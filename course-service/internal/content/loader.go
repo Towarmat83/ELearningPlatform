@@ -220,9 +220,7 @@ func FetchModuleIndex(ctx context.Context, gc *GitCache, parent Module, token st
 
 // extractFrontmatter splits data into an optional YAML front matter title
 // and the remaining markdown body.
-//
-//nolint:nonamedreturns // gocritic(unnamedResult) wants names here.
-func extractFrontmatter(data []byte) (title, body string) {
+func extractFrontmatter(data []byte) (title, body string) { //nolint:nonamedreturns // gocritic(unnamedResult) wants names here
 	data = bytes.TrimSpace(data)
 	if !bytes.HasPrefix(data, []byte("---")) {
 		return "", string(data)

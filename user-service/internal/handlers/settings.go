@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/elearning/user-service/internal/db"
 )
@@ -17,40 +18,69 @@ const (
 	settingKeyPasswordRequireNumber    = "password_require_number"
 	settingKeyOIDCEnabled              = "oidc_enabled"
 	settingKeyLDAPEnabled              = "ldap_enabled"
+	settingKeyOIDCClientSecret         = "oidc_client_secret"
+	settingKeyLDAPBindPassword         = "ldap_bind_password"
+	settingRedactedValue               = "********"
 )
 
+// keySet is a concurrency-safe string set. A RWMutex guards the underlying
+// map so handler goroutines can read concurrently without data races.
+type keySet struct {
+	mu   sync.RWMutex
+	keys map[string]struct{}
+}
+
+// contains reports whether key is in the set.
+func (s *keySet) contains(key string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.keys[key]
+
+	return ok
+}
+
 // allowedSettingKeys is the set of platform setting keys clients may write.
-//
-//nolint:gochecknoglobals // static allow-list of settings keys, read-only
-var allowedSettingKeys = map[string]bool{
-	"gitlab_url":                       true,
-	settingKeyRegistrationEnabled:      true,
-	"registration_email_whitelist":     true,
-	settingKeyPasswordMinLength:        true,
-	settingKeyPasswordRequireUppercase: true,
-	settingKeyPasswordRequireNumber:    true,
-	"profile_allow_username_change":    true,
-	settingKeySSOLocalLoginEnabled:     true,
-	// OIDC
-	settingKeyOIDCEnabled:       true,
-	"oidc_provider_url":         true,
-	"oidc_issuer_url":           true,
-	"oidc_redirect_base":        true,
-	"oidc_browser_base_url":     true,
-	"oidc_client_id":            true,
-	"oidc_client_secret":        true,
-	"oidc_scopes":               true,
-	"oidc_group_claim":          true,
-	"oidc_insecure_skip_verify": true,
-	// LDAP
-	settingKeyLDAPEnabled: true,
-	"ldap_server_url":     true,
-	"ldap_bind_dn":        true,
-	"ldap_bind_password":  true,
-	"ldap_user_base_dn":   true,
-	"ldap_user_filter":    true,
-	"ldap_group_base_dn":  true,
-	"ldap_group_filter":   true,
+var allowedSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide allow-list for writable settings, guarded by keySet.mu
+	keys: map[string]struct{}{
+		"gitlab_url":                       {},
+		settingKeyRegistrationEnabled:      {},
+		"registration_email_whitelist":     {},
+		settingKeyPasswordMinLength:        {},
+		settingKeyPasswordRequireUppercase: {},
+		settingKeyPasswordRequireNumber:    {},
+		"profile_allow_username_change":    {},
+		settingKeySSOLocalLoginEnabled:     {},
+		// OIDC — oidc_insecure_skip_verify is intentionally absent: it must not be
+		// toggled at runtime via the API (deploy-time env var only).
+		settingKeyOIDCEnabled:      {},
+		"oidc_provider_url":        {},
+		"oidc_issuer_url":          {},
+		"oidc_redirect_base":       {},
+		"oidc_browser_base_url":    {},
+		"oidc_client_id":           {},
+		settingKeyOIDCClientSecret: {},
+		"oidc_scopes":              {},
+		"oidc_group_claim":         {},
+		// LDAP
+		settingKeyLDAPEnabled:      {},
+		"ldap_server_url":          {},
+		"ldap_bind_dn":             {},
+		settingKeyLDAPBindPassword: {},
+		"ldap_user_base_dn":        {},
+		"ldap_user_filter":         {},
+		"ldap_group_base_dn":       {},
+		"ldap_group_filter":        {},
+	},
+}
+
+// secretSettingKeys holds setting keys whose values must be redacted in API
+// responses to avoid leaking credentials stored in platform_settings.
+var secretSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide redaction set, guarded by keySet.mu
+	keys: map[string]struct{}{
+		settingKeyOIDCClientSecret: {},
+		settingKeyLDAPBindPassword: {},
+	},
 }
 
 // ReadSetting reads a platform setting value by key, returning fallback when
@@ -122,6 +152,10 @@ func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 
+		if secretSettingKeys.contains(current.Key) && current.Value != "" {
+			current.Value = settingRedactedValue
+		}
+
 		settings = append(settings, current)
 	}
 
@@ -155,7 +189,7 @@ func (s *State) UpdateSettings(writer http.ResponseWriter, request *http.Request
 	}
 
 	for key, value := range body {
-		if !allowedSettingKeys[key] {
+		if !allowedSettingKeys.contains(key) {
 			s.Error(writer, http.StatusBadRequest, "Unknown setting key: '"+key+"'")
 
 			return

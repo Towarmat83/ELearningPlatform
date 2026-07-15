@@ -79,9 +79,12 @@ func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 	router.Get("/api/auth/oauth/{provider}/authorize", state.OAuthAuthorize)
 	router.Get("/api/auth/oidc/authorize", state.OIDCAuthorize)
 
-	// Rate-limited auth endpoints — configurable via AUTH_RATE_LIMIT_REQUESTS / AUTH_RATE_LIMIT_WINDOW_SECONDS.
+	// Rate-limited auth endpoints — set AUTH_RATE_LIMIT_REQUESTS=0 to disable.
 	router.Group(func(group chi.Router) {
-		group.Use(httprate.LimitBy(cfg.AuthRateLimitRequests, time.Duration(cfg.AuthRateLimitWindowSeconds)*time.Second, remoteIP))
+		if cfg.AuthRateLimitRequests > 0 {
+			group.Use(httprate.LimitBy(cfg.AuthRateLimitRequests, time.Duration(cfg.AuthRateLimitWindowSeconds)*time.Second, remoteIP))
+		}
+
 		group.Post("/api/auth/register", state.Register)
 		group.Post("/api/auth/login", state.Login)
 		group.Post("/api/auth/oauth/callback", state.OAuthCallback)

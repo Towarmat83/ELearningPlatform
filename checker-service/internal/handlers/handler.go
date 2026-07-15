@@ -49,7 +49,11 @@ func (h *Handler) BuildRouter() *chi.Mux {
 	router.Use(chiMiddleware.Logger)
 	router.Use(chiMiddleware.Recoverer)
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
-	router.Use(httprate.LimitBy(h.config.RateLimitRequests, time.Duration(h.config.RateLimitWindowSeconds)*time.Second, remoteIP))
+
+	if h.config.RateLimitRequests > 0 {
+		router.Use(httprate.LimitBy(h.config.RateLimitRequests, time.Duration(h.config.RateLimitWindowSeconds)*time.Second, remoteIP))
+	}
+
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins: h.config.CORSOrigins,
 		AllowedMethods: []string{"GET", "POST", "OPTIONS"},

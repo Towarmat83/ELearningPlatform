@@ -55,22 +55,22 @@ func Load() *Config {
 		cfg.GitLabBaseURL = v
 	}
 
-	cfg.RateLimitRequests = positiveIntFromEnv("RATE_LIMIT_REQUESTS", cfg.RateLimitRequests)
-	cfg.RateLimitWindowSeconds = positiveIntFromEnv("RATE_LIMIT_WINDOW_SECONDS", cfg.RateLimitWindowSeconds)
+	cfg.RateLimitRequests = rateLimitFromEnv("RATE_LIMIT_REQUESTS", cfg.RateLimitRequests)
+	cfg.RateLimitWindowSeconds = rateLimitFromEnv("RATE_LIMIT_WINDOW_SECONDS", cfg.RateLimitWindowSeconds)
 
 	return cfg
 }
 
-// positiveIntFromEnv returns the parsed value of the environment variable key
-// when it is a positive integer, or current otherwise.
-func positiveIntFromEnv(key string, current int) int {
+// rateLimitFromEnv parses the env var as a non-negative integer. 0 means
+// disabled; negatives and non-integers fall back to current.
+func rateLimitFromEnv(key string, current int) int {
 	v := os.Getenv(key)
 	if v == "" {
 		return current
 	}
 
 	n, err := strconv.Atoi(v)
-	if err != nil || n <= 0 {
+	if err != nil || n < 0 {
 		return current
 	}
 

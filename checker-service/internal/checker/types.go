@@ -2,11 +2,17 @@ package checker
 
 // EvaluateRequest is sent by course-service to POST /evaluate.
 // The project template has already been resolved ({{ .Username }} replaced).
+// Raw Rego text is not accepted: the policy is fetched directly from the
+// course git repository so an attacker who can reach this endpoint cannot
+// inject arbitrary Rego.
 type EvaluateRequest struct {
-	Username string   `json:"username"`
-	Project  string   `json:"project"`
-	Files    []string `json:"files"`
-	Policy   string   `json:"policy"`
+	Username    string   `json:"username"`
+	Project     string   `json:"project"`
+	Files       []string `json:"files"`
+	PolicySrc   string   `json:"policySrc"`             // git repository URL
+	PolicyRef   string   `json:"policyRef"`             // branch / tag / commit
+	PolicyPath  string   `json:"policyPath"`            // relative path to the .rego file
+	PolicyToken *string  `json:"policyToken,omitempty"` // optional git authentication token
 }
 
 // EvaluateResponse is returned to course-service.
@@ -15,11 +21,11 @@ type EvaluateResponse struct {
 	Violations []string `json:"violations"`
 }
 
-// gitLabState is the JSON input passed to OPA. Field names are snake_case
+// GitLabState is the JSON input passed to OPA. Field names are snake_case
 // and documented in docs/interactive-labs.md as the policy input schema;
 // course authors write Rego policies against these exact names, so the
 // wire format cannot be changed without breaking existing course policies.
-type gitLabState struct {
+type GitLabState struct {
 	Project       *projectInfo      `json:"project"`
 	MergedMRCount int               `json:"mergedMrCount"`
 	OpenMRs       []openMRInfo      `json:"openMrs"`

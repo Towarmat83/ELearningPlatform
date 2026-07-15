@@ -48,6 +48,17 @@ const (
 	oauthMaxUsernameLen = 32
 )
 
+// oauthStateSecret returns the secret used to sign OAuth CSRF state tokens.
+// Falls back to JWTSecret when OAuthStateSecret is not explicitly set, so
+// existing deployments and tests that only configure JWTSecret keep working.
+func (s *State) oauthStateSecret() string {
+	if s.Config.OAuthStateSecret != "" {
+		return s.Config.OAuthStateSecret
+	}
+
+	return s.Config.JWTSecret
+}
+
 // ── OAuth CSRF state JWT ──────────────────────────────────────────────────────
 
 // oauthStateClaims is the JWT payload carried in the OAuth "state"
@@ -139,7 +150,7 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	stateToken, err := makeOAuthState(providerID, s.Config.JWTSecret)
+	stateToken, err := makeOAuthState(providerID, s.oauthStateSecret())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "State token error")
 
@@ -210,7 +221,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 
-	providerID, ok := decodeOAuthState(body.State, s.Config.JWTSecret)
+	providerID, ok := decodeOAuthState(body.State, s.oauthStateSecret())
 	if !ok {
 		s.Error(writer, http.StatusUnauthorized, "Invalid or expired OAuth state")
 

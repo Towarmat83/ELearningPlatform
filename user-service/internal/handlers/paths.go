@@ -93,20 +93,27 @@ type enrolledUser struct {
 }
 
 // buildCourseStatuses derives each course's completion status in an
-// ordered path, given the set of courses the user has completed. Status
-// is "completed" if done, "available" if the previous course is done
-// (or it is the first course), and "locked" otherwise.
+// ordered path, given the set of courses the user has completed.
+//
+// Rules:
+//   - "completed" if the user finished the course (cross-path counts).
+//   - "available" for the first non-completed course in an unbroken chain.
+//   - "locked" otherwise. A cross-path completion mid-path does not
+//     unlock the next course if preceding courses are not yet done.
 func buildCourseStatuses(courses []string, completed map[string]bool) []courseStatus {
 	out := make([]courseStatus, len(courses))
-	for idx, slug := range courses {
-		status := pathStatusLocked
-		if completed[slug] {
-			status = pathStatusCompleted
-		} else if idx == 0 || completed[courses[idx-1]] {
-			status = pathStatusAvailable
-		}
+	sequential := true // true while no non-completed course has been seen yet
 
-		out[idx] = courseStatus{Slug: slug, Status: status}
+	for idx, slug := range courses {
+		switch {
+		case completed[slug]:
+			out[idx] = courseStatus{Slug: slug, Status: pathStatusCompleted}
+		case sequential:
+			out[idx] = courseStatus{Slug: slug, Status: pathStatusAvailable}
+			sequential = false
+		default:
+			out[idx] = courseStatus{Slug: slug, Status: pathStatusLocked}
+		}
 	}
 
 	return out

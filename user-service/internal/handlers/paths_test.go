@@ -12,6 +12,78 @@ import (
 	"github.com/elearning/user-service/internal/config"
 )
 
+// ── buildCourseStatuses ───────────────────────────────────────────────────────
+
+// TestBuildCourseStatuses_Sequential verifies standard linear progression.
+func TestBuildCourseStatuses_Sequential(t *testing.T) {
+	t.Parallel()
+
+	courses := []string{"a", "b", "c", "d"}
+	completed := map[string]bool{"a": true, "b": true}
+
+	out := buildCourseStatuses(courses, completed)
+
+	want := []string{pathStatusCompleted, pathStatusCompleted, pathStatusAvailable, pathStatusLocked}
+	for i, cs := range out {
+		if cs.Status != want[i] {
+			t.Errorf("course[%d] %q: want %q, got %q", i, courses[i], want[i], cs.Status)
+		}
+	}
+}
+
+// TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock verifies that a course
+// completed in another path does not unlock the next course when preceding
+// courses in this path are not completed.
+func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
+	t.Parallel()
+
+	// Simulates security path where "secrets-management" (index 6) was
+	// completed via DevOps path, but "git-advanced" (index 5) is not done.
+	courses := []string{"linux-intro", "networking", "cyber", "net-ess", "python", "git-advanced", "secrets-management", "container-security"}
+	completed := map[string]bool{"secrets-management": true}
+
+	out := buildCourseStatuses(courses, completed)
+
+	if out[0].Status != pathStatusAvailable {
+		t.Errorf("linux-intro: want available, got %q", out[0].Status)
+	}
+
+	for i := 1; i <= 5; i++ {
+		if out[i].Status != pathStatusLocked {
+			t.Errorf("course[%d]: want locked, got %q", i, out[i].Status)
+		}
+	}
+
+	if out[6].Status != pathStatusCompleted {
+		t.Errorf("secrets-management: want completed, got %q", out[6].Status)
+	}
+
+	// container-security must remain locked — the chain was broken before it
+	if out[7].Status != pathStatusLocked {
+		t.Errorf("container-security: want locked, got %q", out[7].Status)
+	}
+}
+
+// TestBuildCourseStatuses_CrossPathCompletionUnlocksWhenChainComplete verifies
+// that a cross-path completed course DOES unlock the next course when all
+// preceding courses in this path are also completed.
+func TestBuildCourseStatuses_CrossPathCompletionUnlocksWhenChainComplete(t *testing.T) {
+	t.Parallel()
+
+	courses := []string{"a", "b", "shared", "c"}
+	completed := map[string]bool{"a": true, "b": true, "shared": true}
+
+	out := buildCourseStatuses(courses, completed)
+
+	if out[2].Status != pathStatusCompleted {
+		t.Errorf("shared: want completed, got %q", out[2].Status)
+	}
+
+	if out[3].Status != pathStatusAvailable {
+		t.Errorf("c: want available, got %q", out[3].Status)
+	}
+}
+
 // ── MyPaths ───────────────────────────────────────────────────────────────────
 
 // TestMyPaths_DBError verifies my paths DB error behavior.

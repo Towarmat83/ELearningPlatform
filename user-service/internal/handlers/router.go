@@ -30,12 +30,6 @@ func remoteIP(r *http.Request) (string, error) {
 // corsMaxAgeSeconds bounds CORS preflight cache duration, in seconds.
 const corsMaxAgeSeconds = 300
 
-// authRateLimit is the max auth requests per IP per window.
-const authRateLimit = 10
-
-// authRateWindow is the time window for the auth rate limiter.
-const authRateWindow = time.Minute
-
 // BuildRouter assembles the HTTP router, wiring public, authenticated, admin,
 // pattern, and internal routes with their respective middleware.
 func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool) *chi.Mux {
@@ -55,7 +49,7 @@ func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsHandler(cfg).Handler)
 
-	registerPublicRoutes(router, state)
+	registerPublicRoutes(router, state, cfg)
 	registerAuthenticatedRoutes(router, state, authMW)
 	registerAdminRoutes(router, state, adminMW)
 	registerPatternRoutes(router, state, authMW, adminMW)
@@ -76,7 +70,7 @@ func corsHandler(cfg *config.Config) *cors.Cors {
 }
 
 // registerPublicRoutes wires routes that require no authentication.
-func registerPublicRoutes(router chi.Router, state *State) {
+func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 	router.Get("/health", state.Health)
 	router.Get("/metrics", metrics.Handler())
 
@@ -85,9 +79,9 @@ func registerPublicRoutes(router chi.Router, state *State) {
 	router.Get("/api/auth/oauth/{provider}/authorize", state.OAuthAuthorize)
 	router.Get("/api/auth/oidc/authorize", state.OIDCAuthorize)
 
-	// Rate-limited auth endpoints — 10 requests per IP per minute.
+	// Rate-limited auth endpoints — configurable via AUTH_RATE_LIMIT_REQUESTS / AUTH_RATE_LIMIT_WINDOW_SECONDS.
 	router.Group(func(group chi.Router) {
-		group.Use(httprate.LimitBy(authRateLimit, authRateWindow, remoteIP))
+		group.Use(httprate.LimitBy(cfg.AuthRateLimitRequests, time.Duration(cfg.AuthRateLimitWindowSeconds)*time.Second, remoteIP))
 		group.Post("/api/auth/register", state.Register)
 		group.Post("/api/auth/login", state.Login)
 		group.Post("/api/auth/oauth/callback", state.OAuthCallback)

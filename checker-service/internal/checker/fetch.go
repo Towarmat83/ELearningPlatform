@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,12 @@ const gitOAuth2Username = "oauth2"
 // ref is the branch/tag, filePath is the relative path to the .rego file,
 // and token is the optional OAuth2 access token.
 func FetchCourseCheckPolicyContent(ctx context.Context, src, ref, filePath, token string) (string, error) {
+	// Reject non-HTTP(S) schemes to prevent SSRF via file://, gopher://, etc.
+	parsed, err := url.Parse(src)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("invalid policy source URL: %q", src)
+	}
+
 	// Build GitLab raw file URL: strip .git suffix, append /-/raw/ref/path
 	base := strings.TrimSuffix(strings.TrimRight(src, "/"), ".git")
 	rawURL := base + "/-/raw/" + ref + "/" + strings.TrimLeft(filePath, "/")

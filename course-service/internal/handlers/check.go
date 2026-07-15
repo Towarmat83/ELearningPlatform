@@ -33,10 +33,10 @@ type evaluateRequest struct {
 	Username    string   `json:"username"`
 	Project     string   `json:"project"`
 	Files       []string `json:"files"`
-	PolicySrc   string   `json:"policySrc"`   // git repository URL
-	PolicyRef   string   `json:"policyRef"`   // branch / tag / commit
-	PolicyPath  string   `json:"policyPath"`  // relative path to the .rego file
-	PolicyToken string   `json:"policyToken"` // optional git authentication token
+	PolicySrc   string   `json:"policySrc"`             // git repository URL
+	PolicyRef   string   `json:"policyRef"`             // branch / tag / commit
+	PolicyPath  string   `json:"policyPath"`            // relative path to the .rego file
+	PolicyToken *string  `json:"policyToken,omitempty"` // optional git authentication token
 }
 
 // CheckResponse mirrors checker.EvaluateResponse.
@@ -86,6 +86,11 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 	// Resolve username template in project path
 	project := strings.ReplaceAll(spec.Project, "{{ .Username }}", username)
 
+	var policyToken *string
+	if token != "" {
+		policyToken = &token
+	}
+
 	result, success := s.callChecker(writer, req, evaluateRequest{
 		Username:    username,
 		Project:     project,
@@ -93,7 +98,7 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 		PolicySrc:   mod.Src,
 		PolicyRef:   mod.Ref,
 		PolicyPath:  path.Join(path.Dir(mod.Path), spec.Policy),
-		PolicyToken: token,
+		PolicyToken: policyToken,
 	})
 	if !success {
 		return

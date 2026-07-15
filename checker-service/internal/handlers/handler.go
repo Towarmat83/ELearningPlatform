@@ -94,7 +94,7 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 
 	req, valid := decodeEvaluateRequest(resp, httpReq)
 	if !valid {
-		return
+		return // error response and log written by callee
 	}
 
 	if h.config.GitLabToken == "" {
@@ -112,12 +112,12 @@ func (h *Handler) Evaluate(resp http.ResponseWriter, httpReq *http.Request) {
 
 	policy, valid := h.fetchCourseCheckPolicy(resp, httpReq, req)
 	if !valid {
-		return
+		return // error response and log written by callee
 	}
 
 	state, valid := h.fetchStudentGitLabProjectState(resp, req)
 	if !valid {
-		return
+		return // error response and log written by callee
 	}
 
 	result, err := checker.Evaluate(httpReq.Context(), policy, state)

@@ -120,6 +120,7 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		IsPublic:      spec.Public,
 		Prerequisites: prerequisites,
 		Modules:       modules,
+		Skills:        aggregateSkills(modules),
 		Source:        sourceK8s(slug),
 	}
 }
@@ -147,6 +148,7 @@ func moduleFromCR(index int, crModule coursev1.Module) Module {
 		CheckType:              crModule.CheckType,
 		CheckParams:            rawExtensionToMap(crModule.CheckParams),
 		Steps:                  stepsFromCR(crModule.Steps),
+		Skills:                 crModule.Skills,
 	}
 	if mod.Name == "" {
 		mod.Name = fmt.Sprintf("module-%d", index+1)
@@ -360,11 +362,25 @@ func pathFromCR(pathCR *coursev1.Path) *Path {
 		}
 	}
 
+	skills := make([]string, 0, len(pathCR.Spec.Skills))
+	for _, skill := range pathCR.Spec.Skills {
+		if skill != "" {
+			skills = append(skills, skill)
+		}
+	}
+
+	kind := pathCR.Spec.Kind
+	if kind == "" {
+		kind = "course"
+	}
+
 	return &Path{
 		Slug:        slug,
 		Title:       title,
 		Description: pathCR.Spec.Description,
+		Kind:        kind,
 		Courses:     courses,
+		Skills:      skills,
 		Source:      sourceK8s(slug),
 	}
 }
@@ -461,4 +477,28 @@ func watchCRD(
 	}()
 
 	return nil
+}
+
+// aggregateSkills returns a deduplicated list of all skill tags declared
+// across the given modules.
+func aggregateSkills(modules []Module) []string {
+	seen := make(map[string]bool)
+
+	for _, m := range modules {
+		for _, s := range m.Skills {
+			seen[s] = true
+		}
+	}
+
+	if len(seen) == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, len(seen))
+
+	for s := range seen {
+		out = append(out, s)
+	}
+
+	return out
 }

@@ -22,7 +22,7 @@ jwtExistingSecret: ""
 jwtExistingSecretKey: "JWT_SECRET"
 
 # Shared service-to-service secret — sent as X-Internal-Secret by course-service
-# when calling user-service /internal/* routes. Same three modes as jwtSecret.
+# when calling user-service /internal/* and checker-service /evaluate.
 internalServiceSecret: "change-me-internal-secret"
 internalServiceExistingSecret: ""
 internalServiceExistingSecretKey: "INTERNAL_SERVICE_SECRET"

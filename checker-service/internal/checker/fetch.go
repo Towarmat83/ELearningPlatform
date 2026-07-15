@@ -1,12 +1,40 @@
 package checker
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
+	"go.uber.org/zap"
 )
+
+// FetchCourseCheckPolicyContent fetches a Rego policy file from a GitLab repo
+// using the GitLab SDK. src is the git clone URL, ref is the branch/tag,
+// filePath is the relative path to the .rego file, and token is the OAuth2
+// access token. The context is accepted for API compatibility but the SDK
+// handles its own request lifecycle.
+func FetchCourseCheckPolicyContent(_ context.Context, src, ref, filePath, token string) (string, error) {
+	parsed, err := url.Parse(src)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("invalid policy source URL: %q", src)
+	}
+
+	baseURL := parsed.Scheme + "://" + parsed.Host
+
+	fetcher, err := NewFetcher(token, baseURL)
+	if err != nil {
+		return "", fmt.Errorf("create gitlab client: %w", err)
+	}
+
+	// Strip scheme+host prefix and optional .git suffix to obtain the project path.
+	projectPath := strings.TrimSuffix(strings.TrimPrefix(src, baseURL+"/"), ".git")
+
+	return fetcher.FetchPolicy(projectPath, ref, filePath)
+}
 
 // GitLabFetcher fetches project, merge request, and file state from GitLab
 // for policy evaluation.
@@ -27,8 +55,8 @@ func NewFetcher(token, baseURL string) (*GitLabFetcher, error) {
 
 // Fetch gathers project info, merge request state, and file contents for the
 // given project from GitLab.
-func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, error) {
-	state := &gitLabState{Files: make(map[string]string)}
+func (f *GitLabFetcher) Fetch(project string, files []string) (*GitLabState, error) {
+	state := &GitLabState{Files: make(map[string]string)}
 
 	proj, _, err := f.client.Projects.GetProject(project, &gitlab.GetProjectOptions{})
 	if err != nil {
@@ -56,6 +84,25 @@ func (f *GitLabFetcher) Fetch(project string, files []string) (*gitLabState, err
 	return state, nil
 }
 
+// FetchPolicy retrieves a Rego policy file from the given GitLab project at
+// the given ref using the SDK, avoiding any direct HTTP calls to user-supplied
+// URLs.
+func (f *GitLabFetcher) FetchPolicy(project, ref, filePath string) (string, error) {
+	file, _, err := f.client.RepositoryFiles.GetFile(project, filePath, &gitlab.GetFileOptions{
+		Ref: &ref,
+	})
+	if err != nil {
+		return "", fmt.Errorf("fetch policy %q at ref %q: %w", filePath, ref, err)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(file.Content)
+	if err != nil {
+		return "", fmt.Errorf("decode policy content: %w", err)
+	}
+
+	return string(decoded), nil
+}
+
 // countMergedMRs returns the total number of merged merge requests for the
 // project, paginating to ensure an accurate count.
 func (f *GitLabFetcher) countMergedMRs(project string) int {
@@ -69,6 +116,8 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 			ListOptions: gitlab.ListOptions{PerPage: gitLabPageSize, Page: page},
 		})
 		if err != nil {
+			zap.L().Warn("list merged MRs failed", zap.String("project", project), zap.Error(err))
+
 			break
 		}
 
@@ -89,6 +138,8 @@ func (f *GitLabFetcher) countMergedMRs(project string) int {
 func (f *GitLabFetcher) fetchOpenMRs(project string) []openMRInfo {
 	openMRs, err := f.listAllOpenMRs(project)
 	if err != nil {
+		zap.L().Warn("list open MRs failed", zap.String("project", project), zap.Error(err))
+
 		return nil
 	}
 
@@ -134,6 +185,8 @@ func (f *GitLabFetcher) fetchFiles(project, ref string, files []string) map[stri
 			Ref: &ref,
 		})
 		if err != nil {
+			zap.L().Warn("fetch file failed", zap.String("project", project), zap.String("path", filePath), zap.Error(err))
+
 			continue
 		}
 

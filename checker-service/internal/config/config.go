@@ -16,6 +16,18 @@ const defaultRateLimitRequests = 20
 // defaultRateLimitWindowSeconds is the default rate-limit window in seconds.
 const defaultRateLimitWindowSeconds = 60
 
+// defaultInternalSecret is the fallback service-to-service shared secret.
+const defaultInternalSecret = "change-me-internal-secret"
+
+// defaultFrontendURL is the default local frontend origin for CORS.
+const defaultFrontendURL = "http://localhost:3000"
+
+// defaultViteDevURL is the Vite development server origin for CORS.
+const defaultViteDevURL = "http://localhost:5173"
+
+// defaultGitLabBaseURL is the default GitLab instance base URL.
+const defaultGitLabBaseURL = "http://gitlab.local:8880"
+
 // Config holds checker-service runtime configuration.
 type Config struct {
 	Port                   int
@@ -24,16 +36,18 @@ type Config struct {
 	GitLabBaseURL          string
 	RateLimitRequests      int
 	RateLimitWindowSeconds int
+	InternalSecret         string
 }
 
 // Load builds a Config from environment variables, falling back to defaults.
 func Load() *Config {
 	cfg := &Config{
 		Port:                   defaultPort,
-		CORSOrigins:            []string{"http://localhost:3000", "http://localhost:5173"},
-		GitLabBaseURL:          "http://gitlab.local:8880",
+		CORSOrigins:            []string{defaultFrontendURL, defaultViteDevURL},
+		GitLabBaseURL:          defaultGitLabBaseURL,
 		RateLimitRequests:      defaultRateLimitRequests,
 		RateLimitWindowSeconds: defaultRateLimitWindowSeconds,
+		InternalSecret:         defaultInternalSecret,
 	}
 
 	if v := os.Getenv("PORT"); v != "" {
@@ -57,6 +71,10 @@ func Load() *Config {
 
 	cfg.RateLimitRequests = rateLimitFromEnv("RATE_LIMIT_REQUESTS", cfg.RateLimitRequests)
 	cfg.RateLimitWindowSeconds = rateLimitFromEnv("RATE_LIMIT_WINDOW_SECONDS", cfg.RateLimitWindowSeconds)
+
+	if v := os.Getenv("INTERNAL_SERVICE_SECRET"); v != "" {
+		cfg.InternalSecret = v
+	}
 
 	return cfg
 }

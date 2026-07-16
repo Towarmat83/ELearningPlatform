@@ -99,9 +99,9 @@ func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]bo
 }
 
 // skillIsCompleted returns true when all assessable (quiz/lab) modules in the
-// list have been passed by the user. Skills with no assessable modules are
-// never considered completed.
-func skillIsCompleted(modules []skillModuleEntry, passed map[string]bool) bool {
+// list have been completed by the user. Skills with no assessable modules are
+// never considered completed. Quizzes: passed in module_progress; labs: viewed.
+func skillIsCompleted(modules []skillModuleEntry, passed, viewed map[string]bool) bool {
 	hasAssessable := false
 
 	for _, mod := range modules {
@@ -111,8 +111,16 @@ func skillIsCompleted(modules []skillModuleEntry, passed map[string]bool) bool {
 
 		hasAssessable = true
 
-		if !passed[mod.CourseSlug+"/"+mod.Slug] {
-			return false
+		key := mod.CourseSlug + "/" + mod.Slug
+
+		if mod.Type == skillModuleTypeQuiz {
+			if !passed[key] {
+				return false
+			}
+		} else {
+			if !viewed[key] {
+				return false
+			}
 		}
 	}
 
@@ -143,18 +151,30 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 	viewed := s.viewedLessonsCtx(request, claims.Subject)
 
 	result := make([]skillModuleStatus, 0, len(modules))
+	prevCompleted := true // first module has no prerequisite
 
 	for _, mod := range modules {
-		status := pathStatusAvailable
-
 		key := mod.CourseSlug + "/" + mod.Slug
-		if mod.Type == skillModuleTypeQuiz || mod.Type == skillModuleTypeLab {
-			if passed[key] {
-				status = pathStatusCompleted
-			}
-		} else if viewed[key] {
-			status = pathStatusCompleted
+
+		var isDone bool
+		if mod.Type == skillModuleTypeQuiz {
+			isDone = passed[key]
+		} else {
+			isDone = viewed[key] // labs and text/video: viewed in lesson_progress
 		}
+
+		var status string
+
+		switch {
+		case isDone:
+			status = pathStatusCompleted
+		case prevCompleted:
+			status = pathStatusAvailable
+		default:
+			status = pathStatusLocked
+		}
+
+		prevCompleted = isDone
 
 		result = append(result, skillModuleStatus{skillModuleEntry: mod, Status: status})
 	}

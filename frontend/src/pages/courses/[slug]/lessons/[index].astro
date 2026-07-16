@@ -512,6 +512,13 @@ import App from '../../../../layouts/App.astro';
       }
 
       document.title = `${mod.name} — pupitre`;
+
+      function modHref(m: any): string {
+        return m.type === 'quiz' ? `/courses/${slug}/quiz/${m.index}` : `/courses/${slug}/lessons/${m.index}`;
+      }
+      const currentIdx = allModules.findIndex((m: any) => m.index === moduleIndex);
+      const nextMod = allModules.slice(currentIdx + 1).filter((m: any) => !m.inline)[0] ?? null;
+      const prevMod = allModules.slice(0, currentIdx).filter((m: any) => !m.inline).at(-1) ?? null;
       (document.getElementById('back-to-course') as HTMLAnchorElement).href = `/courses/${slug}`;
 
       // Inline quizzes are embedded — exclude from sidebar and progress counts
@@ -561,10 +568,18 @@ import App from '../../../../layouts/App.astro';
         const hasSteps = steps.length > 0;
         const stepValidated = hasSteps ? new Array(steps.length).fill(false) : [];
 
-        const checkAllSteps = () => {
+        const checkAllSteps = async () => {
           if (hasSteps && stepValidated.every(Boolean)) {
             const banner = document.getElementById('lab-success-banner');
             if (banner) banner.style.display = 'flex';
+            try {
+              await apiFetch(`/courses/${slug}/lessons/${mod.slug}/complete`, { method: 'POST', body: {}, token: token! });
+            } catch { /* ignore — already completed */ }
+            const returnTo = localStorage.getItem('courseReturnTo');
+            localStorage.removeItem('courseReturnTo');
+            setTimeout(() => {
+              window.location.href = nextMod ? modHref(nextMod) : (returnTo ?? `/courses/${slug}`);
+            }, 1200);
           }
         };
 
@@ -719,14 +734,6 @@ import App from '../../../../layouts/App.astro';
         window.location.replace(`/courses/${slug}/lessons/${prevIdx}`);
         return;
       }
-
-      // Skip inline modules in nav (they are embedded, not standalone pages)
-      function modHref(m: any): string {
-        return m.type === 'quiz' ? `/courses/${slug}/quiz/${m.index}` : `/courses/${slug}/lessons/${m.index}`;
-      }
-      const currentIdx = allModules.findIndex((m: any) => m.index === moduleIndex);
-      const prevMod = allModules.slice(0, currentIdx).filter((m: any) => !m.inline).at(-1) ?? null;
-      const nextMod = allModules.slice(currentIdx + 1).filter((m: any) => !m.inline)[0] ?? null;
 
       const prevBtn = prevMod
         ? `<a href="${modHref(prevMod)}" class="btn btn-secondary">◂ Précédent</a>`

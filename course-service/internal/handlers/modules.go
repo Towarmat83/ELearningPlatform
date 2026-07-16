@@ -492,9 +492,18 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 	done := completedSlugs(modules, viewed, progress)
 
 	out := make([]moduleResponse, 0, len(modules))
+	prevDone := true // first module is always available
+
 	for idx, mod := range modules {
-		locked := !isAdmin && isLocked(mod.Prerequisites, done)
+		explicitLocked := !isAdmin && isLocked(mod.Prerequisites, done)
+		seqLocked := !isAdmin && !mod.Inline && !prevDone
+		locked := explicitLocked || seqLocked
+
 		out = append(out, buildModuleListEntry(mod, idx, isAdmin, locked, viewed, progress))
+
+		if !mod.Inline {
+			prevDone = done[mod.Slug()]
+		}
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{"modules": out})

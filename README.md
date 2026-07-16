@@ -21,43 +21,46 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions,
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Clients                                                        │
-│  Browser ──────────────────────────────────────────────────┐   │
-│  Pupitre (Tauri desktop) ──────────────────────────────────┤   │
-└────────────────────────────────────────────────────────────┼───┘
-                                                             │
-                        ┌────────────────────────────────────▼──┐
-                        │  Frontend — Astro SSR  :3000           │
-                        │  API proxy · markdown renderer         │
-                        └──────────┬────────────────────────────┘
-                                   │  HTTP
-              ┌────────────────────┼──────────────────┐
-              │                    │                   │
-    ┌─────────▼──────┐  ┌──────────▼──────┐  ┌───────▼────────┐
-    │  User Service  │  │ Course Service  │  │Checker Service │
-    │  :8081         │  │ :8082           │  │ :8083          │
-    │                │  │                 │  │                │
-    │ Auth (local    │  │ Courses · Labs  │  │ GitLab fetch   │
-    │ + OAuth/OIDC)  │  │ Quiz · Skills   │  │ OPA/Rego eval  │
-    │ Enrollments    │  │ Paths · Modules │  │ Step checker   │
-    │ Progress       │  │ Lab results     │  │                │
-    │ Admin · Groups │  │ K8s CRD watcher │  │                │
-    └────────┬───────┘  └──────┬──────────┘  └───────────────┘
-             │                 │                      │
-             │                 ├──────────────────────┘
-             │                 │    Internal calls
-    ┌────────▼─────────────────▼────────────────────────┐
-    │  PostgreSQL                                        │
-    │  user-service DB  ·  course-service DB             │
-    └────────────────────────────────────────────────────┘
-             
-    ┌──────────────────┐   ┌────────────────┐   ┌──────────────┐
-    │  Kubernetes CRDs │   │   Git repos    │   │   GitLab     │
-    │  Kind:Course     │   │  Module content│   │  Student MRs │
-    │  Kind:Path       │   │  Lab assets    │   │  Pipelines   │
-    │  Kind:Pattern    │   │  check.rego    │   │  Commits     │
-    └──────────────────┘   └────────────────┘   └──────────────┘
+  ┌─────────────┐          ┌──────────────────────┐
+  │   Browser   │          │   Pupitre (Tauri)    │
+  └──────┬──────┘          └──────────┬───────────┘
+         │ HTTP                       │ WebView
+         └──────────────┬─────────────┘
+                        │
+                        ▼
+          ┌─────────────────────────────┐
+          │          Frontend           │
+          │      Astro SSR · :3000      │
+          │   API proxy · markdown      │
+          └────────┬──────────┬─────────┘
+                   │          │
+         ┌─────────┘          └──────────┐
+         │                              │
+         ▼                              ▼
+┌─────────────────┐            ┌─────────────────┐
+│  User Service   │◄─ internal─│ Course Service  │───── POST /evaluate ──►┌──────────────────┐
+│     :8081       │            │     :8082       │                         │ Checker Service  │
+│                 │            │                 │                         │     :8083        │
+│ Auth · Progress │            │ Courses · Labs  │                         │ OPA/Rego · eval  │
+│ Admin · Groups  │            │ Quiz · Skills   │                         │ GitLab fetch     │
+│ OAuth / OIDC    │            │ K8s CRD watcher │                         └────────┬─────────┘
+└────────┬────────┘            └────┬────────────┘                                  │
+         │                          │                                                │
+         └──────────┬───────────────┘                                                │
+                    │                                                                 │
+                    ▼                                                                 ▼
+          ┌──────────────────┐      ┌──────────────────┐      ┌────────────────────────┐
+          │   PostgreSQL     │      │   Kubernetes CRDs│      │        GitLab          │
+          │ (shared DB)      │      │  Course · Path   │      │   Student MRs          │
+          └──────────────────┘      │  Pattern         │      │   Pipelines · Commits  │
+                                    └──────────────────┘      └────────────────────────┘
+
+                               ┌──────────────────┐      ┌──────────────────┐
+                               │    Git repos     │      │   OAuth2 / OIDC  │
+                               │  Module content  │      │ Keycloak · GitHub│
+                               │  Lab assets      │      └──────────────────┘
+                               │  check.rego      │
+                               └──────────────────┘
 ```
 
 ---

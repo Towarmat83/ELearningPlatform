@@ -85,6 +85,19 @@ func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bo
 	return out
 }
 
+// viewedLessonsCtx returns the set of "courseSlug/lessonSlug" for all
+// non-quiz/lab lessons the user has viewed.
+func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]bool {
+	out, err := s.Repos.LessonProgress.ViewedKeys(req.Context(), userID)
+	if err != nil {
+		zap.L().Error("failed to query viewed lesson keys", zap.String("userID", userID), zap.Error(err))
+
+		return nil
+	}
+
+	return out
+}
+
 // skillIsCompleted returns true when all assessable (quiz/lab) modules in the
 // list have been passed by the user. Skills with no assessable modules are
 // never considered completed.
@@ -127,12 +140,19 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 	}
 
 	passed := s.passedModulesCtx(request, claims.Subject)
+	viewed := s.viewedLessonsCtx(request, claims.Subject)
 
 	result := make([]skillModuleStatus, 0, len(modules))
 
 	for _, mod := range modules {
 		status := pathStatusAvailable
-		if (mod.Type == skillModuleTypeQuiz || mod.Type == skillModuleTypeLab) && passed[mod.CourseSlug+"/"+mod.Slug] {
+
+		key := mod.CourseSlug + "/" + mod.Slug
+		if mod.Type == skillModuleTypeQuiz || mod.Type == skillModuleTypeLab {
+			if passed[key] {
+				status = pathStatusCompleted
+			}
+		} else if viewed[key] {
 			status = pathStatusCompleted
 		}
 

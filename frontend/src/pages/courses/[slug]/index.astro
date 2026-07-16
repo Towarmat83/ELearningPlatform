@@ -249,7 +249,8 @@ import App from '../../../layouts/App.astro';
     function moduleStatusBadges(m: any): string {
       const parts: string[] = [];
       const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lab: 'Lab', lesson: 'Lecture' };
-      parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeLabel[m.type] || m.type}</span>`);
+      const typeStr = typeLabel[m.type];
+      if (typeStr) parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeStr}</span>`);
       if (m.locked) {
         parts.push(`<span class="badge badge-gray" style="font-size:.7rem">Verrouillé</span>`);
       } else if (m.type === 'quiz') {
@@ -259,6 +260,7 @@ import App from '../../../layouts/App.astro';
       } else {
         if (m.viewed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ Vu</span>`);
       }
+      (m.skills ?? []).forEach((s: string) => parts.push(`<a href="/skills/${s}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none">🎯 ${s}</a>`));
       return parts.join('');
     }
 

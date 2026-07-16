@@ -27,6 +27,10 @@ type LessonProgressRepository interface {
 	// ModuleProgressRepository's method of the same name — see the doc
 	// comment there for why this isn't one cross-aggregate method.
 	CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error)
+
+	// ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for
+	// all non-sentinel lesson entries the user has viewed, across all courses.
+	ViewedKeys(ctx context.Context, userID string) (map[string]bool, error)
 }
 
 // gormLessonProgressRepository is the GORM-backed LessonProgressRepository.
@@ -83,6 +87,30 @@ func (r *gormLessonProgressRepository) CountViewed(ctx context.Context, userID, 
 	}
 
 	return count, nil
+}
+
+// ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for
+// all non-sentinel lesson entries userID has viewed, across all courses.
+func (r *gormLessonProgressRepository) ViewedKeys(ctx context.Context, userID string) (map[string]bool, error) {
+	var rows []struct {
+		CourseSlug string `gorm:"column:courseslug"`
+		LessonSlug string `gorm:"column:lessonslug"`
+	}
+
+	err := r.db.WithContext(ctx).Model(&models.LessonProgress{}).
+		Select("courseslug, lessonslug").
+		Where("userid = ?::uuid AND lessonslug IS NOT NULL AND lessonslug != ?", userID, lessonSlugComplete).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list viewed lesson keys: %w", err)
+	}
+
+	out := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		out[row.CourseSlug+"/"+row.LessonSlug] = true
+	}
+
+	return out, nil
 }
 
 // CompletedCourseSlugs returns the subset of slugs userID has marked

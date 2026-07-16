@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
-	"github.com/elearning/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/db"
 )
 
 // MarkdownPattern is a reusable markdown rendering rule (global or

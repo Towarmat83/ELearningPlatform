@@ -5,9 +5,9 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/elearning/course-service/internal/config"
-	"github.com/elearning/course-service/internal/metrics"
-	apimiddleware "github.com/elearning/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/config"
+	"github.com/genesary/pupitre/course-service/internal/metrics"
+	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // routerCORSMaxAgeSeconds is the max-age advertised for CORS preflight

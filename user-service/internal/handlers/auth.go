@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/elearning/user-service/internal/metrics"
-	"github.com/elearning/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/internal/metrics"
+	"github.com/genesary/pupitre/user-service/internal/middleware"
 )
 
 // bcryptCost is the bcrypt hashing cost used for all stored passwords.

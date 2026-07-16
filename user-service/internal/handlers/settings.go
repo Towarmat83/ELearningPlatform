@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/elearning/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/db"
 )
 
 // Platform setting keys read from more than one file; pulled out to satisfy

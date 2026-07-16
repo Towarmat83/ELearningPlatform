@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Functional test for the eLearning Platform
+# Functional test for the pupitre Platform
 # Tests the full stack: frontend, course-service, user-service through Traefik
 set -euo pipefail
 
 BASE="${1:-http://localhost:30080}"
-HOST="elearning.local"
+HOST="pupitre.local"
 
 pass=0
 fail=0
@@ -31,7 +31,7 @@ skip() {
   echo -e "  ${yellow}∼${nc} $desc (skipped — backend not migrated yet)"
 }
 
-echo "═══ eLearning Platform — Functional Tests ═══"
+echo "═══ pupitre Platform — Functional Tests ═══"
 echo ""
 
 # 1. Health — Traefik routes /health to course-service, but sometimes falls through to frontend (Traefik config issue)
@@ -97,7 +97,7 @@ if [ -z "$token" ]; then
   auth_method="admin"
   login_resp=$(curl -s -H "Host: $HOST" -X POST "$BASE/api/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"email":"admin@elearning.local","password":"Admin@1234"}')
+    -d '{"email":"admin@pupitre.local","password":"Admin@1234"}')
   token=$(echo "$login_resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
 fi
 
@@ -186,7 +186,7 @@ if [ -n "$token" ]; then
   # ── Admin endpoints (separate admin token) ──
   admin_token=$(curl -s -H "Host: $HOST" -X POST "$BASE/api/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"email":"admin@elearning.local","password":"Admin@1234"}' | \
+    -d '{"email":"admin@pupitre.local","password":"Admin@1234"}' | \
     python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
 
   if [ -n "$admin_token" ]; then

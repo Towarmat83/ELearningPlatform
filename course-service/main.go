@@ -14,11 +14,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/elearning/course-service/internal/config"
-	"github.com/elearning/course-service/internal/content"
-	coursedb "github.com/elearning/course-service/internal/db"
-	"github.com/elearning/course-service/internal/handlers"
-	"github.com/elearning/course-service/migrations"
+	"github.com/genesary/pupitre/course-service/internal/config"
+	"github.com/genesary/pupitre/course-service/internal/content"
+	coursedb "github.com/genesary/pupitre/course-service/internal/db"
+	"github.com/genesary/pupitre/course-service/internal/handlers"
+	"github.com/genesary/pupitre/course-service/migrations"
 )
 
 const (

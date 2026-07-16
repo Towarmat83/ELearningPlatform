@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/elearning/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/db"
 )
 
 // defaultGroupName is the platform-wide group every user is added to.

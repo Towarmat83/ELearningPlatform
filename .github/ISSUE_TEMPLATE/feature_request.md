@@ -1,10 +1,10 @@
 ---
 name: Feature Request
-about: Help us make ELearningPlatform more useful
+about: Help us make Pupitre more useful
 labels: enhancement
 ---
 <!--
-Thank you for helping to improve ELearningPlatform!
+Thank you for helping to improve Pupitre!
 
 Please be sure to search for open issues before raising a new one. We use issues
 for bug reports and feature requests.
@@ -17,7 +17,7 @@ Leading with this context helps frame the feature request so we can ensure we
 implement it sensibly.
 --->
 
-### How could ELearningPlatform help solve your problem?
+### How could Pupitre help solve your problem?
 <!--
-Let us know how you think ELearningPlatform could help with your use case.
+Let us know how you think Pupitre could help with your use case.
 -->

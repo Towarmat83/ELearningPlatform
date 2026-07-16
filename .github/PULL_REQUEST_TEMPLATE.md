@@ -13,7 +13,7 @@ Fixes #
 
 I have:
 
-- [ ] Read and followed the [Contribution Guidelines](https://github.com/Towarmat83/ELearningPlatform/blob/main/CONTRIBUTING.md)
+- [ ] Read and followed the [Contribution Guidelines](https://github.com/genesary/pupitre/blob/main/CONTRIBUTING.md)
 - [ ] Followed the git conventional commit message format.
 - [ ] Made sure all changes are covered by proper tests, reaching a coverage of at least 80% when applicable.
 - [ ] Run `make go/lint` & `make go/test` & `make dev` to ensure this PR is ready for review.

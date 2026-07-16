@@ -1,10 +1,10 @@
 ---
 name: Bug Report
-about: Help us diagnose and fix bugs in ELearningPlatform
+about: Help us diagnose and fix bugs in Pupitre
 labels: bug
 ---
 <!--
-Thank you for helping to improve ELearningPlatform!
+Thank you for helping to improve Pupitre!
 
 Please be sure to search for open issues before raising a new one. We use issues
 for bug reports and feature requests.
@@ -12,7 +12,7 @@ for bug reports and feature requests.
 
 ### What happened?
 <!--
-Please let us know what behaviour you expected and how ELearningPlatform diverged from
+Please let us know what behaviour you expected and how Pupitre diverged from
 that behaviour.
 -->
 
@@ -25,10 +25,10 @@ appreciated!
 
 ### What environment did it happen in?
 
-ELearningPlatform version:
+Pupitre version:
 
 <!--
-Include at least the version or commit of ELearningPlatform you were running. Consider
+Include at least the version or commit of Pupitre you were running. Consider
 also including your:
 
 * Cloud provider or hardware configuration

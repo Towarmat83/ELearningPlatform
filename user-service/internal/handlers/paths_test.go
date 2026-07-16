@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elearning/user-service/fake"
-	"github.com/elearning/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/fake"
+	"github.com/genesary/pupitre/user-service/internal/config"
 )
 
 // ── buildCourseStatuses ───────────────────────────────────────────────────────

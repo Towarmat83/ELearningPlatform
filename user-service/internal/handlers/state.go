@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/elearning/user-service/internal/config"
-	"github.com/elearning/user-service/internal/db"
-	"github.com/elearning/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/middleware"
 )
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).

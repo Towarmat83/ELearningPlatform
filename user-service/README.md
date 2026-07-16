@@ -51,7 +51,7 @@ Configured via environment variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgres://elearning:elearning@localhost:5432/elearning` | PostgreSQL connection string |
+| `DATABASE_URL` | `postgres://pupitre:pupitre@localhost:5432/pupitre` | PostgreSQL connection string |
 | `JWT_SECRET` | `change-me-in-production-use-a-long-random-string` | HMAC key for JWT signing |
 | `JWT_EXPIRY_HOURS` | `24` | Token lifetime in hours |
 | `PORT` | `8081` | HTTP listen port |
@@ -84,9 +84,9 @@ Uses PostgreSQL with automatic migrations on startup. Migrations are embedded SQ
 ```sh
 # Start PostgreSQL (e.g. via Docker)
 docker run -d --name pg \
-  -e POSTGRES_USER=elearning \
-  -e POSTGRES_PASSWORD=elearning \
-  -e POSTGRES_DB=elearning \
+  -e POSTGRES_USER=pupitre \
+  -e POSTGRES_PASSWORD=pupitre \
+  -e POSTGRES_DB=pupitre \
   -p 5432:5432 postgres:17
 
 # Run the service
@@ -98,7 +98,7 @@ go run .
 ```sh
 docker build -t user-service .
 docker run -p 8081:8081 \
-  -e DATABASE_URL=postgres://elearning:elearning@host.docker.internal:5432/elearning \
+  -e DATABASE_URL=postgres://pupitre:pupitre@host.docker.internal:5432/pupitre \
   user-service
 ```
 
@@ -111,9 +111,9 @@ docker run -p 8081:8081 \
 make rebuild-user
 
 # Or manually:
-docker build -t localhost/elearning-user-service:latest user-service/
-kind load docker-image localhost/elearning-user-service:latest --name elearning
-kubectl rollout restart deploy/elearning-user-service
+docker build -t localhost/pupitre-user-service:latest user-service/
+kind load docker-image localhost/pupitre-user-service:latest --name pupitre
+kubectl rollout restart deploy/pupitre-user-service
 
 # Check logs
 make logs
@@ -124,9 +124,9 @@ make logs
 ```sh
 # Start PostgreSQL
 docker run -d --name pg \
-  -e POSTGRES_USER=elearning \
-  -e POSTGRES_PASSWORD=elearning \
-  -e POSTGRES_DB=elearning \
+  -e POSTGRES_USER=pupitre \
+  -e POSTGRES_PASSWORD=pupitre \
+  -e POSTGRES_DB=pupitre \
   -p 5432:5432 postgres:17
 
 # Run the service

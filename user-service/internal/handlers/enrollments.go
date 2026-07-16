@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/elearning/user-service/internal/metrics"
+	"github.com/genesary/pupitre/user-service/internal/metrics"
 )
 
 // myCoursesRespKeyCourses is the JSON response field holding the course list.

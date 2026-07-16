@@ -14,7 +14,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/elearning/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/db"
 )
 
 // roleAdmin is the role name granted administrative access.
@@ -25,7 +25,7 @@ const jwtIssuer = "user-service"
 
 // jwtAudience is the aud claim set on every session token and required on
 // parse.
-const jwtAudience = "elearning-api"
+const jwtAudience = "pupitre-api"
 
 // Claims are the JWT claims embedded in issued access tokens.
 type Claims struct {

@@ -11,8 +11,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/elearning/checker-service/internal/config"
-	"github.com/elearning/checker-service/internal/handlers"
+	"github.com/genesary/pupitre/checker-service/internal/config"
+	"github.com/genesary/pupitre/checker-service/internal/handlers"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/elearning/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
 // ListPaths returns learning paths known to the service, optionally

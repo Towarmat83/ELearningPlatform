@@ -61,37 +61,44 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions,
 ```
 
 ```mermaid
-graph LR
-    subgraph Clients
+graph TD
+    subgraph Clients["Clients"]
         Browser(["Browser"])
-        Pupitre(["Pupitre (Tauri)"])
+        Pupitre(["Pupitre\n(Tauri desktop)"])
     end
+
     subgraph Platform["Platform — Kubernetes"]
-        Frontend["Frontend\nAstro SSR :3000"]
+        Frontend["Frontend\nAstro SSR · :3000\nAPI proxy · markdown renderer"]
+
         subgraph Services["Backend Services"]
-            US["User Service :8081\nAuth · Enrollments · Progress"]
-            CS["Course Service :8082\nCourses · Labs · Quiz · Skills"]
-            CK["Checker Service :8083\nOPA/Rego · GitLab fetch"]
+            US["User Service · :8081\nAuth (local + OAuth/OIDC)\nEnrollments · Progress\nAdmin · Groups"]
+            CS["Course Service · :8082\nCourses · Labs · Quiz · Skills\nPaths · Modules · Lab results\nK8s CRD watcher"]
+            CK["Checker Service · :8083\nGitLab fetch\nOPA/Rego eval\nStep checker"]
         end
-        subgraph Data
-            PG[("PostgreSQL")]
-            CRD[["K8s CRDs\nCourse · Path · Pattern"]]
-            Git[["Git repos\nModule content"]]
+
+        subgraph Data["Data"]
+            PG[("PostgreSQL\nuser-service DB\ncourse-service DB")]
+            CRD[["Kubernetes CRDs\nKind:Course\nKind:Path\nKind:Pattern"]]
+            Git[["Git repos\nModule content\nLab assets\ncheck.rego"]]
         end
     end
-    subgraph External
-        GitLab["GitLab\nStudent projects"]
-        OAuth["OAuth2/OIDC\nKeycloak · GitHub"]
+
+    subgraph External["External"]
+        GitLab["GitLab\nStudent MRs\nPipelines · Commits"]
+        OAuth["OAuth2 / OIDC\nKeycloak · GitHub"]
         Podman["Podman\nLocal machine"]
     end
 
     Browser -->|HTTP| Frontend
     Pupitre -->|WebView| Frontend
     Pupitre -->|"local_check (Rust)"| Podman
+
     Frontend --> US
     Frontend --> CS
-    CS -->|Internal| US
+
+    CS -->|Internal calls| US
     CS -->|"POST /evaluate"| CK
+
     US --> PG
     CS --> PG
     CS --> CRD

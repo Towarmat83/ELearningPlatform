@@ -60,54 +60,6 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions,
     └──────────────────┘   └────────────────┘   └──────────────┘
 ```
 
-```mermaid
-graph TD
-    subgraph Clients["Clients"]
-        Browser(["Browser"])
-        Pupitre(["Pupitre\n(Tauri desktop)"])
-    end
-
-    subgraph Platform["Platform — Kubernetes"]
-        Frontend["Frontend\nAstro SSR · :3000\nAPI proxy · markdown renderer"]
-
-        subgraph Services["Backend Services"]
-            US["User Service · :8081\nAuth (local + OAuth/OIDC)\nEnrollments · Progress\nAdmin · Groups"]
-            CS["Course Service · :8082\nCourses · Labs · Quiz · Skills\nPaths · Modules · Lab results\nK8s CRD watcher"]
-            CK["Checker Service · :8083\nGitLab fetch\nOPA/Rego eval\nStep checker"]
-        end
-
-        subgraph Data["Data"]
-            PG[("PostgreSQL\nuser-service DB\ncourse-service DB")]
-            CRD[["Kubernetes CRDs\nKind:Course\nKind:Path\nKind:Pattern"]]
-            Git[["Git repos\nModule content\nLab assets\ncheck.rego"]]
-        end
-    end
-
-    subgraph External["External"]
-        GitLab["GitLab\nStudent MRs\nPipelines · Commits"]
-        OAuth["OAuth2 / OIDC\nKeycloak · GitHub"]
-        Podman["Podman\nLocal machine"]
-    end
-
-    Browser -->|HTTP| Frontend
-    Pupitre -->|WebView| Frontend
-    Pupitre -->|"local_check (Rust)"| Podman
-
-    Frontend --> US
-    Frontend --> CS
-
-    CS -->|Internal calls| US
-    CS -->|"POST /evaluate"| CK
-
-    US --> PG
-    CS --> PG
-    CS --> CRD
-    CS --> Git
-    CK --> Git
-    CK --> GitLab
-    US -.->|OIDC| OAuth
-```
-
 ---
 
 ## Project structure

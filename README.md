@@ -20,47 +20,56 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions,
 
 ## Architecture
 
-```
-  ┌─────────────┐          ┌──────────────────────┐
-  │   Browser   │          │   Pupitre (Tauri)    │
-  └──────┬──────┘          └──────────┬───────────┘
-         │ HTTP                       │ WebView
-         └──────────────┬─────────────┘
-                        │
-                        ▼
-          ┌─────────────────────────────┐
-          │          Frontend           │
-          │      Astro SSR · :3000      │
-          │   API proxy · markdown      │
-          └────────┬──────────┬─────────┘
-                   │          │
-         ┌─────────┘          └──────────┐
-         │                              │
-         ▼                              ▼
-┌─────────────────┐            ┌─────────────────┐
-│  User Service   │◄─ internal─│ Course Service  │───── POST /evaluate ──►┌──────────────────┐
-│     :8081       │            │     :8082       │                         │ Checker Service  │
-│                 │            │                 │                         │     :8083        │
-│ Auth · Progress │            │ Courses · Labs  │                         │ OPA/Rego · eval  │
-│ Admin · Groups  │            │ Quiz · Skills   │                         │ GitLab fetch     │
-│ OAuth / OIDC    │            │ K8s CRD watcher │                         └────────┬─────────┘
-└────────┬────────┘            └────┬────────────┘                                  │
-         │                          │                                                │
-         └──────────┬───────────────┘                                                │
-                    │                                                                 │
-                    ▼                                                                 ▼
-          ┌──────────────────┐      ┌──────────────────┐      ┌────────────────────────┐
-          │   PostgreSQL     │      │   Kubernetes CRDs│      │        GitLab          │
-          │ (shared DB)      │      │  Course · Path   │      │   Student MRs          │
-          └──────────────────┘      │  Pattern         │      │   Pipelines · Commits  │
-                                    └──────────────────┘      └────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph CLIENTS["Clients"]
+        direction LR
+        Browser(["🌐 Browser"])
+        Pupitre(["🖥️ Pupitre — Tauri"])
+    end
 
-                               ┌──────────────────┐      ┌──────────────────┐
-                               │    Git repos     │      │   OAuth2 / OIDC  │
-                               │  Module content  │      │ Keycloak · GitHub│
-                               │  Lab assets      │      └──────────────────┘
-                               │  check.rego      │
-                               └──────────────────┘
+    subgraph PLATFORM["Platform — Kubernetes"]
+        Frontend["⚡ Frontend\nAstro SSR · :3000\nAPI proxy"]
+
+        subgraph SERVICES["Backend Services"]
+            direction LR
+            US["👤 User Service\n:8081\nAuth · Progress · Admin"]
+            CS["📚 Course Service\n:8082\nCourses · Labs · Skills"]
+            CK["🔍 Checker Service\n:8083\nOPA/Rego · GitLab fetch"]
+        end
+
+        subgraph DATA["Data"]
+            direction LR
+            PG[("🗄️ PostgreSQL")]
+            CRD[["⚙️ K8s CRDs\nCourse · Path · Pattern"]]
+            GIT[["📁 Git repos\nModule content · check.rego"]]
+        end
+    end
+
+    subgraph EXTERNAL["External"]
+        direction LR
+        GL(["🦊 GitLab\nStudent repos"])
+        OA(["🔑 OAuth2 / OIDC\nKeycloak · GitHub"])
+        PO(["🐳 Podman\nLocal machine"])
+    end
+
+    Browser -->|HTTP| Frontend
+    Pupitre -->|WebView| Frontend
+    Pupitre -->|local_check Rust| PO
+
+    Frontend --> US
+    Frontend --> CS
+
+    CS -->|internal API| US
+    CS -->|POST /evaluate| CK
+
+    US --> PG
+    CS --> PG
+    CS --> CRD
+    CS --> GIT
+    CK --> GIT
+    CK --> GL
+    US -.->|OIDC| OA
 ```
 
 ---

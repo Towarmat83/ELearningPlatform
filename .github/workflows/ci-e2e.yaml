@@ -56,7 +56,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: user-service/go.mod
+          go-version: "1.26"
           cache-dependency-path: |
             user-service/go.sum
             checker-service/go.sum

@@ -22,45 +22,40 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions,
 
 ```mermaid
 graph LR
-    subgraph CLI["Clients"]
-        B(["Browser"])
-        P(["Pupitre — Tauri"])
-    end
+    Browser(["Browser"])
+    Pupitre(["Pupitre — Tauri"])
 
-    subgraph PLAT["Platform — Kubernetes"]
-        F["Frontend\nAstro SSR · :3000"]
+    Frontend["Frontend\nAstro SSR · :3000"]
 
-        subgraph SVC["Backend Services"]
-            US["User Service · :8081\nAuth · Progress · Admin"]
-            CS["Course Service · :8082\nCourses · Labs · Skills"]
-            CK["Checker Service · :8083\nOPA/Rego · GitLab fetch"]
-        end
+    UserService["User Service\n:8081\nAuth · Progress · Admin"]
+    CourseService["Course Service\n:8082\nCourses · Labs · Skills"]
+    CheckerService["Checker Service\n:8083\nOPA/Rego · GitLab fetch"]
 
-        subgraph DAT["Data"]
-            PG[("PostgreSQL")]
-            CRD[["K8s CRDs\nCourse · Path · Pattern"]]
-            GIT[["Git repos\nModule content · check.rego"]]
-        end
-    end
+    PostgreSQL[("PostgreSQL")]
+    K8sCRDs[["K8s CRDs\nCourse · Path · Pattern"]]
+    GitRepos[["Git repos\nModule content"]]
 
-    subgraph EXT["External"]
-        GL(["GitLab"])
-        OA(["OAuth2 / OIDC"])
-        PD(["Podman"])
-    end
+    GitLab(["GitLab"])
+    OAuth(["OAuth2 / OIDC"])
+    Podman(["Podman"])
 
-    B -->|HTTP| F
-    P -->|WebView| F
-    P -.->|local_check| PD
+    Browser -->|HTTP| Frontend
+    Pupitre -->|WebView| Frontend
+    Pupitre -.->|local_check| Podman
 
-    F --> US & CS
-    CS -->|internal| US
-    CS -->|POST /evaluate| CK
+    Frontend --> UserService
+    Frontend --> CourseService
 
-    US & CS --> PG
-    CS --> CRD & GIT
-    CK --> GIT & GL
-    US -.->|OIDC| OA
+    CourseService -->|internal| UserService
+    CourseService -->|POST /evaluate| CheckerService
+
+    UserService --> PostgreSQL
+    CourseService --> PostgreSQL
+    CourseService --> K8sCRDs
+    CourseService --> GitRepos
+    CheckerService --> GitRepos
+    CheckerService --> GitLab
+    UserService -.->|OIDC| OAuth
 ```
 
 ---

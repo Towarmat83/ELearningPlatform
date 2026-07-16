@@ -1,0 +1,3 @@
+[submodule "pupitre-desktop"]
+	path = pupitre-desktop
+	url = https://github.com/genesary/pupitre-desktop

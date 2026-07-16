@@ -257,7 +257,7 @@ import App from '../layouts/App.astro';
           ? `/skills/${c.slug}`
           : `/courses/${c.slug}`;
         const onclick = isSkillPath
-          ? ''
+          ? `onclick="localStorage.setItem('skillReturnPath','${p.slug}')"`
           : `onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')"`;
         nodesSVG += isLocked
           ? `<g>${inner}</g>`
@@ -280,7 +280,7 @@ import App from '../layouts/App.astro';
         <div class="detail-header">
           <div class="detail-title">${p.title||p.slug}</div>
           ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
-          ${p.skills?.length && !isSkillPath ? `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin:.4rem 0 .2rem">${(p.skills as string[]).map(sk=>`<a href="/skills/${sk}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none">🎯 ${sk}</a>`).join('')}</div>` : ''}
+          ${p.skills?.length && !isSkillPath ? `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin:.4rem 0 .2rem">${(p.skills as string[]).map(sk=>`<a href="/skills/${sk}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none" onclick="localStorage.setItem('skillReturnPath','${p.slug}')">🎯 ${sk}</a>`).join('')}</div>` : ''}
           <div class="detail-prog">
             <div class="progress-bar" style="flex:1">
               <div class="progress-bar-fill" style="width:${pct}%;background:${pBarCol}"></div>
@@ -328,9 +328,10 @@ import App from '../layouts/App.astro';
         });
         document.getElementById('btn-back')!.addEventListener('click', showList);
 
-        const returnPath = localStorage.getItem('courseReturnPath');
+        const returnPath = localStorage.getItem('courseReturnPath') ?? localStorage.getItem('skillReturnPath');
         if (returnPath) {
           localStorage.removeItem('courseReturnPath');
+          localStorage.removeItem('skillReturnPath');
           showDetail(returnPath);
         }
       } catch {

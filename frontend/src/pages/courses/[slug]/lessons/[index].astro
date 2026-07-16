@@ -500,6 +500,8 @@ import App from '../../../../layouts/App.astro';
         ]);
         allModules = (modRes as any).modules || [];
         mod = moduleDetail;
+        const currentMod = allModules.find((m: any) => m.index === moduleIndex);
+        if (currentMod?.locked) { window.location.href = `/courses/${slug}`; return; }
       } catch (e: any) {
         if (e.status === 403) { window.location.href = `/courses/${slug}`; return; }
         document.getElementById('loading')!.innerHTML = '<div style="text-align:center;padding:64px"><h2>Module introuvable</h2><a href="/courses" class="btn btn-primary" style="margin-top:16px;display:inline-flex">Catalogue</a></div>';

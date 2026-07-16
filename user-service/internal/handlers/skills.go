@@ -72,15 +72,13 @@ func (s *State) fetchSkillModules(req *http.Request, skill string) ([]skillModul
 	return body.Modules, nil
 }
 
-// passedModulesCtx returns the set of "courseSlug/moduleSlug" for all
-// quiz and lab modules the user has passed.
-func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bool {
-	rows, err := s.Pool.Query(req.Context(),
-		`SELECT courseSlug, moduleSlug FROM module_progress
-		 WHERE userId = $1::uuid AND passed = true AND moduleSlug IS NOT NULL`,
-		userID)
+// querySlugPairs executes a two-column (courseSlug, slug) query and returns the
+// results as a "courseSlug/slug" → true map. The query must accept a single
+// $1::uuid parameter for the user ID.
+func (s *State) querySlugPairs(req *http.Request, userID, logKey, query string) map[string]bool {
+	rows, err := s.Pool.Query(req.Context(), query, userID)
 	if err != nil {
-		zap.L().Error("failed to query module progress", zap.String("userID", userID), zap.Error(err))
+		zap.L().Error("failed to query "+logKey, zap.String("userID", userID), zap.Error(err))
 
 		return nil
 	}
@@ -90,13 +88,29 @@ func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bo
 	out := make(map[string]bool)
 
 	for rows.Next() {
-		var cs, ms string
-		if rows.Scan(&cs, &ms) == nil {
-			out[cs+"/"+ms] = true
+		var cs, sl string
+		if rows.Scan(&cs, &sl) == nil {
+			out[cs+"/"+sl] = true
 		}
 	}
 
 	return out
+}
+
+// passedModulesCtx returns the set of "courseSlug/moduleSlug" for all
+// quiz and lab modules the user has passed.
+func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bool {
+	return s.querySlugPairs(req, userID, "module progress",
+		`SELECT courseSlug, moduleSlug FROM module_progress
+		 WHERE userId = $1::uuid AND passed = true AND moduleSlug IS NOT NULL`)
+}
+
+// viewedLessonsCtx returns the set of "courseSlug/lessonSlug" for all
+// non-quiz/lab modules the user has viewed.
+func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]bool {
+	return s.querySlugPairs(req, userID, "lesson progress",
+		`SELECT courseSlug, lessonSlug FROM lesson_progress
+		 WHERE userId = $1::uuid AND lessonSlug IS NOT NULL AND lessonSlug != '__complete__'`)
 }
 
 // skillIsCompleted returns true when all assessable (quiz/lab) modules in the
@@ -141,12 +155,19 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 	}
 
 	passed := s.passedModulesCtx(request, claims.Subject)
+	viewed := s.viewedLessonsCtx(request, claims.Subject)
 
 	result := make([]skillModuleStatus, 0, len(modules))
 
 	for _, mod := range modules {
 		status := pathStatusAvailable
-		if (mod.Type == skillModuleTypeQuiz || mod.Type == skillModuleTypeLab) && passed[mod.CourseSlug+"/"+mod.Slug] {
+
+		key := mod.CourseSlug + "/" + mod.Slug
+		if mod.Type == skillModuleTypeQuiz || mod.Type == skillModuleTypeLab {
+			if passed[key] {
+				status = pathStatusCompleted
+			}
+		} else if viewed[key] {
 			status = pathStatusCompleted
 		}
 

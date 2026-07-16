@@ -12,7 +12,7 @@ const { slug } = Astro.params;
     .skill-subtitle { font-size: .83rem; color: var(--ink-soft); margin-top: 4px; }
     .skill-prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; background: var(--fill); border-radius: 10px; font-size: .82rem; color: var(--ink-soft); }
     .skill-prog-pct { font-weight: 700; font-size: 1rem; }
-    .snake-wrap { width: 100%; max-width: 500px; padding: 8px 0; display: flex; justify-content: flex-start; }
+    .snake-wrap { width: 100%; padding: 8px 0; display: flex; justify-content: flex-start; }
     .snake-wrap svg { display: block; height: auto; overflow: visible; max-width: 100%; }
     .skill-empty { text-align: center; padding: 60px 24px; color: var(--ink-soft); }
   </style>
@@ -40,8 +40,8 @@ const { slug } = Astro.params;
     if (!token) { window.location.href = `/login?redirect=/skills/${slug}`; }
 
     // ── Snake view constants ──────────────────────────────────────────────
-    const CPR = 3, NR = 22, HG = 100, VG = 90, PX = 40, PY = 36;
-    const ROAD = 8, CR = 18, LABEL = 26;
+    const CPR = 5, NR = 18, HG = 200, VG = 125, PX = 40, PY = 45;
+    const ROAD = 6, CR = 28, LABEL = 38;
 
     const TH = {
       completed: { fill: '#4ade80', text: 'white',   badge: '#dcfce7', badgeTxt: '#166534', label: 'Acquis'     },
@@ -95,7 +95,6 @@ const { slug } = Astro.params;
       if (total === 0) return '';
 
       const numRows = Math.ceil(total / CPR);
-      // Always use full 3-column viewBox width so nodes are the same visual size as my-paths
       const VB_W = PX * 2 + HG * (CPR - 1);
       const VB_H = PY + VG * Math.max(numRows - 1, 0) + NR + LABEL + 20;
 
@@ -153,14 +152,14 @@ const { slug } = Astro.params;
 
         nodesSVG += isLocked
           ? `<g>${inner}</g>`
-          : `<a href="/courses/${m.courseSlug}/lessons/${m.index}" style="cursor:pointer">${courseLabel}${inner}</a>`;
+          : `<a href="/courses/${m.courseSlug}/lessons/${m.index}" onclick="localStorage.setItem('courseReturnTo','/skills/${slug}')" style="cursor:pointer">${courseLabel}${inner}</a>`;
       });
 
-      return `<svg width="100%" viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg" style="display:block;height:auto;overflow:visible;max-width:100%">
+      return { svg: `<svg width="100%" viewBox="0 0 ${VB_W} ${VB_H}" xmlns="http://www.w3.org/2000/svg" style="display:block;height:auto;overflow:visible;max-width:100%">
         <path d="${grayD}" fill="none" stroke="#e2e8f0" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>
         ${progD ? `<path d="${progD}" fill="none" stroke="${progCol}" stroke-width="${ROAD}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
         ${nodesSVG}
-      </svg>`;
+      </svg>`, maxW: VB_W };
     }
 
     async function init() {
@@ -198,7 +197,7 @@ const { slug } = Astro.params;
           <span class="skill-prog-pct" style="color:${pBarCol}">${pct}%</span>
           <span>${done}/${total} modules complétés</span>`;
 
-        const snakeEl = renderSnake(modules);
+        const { svg: snakeEl } = renderSnake(modules);
         document.getElementById('snake-wrap').style.display = 'block';
         document.getElementById('snake-content').innerHTML = snakeEl;
 

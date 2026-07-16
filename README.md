@@ -146,7 +146,7 @@ See `CONTRIBUTING.md` for the full step-by-step guide, troubleshooting, and depl
 │   │   └── config/       # Env config
 │   └── migrations/       # Embedded SQL migrations
 ├── frontend/             # Astro
-├── helm/                 # Helm chart (all services)
+├── helm/                 # Helm chart (submodule: pupitre-helm)
 ├── infra/                # Kind config + manifests + course CRDs
 ├── docs/                 # Architecture, Course spec, Labs, SSO
 └── examples/             # Sample Course CRD manifests

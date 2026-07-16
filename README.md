@@ -94,14 +94,7 @@ See [`docs/interactive-labs.md`](docs/interactive-labs.md) for full documentatio
 
 ## Pupitre — Desktop App (Local Labs)
 
-Some labs require verifying work done locally on the student's machine (e.g. `podman pull`, `podman run`). For these, the platform runs as a **Tauri v2 desktop app** called **Pupitre**.
-
-```
-tauri-app/
-├── src/              # Minimal HTML shell (loads localhost:3000)
-└── src-tauri/        # Rust backend
-    └── src/lib.rs    # Local check commands (podman images, podman events)
-```
+Some labs require verifying work done locally on the student's machine (e.g. `podman pull`, `podman run`). For these, the platform runs as a **Tauri v2 desktop app** called **Pupitre**, developed in a separate repository: [`pupitre-desktop`](https://github.com/genesary/pupitre-desktop).
 
 When running inside Pupitre, the "Vérifier mon travail" button calls a local Rust command instead of the remote checker-service:
 
@@ -117,13 +110,7 @@ Lab modules with `checkProvider: local` in the CRD use this flow. Labs with `che
 
 ### Build Pupitre
 
-```bash
-# macOS (ARM64)
-cd tauri-app/src-tauri && cargo build --release
-
-# Linux x86_64 (via Silverblue VM or toolbox)
-toolbox run bash -c 'source ~/.cargo/env && cd ~/tauri-app/src-tauri && cargo build --release'
-```
+See the [`pupitre-desktop`](https://github.com/genesary/pupitre-desktop) repository for build instructions.
 
 ## Quick start
 
@@ -159,7 +146,6 @@ See `CONTRIBUTING.md` for the full step-by-step guide, troubleshooting, and depl
 │   │   └── config/       # Env config
 │   └── migrations/       # Embedded SQL migrations
 ├── frontend/             # Astro
-├── tauri-app/            # Pupitre desktop app (Tauri v2)
 ├── helm/                 # Helm chart (all services)
 ├── infra/                # Kind config + manifests + course CRDs
 ├── docs/                 # Architecture, Course spec, Labs, SSO

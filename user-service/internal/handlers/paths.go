@@ -104,20 +104,22 @@ type enrolledUser struct {
 //
 // Rules:
 //   - "completed" if the user finished the course (cross-path counts).
-//   - "available" for the first non-completed course in an unbroken chain.
-//   - "locked" otherwise. A cross-path completion mid-path does not
-//     unlock the next course if preceding courses are not yet done.
+//   - "available" if the immediately preceding course is completed (or first).
+//   - "locked" otherwise.
 func buildCourseStatuses(courses []string, completed map[string]bool) []courseStatus {
 	out := make([]courseStatus, len(courses))
-	sequential := true // true while no non-completed course has been seen yet
 
 	for idx, slug := range courses {
+		prevDone := true
+		if idx > 0 {
+			prevDone = completed[courses[idx-1]] //nolint:gosec // idx>0 guards the slice access
+		}
+
 		switch {
 		case completed[slug]:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusCompleted}
-		case sequential:
+		case prevDone:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusAvailable}
-			sequential = false
 		default:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusLocked}
 		}
@@ -257,29 +259,35 @@ func (s *State) resolveEnrollment(req *http.Request, userID string, enr enrollme
 // "available" and subsequent ones are "locked" (sequential ordering).
 func (s *State) buildSkillStatuses(req *http.Request, userID string, skills []string) []courseStatus {
 	passed := s.passedModulesCtx(req, userID)
+	viewed := s.viewedLessonsCtx(req, userID)
 	out := make([]courseStatus, 0, len(skills))
-	sequential := true
+	prevCompleted := true // first skill has no prerequisite
 
 	for _, skill := range skills {
 		modules, err := s.fetchSkillModules(req, skill)
 		if err != nil {
 			zap.L().Warn("failed to fetch skill modules for path", zap.String("skill", skill), zap.Error(err))
-			// treat as locked if we can't determine completion
 			out = append(out, courseStatus{Slug: skill, Status: pathStatusLocked})
-			sequential = false
+			prevCompleted = false
 
 			continue
 		}
 
+		done := skillIsCompleted(modules, passed, viewed)
+
+		var status string
+
 		switch {
-		case skillIsCompleted(modules, passed):
-			out = append(out, courseStatus{Slug: skill, Status: pathStatusCompleted})
-		case sequential:
-			out = append(out, courseStatus{Slug: skill, Status: pathStatusAvailable})
-			sequential = false
+		case done:
+			status = pathStatusCompleted
+		case prevCompleted:
+			status = pathStatusAvailable
 		default:
-			out = append(out, courseStatus{Slug: skill, Status: pathStatusLocked})
+			status = pathStatusLocked
 		}
+
+		out = append(out, courseStatus{Slug: skill, Status: status})
+		prevCompleted = done
 	}
 
 	return out

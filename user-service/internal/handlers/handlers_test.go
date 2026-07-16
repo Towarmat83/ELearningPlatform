@@ -2165,8 +2165,8 @@ func TestRegister_Success(t *testing.T) {
 	body := `{"username":"testuser","email":"test@example.com","password":"ValidPass9"}`
 
 	rec := htDo(t, r, "POST", "/api/auth/register", body, "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Errorf("want 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -264,6 +264,23 @@ go/lint-checker:
 	@echo "=== Linting checker-service ==="
 	@cd checker-service && golangci-lint run ./...
 
+# ── E2E Tests ───────────────────────────────────────────────────────────────
+#
+# Runs e2e tests against services already port-forwarded to localhost.
+# Requires: USER_SERVICE_URL, COURSE_SERVICE_URL (optional), CHECKER_SERVICE_URL,
+#           ADMIN_EMAIL, ADMIN_PASSWORD.
+# Example:
+#   USER_SERVICE_URL=http://localhost:8081 \
+#   COURSE_SERVICE_URL=http://localhost:8082 \
+#   CHECKER_SERVICE_URL=http://localhost:8083 \
+#   ADMIN_PASSWORD=<password> \
+#   make e2e/test
+
+.PHONY: e2e/test
+e2e/test:
+	@echo "=== E2E tests ==="
+	@cd e2e && go test -tags e2e -v -timeout 120s ./...
+
 # ── Status ──────────────────────────────────────────────────────────────────
 
 .PHONY: status

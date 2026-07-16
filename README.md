@@ -21,54 +21,45 @@ Micro-services e-learning platform with Kubernetes CRD-based course definitions,
 ## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph CLIENTS["Clients"]
-        direction LR
-        Browser(["🌐 Browser"])
-        Pupitre(["🖥️ Pupitre — Tauri"])
+graph LR
+    subgraph CLI["Clients"]
+        B(["Browser"])
+        P(["Pupitre — Tauri"])
     end
 
-    subgraph PLATFORM["Platform — Kubernetes"]
-        Frontend["⚡ Frontend\nAstro SSR · :3000\nAPI proxy"]
+    subgraph PLAT["Platform — Kubernetes"]
+        F["Frontend\nAstro SSR · :3000"]
 
-        subgraph SERVICES["Backend Services"]
-            direction LR
-            US["👤 User Service\n:8081\nAuth · Progress · Admin"]
-            CS["📚 Course Service\n:8082\nCourses · Labs · Skills"]
-            CK["🔍 Checker Service\n:8083\nOPA/Rego · GitLab fetch"]
+        subgraph SVC["Backend Services"]
+            US["User Service · :8081\nAuth · Progress · Admin"]
+            CS["Course Service · :8082\nCourses · Labs · Skills"]
+            CK["Checker Service · :8083\nOPA/Rego · GitLab fetch"]
         end
 
-        subgraph DATA["Data"]
-            direction LR
-            PG[("🗄️ PostgreSQL")]
-            CRD[["⚙️ K8s CRDs\nCourse · Path · Pattern"]]
-            GIT[["📁 Git repos\nModule content · check.rego"]]
+        subgraph DAT["Data"]
+            PG[("PostgreSQL")]
+            CRD[["K8s CRDs\nCourse · Path · Pattern"]]
+            GIT[["Git repos\nModule content · check.rego"]]
         end
     end
 
-    subgraph EXTERNAL["External"]
-        direction LR
-        GL(["🦊 GitLab\nStudent repos"])
-        OA(["🔑 OAuth2 / OIDC\nKeycloak · GitHub"])
-        PO(["🐳 Podman\nLocal machine"])
+    subgraph EXT["External"]
+        GL(["GitLab"])
+        OA(["OAuth2 / OIDC"])
+        PD(["Podman"])
     end
 
-    Browser -->|HTTP| Frontend
-    Pupitre -->|WebView| Frontend
-    Pupitre -->|local_check Rust| PO
+    B -->|HTTP| F
+    P -->|WebView| F
+    P -.->|local_check| PD
 
-    Frontend --> US
-    Frontend --> CS
-
-    CS -->|internal API| US
+    F --> US & CS
+    CS -->|internal| US
     CS -->|POST /evaluate| CK
 
-    US --> PG
-    CS --> PG
-    CS --> CRD
-    CS --> GIT
-    CK --> GIT
-    CK --> GL
+    US & CS --> PG
+    CS --> CRD & GIT
+    CK --> GIT & GL
     US -.->|OIDC| OA
 ```
 

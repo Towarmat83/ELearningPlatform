@@ -2,7 +2,7 @@ jwtSecret: "test-jwt-secret-for-kind-cluster-min-32-chars!!"
 
 courseService:
   image:
-    repository: localhost/elearning-course-service
+    repository: localhost/pupitre-course-service
     tag: local
     pullPolicy: Never
   service:
@@ -12,7 +12,7 @@ courseService:
 
 checkerService:
   image:
-    repository: localhost/elearning-checker-service
+    repository: localhost/pupitre-checker-service
     tag: local
     pullPolicy: Never
   service:
@@ -24,7 +24,7 @@ checkerService:
 
 userService:
   image:
-    repository: localhost/elearning-user-service
+    repository: localhost/pupitre-user-service
     tag: local
     pullPolicy: Never
   service:
@@ -34,7 +34,7 @@ userService:
 
 frontend:
   image:
-    repository: localhost/elearning-frontend
+    repository: localhost/pupitre-frontend
     tag: local
     pullPolicy: Never
   service:
@@ -58,8 +58,8 @@ ingress:
 postgresql:
   enabled: true
   auth:
-    username: elearning
-    password: elearning_secret
-    database: elearning
+    username: pupitre
+    password: pupitre_secret
+    database: pupitre
   persistence:
     enabled: false

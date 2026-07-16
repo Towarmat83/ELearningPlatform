@@ -14,7 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/elearning/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
 // checkSpec is the structure of check.yaml in the course git repo.

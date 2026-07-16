@@ -29,9 +29,9 @@ make docker-build
 
 This builds 3 images:
 
-- `localhost/elearning-course-service:latest`
-- `localhost/elearning-user-service:latest`
-- `localhost/elearning-frontend:latest`
+- `localhost/pupitre-course-service:latest`
+- `localhost/pupitre-user-service:latest`
+- `localhost/pupitre-frontend:latest`
 
 If a build fails, check the Dockerfile in each service directory.
 
@@ -41,7 +41,7 @@ If a build fails, check the Dockerfile in each service directory.
 make kind-create
 ```
 
-This creates a local Kubernetes cluster named `elearning` inside Docker.
+This creates a local Kubernetes cluster named `pupitre` inside Docker.
 
 ### 3. Load images into the cluster
 
@@ -71,15 +71,15 @@ kubectl get pods
 
 You should see 4 pods running:
 
-- `elearning-course-service-...`
-- `elearning-user-service-...`
-- `elearning-postgresql-...`
-- `elearning-frontend-...`
+- `pupitre-course-service-...`
+- `pupitre-user-service-...`
+- `pupitre-postgresql-...`
+- `pupitre-frontend-...`
 
-> **Troubleshooting:** If `elearning-postgresql` stays `Pending`, run:
+> **Troubleshooting:** If `pupitre-postgresql` stays `Pending`, run:
 >
 > ```bash
-> kubectl describe pod elearning-postgresql-0
+> kubectl describe pod pupitre-postgresql-0
 > ```
 >
 > If you see `Insufficient ephemeral-storage`, disable Bitnami PostgreSQL and use the standalone one:
@@ -120,7 +120,7 @@ make port-forward
 
 Open <http://localhost:3000> in your browser.
 
-Default admin login: `admin@elearning.local` / `Admin@1234`
+Default admin login: `admin@pupitre.local` / `Admin@1234`
 
 ---
 
@@ -148,7 +148,7 @@ This deletes the old cluster, creates a new one, builds images, loads them, runs
 
 | Command                    | What it does                              |
 |----------------------------|-------------------------------------------|
-| `make kind-create`         | Create KinD cluster (`elearning`)         |
+| `make kind-create`         | Create KinD cluster (`pupitre`)         |
 | `make kind-delete`         | Delete KinD cluster                       |
 | `make docker-build`        | Build all 3 Docker images                 |
 | `make kind-load`           | Load images into KinD nodes               |
@@ -166,9 +166,9 @@ This deletes the old cluster, creates a new one, builds images, loads them, runs
 
 ```bash
 # Build and reload course-service
-docker build -t localhost/elearning-course-service:latest course-service/
-kind load docker-image localhost/elearning-course-service:latest --name elearning
-kubectl rollout restart deploy/elearning-course-service
+docker build -t localhost/pupitre-course-service:latest course-service/
+kind load docker-image localhost/pupitre-course-service:latest --name pupitre
+kubectl rollout restart deploy/pupitre-course-service
 ```
 
 Same pattern for `user-service` and `frontend`.
@@ -230,7 +230,7 @@ kubectl describe pod -l app=postgresql
 **User service CrashLoopBackOff**: check logs:
 
 ```bash
-kubectl logs -l app.kubernetes.io/name=elearning --tail=20
+kubectl logs -l app.kubernetes.io/name=pupitre --tail=20
 ```
 
 If it says "connection refused" to PostgreSQL, the database isn't ready yet.
@@ -245,9 +245,9 @@ kubectl create secret generic course-repo-secret --from-file=git-credentials.yam
 **ConfigMaps**: after modifying a ConfigMap, restart the pod to pick up the changes:
 
 ```bash
-kubectl rollout restart deploy/elearning-course-service
-kubectl rollout restart deploy/elearning-user-service
-kubectl rollout restart deploy/elearning-frontend
+kubectl rollout restart deploy/pupitre-course-service
+kubectl rollout restart deploy/pupitre-user-service
+kubectl rollout restart deploy/pupitre-frontend
 ```
 
 The Go services read the mounted YAML at startup. The frontend entrypoint sources the `.env` file on each container start. All three also respect env var overrides — see `docs/ARCHITECTURE.md` (section "Configuration des services").

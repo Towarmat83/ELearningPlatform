@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/elearning/course-service/internal/content"
-	"github.com/elearning/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // prerequisiteResponse describes a single course prerequisite in API

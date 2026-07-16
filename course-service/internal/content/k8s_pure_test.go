@@ -6,7 +6,7 @@ import (
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	coursev1 "github.com/elearning/course-service/api/v1"
+	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
 )
 
 // TestSourceK8s checks source k8s.

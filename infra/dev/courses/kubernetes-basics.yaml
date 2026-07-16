@@ -10,121 +10,121 @@ spec:
   difficulty: intermediate
   public: true
   modules:
-  - name: "Concepts fondamentaux"
-    type: text
-    content: |
-      ## Concepts fondamentaux
+    - name: "Concepts fondamentaux"
+      type: text
+      content: |
+        ## Concepts fondamentaux
 
-      Kubernetes (K8s) orchestre des conteneurs sur un cluster de nœuds.
+        Kubernetes (K8s) orchestre des conteneurs sur un cluster de nœuds.
 
-      | Objet | Rôle |
-      |---|---|
-      | **Pod** | Plus petite unité déployable — un ou plusieurs conteneurs |
-      | **Deployment** | Gère les réplicas et les mises à jour progressives des Pods |
-      | **Service** | Point réseau stable devant les Pods |
-      | **ConfigMap** | Configuration non sensible sous forme de clés/valeurs |
-      | **Secret** | Données sensibles (encodées en base64) |
-      | **Namespace** | Cluster virtuel pour l'isolation |
+        | Objet | Rôle |
+        |---|---|
+        | **Pod** | Plus petite unité déployable — un ou plusieurs conteneurs |
+        | **Deployment** | Gère les réplicas et les mises à jour progressives des Pods |
+        | **Service** | Point réseau stable devant les Pods |
+        | **ConfigMap** | Configuration non sensible sous forme de clés/valeurs |
+        | **Secret** | Données sensibles (encodées en base64) |
+        | **Namespace** | Cluster virtuel pour l'isolation |
 
-      ```bash
-      kubectl get pods -n default
-      kubectl describe pod <nom>
-      kubectl logs <pod> -f
-      kubectl exec -it <pod> -- sh
-      kubectl apply -f manifest.yaml
-      kubectl delete -f manifest.yaml
-      ```
+        ```bash
+        kubectl get pods -n default
+        kubectl describe pod <nom>
+        kubectl logs <pod> -f
+        kubectl exec -it <pod> -- sh
+        kubectl apply -f manifest.yaml
+        kubectl delete -f manifest.yaml
+        ```
 
-  - name: "Deployments et Services"
-    type: text
-    content: |
-      ## Deployments et Services
+    - name: "Deployments et Services"
+      type: text
+      content: |
+        ## Deployments et Services
 
-      ### Deployment
+        ### Deployment
 
-      ```yaml
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: monapp
-      spec:
-        replicas: 3
-        selector:
-          matchLabels:
-            app: monapp
-        template:
-          metadata:
-            labels:
+        ```yaml
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: monapp
+        spec:
+          replicas: 3
+          selector:
+            matchLabels:
               app: monapp
-          spec:
-            containers:
-            - name: monapp
-              image: monapp:1.0
-              ports:
-              - containerPort: 3000
-              resources:
-                requests:
-                  cpu: 100m
-                  memory: 128Mi
-                limits:
-                  cpu: 500m
-                  memory: 256Mi
-      ```
+          template:
+            metadata:
+              labels:
+                app: monapp
+            spec:
+              containers:
+              - name: monapp
+                image: monapp:1.0
+                ports:
+                - containerPort: 3000
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+        ```
 
-      ### Service
+        ### Service
 
-      ```yaml
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: monapp
-      spec:
-        selector:
-          app: monapp
-        ports:
-        - port: 80
-          targetPort: 3000
-        type: ClusterIP
-      ```
+        ```yaml
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: monapp
+        spec:
+          selector:
+            app: monapp
+          ports:
+          - port: 80
+            targetPort: 3000
+          type: ClusterIP
+        ```
 
-  - name: "ConfigMaps et Secrets"
-    type: text
-    content: |
-      ## ConfigMaps et Secrets
+    - name: "ConfigMaps et Secrets"
+      type: text
+      content: |
+        ## ConfigMaps et Secrets
 
-      ### ConfigMap
+        ### ConfigMap
 
-      ```yaml
-      apiVersion: v1
-      kind: ConfigMap
-      metadata:
-        name: app-config
-      data:
-        LOG_LEVEL: info
-        MAX_CONNECTIONS: "100"
-      ```
-
-      Référencer dans un Pod :
-      ```yaml
-      envFrom:
-      - configMapRef:
+        ```yaml
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
           name: app-config
-      ```
+        data:
+          LOG_LEVEL: info
+          MAX_CONNECTIONS: "100"
+        ```
 
-      ### Secret
+        Référencer dans un Pod :
+        ```yaml
+        envFrom:
+        - configMapRef:
+            name: app-config
+        ```
 
-      ```bash
-      kubectl create secret generic db-creds \
-        --from-literal=password=supersecret
-      ```
+        ### Secret
 
-      ```yaml
-      env:
-      - name: DB_PASSWORD
-        valueFrom:
-          secretKeyRef:
-            name: db-creds
-            key: password
-      ```
+        ```bash
+        kubectl create secret generic db-creds \
+          --from-literal=password=supersecret
+        ```
 
-      > Ne jamais commiter des manifests Secret avec des valeurs en clair dans git — utiliser Sealed Secrets ou un coffre-fort externe.
+        ```yaml
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-creds
+              key: password
+        ```
+
+        > Ne jamais commiter des manifests Secret avec des valeurs en clair dans git — utiliser Sealed Secrets ou un coffre-fort externe.

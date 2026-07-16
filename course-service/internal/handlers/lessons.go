@@ -9,8 +9,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/elearning/course-service/internal/content"
-	"github.com/elearning/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // courseCompleteBody is the request body sent to the user-service when a

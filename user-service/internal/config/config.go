@@ -182,7 +182,7 @@ func Load() *Config {
 // values.
 func defaultConfig() *Config {
 	return &Config{
-		DatabaseURL:                "postgres://elearning:elearning@localhost:5432/elearning",
+		DatabaseURL:                "postgres://pupitre:pupitre@localhost:5432/pupitre",
 		JWTSecret:                  defaultJWTSecret,
 		InternalSecret:             defaultInternalSecret,
 		JWTExpiryH:                 defaultJWTExpiryHours,

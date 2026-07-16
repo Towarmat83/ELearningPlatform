@@ -11,6 +11,6 @@ spec:
   modules:
     - name: "Linux Introduction"
       type: modules
-      src: "https://github.com/Towarmat83/ELearningPlatform"
+      src: "https://github.com/genesary/pupitre"
       ref: "feat/issue-20-modules-type"
       path: "examples/courses/linux-intro/index.yaml"

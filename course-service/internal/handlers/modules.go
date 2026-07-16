@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/elearning/course-service/internal/content"
-	"github.com/elearning/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // publicAnswer is the client-facing representation of a quiz answer option;

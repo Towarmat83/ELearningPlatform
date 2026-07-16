@@ -14,7 +14,7 @@ import (
 	crcache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	coursev1 "github.com/elearning/course-service/api/v1"
+	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
 )
 
 // k8sCooldownDefaultBaseSeconds is the default cooldown base duration (in

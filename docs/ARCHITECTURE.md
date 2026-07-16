@@ -121,7 +121,7 @@ Le frontend utilise un script d'entrée (`docker-entrypoint.sh`) qui source le f
 
 ```bash
 # Surcharger une valeur via Helm
-helm upgrade elearning helm/ --set courseService.env.GIT_CACHE_TTL=30
+helm upgrade pupitre helm/ --set courseService.env.GIT_CACHE_TTL=30
 
 # Ou modifier les valeurs.yaml puis helm upgrade
 ```

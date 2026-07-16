@@ -1,6 +1,6 @@
 //go:build e2e
 
-// Package e2e_test contains end-to-end tests for the eLearning platform.
+// Package e2e_test contains end-to-end tests for the pupitre platform.
 // Run with:
 //
 //	go test -tags e2e ./...
@@ -9,7 +9,7 @@
 //
 //	USER_SERVICE_URL    (default: http://localhost:8081)
 //	CHECKER_SERVICE_URL (default: http://localhost:8083)
-//	ADMIN_EMAIL         (default: admin@elearning.local)
+//	ADMIN_EMAIL         (default: admin@pupitre.local)
 //	ADMIN_PASSWORD      (required — no default)
 //
 // Optional:

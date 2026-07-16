@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elearning/course-service/internal/config"
-	"github.com/elearning/course-service/internal/content"
-	apimiddleware "github.com/elearning/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/config"
+	"github.com/genesary/pupitre/course-service/internal/content"
+	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // newTestState builds a State seeded with published and unpublished test
@@ -617,8 +617,8 @@ func TestMetrics(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "elearning_active_courses_total") {
-		t.Error("expected elearning_active_courses_total metric")
+	if !strings.Contains(body, "pupitre_active_courses_total") {
+		t.Error("expected pupitre_active_courses_total metric")
 	}
 
 	if !strings.Contains(body, "go_goroutines") {

@@ -87,14 +87,14 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/v}"
             MAJOR=$(echo "$VERSION" | cut -d. -f1)
             MINOR=$(echo "$VERSION" | cut -d. -f2)
-            TAGS="ghcr.io/${OWNER}/elearning-${{ matrix.service }}:${VERSION}
-          ghcr.io/${OWNER}/elearning-${{ matrix.service }}:${MAJOR}.${MINOR}
-          ghcr.io/${OWNER}/elearning-${{ matrix.service }}:${MAJOR}
-          ghcr.io/${OWNER}/elearning-${{ matrix.service }}:latest
-          ghcr.io/${OWNER}/elearning-${{ matrix.service }}:${SHORT_SHA}"
+            TAGS="ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:${VERSION}
+          ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:${MAJOR}.${MINOR}
+          ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:${MAJOR}
+          ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:latest
+          ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:${SHORT_SHA}"
             echo "push=true" >> "$GITHUB_OUTPUT"
           else
-            TAGS="ghcr.io/${OWNER}/elearning-${{ matrix.service }}:${SHORT_SHA}"
+            TAGS="ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:${SHORT_SHA}"
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
           {
@@ -110,7 +110,7 @@ jobs:
           push: ${{ steps.vars.outputs.push == 'true' }}
           tags: ${{ steps.vars.outputs.tags }}
           labels: |
-            org.opencontainers.image.title=elearning-${{ matrix.service }}
+            org.opencontainers.image.title=pupitre-${{ matrix.service }}
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
@@ -145,7 +145,7 @@ jobs:
         id: image
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "ref=ghcr.io/${OWNER}/elearning-${{ matrix.service }}:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${OWNER}/pupitre-${{ matrix.service }}:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@v0.36.0

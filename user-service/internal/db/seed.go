@@ -16,7 +16,7 @@ import (
 
 const (
 	// defaultAdminEmail is the email of the bootstrapped admin account.
-	defaultAdminEmail = "admin@elearning.local"
+	defaultAdminEmail = "admin@pupitre.local"
 	// defaultAdminUsername is the username of the bootstrapped admin account.
 	defaultAdminUsername = "admin"
 	// defaultAdminHash is the bcrypt hash of "Admin@1234" (cost 12).

@@ -20,11 +20,11 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 
-	"github.com/elearning/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/db"
 
-	"github.com/elearning/user-service/internal/config"
-	"github.com/elearning/user-service/internal/metrics"
-	"github.com/elearning/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/metrics"
+	"github.com/genesary/pupitre/user-service/internal/middleware"
 )
 
 // Repeated OAuth/OIDC literals and tunables, pulled out to satisfy goconst

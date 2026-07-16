@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	coursev1 "github.com/elearning/course-service/api/v1"
+	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
 )
 
 // k8sClient builds a controller-runtime client for the Course CRD, using

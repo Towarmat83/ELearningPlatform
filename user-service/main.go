@@ -14,11 +14,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/elearning/user-service/internal/config"
-	"github.com/elearning/user-service/internal/db"
-	"github.com/elearning/user-service/internal/handlers"
-	"github.com/elearning/user-service/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/handlers"
+	"github.com/genesary/pupitre/user-service/migrations"
 )
 
 const (

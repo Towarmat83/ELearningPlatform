@@ -10,7 +10,7 @@ metadata:
 data:
   config.yaml: |
     port: 8081
-    databaseUrl: "postgres://elearning:elearning@postgres:5432/elearning"
+    databaseUrl: "postgres://pupitre:pupitre@postgres:5432/pupitre"
     jwtSecret: "change-me-in-production-use-a-long-random-string"
     jwtExpiryHours: 24
     corsOrigins:

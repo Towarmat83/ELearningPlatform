@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	crcache "sigs.k8s.io/controller-runtime/pkg/cache"
 
-	patternv1 "github.com/elearning/user-service/api/v1"
-	"github.com/elearning/user-service/internal/db"
+	patternv1 "github.com/genesary/pupitre/user-service/api/v1"
+	"github.com/genesary/pupitre/user-service/internal/db"
 )
 
 // PatternWatcher watches MarkdownPattern CRDs and syncs them into the DB.

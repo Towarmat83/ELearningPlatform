@@ -1,3 +1,3 @@
-module github.com/elearning/e2e
+module github.com/genesary/pupitre/e2e
 
 go 1.26.0

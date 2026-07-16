@@ -1,20 +1,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# eLearning Platform — KinD Dev Environment
+# Pupitre Platform — KinD Dev Environment
 # ─────────────────────────────────────────────────────────────────────────────
 
-KIND_CLUSTER   := elearning
+KIND_CLUSTER   := pupitre
 HELM_DIR       := helm
-HELM_RELEASE   := elearning
+HELM_RELEASE   := pupitre
 HELM_VALUES    := infra/kind/kind-values.yaml
-PORT_FWDS_LOG  := /tmp/elearning-port-forwards.log
+PORT_FWDS_LOG  := /tmp/pupitre-port-forwards.log
 COURSE_DIR     := examples/courses
 DOCKER         ?= podman
 
-REGISTRY        := ghcr.io/towarmat83
-IMAGE_COURSE    := localhost/elearning-course-service:local
-IMAGE_USER      := localhost/elearning-user-service:local
-IMAGE_FRONTEND  := localhost/elearning-frontend:local
-IMAGE_CHECKER   := localhost/elearning-checker-service:local
+REGISTRY        := ghcr.io/genesary
+IMAGE_COURSE    := localhost/pupitre-course-service:local
+IMAGE_USER      := localhost/pupitre-user-service:local
+IMAGE_FRONTEND  := localhost/pupitre-frontend:local
+IMAGE_CHECKER   := localhost/pupitre-checker-service:local
 
 # ── KinD ────────────────────────────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ dev: kind-delete kind-create docker-build kind-load helm-install apply-courses
 	@echo "=== Deployment ready ==="
 	@echo "Run 'make port-forward' to expose services locally."
 	@echo ""
-	@echo "  Admin login: admin@elearning.local / Admin@1234"
+	@echo "  Admin login: admin@pupitre.local / Admin@1234"
 	@echo "  Frontend:    http://localhost:3000"
 	@echo "  Course API:  http://localhost:18082"
 	@echo "  User API:    http://localhost:18081"

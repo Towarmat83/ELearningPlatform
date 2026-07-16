@@ -15,11 +15,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	patternv1 "github.com/elearning/user-service/api/v1"
+	patternv1 "github.com/genesary/pupitre/user-service/api/v1"
 
-	"github.com/elearning/user-service/fake"
-	"github.com/elearning/user-service/internal/config"
-	apimiddleware "github.com/elearning/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/fake"
+	"github.com/genesary/pupitre/user-service/internal/config"
+	apimiddleware "github.com/genesary/pupitre/user-service/internal/middleware"
 )
 
 const (

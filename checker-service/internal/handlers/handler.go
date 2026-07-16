@@ -13,12 +13,13 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/elearning/checker-service/internal/checker"
-	"github.com/elearning/checker-service/internal/config"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
+
+	"github.com/genesary/pupitre/checker-service/internal/checker"
+	"github.com/genesary/pupitre/checker-service/internal/config"
 )
 
 // internalSecretHeader is the HTTP header used to authenticate

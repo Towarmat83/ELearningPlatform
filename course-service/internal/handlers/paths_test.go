@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/elearning/course-service/internal/config"
-	"github.com/elearning/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/config"
+	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
 // newPathTestState builds a State pre-populated with two fixture learning

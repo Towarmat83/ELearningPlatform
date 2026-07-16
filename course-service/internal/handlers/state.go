@@ -15,9 +15,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/elearning/course-service/internal/config"
-	"github.com/elearning/course-service/internal/content"
-	"github.com/elearning/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/config"
+	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
@@ -117,7 +117,7 @@ type State struct {
 // NewState builds a State from the given config and content stores,
 // wiring up the git cache and optional git credentials.
 func NewState(cfg *config.Config, store *content.Store, paths *content.PathStore) *State {
-	gitCache := content.NewGitCache("/tmp/elearning-git-cache", time.Duration(cfg.GitCacheTTL)*time.Minute)
+	gitCache := content.NewGitCache("/tmp/pupitre-git-cache", time.Duration(cfg.GitCacheTTL)*time.Minute)
 
 	state := &State{
 		Config:          cfg,

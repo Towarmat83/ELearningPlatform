@@ -175,9 +175,9 @@ Deploy as a standard Deployment. The service will use in-cluster config to watch
 make rebuild-course
 
 # Or manually:
-docker build -t localhost/elearning-course-service:latest course-service/
-kind load docker-image localhost/elearning-course-service:latest --name elearning
-kubectl rollout restart deploy/elearning-course-service
+docker build -t localhost/pupitre-course-service:latest course-service/
+kind load docker-image localhost/pupitre-course-service:latest --name pupitre
+kubectl rollout restart deploy/pupitre-course-service
 
 # Check logs
 make logs

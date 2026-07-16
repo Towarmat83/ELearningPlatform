@@ -28,7 +28,7 @@ func loadConfig() testCfg {
 		UserURL:    envOr("USER_SERVICE_URL", "http://localhost:8081"),
 		CourseURL:  os.Getenv("COURSE_SERVICE_URL"),
 		CheckerURL: envOr("CHECKER_SERVICE_URL", "http://localhost:8083"),
-		AdminEmail: envOr("ADMIN_EMAIL", "admin@elearning.local"),
+		AdminEmail: envOr("ADMIN_EMAIL", "admin@pupitre.local"),
 		AdminPass:  envOr("ADMIN_PASSWORD", "admin"),
 	}
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/elearning/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/config"
 )
 
 const (

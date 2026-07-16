@@ -35,19 +35,19 @@ var (
 
 	// ActiveUsers is a gauge of currently registered users.
 	ActiveUsers = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
-		Name: "elearning_active_users_total",
+		Name: "pupitre_active_users_total",
 		Help: "Total number of registered users",
 	})
 
 	// ActiveCourses is a gauge of currently published courses.
 	ActiveCourses = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
-		Name: "elearning_active_courses_total",
+		Name: "pupitre_active_courses_total",
 		Help: "Total number of published courses",
 	})
 
 	// EnrollmentsTotal is a gauge of current course enrollments.
 	EnrollmentsTotal = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
-		Name: "elearning_enrollments_total",
+		Name: "pupitre_enrollments_total",
 		Help: "Total course enrollments",
 	})
 )

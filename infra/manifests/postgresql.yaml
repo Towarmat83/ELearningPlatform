@@ -1,20 +1,20 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: elearning-postgresql
+  name: pupitre-postgresql
   labels:
     app: postgresql
 spec:
   ports:
-  - port: 5432
-    targetPort: 5432
+    - port: 5432
+      targetPort: 5432
   selector:
     app: postgresql
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: elearning-postgresql
+  name: pupitre-postgresql
   labels:
     app: postgresql
 spec:
@@ -28,19 +28,19 @@ spec:
         app: postgresql
     spec:
       containers:
-      - name: postgresql
-        image: postgres:17-alpine
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_USER
-          value: elearning
-        - name: POSTGRES_PASSWORD
-          value: elearning_secret
-        - name: POSTGRES_DB
-          value: elearning
-        readinessProbe:
-          exec:
-            command: ["pg_isready", "-U", "elearning"]
-          initialDelaySeconds: 5
-          periodSeconds: 10
+        - name: postgresql
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: pupitre
+            - name: POSTGRES_PASSWORD
+              value: pupitre_secret
+            - name: POSTGRES_DB
+              value: pupitre
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pupitre"]
+            initialDelaySeconds: 5
+            periodSeconds: 10

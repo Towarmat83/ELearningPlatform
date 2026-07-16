@@ -1,4 +1,4 @@
-module github.com/elearning/user-service
+module github.com/genesary/pupitre/user-service
 
 go 1.26.0
 

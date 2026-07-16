@@ -146,7 +146,7 @@ sso:
   oidc:
     enabled: true
     providerURL: "https://keycloak.company.com/realms/{realm}"  # OIDC discovery URL
-    clientID: "elearning"
+    clientID: "pupitre"
     clientSecret: "yyy"          # dev: rendered into the release Secret
     scopes: "openid email profile groups"
     groupClaim: "groups"
@@ -162,7 +162,7 @@ sso:
   oidc:
     enabled: true
     providerURL: "https://keycloak.company.com/realms/{realm}"
-    clientID: "elearning"
+    clientID: "pupitre"
     existingSecret: keycloak-oidc       # Secret you manage
     existingSecretKey: OIDC_CLIENT_SECRET
 ```
@@ -327,7 +327,7 @@ Required scopes: `openid`, `email`, `profile`.
 providers:
   - id: keycloak
     name: "Company SSO"
-    clientId: "elearning"
+    clientId: "pupitre"
     clientSecret: "yyy"
     issuerUrl: "https://keycloak.company.com/realms/{realm-name}"
 ```
@@ -489,7 +489,7 @@ Configure it at runtime in `/admin/settings`:
 |---|---|---|
 | `ldap_enabled` | Enable LDAP login | `true` |
 | `ldap_server_url` | LDAP server URL | `ldap://openldap:389` or `ldaps://ad.company.com:636` |
-| `ldap_bind_dn` | Service account DN (leave empty for anonymous bind) | `cn=svc-elearning,ou=service,dc=company,dc=com` |
+| `ldap_bind_dn` | Service account DN (leave empty for anonymous bind) | `cn=svc-pupitre,ou=service,dc=company,dc=com` |
 | `ldap_bind_password` | Service account password | `secret` |
 | `ldap_user_base_dn` | Base DN for user search | `ou=users,dc=company,dc=com` |
 | `ldap_user_filter` | Search filter — `%s` is replaced by the user's email | `(mail=%s)` |
@@ -522,7 +522,7 @@ ldap_group_filter     = (|(member=%s)(uniqueMember=%s)(memberUid=%s))
 
 ```
 ldap_server_url       = ldaps://ad.company.com:636
-ldap_bind_dn          = CN=svc-elearning,OU=Service Accounts,DC=company,DC=com
+ldap_bind_dn          = CN=svc-pupitre,OU=Service Accounts,DC=company,DC=com
 ldap_bind_password    = secret
 ldap_user_base_dn     = OU=Users,DC=company,DC=com
 ldap_user_filter      = (userPrincipalName=%s)
@@ -552,7 +552,7 @@ LDAP groups are synced as platform groups on every login. Use `/admin/groups` to
 
 | LDAP group CN | Platform role |
 |---|---|
-| `elearning-admins` | `admin` |
-| `elearning-students` | `student` |
+| `pupitre-admins` | `admin` |
+| `pupitre-students` | `student` |
 
 If a user belongs to multiple groups, the highest role wins (`admin` > `student`).

@@ -6,7 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	toolscache "k8s.io/client-go/tools/cache"
 
-	coursev1 "github.com/elearning/course-service/api/v1"
+	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
 )
 
 // ── PathStore ────────────────────────────────────────────────────────────────

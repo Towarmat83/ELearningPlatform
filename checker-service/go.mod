@@ -1,4 +1,4 @@
-module github.com/elearning/checker-service
+module github.com/genesary/pupitre/checker-service
 
 go 1.26.0
 

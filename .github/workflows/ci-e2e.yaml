@@ -48,6 +48,7 @@ jobs:
       JWT_SECRET: ci-jwt-secret-e2e-only
       INTERNAL_SERVICE_SECRET: ci-internal-secret-e2e-only
       ADMIN_PASSWORD: admin-e2e-password
+      AUTH_RATE_LIMIT_REQUESTS: "1000"
 
     steps:
       - uses: actions/checkout@v4

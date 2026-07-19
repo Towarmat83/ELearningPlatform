@@ -151,7 +151,7 @@ func seedDatabase(ctx context.Context, gdb *gorm.DB, repos *repository.Repositor
 
 	// Seed mock users and enrollments (dev/demo only).
 	if os.Getenv("SEED_MOCK_DATA") == seedMockDataValue {
-		err := db.SeedMockData(ctx, repos.Users, gdb)
+		err := db.SeedMockData(ctx, repos.Users, repos.Enrollments)
 		if err != nil {
 			zap.L().Error("failed to seed mock data", zap.Error(err))
 		}

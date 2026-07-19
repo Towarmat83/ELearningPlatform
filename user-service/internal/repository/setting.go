@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -62,11 +63,12 @@ func (r *gormSettingRepository) List(ctx context.Context) ([]models.PlatformSett
 
 // Upsert creates or updates the setting identified by key with value.
 func (r *gormSettingRepository) Upsert(ctx context.Context, key, value string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO platform_settings (key, value, updatedat)
-		VALUES (?, ?, NOW())
-		ON CONFLICT (key) DO UPDATE SET value = ?, updatedat = NOW()`,
-		key, value, value).Error
+	setting := models.PlatformSetting{Key: key, Value: value}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value", "updatedat"}),
+	}).Create(&setting).Error
 	if err != nil {
 		return fmt.Errorf("upsert setting %s: %w", key, err)
 	}

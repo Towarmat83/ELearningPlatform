@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -17,10 +18,6 @@ var ErrPatternNotFound = errors.New("pattern not found")
 // patternGlobalScope is the scope value shared by patterns visible to every
 // course, as opposed to a single course-specific scope.
 const patternGlobalScope = "global"
-
-// patternReturning lists every markdown_patterns column, used by Create and
-// UpdateByName's RETURNING clause.
-const patternReturning = `id, name, label, description, parameter, html, css, js, scope, from_config, createdby, createdat, updatedat`
 
 // PatternRepository is the persistence boundary for the markdown_patterns
 // table.
@@ -33,10 +30,9 @@ type PatternRepository interface {
 	DeleteByName(ctx context.Context, name string) (bool, error)
 	DeleteByIDAndScope(ctx context.Context, id uuid.UUID, scope string) (bool, error)
 
-	// UpsertFromConfig and UpsertFromCRD are named ON CONFLICT (name, scope)
-	// DO UPDATE upserts, kept as raw SQL per the ORM migration plan's
-	// guidance. They intentionally differ: config upserts also refresh
-	// `parameter`, matching the original hand-rolled SQL for each caller
+	// UpsertFromConfig and UpsertFromCRD are ON CONFLICT (name, scope) DO
+	// UPDATE upserts. They intentionally differ: config upserts also
+	// refresh `parameter`, matching each caller's original semantics
 	// (patterns.go's LoadPatternsFromConfig vs. pattern_watcher.go's CRD sync).
 	UpsertFromConfig(ctx context.Context, name, label, description, parameter, html, css, js, scope string) error
 	UpsertFromCRD(ctx context.Context, name, label, description, html, css, js, scope string) error
@@ -102,14 +98,24 @@ func (r *gormPatternRepository) Get(ctx context.Context, id uuid.UUID) (*models.
 func (r *gormPatternRepository) Create(
 	ctx context.Context, name, label, description, parameter, html, css, jsCode, scope, createdBy string,
 ) (*models.MarkdownPattern, error) {
-	var pattern models.MarkdownPattern
-
-	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, createdby)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		RETURNING `+patternReturning,
-		name, label, description, parameter, html, css, jsCode, scope, createdBy).Scan(&pattern).Error
+	createdByID, err := uuid.Parse(createdBy)
 	if err != nil {
+		return nil, fmt.Errorf("parse createdby: %w", err)
+	}
+
+	pattern := models.MarkdownPattern{
+		Name:        name,
+		Label:       label,
+		Description: description,
+		Parameter:   parameter,
+		HTML:        html,
+		CSS:         css,
+		JS:          jsCode,
+		Scope:       scope,
+		CreatedBy:   &createdByID,
+	}
+
+	if err := r.db.WithContext(ctx).Create(&pattern).Error; err != nil {
 		return nil, fmt.Errorf("create pattern: %w", err)
 	}
 
@@ -123,13 +129,19 @@ func (r *gormPatternRepository) UpdateByName(
 ) (*models.MarkdownPattern, error) {
 	var pattern models.MarkdownPattern
 
-	err := r.db.WithContext(ctx).Raw(`
-		UPDATE markdown_patterns
-		SET name = ?, label = ?, description = ?, parameter = ?, html = ?, css = ?, js = ?,
-		    scope = ?, from_config = FALSE, updatedat = NOW()
-		WHERE name = ?
-		RETURNING `+patternReturning,
-		name, label, description, parameter, html, css, jsCode, scope, oldName).Scan(&pattern).Error
+	err := r.db.WithContext(ctx).Model(&pattern).Clauses(returningAll).
+		Where("name = ?", oldName).
+		Updates(map[string]any{
+			"name":        name,
+			"label":       label,
+			"description": description,
+			"parameter":   parameter,
+			"html":        html,
+			"css":         css,
+			"js":          jsCode,
+			"scope":       scope,
+			"from_config": false,
+		}).Error
 	if err != nil {
 		return nil, fmt.Errorf("update pattern: %w", err)
 	}
@@ -168,19 +180,23 @@ func (r *gormPatternRepository) DeleteByIDAndScope(ctx context.Context, id uuid.
 func (r *gormPatternRepository) UpsertFromConfig(
 	ctx context.Context, name, label, description, parameter, html, css, jsCode, scope string,
 ) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, from_config)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)
-		ON CONFLICT (name, scope) DO UPDATE
-		  SET label       = EXCLUDED.label,
-		      description = EXCLUDED.description,
-		      parameter   = EXCLUDED.parameter,
-		      html        = EXCLUDED.html,
-		      css         = EXCLUDED.css,
-		      js          = EXCLUDED.js,
-		      from_config = TRUE,
-		      updatedat   = NOW()`,
-		name, label, description, parameter, html, css, jsCode, scope).Error
+	pattern := models.MarkdownPattern{
+		Name:        name,
+		Label:       label,
+		Description: description,
+		Parameter:   parameter,
+		HTML:        html,
+		CSS:         css,
+		JS:          jsCode,
+		Scope:       scope,
+		FromConfig:  true,
+	}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "name"}, {Name: "scope"}},
+		DoUpdates: clause.AssignmentColumns(
+			[]string{"label", "description", "parameter", "html", "css", "js", "from_config", "updatedat"}),
+	}).Create(&pattern).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern %q: %w", name, err)
 	}
@@ -193,18 +209,22 @@ func (r *gormPatternRepository) UpsertFromConfig(
 func (r *gormPatternRepository) UpsertFromCRD(
 	ctx context.Context, name, label, description, html, css, jsCode, scope string,
 ) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO markdown_patterns (name, label, description, html, css, js, scope, from_config)
-		VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
-		ON CONFLICT (name, scope) DO UPDATE SET
-			label       = EXCLUDED.label,
-			description = EXCLUDED.description,
-			html        = EXCLUDED.html,
-			css         = EXCLUDED.css,
-			js          = EXCLUDED.js,
-			from_config = TRUE,
-			updatedat   = NOW()`,
-		name, label, description, html, css, jsCode, scope).Error
+	pattern := models.MarkdownPattern{
+		Name:        name,
+		Label:       label,
+		Description: description,
+		HTML:        html,
+		CSS:         css,
+		JS:          jsCode,
+		Scope:       scope,
+		FromConfig:  true,
+	}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "name"}, {Name: "scope"}},
+		DoUpdates: clause.AssignmentColumns(
+			[]string{"label", "description", "html", "css", "js", "from_config", "updatedat"}),
+	}).Create(&pattern).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern from CRD %q: %w", name, err)
 	}
@@ -214,8 +234,9 @@ func (r *gormPatternRepository) UpsertFromCRD(
 
 // DeleteFromCRD removes a CRD-sourced pattern by name and scope.
 func (r *gormPatternRepository) DeleteFromCRD(ctx context.Context, name, scope string) error {
-	err := r.db.WithContext(ctx).Exec(
-		`DELETE FROM markdown_patterns WHERE name = ? AND scope = ? AND from_config = TRUE`, name, scope).Error
+	err := r.db.WithContext(ctx).
+		Where("name = ? AND scope = ? AND from_config = TRUE", name, scope).
+		Delete(&models.MarkdownPattern{}).Error
 	if err != nil {
 		return fmt.Errorf("delete pattern from CRD %q: %w", name, err)
 	}

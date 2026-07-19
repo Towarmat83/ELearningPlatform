@@ -6,6 +6,7 @@ import (
 
 	"github.com/lib/pq"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -44,11 +45,12 @@ func NewGormLessonProgressRepository(db *gorm.DB) LessonProgressRepository {
 // MarkComplete records that userID viewed lessonSlug in courseSlug, doing
 // nothing if already recorded.
 func (r *gormLessonProgressRepository) MarkComplete(ctx context.Context, userID, courseSlug, lessonSlug string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO lesson_progress (userid, courseslug, lessonslug)
-		VALUES (?::uuid, ?, ?)
-		ON CONFLICT (userid, courseslug, lessonslug) DO NOTHING`,
-		userID, courseSlug, lessonSlug).Error
+	progress := models.LessonProgress{UserID: userID, CourseSlug: courseSlug, LessonSlug: lessonSlug}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "userid"}, {Name: "courseslug"}, {Name: "lessonslug"}},
+		DoNothing: true,
+	}).Create(&progress).Error
 	if err != nil {
 		return fmt.Errorf("mark lesson complete: %w", err)
 	}

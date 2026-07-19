@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -55,10 +56,9 @@ func NewGormEnrollmentRepository(db *gorm.DB) EnrollmentRepository {
 
 // Create enrolls userID in courseSlug, doing nothing if already enrolled.
 func (r *gormEnrollmentRepository) Create(ctx context.Context, userID, courseSlug string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO enrollments (userid, courseslug)
-		VALUES (?::uuid, ?)
-		ON CONFLICT DO NOTHING`, userID, courseSlug).Error
+	enrollment := models.Enrollment{UserID: userID, CourseSlug: courseSlug}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&enrollment).Error
 	if err != nil {
 		return fmt.Errorf("create enrollment: %w", err)
 	}
@@ -68,8 +68,9 @@ func (r *gormEnrollmentRepository) Create(ctx context.Context, userID, courseSlu
 
 // Delete removes userID's enrollment in courseSlug.
 func (r *gormEnrollmentRepository) Delete(ctx context.Context, userID, courseSlug string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		DELETE FROM enrollments WHERE userid = ?::uuid AND courseslug = ?`, userID, courseSlug).Error
+	err := r.db.WithContext(ctx).
+		Where("userid = ?::uuid AND courseslug = ?", userID, courseSlug).
+		Delete(&models.Enrollment{}).Error
 	if err != nil {
 		return fmt.Errorf("delete enrollment: %w", err)
 	}
@@ -90,20 +91,18 @@ func (r *gormEnrollmentRepository) Exists(ctx context.Context, userID, courseSlu
 	return count > 0, nil
 }
 
-// MyEnrollments mirrors the original hand-rolled join+subquery exactly (kept
-// as raw SQL, not the query builder, per the ORM migration plan's guidance
-// on reporting queries).
+// MyEnrollments returns userID's enrollments with aggregate lesson/module
+// progress, most recently enrolled first.
 func (r *gormEnrollmentRepository) MyEnrollments(ctx context.Context, userID string) ([]EnrollmentRow, error) {
 	var rows []EnrollmentRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT e.courseslug AS slug,
-		       COUNT(DISTINCT lp.lessonslug) + COALESCE(mp.passedmodules, 0) AS completed_labs,
-		       COALESCE(mp.totalscore, 0) AS total_score,
-		       GREATEST(MAX(lp.viewed_at), mp.lastactivity)::text AS last_activity
-		FROM enrollments e
-		LEFT JOIN lesson_progress lp ON lp.userid = e.userid AND lp.courseslug = e.courseslug
-		LEFT JOIN (
+	err := r.db.WithContext(ctx).Table("enrollments AS e").
+		Select(`e.courseslug AS slug,
+			COUNT(DISTINCT lp.lessonslug) + COALESCE(mp.passedmodules, 0) AS completed_labs,
+			COALESCE(mp.totalscore, 0) AS total_score,
+			GREATEST(MAX(lp.viewed_at), mp.lastactivity)::text AS last_activity`).
+		Joins("LEFT JOIN lesson_progress lp ON lp.userid = e.userid AND lp.courseslug = e.courseslug").
+		Joins(`LEFT JOIN (
 			SELECT courseslug,
 			       SUM(bestscore) AS totalscore,
 			       COUNT(*) FILTER (WHERE passed) AS passedmodules,
@@ -111,10 +110,11 @@ func (r *gormEnrollmentRepository) MyEnrollments(ctx context.Context, userID str
 			FROM module_progress
 			WHERE userid = ?::uuid
 			GROUP BY courseslug
-		) mp ON mp.courseslug = e.courseslug
-		WHERE e.userid = ?::uuid
-		GROUP BY e.courseslug, mp.totalscore, mp.passedmodules, mp.lastactivity, e.enrolledat
-		ORDER BY e.enrolledat DESC`, userID, userID).Scan(&rows).Error
+		) mp ON mp.courseslug = e.courseslug`, userID).
+		Where("e.userid = ?::uuid", userID).
+		Group("e.courseslug, mp.totalscore, mp.passedmodules, mp.lastactivity, e.enrolledat").
+		Order("e.enrolledat DESC").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("query my enrollments: %w", err)
 	}
@@ -148,18 +148,17 @@ func (r *gormEnrollmentRepository) CountDistinctCourses(ctx context.Context) (in
 	return count, nil
 }
 
-// ListByCourse mirrors the original hand-rolled join exactly (kept as raw
-// SQL, not the query builder, per the ORM migration plan's guidance on
-// reporting queries).
+// ListByCourse returns every user enrolled in courseSlug, most recently
+// enrolled first.
 func (r *gormEnrollmentRepository) ListByCourse(ctx context.Context, courseSlug string) ([]CourseEnrollmentRow, error) {
 	var rows []CourseEnrollmentRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT u.id::text AS user_id, u.username, u.email, e.enrolledat::text AS enrolled_at
-		FROM enrollments e
-		JOIN users u ON u.id = e.userid
-		WHERE e.courseslug = ?
-		ORDER BY e.enrolledat DESC`, courseSlug).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Table("enrollments AS e").
+		Select("u.id::text AS user_id, u.username, u.email, e.enrolledat::text AS enrolled_at").
+		Joins("JOIN users u ON u.id = e.userid").
+		Where("e.courseslug = ?", courseSlug).
+		Order("e.enrolledat DESC").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list course enrollments: %w", err)
 	}

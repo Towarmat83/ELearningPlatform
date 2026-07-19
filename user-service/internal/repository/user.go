@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -347,11 +348,11 @@ func (r *gormUserRepository) CountByRole(ctx context.Context, role string) (int6
 func (r *gormUserRepository) ListAuthProviders(ctx context.Context) ([]AuthProviderCount, error) {
 	var list []AuthProviderCount
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT authprovider AS provider, COUNT(*)::bigint AS count
-		FROM users
-		GROUP BY authprovider
-		ORDER BY authprovider`).Scan(&list).Error
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Select("authprovider AS provider, COUNT(*)::bigint AS count").
+		Group("authprovider").
+		Order("authprovider").
+		Scan(&list).Error
 	if err != nil {
 		return nil, fmt.Errorf("list auth providers: %w", err)
 	}
@@ -362,27 +363,19 @@ func (r *gormUserRepository) ListAuthProviders(ctx context.Context) ([]AuthProvi
 // ListForAdmin returns every user for the admin listing, optionally filtered
 // by auth provider, most recently created first.
 func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) ([]AdminUserRow, error) {
-	query := `
-		SELECT u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
-		       u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
-		       COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses
-		FROM users u
-		LEFT JOIN enrollments e ON e.userid = u.id`
+	var list []AdminUserRow
 
-	var (
-		args []any
-		list []AdminUserRow
-	)
+	query := r.db.WithContext(ctx).Table("users AS u").
+		Select(`u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
+			u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
+			COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses`).
+		Joins("LEFT JOIN enrollments e ON e.userid = u.id")
 
 	if provider != "" {
-		query += ` WHERE u.authprovider = ?`
-
-		args = append(args, provider)
+		query = query.Where("u.authprovider = ?", provider)
 	}
 
-	query += ` GROUP BY u.id ORDER BY u.createdat DESC`
-
-	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&list).Error
+	err := query.Group("u.id").Order("u.createdat DESC").Scan(&list).Error
 	if err != nil {
 		return nil, fmt.Errorf("list admin users: %w", err)
 	}
@@ -395,16 +388,16 @@ func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) 
 func (r *gormUserRepository) GetForAdmin(ctx context.Context, userID uuid.UUID) (*AdminUserDetailRow, error) {
 	var row AdminUserDetailRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
-		       u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
-		       COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses,
-		       COUNT(DISTINCT lp.lessonslug)::bigint AS viewed_lessons
-		FROM users u
-		LEFT JOIN enrollments e ON e.userid = u.id
-		LEFT JOIN lesson_progress lp ON lp.userid = u.id
-		WHERE u.id = ?
-		GROUP BY u.id`, userID).Scan(&row).Error
+	err := r.db.WithContext(ctx).Table("users AS u").
+		Select(`u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
+			u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
+			COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses,
+			COUNT(DISTINCT lp.lessonslug)::bigint AS viewed_lessons`).
+		Joins("LEFT JOIN enrollments e ON e.userid = u.id").
+		Joins("LEFT JOIN lesson_progress lp ON lp.userid = u.id").
+		Where("u.id = ?", userID).
+		Group("u.id").
+		Scan(&row).Error
 	if err != nil {
 		return nil, fmt.Errorf("get admin user: %w", err)
 	}
@@ -474,10 +467,12 @@ func (r *gormUserRepository) Search(ctx context.Context, query string) ([]UserSe
 
 	var results []UserSearchRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT id::text AS id, username, email FROM users
-		WHERE LOWER(username) LIKE ? OR LOWER(email) LIKE ?
-		ORDER BY username LIMIT ?`, pattern, pattern, searchUsersLimit).Scan(&results).Error
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Select("id::text AS id, username, email").
+		Where("LOWER(username) LIKE ? OR LOWER(email) LIKE ?", pattern, pattern).
+		Order("username").
+		Limit(searchUsersLimit).
+		Scan(&results).Error
 	if err != nil {
 		return nil, fmt.Errorf("search users: %w", err)
 	}
@@ -489,17 +484,17 @@ func (r *gormUserRepository) Search(ctx context.Context, query string) ([]UserSe
 func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow, error) {
 	var list []LeaderboardRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT u.id::text AS id, u.username, u.email, u.avatarurl AS avatar_url,
-		       COALESCE(SUM(mp.bestscore), 0)::bigint AS total_score,
-		       COUNT(DISTINCT CASE WHEN mp.passed THEN mp.courseslug || ':' || mp.moduleindex::text END)::bigint AS passed_modules,
-		       COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses
-		FROM users u
-		LEFT JOIN module_progress mp ON mp.userid = u.id
-		LEFT JOIN enrollments e ON e.userid = u.id
-		WHERE u.role = 'student' AND u.isactive = TRUE
-		GROUP BY u.id, u.username, u.email, u.avatarurl
-		ORDER BY total_score DESC, passed_modules DESC`).Scan(&list).Error
+	err := r.db.WithContext(ctx).Table("users AS u").
+		Select(`u.id::text AS id, u.username, u.email, u.avatarurl AS avatar_url,
+			COALESCE(SUM(mp.bestscore), 0)::bigint AS total_score,
+			COUNT(DISTINCT CASE WHEN mp.passed THEN mp.courseslug || ':' || mp.moduleindex::text END)::bigint AS passed_modules,
+			COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses`).
+		Joins("LEFT JOIN module_progress mp ON mp.userid = u.id").
+		Joins("LEFT JOIN enrollments e ON e.userid = u.id").
+		Where("u.role = ? AND u.isactive = TRUE", "student").
+		Group("u.id, u.username, u.email, u.avatarurl").
+		Order("total_score DESC, passed_modules DESC").
+		Scan(&list).Error
 	if err != nil {
 		return nil, fmt.Errorf("leaderboard: %w", err)
 	}
@@ -510,10 +505,9 @@ func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow,
 // CreateAdminIfAbsent inserts the default admin account, doing nothing if a
 // conflicting row already exists.
 func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, email, hash string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES (?, ?, ?, 'admin')
-		ON CONFLICT DO NOTHING`, username, email, hash).Error
+	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: "admin"}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&user).Error
 	if err != nil {
 		return fmt.Errorf("insert default admin: %w", err)
 	}
@@ -524,12 +518,12 @@ func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, 
 // UpsertAdminPassword creates the admin account with hash, or updates the
 // password hash of the existing one matching email.
 func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, email, hash string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES (?, ?, ?, 'admin')
-		ON CONFLICT (email) DO UPDATE SET
-			password_hash = EXCLUDED.password_hash,
-			updatedat     = NOW()`, username, email, hash).Error
+	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: "admin"}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "email"}},
+		DoUpdates: clause.AssignmentColumns([]string{"password_hash", "updatedat"}),
+	}).Create(&user).Error
 	if err != nil {
 		return fmt.Errorf("upsert admin password: %w", err)
 	}
@@ -540,18 +534,17 @@ func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, 
 // UpsertMockStudent creates the mock student account with hash, or updates
 // the username of the existing one matching email, returning its ID.
 func (r *gormUserRepository) UpsertMockStudent(ctx context.Context, username, email, hash string) (uuid.UUID, error) {
-	var studentID uuid.UUID
+	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: "student"}
 
-	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES (?, ?, ?, 'student')
-		ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username
-		RETURNING id`, username, email, hash).Scan(&studentID).Error
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "email"}},
+		DoUpdates: clause.AssignmentColumns([]string{"username"}),
+	}).Create(&user).Error
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("upsert mock student: %w", err)
 	}
 
-	return studentID, nil
+	return user.ID, nil
 }
 
 // wrapNotFound maps gorm.ErrRecordNotFound to sentinel, leaving other errors

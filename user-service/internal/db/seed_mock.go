@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
@@ -130,10 +129,7 @@ var mockEnrollments = map[string][]string{
 // SeedMockData inserts mock student users and their enrollments.
 // It is idempotent: existing rows are skipped via ON CONFLICT DO NOTHING.
 // Activate with SEED_MOCK_DATA=true at startup.
-//
-// gdb is used directly (rather than an EnrollmentRepository) for the
-// enrollment inserts since enrollments do not have a repository yet.
-func SeedMockData(ctx context.Context, users repository.UserRepository, gdb *gorm.DB) error {
+func SeedMockData(ctx context.Context, users repository.UserRepository, enrollments repository.EnrollmentRepository) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(mockStudentPassword), bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash mock student password: %w", err)
@@ -150,12 +146,7 @@ func SeedMockData(ctx context.Context, users repository.UserRepository, gdb *gor
 		}
 
 		for _, slug := range mockEnrollments[student.username] {
-			err := gdb.WithContext(ctx).Exec(`
-				INSERT INTO enrollments (userid, courseslug)
-				VALUES (?, ?)
-				ON CONFLICT DO NOTHING`,
-				userID, slug,
-			).Error
+			err := enrollments.Create(ctx, userID.String(), slug)
 			if err != nil {
 				zap.L().Error("mock seed: failed to enroll user", zap.String("username", student.username), zap.String("course", slug), zap.Error(err))
 			}

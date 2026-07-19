@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
+	"github.com/genesary/pupitre/user-service/internal/models"
 )
 
 const (
@@ -84,22 +88,26 @@ func NewGormGroupRepository(db *gorm.DB) GroupRepository {
 // Create inserts a new local group named name, doing nothing if it already
 // exists, and returns its ID.
 func (r *gormGroupRepository) Create(ctx context.Context, name string) (string, error) {
-	var groupID string
+	group := models.Group{Name: name, Source: "local"}
 
-	err := r.db.WithContext(ctx).Raw(
-		`INSERT INTO groups (name, source) VALUES (?, 'local') ON CONFLICT (name) DO NOTHING RETURNING id::text`,
-		name).Scan(&groupID).Error
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&group).Error
 	if err != nil {
 		return "", fmt.Errorf("create group: %w", err)
 	}
 
-	return groupID, nil
+	if group.ID == uuid.Nil {
+		return "", nil
+	}
+
+	return group.ID.String(), nil
 }
 
 // Delete removes the local group identified by id, reporting whether a row
 // was deleted.
 func (r *gormGroupRepository) Delete(ctx context.Context, id string) (bool, error) {
-	result := r.db.WithContext(ctx).Exec(`DELETE FROM groups WHERE id = ?::uuid AND source = 'local'`, id)
+	result := r.db.WithContext(ctx).
+		Where("id = ?::uuid AND source = ?", id, "local").
+		Delete(&models.Group{})
 	if result.Error != nil {
 		return false, fmt.Errorf("delete group: %w", result.Error)
 	}
@@ -112,15 +120,15 @@ func (r *gormGroupRepository) Delete(ctx context.Context, id string) (bool, erro
 func (r *gormGroupRepository) List(ctx context.Context) ([]GroupRow, error) {
 	var rows []GroupRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT g.id::text AS id, g.name, g.source, g.createdat::text AS created_at,
-		       COUNT(ug.userid) AS member_count,
-		       COALESCE(grm.platformrole, '') AS mapped_role
-		FROM groups g
-		LEFT JOIN user_groups ug ON ug.groupid = g.id
-		LEFT JOIN group_role_mappings grm ON grm.groupname = g.name
-		GROUP BY g.id, g.name, g.source, g.createdat, grm.platformrole
-		ORDER BY g.name`).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Table("groups AS g").
+		Select(`g.id::text AS id, g.name, g.source, g.createdat::text AS created_at,
+			COUNT(ug.userid) AS member_count,
+			COALESCE(grm.platformrole, '') AS mapped_role`).
+		Joins("LEFT JOIN user_groups ug ON ug.groupid = g.id").
+		Joins("LEFT JOIN group_role_mappings grm ON grm.groupname = g.name").
+		Group("g.id, g.name, g.source, g.createdat, grm.platformrole").
+		Order("g.name").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list groups: %w", err)
 	}
@@ -133,9 +141,10 @@ func (r *gormGroupRepository) List(ctx context.Context) ([]GroupRow, error) {
 func (r *gormGroupRepository) ListMappings(ctx context.Context) ([]GroupMapping, error) {
 	var rows []GroupMapping
 
-	err := r.db.WithContext(ctx).Raw(
-		`SELECT groupname AS group_name, platformrole AS platform_role FROM group_role_mappings ORDER BY groupname`,
-	).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Model(&models.GroupRoleMapping{}).
+		Select("groupname AS group_name, platformrole AS platform_role").
+		Order("groupname").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list group mappings: %w", err)
 	}
@@ -145,10 +154,12 @@ func (r *gormGroupRepository) ListMappings(ctx context.Context) ([]GroupMapping,
 
 // UpsertMapping creates or updates the platform role mapped to groupName.
 func (r *gormGroupRepository) UpsertMapping(ctx context.Context, groupName, platformRole string) error {
-	err := r.db.WithContext(ctx).Exec(
-		`INSERT INTO group_role_mappings (groupname, platformrole) VALUES (?, ?)
-		 ON CONFLICT (groupname) DO UPDATE SET platformrole = ?`,
-		groupName, platformRole, platformRole).Error
+	mapping := models.GroupRoleMapping{GroupName: groupName, PlatformRole: platformRole}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "groupname"}},
+		DoUpdates: clause.AssignmentColumns([]string{"platformrole"}),
+	}).Create(&mapping).Error
 	if err != nil {
 		return fmt.Errorf("upsert group mapping: %w", err)
 	}
@@ -159,7 +170,7 @@ func (r *gormGroupRepository) UpsertMapping(ctx context.Context, groupName, plat
 // DeleteMapping removes the role mapping for groupName, reporting whether a
 // row was deleted.
 func (r *gormGroupRepository) DeleteMapping(ctx context.Context, groupName string) (bool, error) {
-	result := r.db.WithContext(ctx).Exec(`DELETE FROM group_role_mappings WHERE groupname = ?`, groupName)
+	result := r.db.WithContext(ctx).Where("groupname = ?", groupName).Delete(&models.GroupRoleMapping{})
 	if result.Error != nil {
 		return false, fmt.Errorf("delete group mapping: %w", result.Error)
 	}
@@ -170,23 +181,24 @@ func (r *gormGroupRepository) DeleteMapping(ctx context.Context, groupName strin
 // AddToDefault creates the shared "everyone" group if absent and links
 // userID to it.
 func (r *gormGroupRepository) AddToDefault(ctx context.Context, userID string) error {
-	var groupID string
+	description := "Default group — all users are members automatically"
+	group := models.Group{Name: defaultGroupName, Source: "local", Description: &description}
 
-	err := r.db.WithContext(ctx).Raw(
-		`INSERT INTO groups (name, source, description) VALUES (?, 'local', 'Default group — all users are members automatically')
-		 ON CONFLICT (name) DO UPDATE SET updatedat = NOW() RETURNING id::text`,
-		defaultGroupName).Scan(&groupID).Error
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoUpdates: clause.Assignments(map[string]any{"updatedat": gorm.Expr("NOW()")}),
+	}).Create(&group).Error
 	if err != nil {
 		return fmt.Errorf("upsert default group: %w", err)
 	}
 
-	if groupID == "" {
+	if group.ID == uuid.Nil {
 		return nil
 	}
 
-	err = r.db.WithContext(ctx).Exec(
-		`INSERT INTO user_groups (userid, groupid) VALUES (?::uuid, ?::uuid) ON CONFLICT DO NOTHING`,
-		userID, groupID).Error
+	userGroup := models.UserGroup{UserID: userID, GroupID: group.ID}
+
+	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&userGroup).Error
 	if err != nil {
 		return fmt.Errorf("link user to default group: %w", err)
 	}
@@ -197,14 +209,26 @@ func (r *gormGroupRepository) AddToDefault(ctx context.Context, userID string) e
 // SyncEnrollments enrolls userID in every course reachable through their
 // group enrollments, doing nothing for enrollments that already exist.
 func (r *gormGroupRepository) SyncEnrollments(ctx context.Context, userID string) error {
-	err := r.db.WithContext(ctx).Exec(
-		`INSERT INTO enrollments (userid, courseslug)
-		 SELECT ?::uuid, ge.courseslug
-		 FROM group_enrollments ge
-		 JOIN user_groups ug ON ug.groupid = ge.groupid
-		 WHERE ug.userid = ?::uuid
-		 ON CONFLICT DO NOTHING`,
-		userID, userID).Error
+	var courseSlugs []string
+
+	err := r.db.WithContext(ctx).Table("group_enrollments AS ge").
+		Joins("JOIN user_groups ug ON ug.groupid = ge.groupid").
+		Where("ug.userid = ?::uuid", userID).
+		Pluck("ge.courseslug", &courseSlugs).Error
+	if err != nil {
+		return fmt.Errorf("list group course slugs: %w", err)
+	}
+
+	if len(courseSlugs) == 0 {
+		return nil
+	}
+
+	enrollments := make([]models.Enrollment, len(courseSlugs))
+	for i, slug := range courseSlugs {
+		enrollments[i] = models.Enrollment{UserID: userID, CourseSlug: slug}
+	}
+
+	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&enrollments).Error
 	if err != nil {
 		return fmt.Errorf("sync group enrollments: %w", err)
 	}
@@ -227,12 +251,12 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 	role := groupsRoleStudent
 
 	err := r.db.WithContext(ctx).Transaction(func(groupTx *gorm.DB) error {
-		selErr := groupTx.Raw(`SELECT role FROM users WHERE id = ?::uuid`, userID).Scan(&dbRole).Error
+		selErr := groupTx.Model(&models.User{}).Select("role").Where("id = ?::uuid", userID).Scan(&dbRole).Error
 		if selErr == nil && dbRole != "" {
 			role = dbRole
 		}
 
-		delErr := groupTx.Exec(`DELETE FROM user_groups WHERE userid = ?::uuid`, userID).Error
+		delErr := groupTx.Where("userid = ?::uuid", userID).Delete(&models.UserGroup{}).Error
 		if delErr != nil {
 			return fmt.Errorf("clear group memberships: %w", delErr)
 		}
@@ -245,7 +269,7 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 		role = updatedRole
 
 		if roleMapped {
-			updErr := groupTx.Exec(`UPDATE users SET role = ?, updatedat = NOW() WHERE id = ?::uuid`, role, userID).Error
+			updErr := groupTx.Model(&models.User{}).Where("id = ?::uuid", userID).Update("role", role).Error
 			if updErr != nil {
 				return fmt.Errorf("persist derived role: %w", updErr)
 			}
@@ -292,22 +316,37 @@ func applyGroupMemberships(groupTx *gorm.DB, userID string, groupNames []string,
 // EnrollCourse enrolls groupID in courseSlug and backfills enrollments for
 // every existing member, returning the number of members newly enrolled.
 func (r *gormGroupRepository) EnrollCourse(ctx context.Context, groupID, courseSlug string) (int64, error) {
-	err := r.db.WithContext(ctx).Exec(
-		`INSERT INTO group_enrollments (groupid, courseslug)
-		 VALUES (?::uuid, ?)
-		 ON CONFLICT DO NOTHING`,
-		groupID, courseSlug).Error
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		return 0, fmt.Errorf("parse group id: %w", err)
+	}
+
+	enrollment := models.GroupEnrollment{GroupID: groupUUID, CourseSlug: courseSlug}
+
+	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&enrollment).Error
 	if err != nil {
 		return 0, fmt.Errorf("enroll group in course: %w", err)
 	}
 
-	result := r.db.WithContext(ctx).Exec(
-		`INSERT INTO enrollments (userid, courseslug)
-		 SELECT ug.userid, ?
-		 FROM user_groups ug
-		 WHERE ug.groupid = ?::uuid
-		 ON CONFLICT DO NOTHING`,
-		courseSlug, groupID)
+	var userIDs []string
+
+	err = r.db.WithContext(ctx).Model(&models.UserGroup{}).
+		Where("groupid = ?::uuid", groupID).
+		Pluck("userid", &userIDs).Error
+	if err != nil {
+		return 0, fmt.Errorf("list group members: %w", err)
+	}
+
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+
+	enrollments := make([]models.Enrollment, len(userIDs))
+	for i, uid := range userIDs {
+		enrollments[i] = models.Enrollment{UserID: uid, CourseSlug: courseSlug}
+	}
+
+	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&enrollments)
 	if result.Error != nil {
 		return 0, fmt.Errorf("backfill group course enrollments: %w", result.Error)
 	}
@@ -315,20 +354,18 @@ func (r *gormGroupRepository) EnrollCourse(ctx context.Context, groupID, courseS
 	return result.RowsAffected, nil
 }
 
-// ListCourseEnrollments mirrors the original hand-rolled join exactly (kept
-// as raw SQL, not the query builder, per the ORM migration plan's guidance
-// on reporting queries).
+// ListCourseEnrollments mirrors the original hand-rolled join exactly.
 func (r *gormGroupRepository) ListCourseEnrollments(ctx context.Context, courseSlug string) ([]GroupEnrollmentRow, error) {
 	var rows []GroupEnrollmentRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT g.id::text AS id, g.name, g.source, COUNT(ug.userid) AS member_count, ge.createdat::text AS enrolled_at
-		FROM group_enrollments ge
-		JOIN groups g ON g.id = ge.groupid
-		LEFT JOIN user_groups ug ON ug.groupid = ge.groupid
-		WHERE ge.courseslug = ?
-		GROUP BY g.id, g.name, g.source, ge.createdat
-		ORDER BY g.name`, courseSlug).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Table("group_enrollments AS ge").
+		Select("g.id::text AS id, g.name, g.source, COUNT(ug.userid) AS member_count, ge.createdat::text AS enrolled_at").
+		Joins("JOIN groups g ON g.id = ge.groupid").
+		Joins("LEFT JOIN user_groups ug ON ug.groupid = ge.groupid").
+		Where("ge.courseslug = ?", courseSlug).
+		Group("g.id, g.name, g.source, ge.createdat").
+		Order("g.name").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list course group enrollments: %w", err)
 	}
@@ -338,9 +375,9 @@ func (r *gormGroupRepository) ListCourseEnrollments(ctx context.Context, courseS
 
 // UnenrollCourse removes groupID's enrollment in courseSlug.
 func (r *gormGroupRepository) UnenrollCourse(ctx context.Context, groupID, courseSlug string) error {
-	err := r.db.WithContext(ctx).Exec(
-		`DELETE FROM group_enrollments WHERE groupid = ?::uuid AND courseslug = ?`,
-		groupID, courseSlug).Error
+	err := r.db.WithContext(ctx).
+		Where("groupid = ?::uuid AND courseslug = ?", groupID, courseSlug).
+		Delete(&models.GroupEnrollment{}).Error
 	if err != nil {
 		return fmt.Errorf("unenroll group from course: %w", err)
 	}
@@ -355,26 +392,27 @@ func (r *gormGroupRepository) UnenrollCourse(ctx context.Context, groupID, cours
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func syncGroupMembership(groupTx *gorm.DB, userID, name, source, currentRole string) (string, bool, error) {
-	var groupID string
+	group := models.Group{Name: name, Source: source}
 
-	err := groupTx.Raw(
-		`INSERT INTO groups (name, source, updatedat) VALUES (?, ?, NOW())
-		 ON CONFLICT (name) DO UPDATE SET source = ?, updatedat = NOW() RETURNING id::text`,
-		name, source, source).Scan(&groupID).Error
+	err := groupTx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoUpdates: clause.Assignments(map[string]any{"source": source, "updatedat": gorm.Expr("NOW()")}),
+	}).Create(&group).Error
 	if err != nil {
 		return currentRole, false, fmt.Errorf("upsert group %q: %w", name, err)
 	}
 
-	err = groupTx.Exec(
-		`INSERT INTO user_groups (userid, groupid) VALUES (?::uuid, ?::uuid) ON CONFLICT DO NOTHING`,
-		userID, groupID).Error
+	userGroup := models.UserGroup{UserID: userID, GroupID: group.ID}
+
+	err = groupTx.Clauses(clause.OnConflict{DoNothing: true}).Create(&userGroup).Error
 	if err != nil {
 		return currentRole, false, fmt.Errorf("link user to group %q: %w", name, err)
 	}
 
 	var mappedRole string
 
-	scanErr := groupTx.Raw(`SELECT platformrole FROM group_role_mappings WHERE groupname = ?`, name).Scan(&mappedRole).Error
+	scanErr := groupTx.Model(&models.GroupRoleMapping{}).
+		Select("platformrole").Where("groupname = ?", name).Scan(&mappedRole).Error
 	if scanErr != nil {
 		return currentRole, false, fmt.Errorf("lookup group mapping %q: %w", name, scanErr)
 	}

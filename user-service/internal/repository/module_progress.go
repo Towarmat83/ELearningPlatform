@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/lib/pq"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -42,24 +44,47 @@ func NewGormModuleProgressRepository(db *gorm.DB) ModuleProgressRepository {
 	return &gormModuleProgressRepository{db: db}
 }
 
-// RecordProgress is kept as raw SQL (not the query builder), per the ORM
-// migration plan's guidance to port the keep-best upsert verbatim.
+// RecordProgress upserts userID's score for a module, keeping the best
+// score/pass state seen across attempts rather than overwriting them.
 func (r *gormModuleProgressRepository) RecordProgress(
 	ctx context.Context, userID, courseSlug string, moduleIndex int, moduleSlug string, score, maxScore int, passed bool,
 ) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO module_progress (userid, courseslug, moduleindex, moduleslug, bestscore, maxscore, passed, attempts, completed_at)
-		VALUES (?::uuid, ?, ?, NULLIF(?, ''), ?, ?, ?, 1, CASE WHEN ? THEN NOW() ELSE NULL END)
-		ON CONFLICT (userid, courseslug, moduleindex) DO UPDATE SET
-			attempts     = module_progress.attempts + 1,
-			bestscore    = GREATEST(module_progress.bestscore, ?),
-			maxscore     = ?,
-			passed       = module_progress.passed OR ?,
-			moduleslug   = COALESCE(module_progress.moduleslug, NULLIF(?, '')),
-			completed_at = CASE WHEN (? AND module_progress.completed_at IS NULL) THEN NOW() ELSE module_progress.completed_at END,
-			updatedat    = NOW()`,
-		userID, courseSlug, moduleIndex, moduleSlug, score, maxScore, passed, passed,
-		score, maxScore, passed, moduleSlug, passed).Error
+	var moduleSlugPtr *string
+	if moduleSlug != "" {
+		moduleSlugPtr = &moduleSlug
+	}
+
+	var completedAt *time.Time
+	if passed {
+		now := time.Now()
+		completedAt = &now
+	}
+
+	progress := models.ModuleProgress{
+		UserID:      userID,
+		CourseSlug:  courseSlug,
+		ModuleIndex: moduleIndex,
+		ModuleSlug:  moduleSlugPtr,
+		BestScore:   score,
+		MaxScore:    maxScore,
+		Passed:      passed,
+		Attempts:    1,
+		CompletedAt: completedAt,
+	}
+
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "userid"}, {Name: "courseslug"}, {Name: "moduleindex"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"attempts":   gorm.Expr("module_progress.attempts + 1"),
+			"bestscore":  gorm.Expr("GREATEST(module_progress.bestscore, ?)", score),
+			"maxscore":   maxScore,
+			"passed":     gorm.Expr("module_progress.passed OR ?", passed),
+			"moduleslug": gorm.Expr("COALESCE(module_progress.moduleslug, ?)", moduleSlugPtr),
+			"completed_at": gorm.Expr(
+				"CASE WHEN ? AND module_progress.completed_at IS NULL THEN NOW() ELSE module_progress.completed_at END", passed),
+			"updatedat": gorm.Expr("NOW()"),
+		}),
+	}).Create(&progress).Error
 	if err != nil {
 		return fmt.Errorf("record module progress: %w", err)
 	}
@@ -72,9 +97,10 @@ func (r *gormModuleProgressRepository) RecordProgress(
 func (r *gormModuleProgressRepository) TotalScore(ctx context.Context, userID, courseSlug string) (int64, error) {
 	var total int64
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT COALESCE(SUM(bestscore), 0) FROM module_progress
-		WHERE userid = ?::uuid AND courseslug = ?`, userID, courseSlug).Scan(&total).Error
+	err := r.db.WithContext(ctx).Model(&models.ModuleProgress{}).
+		Where("userid = ?::uuid AND courseslug = ?", userID, courseSlug).
+		Select("COALESCE(SUM(bestscore), 0)").
+		Scan(&total).Error
 	if err != nil {
 		return 0, fmt.Errorf("total module score: %w", err)
 	}

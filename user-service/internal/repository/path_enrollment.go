@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -70,18 +72,17 @@ func (r *gormPathEnrollmentRepository) MyEnrollments(
 	return rows, nil
 }
 
-// ListBySlug mirrors the original hand-rolled join exactly (kept as raw SQL,
-// not the query builder, per the ORM migration plan's guidance on reporting
-// queries).
+// ListBySlug returns every user enrolled in pathSlug, most recently
+// enrolled first.
 func (r *gormPathEnrollmentRepository) ListBySlug(ctx context.Context, pathSlug string) ([]PathEnrolledUserRow, error) {
 	rows := make([]PathEnrolledUserRow, 0)
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT u.id::text AS user_id, u.email, u.role, pe.enrolledat AS enrolled_at
-		FROM path_enrollments pe
-		JOIN users u ON u.id = pe.userid
-		WHERE pe.path_slug = ?
-		ORDER BY pe.enrolledat DESC`, pathSlug).Scan(&rows).Error
+	err := r.db.WithContext(ctx).Table("path_enrollments AS pe").
+		Select("u.id::text AS user_id, u.email, u.role, pe.enrolledat AS enrolled_at").
+		Joins("JOIN users u ON u.id = pe.userid").
+		Where("pe.path_slug = ?", pathSlug).
+		Order("pe.enrolledat DESC").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list path enrollments: %w", err)
 	}
@@ -91,9 +92,14 @@ func (r *gormPathEnrollmentRepository) ListBySlug(ctx context.Context, pathSlug 
 
 // Enroll enrolls userID in pathSlug, doing nothing if already enrolled.
 func (r *gormPathEnrollmentRepository) Enroll(ctx context.Context, userID, pathSlug string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO path_enrollments (userid, path_slug) VALUES (?::uuid, ?) ON CONFLICT DO NOTHING`,
-		userID, pathSlug).Error
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("parse user id: %w", err)
+	}
+
+	enrollment := models.PathEnrollment{UserID: uid, PathSlug: pathSlug}
+
+	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&enrollment).Error
 	if err != nil {
 		return fmt.Errorf("enroll in path: %w", err)
 	}
@@ -103,8 +109,9 @@ func (r *gormPathEnrollmentRepository) Enroll(ctx context.Context, userID, pathS
 
 // Unenroll removes userID's enrollment in pathSlug.
 func (r *gormPathEnrollmentRepository) Unenroll(ctx context.Context, userID, pathSlug string) error {
-	err := r.db.WithContext(ctx).Exec(`
-		DELETE FROM path_enrollments WHERE userid = ?::uuid AND path_slug = ?`, userID, pathSlug).Error
+	err := r.db.WithContext(ctx).
+		Where("userid = ?::uuid AND path_slug = ?", userID, pathSlug).
+		Delete(&models.PathEnrollment{}).Error
 	if err != nil {
 		return fmt.Errorf("unenroll from path: %w", err)
 	}

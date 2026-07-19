@@ -41,15 +41,19 @@ type EnrollmentRepository interface {
 	ListByCourse(ctx context.Context, courseSlug string) ([]CourseEnrollmentRow, error)
 }
 
+// gormEnrollmentRepository is the GORM-backed EnrollmentRepository impl.
 type gormEnrollmentRepository struct {
 	db *gorm.DB
 }
 
 // NewGormEnrollmentRepository builds an EnrollmentRepository backed by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormEnrollmentRepository(db *gorm.DB) EnrollmentRepository {
 	return &gormEnrollmentRepository{db: db}
 }
 
+// Create enrolls userID in courseSlug, doing nothing if already enrolled.
 func (r *gormEnrollmentRepository) Create(ctx context.Context, userID, courseSlug string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO enrollments (userid, courseslug)
@@ -62,6 +66,7 @@ func (r *gormEnrollmentRepository) Create(ctx context.Context, userID, courseSlu
 	return nil
 }
 
+// Delete removes userID's enrollment in courseSlug.
 func (r *gormEnrollmentRepository) Delete(ctx context.Context, userID, courseSlug string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		DELETE FROM enrollments WHERE userid = ?::uuid AND courseslug = ?`, userID, courseSlug).Error
@@ -72,6 +77,7 @@ func (r *gormEnrollmentRepository) Delete(ctx context.Context, userID, courseSlu
 	return nil
 }
 
+// Exists reports whether userID is enrolled in courseSlug.
 func (r *gormEnrollmentRepository) Exists(ctx context.Context, userID, courseSlug string) (bool, error) {
 	var count int64
 
@@ -116,6 +122,7 @@ func (r *gormEnrollmentRepository) MyEnrollments(ctx context.Context, userID str
 	return rows, nil
 }
 
+// CountAll returns the total number of enrollments across all courses.
 func (r *gormEnrollmentRepository) CountAll(ctx context.Context) (int64, error) {
 	var count int64
 
@@ -127,6 +134,8 @@ func (r *gormEnrollmentRepository) CountAll(ctx context.Context) (int64, error) 
 	return count, nil
 }
 
+// CountDistinctCourses returns the number of distinct courses with at least
+// one enrollment.
 func (r *gormEnrollmentRepository) CountDistinctCourses(ctx context.Context) (int64, error) {
 	var count int64
 

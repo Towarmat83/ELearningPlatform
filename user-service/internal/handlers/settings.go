@@ -10,16 +10,29 @@ import (
 // Platform setting keys read from more than one file; pulled out to satisfy
 // goconst.
 const (
-	settingKeyRegistrationEnabled      = "registration_enabled"
-	settingKeySSOLocalLoginEnabled     = "sso_local_login_enabled"
-	settingKeyPasswordMinLength        = "password_min_length"
-	settingKeyPasswordRequireUppercase = "password_require_uppercase"
-	settingKeyPasswordRequireNumber    = "password_require_number"
-	settingKeyOIDCEnabled              = "oidc_enabled"
-	settingKeyLDAPEnabled              = "ldap_enabled"
-	settingKeyOIDCClientSecret         = "oidc_client_secret"
-	settingKeyLDAPBindPassword         = "ldap_bind_password"
-	settingRedactedValue               = "********"
+	settingKeyRegistrationEnabled        = "registration_enabled"
+	settingKeySSOLocalLoginEnabled       = "sso_local_login_enabled"
+	settingKeyPasswordMinLength          = "password_min_length"
+	settingKeyPasswordRequireUppercase   = "password_require_uppercase"
+	settingKeyPasswordRequireNumber      = "password_require_number"
+	settingKeyOIDCEnabled                = "oidc_enabled"
+	settingKeyLDAPEnabled                = "ldap_enabled"
+	settingKeyOIDCClientSecret           = "oidc_client_secret"
+	settingKeyLDAPBindPassword           = "ldap_bind_password"
+	settingRedactedValue                 = "********"
+	settingKeyRegistrationEmailWhitelist = "registration_email_whitelist"
+	settingKeyProfileAllowUsernameChange = "profile_allow_username_change"
+	settingKeyOIDCProviderURL            = "oidc_provider_url"
+	settingKeyOIDCIssuerURL              = "oidc_issuer_url"
+	settingKeyOIDCRedirectBase           = "oidc_redirect_base"
+	settingKeyOIDCBrowserBaseURL         = "oidc_browser_base_url"
+	settingKeyOIDCClientID               = "oidc_client_id"
+	settingKeyOIDCScopes                 = "oidc_scopes"
+	settingKeyOIDCGroupClaim             = "oidc_group_claim"
+	settingKeyLDAPServerURL              = "ldap_server_url"
+	settingKeyLDAPBindDN                 = "ldap_bind_dn"
+	settingKeyLDAPUserBaseDN             = "ldap_user_base_dn"
+	settingKeyLDAPUserFilter             = "ldap_user_filter"
 )
 
 // keySet is a concurrency-safe string set. A RWMutex guards the underlying
@@ -42,32 +55,32 @@ func (s *keySet) contains(key string) bool {
 // allowedSettingKeys is the set of platform setting keys clients may write.
 var allowedSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide allow-list for writable settings, guarded by keySet.mu
 	keys: map[string]struct{}{
-		"gitlab_url":                       {},
-		settingKeyRegistrationEnabled:      {},
-		"registration_email_whitelist":     {},
-		settingKeyPasswordMinLength:        {},
-		settingKeyPasswordRequireUppercase: {},
-		settingKeyPasswordRequireNumber:    {},
-		"profile_allow_username_change":    {},
-		settingKeySSOLocalLoginEnabled:     {},
+		"gitlab_url":                         {},
+		settingKeyRegistrationEnabled:        {},
+		settingKeyRegistrationEmailWhitelist: {},
+		settingKeyPasswordMinLength:          {},
+		settingKeyPasswordRequireUppercase:   {},
+		settingKeyPasswordRequireNumber:      {},
+		settingKeyProfileAllowUsernameChange: {},
+		settingKeySSOLocalLoginEnabled:       {},
 		// OIDC — oidc_insecure_skip_verify is intentionally absent: it must not be
 		// toggled at runtime via the API (deploy-time env var only).
-		settingKeyOIDCEnabled:      {},
-		"oidc_provider_url":        {},
-		"oidc_issuer_url":          {},
-		"oidc_redirect_base":       {},
-		"oidc_browser_base_url":    {},
-		"oidc_client_id":           {},
-		settingKeyOIDCClientSecret: {},
-		"oidc_scopes":              {},
-		"oidc_group_claim":         {},
+		settingKeyOIDCEnabled:        {},
+		settingKeyOIDCProviderURL:    {},
+		settingKeyOIDCIssuerURL:      {},
+		settingKeyOIDCRedirectBase:   {},
+		settingKeyOIDCBrowserBaseURL: {},
+		settingKeyOIDCClientID:       {},
+		settingKeyOIDCClientSecret:   {},
+		settingKeyOIDCScopes:         {},
+		settingKeyOIDCGroupClaim:     {},
 		// LDAP
 		settingKeyLDAPEnabled:      {},
-		"ldap_server_url":          {},
-		"ldap_bind_dn":             {},
+		settingKeyLDAPServerURL:    {},
+		settingKeyLDAPBindDN:       {},
 		settingKeyLDAPBindPassword: {},
-		"ldap_user_base_dn":        {},
-		"ldap_user_filter":         {},
+		settingKeyLDAPUserBaseDN:   {},
+		settingKeyLDAPUserFilter:   {},
 		"ldap_group_base_dn":       {},
 		"ldap_group_filter":        {},
 	},

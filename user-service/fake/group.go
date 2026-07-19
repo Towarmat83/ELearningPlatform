@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	groupsRoleAdmin   = "admin"
+	// groupsRoleAdmin is the platform role derived from a group mapped to "admin".
+	groupsRoleAdmin = "admin"
+	// groupsRoleStudent is the default platform role when no mapping applies.
 	groupsRoleStudent = "student"
 )
 
@@ -46,6 +48,7 @@ func NewGroupRepository(seed ...models.Group) *GroupRepository {
 	}
 }
 
+// Create adds a new local group named name, returning its generated ID.
 func (f *GroupRepository) Create(_ context.Context, name string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -61,12 +64,13 @@ func (f *GroupRepository) Create(_ context.Context, name string) (string, error)
 	}
 
 	id := uuid.New()
-	f.Groups = append(f.Groups, models.Group{ID: id, Name: name, Source: "local"})
+	f.Groups = append(f.Groups, models.Group{ID: id, Name: name, Source: authProviderLocal})
 
 	return id.String(), nil
 }
 
-func (f *GroupRepository) Delete(_ context.Context, id string) (bool, error) {
+// Delete removes the local group with groupID, a no-op for non-local groups.
+func (f *GroupRepository) Delete(_ context.Context, groupID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -75,7 +79,7 @@ func (f *GroupRepository) Delete(_ context.Context, id string) (bool, error) {
 	}
 
 	for i, g := range f.Groups {
-		if g.ID.String() == id && g.Source == "local" {
+		if g.ID.String() == groupID && g.Source == authProviderLocal {
 			f.Groups = append(f.Groups[:i], f.Groups[i+1:]...)
 
 			return true, nil
@@ -85,6 +89,7 @@ func (f *GroupRepository) Delete(_ context.Context, id string) (bool, error) {
 	return false, nil
 }
 
+// List returns every group along with its member count and mapped role.
 func (f *GroupRepository) List(_ context.Context) ([]repository.GroupRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -95,11 +100,11 @@ func (f *GroupRepository) List(_ context.Context) ([]repository.GroupRow, error)
 
 	rows := make([]repository.GroupRow, 0, len(f.Groups))
 
-	for _, g := range f.Groups {
+	for _, group := range f.Groups {
 		memberCount := int64(0)
 
 		for _, ug := range f.UserGroup {
-			if ug.GroupID == g.ID {
+			if ug.GroupID == group.ID {
 				memberCount++
 			}
 		}
@@ -107,7 +112,7 @@ func (f *GroupRepository) List(_ context.Context) ([]repository.GroupRow, error)
 		mappedRole := ""
 
 		for _, m := range f.Mappings {
-			if m.GroupName == g.Name {
+			if m.GroupName == group.Name {
 				mappedRole = m.PlatformRole
 
 				break
@@ -115,14 +120,15 @@ func (f *GroupRepository) List(_ context.Context) ([]repository.GroupRow, error)
 		}
 
 		rows = append(rows, repository.GroupRow{
-			ID: g.ID.String(), Name: g.Name, Source: g.Source,
-			CreatedAt: g.CreatedAt.String(), MemberCount: memberCount, MappedRole: mappedRole,
+			ID: group.ID.String(), Name: group.Name, Source: group.Source,
+			CreatedAt: group.CreatedAt.String(), MemberCount: memberCount, MappedRole: mappedRole,
 		})
 	}
 
 	return rows, nil
 }
 
+// ListMappings returns every group-to-role mapping.
 func (f *GroupRepository) ListMappings(_ context.Context) ([]repository.GroupMapping, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -139,6 +145,7 @@ func (f *GroupRepository) ListMappings(_ context.Context) ([]repository.GroupMap
 	return rows, nil
 }
 
+// UpsertMapping creates or updates the role mapping for groupName.
 func (f *GroupRepository) UpsertMapping(_ context.Context, groupName, platformRole string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -160,6 +167,7 @@ func (f *GroupRepository) UpsertMapping(_ context.Context, groupName, platformRo
 	return nil
 }
 
+// DeleteMapping removes the role mapping for groupName, if present.
 func (f *GroupRepository) DeleteMapping(_ context.Context, groupName string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -179,6 +187,7 @@ func (f *GroupRepository) DeleteMapping(_ context.Context, groupName string) (bo
 	return false, nil
 }
 
+// AddToDefault is a no-op in the fake; it exists to satisfy the interface.
 func (f *GroupRepository) AddToDefault(_ context.Context, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -186,6 +195,7 @@ func (f *GroupRepository) AddToDefault(_ context.Context, _ string) error {
 	return f.Err
 }
 
+// SyncEnrollments is a no-op in the fake; it exists to satisfy the interface.
 func (f *GroupRepository) SyncEnrollments(_ context.Context, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -193,6 +203,8 @@ func (f *GroupRepository) SyncEnrollments(_ context.Context, _ string) error {
 	return f.Err
 }
 
+// SyncGroupsAndDeriveRole replaces userID's group memberships with groupNames
+// and derives the platform role along the way.
 func (f *GroupRepository) SyncGroupsAndDeriveRole(
 	_ context.Context, userID string, groupNames []string, source string,
 ) (string, error) {
@@ -223,22 +235,11 @@ func (f *GroupRepository) SyncGroupsAndDeriveRole(
 			continue
 		}
 
-		groupID := f.findOrCreateGroup(name, source)
-		userGroups = append(userGroups, models.UserGroup{UserID: userID, GroupID: groupID})
+		var mapped bool
 
-		for _, m := range f.Mappings {
-			if m.GroupName != name {
-				continue
-			}
-
+		userGroups, role, mapped = f.applyGroupMembership(userGroups, userID, name, source, role)
+		if mapped {
 			roleMapped = true
-			if m.PlatformRole == groupsRoleAdmin {
-				role = groupsRoleAdmin
-			} else if role != groupsRoleAdmin {
-				role = m.PlatformRole
-			}
-
-			break
 		}
 	}
 
@@ -250,6 +251,8 @@ func (f *GroupRepository) SyncGroupsAndDeriveRole(
 	return role, nil
 }
 
+// EnrollCourse enrolls the group in courseSlug and returns the count of
+// members backfilled into it.
 func (f *GroupRepository) EnrollCourse(_ context.Context, groupID, courseSlug string) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -302,15 +305,15 @@ func (f *GroupRepository) ListCourseEnrollments(_ context.Context, courseSlug st
 
 	rows := make([]repository.GroupEnrollmentRow, 0)
 
-	for _, ge := range f.GroupEnrollments {
-		if ge.CourseSlug != courseSlug {
+	for _, enrollment := range f.GroupEnrollments {
+		if enrollment.CourseSlug != courseSlug {
 			continue
 		}
 
 		var group models.Group
 
 		for _, g := range f.Groups {
-			if g.ID == ge.GroupID {
+			if g.ID == enrollment.GroupID {
 				group = g
 
 				break
@@ -320,7 +323,7 @@ func (f *GroupRepository) ListCourseEnrollments(_ context.Context, courseSlug st
 		memberCount := int64(0)
 
 		for _, ug := range f.UserGroup {
-			if ug.GroupID == ge.GroupID {
+			if ug.GroupID == enrollment.GroupID {
 				memberCount++
 			}
 		}
@@ -333,6 +336,7 @@ func (f *GroupRepository) ListCourseEnrollments(_ context.Context, courseSlug st
 	return rows, nil
 }
 
+// UnenrollCourse removes the group's enrollment in courseSlug, if present.
 func (f *GroupRepository) UnenrollCourse(_ context.Context, groupID, courseSlug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -350,6 +354,32 @@ func (f *GroupRepository) UnenrollCourse(_ context.Context, groupID, courseSlug 
 	}
 
 	return nil
+}
+
+// applyGroupMembership adds userID to the group named name (creating it if
+// absent) and returns the updated userGroups slice, the (possibly updated)
+// role, and whether a group-role mapping applied.
+func (f *GroupRepository) applyGroupMembership(
+	userGroups []models.UserGroup, userID, name, source, role string,
+) ([]models.UserGroup, string, bool) {
+	groupID := f.findOrCreateGroup(name, source)
+	userGroups = append(userGroups, models.UserGroup{UserID: userID, GroupID: groupID})
+
+	for _, mapping := range f.Mappings {
+		if mapping.GroupName != name {
+			continue
+		}
+
+		if mapping.PlatformRole == groupsRoleAdmin {
+			role = groupsRoleAdmin
+		} else if role != groupsRoleAdmin {
+			role = mapping.PlatformRole
+		}
+
+		return userGroups, role, true
+	}
+
+	return userGroups, role, false
 }
 
 // findOrCreateGroup returns the ID of the group named name, upserting it

@@ -30,10 +30,14 @@ type gormLabCheckRepository struct {
 }
 
 // NewGormLabCheckRepository builds a LabCheckRepository backed by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormLabCheckRepository(db *gorm.DB) LabCheckRepository {
 	return &gormLabCheckRepository{db: db}
 }
 
+// List returns up to 500 lab checks, most recent first, optionally filtered
+// to a single course slug.
 func (r *gormLabCheckRepository) List(ctx context.Context, courseSlug string) ([]models.LabCheck, error) {
 	query := r.db.WithContext(ctx).Order("checkedat DESC").Limit(maxLabResults)
 	if courseSlug != "" {
@@ -50,6 +54,7 @@ func (r *gormLabCheckRepository) List(ctx context.Context, courseSlug string) ([
 	return results, nil
 }
 
+// Create inserts a new lab check row.
 func (r *gormLabCheckRepository) Create(ctx context.Context, check *models.LabCheck) error {
 	return r.db.WithContext(ctx).Create(check).Error
 }

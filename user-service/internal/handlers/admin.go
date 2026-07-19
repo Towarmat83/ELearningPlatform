@@ -91,6 +91,7 @@ type userAdminRow struct {
 	EnrolledCourses int64 `json:"enrolledCourses"`
 }
 
+// userAdminRowFromRepo converts a repository row into its DTO representation.
 func userAdminRowFromRepo(r repository.AdminUserRow) userAdminRow {
 	return userAdminRow{
 		ID: r.ID, Username: r.Username, Email: r.Email, Role: r.Role, IsActive: r.IsActive,
@@ -156,14 +157,14 @@ func (s *State) GetUser(writer http.ResponseWriter, request *http.Request) {
 		ViewedLessons   int64 `json:"viewedLessons"`
 	}
 
-	id, err := uuid.Parse(userID)
+	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
 		return
 	}
 
-	row, err := s.Repos.Users.GetForAdmin(request.Context(), id)
+	row, err := s.Repos.Users.GetForAdmin(request.Context(), userUUID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
@@ -214,7 +215,7 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	id, err := uuid.Parse(userID)
+	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
@@ -222,7 +223,7 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	user, err := s.Repos.Users.UpdateAdminFields(
-		request.Context(), id, body.Username, body.Bio, body.AvatarURL, body.IsActive, body.Role)
+		request.Context(), userUUID, body.Username, body.Bio, body.AvatarURL, body.IsActive, body.Role)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
@@ -243,14 +244,14 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 func (s *State) DeleteUser(writer http.ResponseWriter, request *http.Request) {
 	userID := param(request, "userId")
 
-	id, err := uuid.Parse(userID)
+	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
-	err = s.Repos.Users.Delete(request.Context(), id)
+	err = s.Repos.Users.Delete(request.Context(), userUUID)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 

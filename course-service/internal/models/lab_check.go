@@ -12,14 +12,14 @@ import (
 // server-verified (CheckModule) or client-reported (RecordLocalCheck).
 type LabCheck struct {
 	ID          int64          `gorm:"column:id;primaryKey"`
-	Username    string         `gorm:"column:username"`
-	CourseSlug  string         `gorm:"column:courseslug"`
-	ModuleIndex int            `gorm:"column:moduleindex"`
-	ModuleName  string         `gorm:"column:modulename"`
-	Allow       bool           `gorm:"column:allow"`
-	Violations  pq.StringArray `gorm:"column:violations;type:text[]"`
-	CheckedAt   time.Time      `gorm:"column:checkedat"`
-	Verified    bool           `gorm:"column:verified"`
+	Username    string         `gorm:"column:username;not null;index:lab_checks_username_idx"`
+	CourseSlug  string         `gorm:"column:courseslug;not null;index:lab_checks_course_slug_idx"`
+	ModuleIndex int            `gorm:"column:moduleindex;not null"`
+	ModuleName  string         `gorm:"column:modulename;not null"`
+	Allow       bool           `gorm:"column:allow;not null"`
+	Violations  pq.StringArray `gorm:"column:violations;type:text[];not null;default:'{}'"`
+	CheckedAt   time.Time      `gorm:"column:checkedat;not null;default:now()"`
+	Verified    bool           `gorm:"column:verified;not null;default:false"`
 }
 
 // TableName pins the table name so GORM doesn't infer one from the type

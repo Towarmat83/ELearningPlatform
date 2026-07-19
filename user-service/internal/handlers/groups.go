@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -41,7 +42,12 @@ func addToDefaultGroup(ctx context.Context, groups repository.GroupRepository, u
 func syncGroupsAndDeriveRole(
 	ctx context.Context, groups repository.GroupRepository, userID string, groupNames []string, source string,
 ) (string, error) {
-	return groups.SyncGroupsAndDeriveRole(ctx, userID, groupNames, source)
+	role, err := groups.SyncGroupsAndDeriveRole(ctx, userID, groupNames, source)
+	if err != nil {
+		return role, fmt.Errorf("sync groups and derive role: %w", err)
+	}
+
+	return role, nil
 }
 
 // ── Admin group handlers ───────────────────────────────────────────────────────

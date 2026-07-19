@@ -15,16 +15,16 @@ type Repositories struct {
 	Paths          PathEnrollmentRepository
 }
 
-// NewGormRepositories builds a Repositories backed by db.
-func NewGormRepositories(db *gorm.DB) *Repositories {
+// NewGormRepositories builds a Repositories backed by gdb.
+func NewGormRepositories(gdb *gorm.DB) *Repositories {
 	return &Repositories{
-		Users:          NewGormUserRepository(db),
-		Settings:       NewGormSettingRepository(db),
-		Enrollments:    NewGormEnrollmentRepository(db),
-		LessonProgress: NewGormLessonProgressRepository(db),
-		ModuleProgress: NewGormModuleProgressRepository(db),
-		Groups:         NewGormGroupRepository(db),
-		Patterns:       NewGormPatternRepository(db),
-		Paths:          NewGormPathEnrollmentRepository(db),
+		Users:          NewGormUserRepository(gdb),
+		Settings:       NewGormSettingRepository(gdb),
+		Enrollments:    NewGormEnrollmentRepository(gdb),
+		LessonProgress: NewGormLessonProgressRepository(gdb),
+		ModuleProgress: NewGormModuleProgressRepository(gdb),
+		Groups:         NewGormGroupRepository(gdb),
+		Patterns:       NewGormPatternRepository(gdb),
+		Paths:          NewGormPathEnrollmentRepository(gdb),
 	}
 }

@@ -37,24 +37,28 @@ type MarkdownPattern struct {
 }
 
 // patternDTO converts a repository-owned model into the wire-format DTO.
-func patternDTO(p models.MarkdownPattern) MarkdownPattern {
+func patternDTO(pattern models.MarkdownPattern) MarkdownPattern {
 	var createdBy *string
-	if p.CreatedBy != nil {
-		s := p.CreatedBy.String()
+
+	if pattern.CreatedBy != nil {
+		s := pattern.CreatedBy.String()
 		createdBy = &s
 	}
 
 	return MarkdownPattern{
-		ID: p.ID.String(), Name: p.Name, Label: p.Label, Description: p.Description, Parameter: p.Parameter,
-		HTML: p.HTML, CSS: p.CSS, JS: p.JS, Scope: p.Scope, FromConfig: p.FromConfig, CreatedBy: createdBy,
-		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		ID: pattern.ID.String(), Name: pattern.Name, Label: pattern.Label,
+		Description: pattern.Description, Parameter: pattern.Parameter,
+		HTML: pattern.HTML, CSS: pattern.CSS, JS: pattern.JS, Scope: pattern.Scope,
+		FromConfig: pattern.FromConfig, CreatedBy: createdBy,
+		CreatedAt: pattern.CreatedAt, UpdatedAt: pattern.UpdatedAt,
 	}
 }
 
+// patternDTOs converts every repository-owned model into its wire-format DTO.
 func patternDTOs(patterns []models.MarkdownPattern) []MarkdownPattern {
 	out := make([]MarkdownPattern, len(patterns))
-	for i, p := range patterns {
-		out[i] = patternDTO(p)
+	for i, pattern := range patterns {
+		out[i] = patternDTO(pattern)
 	}
 
 	return out
@@ -144,14 +148,14 @@ func (s *State) ListPatterns(writer http.ResponseWriter, req *http.Request) {
 func (s *State) GetPattern(writer http.ResponseWriter, req *http.Request) {
 	patternID := param(req, "id")
 
-	id, err := uuid.Parse(patternID)
+	patternUUID, err := uuid.Parse(patternID)
 	if err != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid pattern ID")
 
 		return
 	}
 
-	pattern, err := s.Repos.Patterns.Get(req.Context(), id)
+	pattern, err := s.Repos.Patterns.Get(req.Context(), patternUUID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "Pattern not found")
 
@@ -378,14 +382,14 @@ func (s *State) DeleteCoursePattern(writer http.ResponseWriter, req *http.Reques
 
 	patternID := param(req, "id")
 
-	id, err := uuid.Parse(patternID)
+	patternUUID, err := uuid.Parse(patternID)
 	if err != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid pattern ID")
 
 		return
 	}
 
-	found, err := s.Repos.Patterns.DeleteByIDAndScope(req.Context(), id, slug)
+	found, err := s.Repos.Patterns.DeleteByIDAndScope(req.Context(), patternUUID, slug)
 	if err != nil || !found {
 		s.Error(writer, http.StatusNotFound, "Pattern not found")
 

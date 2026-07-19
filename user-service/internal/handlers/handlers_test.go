@@ -1452,7 +1452,13 @@ func TestListGroupMappings_WithData(t *testing.T) {
 	t.Parallel()
 
 	repos := fake.NewRepositories()
-	repos.Groups.(*fake.GroupRepository).Mappings = []models.GroupRoleMapping{{GroupName: "devs", PlatformRole: "admin"}}
+
+	groups, ok := repos.Groups.(*fake.GroupRepository)
+	if !ok {
+		t.Fatalf("repos.Groups is not *fake.GroupRepository")
+	}
+
+	groups.Mappings = []models.GroupRoleMapping{{GroupName: "devs", PlatformRole: "admin"}}
 	r := newTestRouterWithRepos(repos)
 
 	rec := htDo(t, r, "GET", "/api/admin/groups/mappings", "", htAuthHeader(t, "admin"))
@@ -1519,7 +1525,13 @@ func TestDeleteGroupMapping_Success(t *testing.T) {
 	t.Parallel()
 
 	repos := fake.NewRepositories()
-	repos.Groups.(*fake.GroupRepository).Mappings = []models.GroupRoleMapping{{GroupName: "devs", PlatformRole: "admin"}}
+
+	groups, ok := repos.Groups.(*fake.GroupRepository)
+	if !ok {
+		t.Fatalf("repos.Groups is not *fake.GroupRepository")
+	}
+
+	groups.Mappings = []models.GroupRoleMapping{{GroupName: "devs", PlatformRole: "admin"}}
 	r := newTestRouterWithRepos(repos)
 
 	rec := htDo(t, r, "DELETE", "/api/admin/groups/mappings/devs", "", htAuthHeader(t, "admin"))
@@ -4598,6 +4610,7 @@ type passedModuleSlugsErrRepository struct {
 	err error
 }
 
+// PassedModuleSlugs always fails with r.err.
 func (r passedModuleSlugsErrRepository) PassedModuleSlugs(_ context.Context, _, _ string) ([]string, error) {
 	return nil, r.err
 }

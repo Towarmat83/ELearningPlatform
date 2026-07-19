@@ -1,3 +1,6 @@
+// Package fake provides in-memory fakes of user-service's repository
+// interfaces, so handler tests can control persisted state without a real
+// database connection.
 package fake
 
 import (
@@ -31,6 +34,7 @@ func NewEnrollmentRepository(seed ...models.Enrollment) *EnrollmentRepository {
 	return &EnrollmentRepository{enrollments: append([]models.Enrollment{}, seed...)}
 }
 
+// Create enrolls userID in courseSlug, or does nothing if already enrolled.
 func (f *EnrollmentRepository) Create(_ context.Context, userID, courseSlug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -52,6 +56,7 @@ func (f *EnrollmentRepository) Create(_ context.Context, userID, courseSlug stri
 	return nil
 }
 
+// Delete removes userID's enrollment in courseSlug, if any.
 func (f *EnrollmentRepository) Delete(_ context.Context, userID, courseSlug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -71,6 +76,7 @@ func (f *EnrollmentRepository) Delete(_ context.Context, userID, courseSlug stri
 	return nil
 }
 
+// Exists reports whether userID is enrolled in courseSlug.
 func (f *EnrollmentRepository) Exists(_ context.Context, userID, courseSlug string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -88,6 +94,7 @@ func (f *EnrollmentRepository) Exists(_ context.Context, userID, courseSlug stri
 	return false, nil
 }
 
+// MyEnrollments lists userID's enrolled course slugs.
 func (f *EnrollmentRepository) MyEnrollments(_ context.Context, userID string) ([]repository.EnrollmentRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -107,6 +114,7 @@ func (f *EnrollmentRepository) MyEnrollments(_ context.Context, userID string) (
 	return rows, nil
 }
 
+// CountAll returns the total number of enrollments.
 func (f *EnrollmentRepository) CountAll(_ context.Context) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -118,6 +126,8 @@ func (f *EnrollmentRepository) CountAll(_ context.Context) (int64, error) {
 	return int64(len(f.enrollments)), nil
 }
 
+// CountDistinctCourses returns the number of distinct courses with at least
+// one enrollment.
 func (f *EnrollmentRepository) CountDistinctCourses(_ context.Context) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

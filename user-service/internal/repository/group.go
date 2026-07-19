@@ -8,9 +8,15 @@ import (
 )
 
 const (
+	// defaultGroupName is the name of the group every user is automatically
+	// made a member of via AddToDefault.
 	defaultGroupName = "everyone"
 
-	groupsRoleAdmin   = "admin"
+	// groupsRoleAdmin is the platform role applied when a synced group maps
+	// to admin in group_role_mappings.
+	groupsRoleAdmin = "admin"
+	// groupsRoleStudent is the platform role used when no synced group maps
+	// to a higher role.
 	groupsRoleStudent = "student"
 )
 
@@ -63,28 +69,35 @@ type GroupRepository interface {
 	UnenrollCourse(ctx context.Context, groupID, courseSlug string) error
 }
 
+// gormGroupRepository is the GORM-backed GroupRepository implementation.
 type gormGroupRepository struct {
 	db *gorm.DB
 }
 
 // NewGormGroupRepository builds a GroupRepository backed by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormGroupRepository(db *gorm.DB) GroupRepository {
 	return &gormGroupRepository{db: db}
 }
 
+// Create inserts a new local group named name, doing nothing if it already
+// exists, and returns its ID.
 func (r *gormGroupRepository) Create(ctx context.Context, name string) (string, error) {
-	var id string
+	var groupID string
 
 	err := r.db.WithContext(ctx).Raw(
 		`INSERT INTO groups (name, source) VALUES (?, 'local') ON CONFLICT (name) DO NOTHING RETURNING id::text`,
-		name).Scan(&id).Error
+		name).Scan(&groupID).Error
 	if err != nil {
 		return "", fmt.Errorf("create group: %w", err)
 	}
 
-	return id, nil
+	return groupID, nil
 }
 
+// Delete removes the local group identified by id, reporting whether a row
+// was deleted.
 func (r *gormGroupRepository) Delete(ctx context.Context, id string) (bool, error) {
 	result := r.db.WithContext(ctx).Exec(`DELETE FROM groups WHERE id = ?::uuid AND source = 'local'`, id)
 	if result.Error != nil {
@@ -94,6 +107,8 @@ func (r *gormGroupRepository) Delete(ctx context.Context, id string) (bool, erro
 	return result.RowsAffected > 0, nil
 }
 
+// List returns every group with its member count and mapped role, ordered
+// by name.
 func (r *gormGroupRepository) List(ctx context.Context) ([]GroupRow, error) {
 	var rows []GroupRow
 
@@ -113,6 +128,8 @@ func (r *gormGroupRepository) List(ctx context.Context) ([]GroupRow, error) {
 	return rows, nil
 }
 
+// ListMappings returns every group-to-platform-role mapping, ordered by
+// group name.
 func (r *gormGroupRepository) ListMappings(ctx context.Context) ([]GroupMapping, error) {
 	var rows []GroupMapping
 
@@ -126,6 +143,7 @@ func (r *gormGroupRepository) ListMappings(ctx context.Context) ([]GroupMapping,
 	return rows, nil
 }
 
+// UpsertMapping creates or updates the platform role mapped to groupName.
 func (r *gormGroupRepository) UpsertMapping(ctx context.Context, groupName, platformRole string) error {
 	err := r.db.WithContext(ctx).Exec(
 		`INSERT INTO group_role_mappings (groupname, platformrole) VALUES (?, ?)
@@ -138,6 +156,8 @@ func (r *gormGroupRepository) UpsertMapping(ctx context.Context, groupName, plat
 	return nil
 }
 
+// DeleteMapping removes the role mapping for groupName, reporting whether a
+// row was deleted.
 func (r *gormGroupRepository) DeleteMapping(ctx context.Context, groupName string) (bool, error) {
 	result := r.db.WithContext(ctx).Exec(`DELETE FROM group_role_mappings WHERE groupname = ?`, groupName)
 	if result.Error != nil {
@@ -147,6 +167,8 @@ func (r *gormGroupRepository) DeleteMapping(ctx context.Context, groupName strin
 	return result.RowsAffected > 0, nil
 }
 
+// AddToDefault creates the shared "everyone" group if absent and links
+// userID to it.
 func (r *gormGroupRepository) AddToDefault(ctx context.Context, userID string) error {
 	var groupID string
 
@@ -172,6 +194,8 @@ func (r *gormGroupRepository) AddToDefault(ctx context.Context, userID string) e
 	return nil
 }
 
+// SyncEnrollments enrolls userID in every course reachable through their
+// group enrollments, doing nothing for enrollments that already exist.
 func (r *gormGroupRepository) SyncEnrollments(ctx context.Context, userID string) error {
 	err := r.db.WithContext(ctx).Exec(
 		`INSERT INTO enrollments (userid, courseslug)
@@ -202,37 +226,26 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 
 	role := groupsRoleStudent
 
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		selErr := tx.Raw(`SELECT role FROM users WHERE id = ?::uuid`, userID).Scan(&dbRole).Error
+	err := r.db.WithContext(ctx).Transaction(func(groupTx *gorm.DB) error {
+		selErr := groupTx.Raw(`SELECT role FROM users WHERE id = ?::uuid`, userID).Scan(&dbRole).Error
 		if selErr == nil && dbRole != "" {
 			role = dbRole
 		}
 
-		delErr := tx.Exec(`DELETE FROM user_groups WHERE userid = ?::uuid`, userID).Error
+		delErr := groupTx.Exec(`DELETE FROM user_groups WHERE userid = ?::uuid`, userID).Error
 		if delErr != nil {
 			return fmt.Errorf("clear group memberships: %w", delErr)
 		}
 
-		roleMapped := false
-
-		for _, name := range groupNames {
-			if name == "" {
-				continue
-			}
-
-			updatedRole, mapped, membershipErr := syncGroupMembership(tx, userID, name, source, role)
-			if membershipErr != nil {
-				return membershipErr
-			}
-
-			role = updatedRole
-			if mapped {
-				roleMapped = true
-			}
+		updatedRole, roleMapped, syncErr := applyGroupMemberships(groupTx, userID, groupNames, source, role)
+		if syncErr != nil {
+			return syncErr
 		}
 
+		role = updatedRole
+
 		if roleMapped {
-			updErr := tx.Exec(`UPDATE users SET role = ?, updatedat = NOW() WHERE id = ?::uuid`, role, userID).Error
+			updErr := groupTx.Exec(`UPDATE users SET role = ?, updatedat = NOW() WHERE id = ?::uuid`, role, userID).Error
 			if updErr != nil {
 				return fmt.Errorf("persist derived role: %w", updErr)
 			}
@@ -241,12 +254,43 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 		return nil
 	})
 	if err != nil {
-		return role, err
+		return role, fmt.Errorf("sync groups and derive role: %w", err)
 	}
 
 	return role, nil
 }
 
+// applyGroupMemberships syncs userID's membership in every non-empty name in
+// groupNames, deriving the platform role along the way. It returns the
+// (possibly updated) role, whether any group mapping was applied, and any
+// error.
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func applyGroupMemberships(groupTx *gorm.DB, userID string, groupNames []string, source, role string) (string, bool, error) {
+	roleMapped := false
+
+	for _, name := range groupNames {
+		if name == "" {
+			continue
+		}
+
+		updatedRole, mapped, err := syncGroupMembership(groupTx, userID, name, source, role)
+		if err != nil {
+			return role, false, err
+		}
+
+		role = updatedRole
+
+		if mapped {
+			roleMapped = true
+		}
+	}
+
+	return role, roleMapped, nil
+}
+
+// EnrollCourse enrolls groupID in courseSlug and backfills enrollments for
+// every existing member, returning the number of members newly enrolled.
 func (r *gormGroupRepository) EnrollCourse(ctx context.Context, groupID, courseSlug string) (int64, error) {
 	err := r.db.WithContext(ctx).Exec(
 		`INSERT INTO group_enrollments (groupid, courseslug)
@@ -292,6 +336,7 @@ func (r *gormGroupRepository) ListCourseEnrollments(ctx context.Context, courseS
 	return rows, nil
 }
 
+// UnenrollCourse removes groupID's enrollment in courseSlug.
 func (r *gormGroupRepository) UnenrollCourse(ctx context.Context, groupID, courseSlug string) error {
 	err := r.db.WithContext(ctx).Exec(
 		`DELETE FROM group_enrollments WHERE groupid = ?::uuid AND courseslug = ?`,
@@ -305,10 +350,14 @@ func (r *gormGroupRepository) UnenrollCourse(ctx context.Context, groupID, cours
 
 // syncGroupMembership upserts a single group, links userID to it, and
 // derives the platform role implied by that group's role mapping (if any).
-func syncGroupMembership(tx *gorm.DB, userID, name, source, currentRole string) (string, bool, error) {
+// It returns the (possibly updated) role, whether a mapping was applied,
+// and any error.
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func syncGroupMembership(groupTx *gorm.DB, userID, name, source, currentRole string) (string, bool, error) {
 	var groupID string
 
-	err := tx.Raw(
+	err := groupTx.Raw(
 		`INSERT INTO groups (name, source, updatedat) VALUES (?, ?, NOW())
 		 ON CONFLICT (name) DO UPDATE SET source = ?, updatedat = NOW() RETURNING id::text`,
 		name, source, source).Scan(&groupID).Error
@@ -316,7 +365,7 @@ func syncGroupMembership(tx *gorm.DB, userID, name, source, currentRole string) 
 		return currentRole, false, fmt.Errorf("upsert group %q: %w", name, err)
 	}
 
-	err = tx.Exec(
+	err = groupTx.Exec(
 		`INSERT INTO user_groups (userid, groupid) VALUES (?::uuid, ?::uuid) ON CONFLICT DO NOTHING`,
 		userID, groupID).Error
 	if err != nil {
@@ -325,8 +374,12 @@ func syncGroupMembership(tx *gorm.DB, userID, name, source, currentRole string) 
 
 	var mappedRole string
 
-	scanErr := tx.Raw(`SELECT platformrole FROM group_role_mappings WHERE groupname = ?`, name).Scan(&mappedRole).Error
-	if scanErr != nil || mappedRole == "" {
+	scanErr := groupTx.Raw(`SELECT platformrole FROM group_role_mappings WHERE groupname = ?`, name).Scan(&mappedRole).Error
+	if scanErr != nil {
+		return currentRole, false, fmt.Errorf("lookup group mapping %q: %w", name, scanErr)
+	}
+
+	if mappedRole == "" {
 		return currentRole, false, nil
 	}
 

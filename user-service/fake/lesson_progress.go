@@ -25,6 +25,8 @@ func NewLessonProgressRepository(seed ...models.LessonProgress) *LessonProgressR
 	return &LessonProgressRepository{progress: append([]models.LessonProgress{}, seed...)}
 }
 
+// MarkComplete records that userID viewed lessonSlug in courseSlug, or does
+// nothing if already recorded.
 func (f *LessonProgressRepository) MarkComplete(_ context.Context, userID, courseSlug, lessonSlug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -46,6 +48,7 @@ func (f *LessonProgressRepository) MarkComplete(_ context.Context, userID, cours
 	return nil
 }
 
+// ViewedSlugs lists the lesson slugs userID has viewed in courseSlug.
 func (f *LessonProgressRepository) ViewedSlugs(_ context.Context, userID, courseSlug string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -65,6 +68,7 @@ func (f *LessonProgressRepository) ViewedSlugs(_ context.Context, userID, course
 	return slugs, nil
 }
 
+// CountViewed returns the number of lessons userID has viewed in courseSlug.
 func (f *LessonProgressRepository) CountViewed(_ context.Context, userID, courseSlug string) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -84,6 +88,8 @@ func (f *LessonProgressRepository) CountViewed(_ context.Context, userID, course
 	return count, nil
 }
 
+// CompletedCourseSlugs filters slugs down to the courses userID has
+// completed.
 func (f *LessonProgressRepository) CompletedCourseSlugs(_ context.Context, userID string, slugs []string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

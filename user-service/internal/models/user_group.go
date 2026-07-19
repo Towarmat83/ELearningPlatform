@@ -7,8 +7,8 @@ import "github.com/google/uuid"
 // codebase-wide convention that user IDs are handled as raw strings
 // (e.g. claims.Subject).
 type UserGroup struct {
-	UserID  string    `gorm:"column:userid;primaryKey"`
-	GroupID uuid.UUID `gorm:"column:groupid;primaryKey"`
+	UserID  string    `gorm:"column:userid;type:uuid;primaryKey"`
+	GroupID uuid.UUID `gorm:"column:groupid;type:uuid;primaryKey;index:idx_user_groups_group"`
 }
 
 // TableName pins UserGroup to the user_groups table.

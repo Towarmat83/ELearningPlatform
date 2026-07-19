@@ -20,7 +20,6 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/db"
 	"github.com/genesary/pupitre/user-service/internal/handlers"
 	"github.com/genesary/pupitre/user-service/internal/repository"
-	"github.com/genesary/pupitre/user-service/migrations"
 )
 
 const (
@@ -85,7 +84,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("unwrap sql.DB: %w", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	zap.L().Info("database connected")
 
@@ -131,7 +130,7 @@ func run() error {
 // seedDatabase runs migrations and seeds the default admin user, OIDC
 // settings, and (if enabled) mock demo data.
 func seedDatabase(ctx context.Context, gdb *gorm.DB, repos *repository.Repositories, cfg *config.Config) error {
-	err := db.RunMigrations(ctx, gdb, migrations.FS)
+	err := db.RunMigrations(ctx, gdb)
 	if err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}

@@ -29,12 +29,15 @@ type ModuleProgressRepository interface {
 	CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error)
 }
 
+// gormModuleProgressRepository is the GORM-backed ModuleProgressRepository.
 type gormModuleProgressRepository struct {
 	db *gorm.DB
 }
 
 // NewGormModuleProgressRepository builds a ModuleProgressRepository backed
 // by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormModuleProgressRepository(db *gorm.DB) ModuleProgressRepository {
 	return &gormModuleProgressRepository{db: db}
 }
@@ -64,6 +67,8 @@ func (r *gormModuleProgressRepository) RecordProgress(
 	return nil
 }
 
+// TotalScore returns the sum of userID's best scores across every module in
+// courseSlug.
 func (r *gormModuleProgressRepository) TotalScore(ctx context.Context, userID, courseSlug string) (int64, error) {
 	var total int64
 
@@ -77,6 +82,8 @@ func (r *gormModuleProgressRepository) TotalScore(ctx context.Context, userID, c
 	return total, nil
 }
 
+// PassedModuleSlugs returns the module slugs userID has passed in
+// courseSlug.
 func (r *gormModuleProgressRepository) PassedModuleSlugs(ctx context.Context, userID, courseSlug string) ([]string, error) {
 	var slugs []string
 
@@ -90,6 +97,8 @@ func (r *gormModuleProgressRepository) PassedModuleSlugs(ctx context.Context, us
 	return slugs, nil
 }
 
+// ListByUserCourse returns every module_progress row for userID in
+// courseSlug.
 func (r *gormModuleProgressRepository) ListByUserCourse(ctx context.Context, userID, courseSlug string) ([]models.ModuleProgress, error) {
 	var list []models.ModuleProgress
 
@@ -103,6 +112,8 @@ func (r *gormModuleProgressRepository) ListByUserCourse(ctx context.Context, use
 	return list, nil
 }
 
+// CompletedCourseSlugs returns the subset of slugs userID has passed at
+// least one module in.
 func (r *gormModuleProgressRepository) CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error) {
 	var completed []string
 

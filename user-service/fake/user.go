@@ -12,6 +12,10 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
+// authProviderLocal is the AuthProvider value for locally-authenticated
+// (non-SSO) seeded users.
+const authProviderLocal = "local"
+
 // UserRepository is an in-memory repository.UserRepository for tests.
 //
 // Cross-aggregate projections (ListForAdmin/GetForAdmin/Leaderboard) only
@@ -46,16 +50,7 @@ func NewUserRepository(seed ...models.User) *UserRepository {
 	return &UserRepository{users: append([]models.User{}, seed...)}
 }
 
-func (f *UserRepository) findIndexByID(id uuid.UUID) int {
-	for i := range f.users {
-		if f.users[i].ID == id {
-			return i
-		}
-	}
-
-	return -1
-}
-
+// ExistsByEmailOrUsername reports whether any user has email or username.
 func (f *UserRepository) ExistsByEmailOrUsername(_ context.Context, email, username string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -73,7 +68,8 @@ func (f *UserRepository) ExistsByEmailOrUsername(_ context.Context, email, usern
 	return false, nil
 }
 
-func (f *UserRepository) Create(_ context.Context, u *models.User) error {
+// Create appends user, assigning it an ID and timestamps if unset.
+func (f *UserRepository) Create(_ context.Context, user *models.User) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -85,22 +81,23 @@ func (f *UserRepository) Create(_ context.Context, u *models.User) error {
 		return f.CreateErr
 	}
 
-	if u.ID == uuid.Nil {
-		u.ID = uuid.New()
+	if user.ID == uuid.Nil {
+		user.ID = uuid.New()
 	}
 
 	now := time.Now()
-	if u.CreatedAt.IsZero() {
-		u.CreatedAt = now
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = now
 	}
 
-	u.UpdatedAt = now
+	user.UpdatedAt = now
 
-	f.users = append(f.users, *u)
+	f.users = append(f.users, *user)
 
 	return nil
 }
 
+// FindByEmailActive returns the active user matching email, or ErrUserNotFound.
 func (f *UserRepository) FindByEmailActive(_ context.Context, email string) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -120,7 +117,8 @@ func (f *UserRepository) FindByEmailActive(_ context.Context, email string) (*mo
 	return nil, repository.ErrUserNotFound
 }
 
-func (f *UserRepository) FindByID(_ context.Context, id uuid.UUID) (*models.User, error) {
+// FindByID returns the user with the given id, or ErrUserNotFound.
+func (f *UserRepository) FindByID(_ context.Context, userID uuid.UUID) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -128,7 +126,7 @@ func (f *UserRepository) FindByID(_ context.Context, id uuid.UUID) (*models.User
 		return nil, f.Err
 	}
 
-	i := f.findIndexByID(id)
+	i := f.findIndexByID(userID)
 	if i < 0 {
 		return nil, repository.ErrUserNotFound
 	}
@@ -138,6 +136,7 @@ func (f *UserRepository) FindByID(_ context.Context, id uuid.UUID) (*models.User
 	return &cp, nil
 }
 
+// ExistsUsernameExcluding reports whether username is taken by another user.
 func (f *UserRepository) ExistsUsernameExcluding(_ context.Context, username string, excludeID uuid.UUID) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -155,7 +154,8 @@ func (f *UserRepository) ExistsUsernameExcluding(_ context.Context, username str
 	return false, nil
 }
 
-func (f *UserRepository) UpdateProfile(_ context.Context, id uuid.UUID, username, bio, avatarURL *string) (*models.User, error) {
+// UpdateProfile applies non-nil profile fields to the user with the given id.
+func (f *UserRepository) UpdateProfile(_ context.Context, userID uuid.UUID, username, bio, avatarURL *string) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -163,31 +163,32 @@ func (f *UserRepository) UpdateProfile(_ context.Context, id uuid.UUID, username
 		return nil, f.Err
 	}
 
-	i := f.findIndexByID(id)
-	if i < 0 {
+	idx := f.findIndexByID(userID)
+	if idx < 0 {
 		return nil, repository.ErrUserNotFound
 	}
 
 	if username != nil {
-		f.users[i].Username = *username
+		f.users[idx].Username = *username
 	}
 
 	if bio != nil {
-		f.users[i].Bio = bio
+		f.users[idx].Bio = bio
 	}
 
 	if avatarURL != nil {
-		f.users[i].AvatarURL = avatarURL
+		f.users[idx].AvatarURL = avatarURL
 	}
 
-	f.users[i].UpdatedAt = time.Now()
+	f.users[idx].UpdatedAt = time.Now()
 
-	cp := f.users[i]
+	cp := f.users[idx]
 
 	return &cp, nil
 }
 
-func (f *UserRepository) GetPasswordHash(_ context.Context, id uuid.UUID) (*string, error) {
+// GetPasswordHash returns the password hash of the user with the given id.
+func (f *UserRepository) GetPasswordHash(_ context.Context, userID uuid.UUID) (*string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -195,7 +196,7 @@ func (f *UserRepository) GetPasswordHash(_ context.Context, id uuid.UUID) (*stri
 		return nil, f.Err
 	}
 
-	i := f.findIndexByID(id)
+	i := f.findIndexByID(userID)
 	if i < 0 {
 		return nil, repository.ErrUserNotFound
 	}
@@ -203,7 +204,8 @@ func (f *UserRepository) GetPasswordHash(_ context.Context, id uuid.UUID) (*stri
 	return f.users[i].PasswordHash, nil
 }
 
-func (f *UserRepository) UpdatePasswordHash(_ context.Context, id uuid.UUID, hash string) error {
+// UpdatePasswordHash sets the password hash of the user with the given id.
+func (f *UserRepository) UpdatePasswordHash(_ context.Context, userID uuid.UUID, hash string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -215,17 +217,18 @@ func (f *UserRepository) UpdatePasswordHash(_ context.Context, id uuid.UUID, has
 		return f.UpdatePasswordHashErr
 	}
 
-	i := f.findIndexByID(id)
-	if i < 0 {
+	idx := f.findIndexByID(userID)
+	if idx < 0 {
 		return repository.ErrUserNotFound
 	}
 
-	f.users[i].PasswordHash = &hash
-	f.users[i].UpdatedAt = time.Now()
+	f.users[idx].PasswordHash = &hash
+	f.users[idx].UpdatedAt = time.Now()
 
 	return nil
 }
 
+// ExistsByUsername reports whether any user has the given username.
 func (f *UserRepository) ExistsByUsername(_ context.Context, username string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -243,6 +246,7 @@ func (f *UserRepository) ExistsByUsername(_ context.Context, username string) (b
 	return false, nil
 }
 
+// FindByProviderIdentity returns the user matching provider and its ID.
 func (f *UserRepository) FindByProviderIdentity(_ context.Context, provider, providerUserID string) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -262,6 +266,7 @@ func (f *UserRepository) FindByProviderIdentity(_ context.Context, provider, pro
 	return nil, repository.ErrUserNotFound
 }
 
+// FindByEmail returns the user matching email, or ErrUserNotFound.
 func (f *UserRepository) FindByEmail(_ context.Context, email string) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -281,7 +286,8 @@ func (f *UserRepository) FindByEmail(_ context.Context, email string) (*models.U
 	return nil, repository.ErrUserNotFound
 }
 
-func (f *UserRepository) RefreshSSOProfile(_ context.Context, id uuid.UUID, avatarURL, bio *string) (*models.User, error) {
+// RefreshSSOProfile updates avatarURL and, if unset, bio for the user.
+func (f *UserRepository) RefreshSSOProfile(_ context.Context, userID uuid.UUID, avatarURL, bio *string) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -293,30 +299,31 @@ func (f *UserRepository) RefreshSSOProfile(_ context.Context, id uuid.UUID, avat
 		return nil, f.RefreshSSOProfileErr
 	}
 
-	i := f.findIndexByID(id)
-	if i < 0 {
+	idx := f.findIndexByID(userID)
+	if idx < 0 {
 		return nil, repository.ErrUserNotFound
 	}
 
 	if avatarURL != nil {
-		f.users[i].AvatarURL = avatarURL
+		f.users[idx].AvatarURL = avatarURL
 	}
 
-	if f.users[i].Bio == nil || *f.users[i].Bio == "" {
+	if f.users[idx].Bio == nil || *f.users[idx].Bio == "" {
 		if bio != nil {
-			f.users[i].Bio = bio
+			f.users[idx].Bio = bio
 		}
 	}
 
-	f.users[i].UpdatedAt = time.Now()
+	f.users[idx].UpdatedAt = time.Now()
 
-	cp := f.users[i]
+	cp := f.users[idx]
 
 	return &cp, nil
 }
 
+// LinkProviderIdentity sets the auth provider and identity for the user.
 func (f *UserRepository) LinkProviderIdentity(
-	_ context.Context, id uuid.UUID, provider, providerUserID string, avatarURL, bio *string,
+	_ context.Context, userID uuid.UUID, provider, providerUserID string, avatarURL, bio *string,
 ) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -329,31 +336,32 @@ func (f *UserRepository) LinkProviderIdentity(
 		return nil, f.LinkProviderIdentityErr
 	}
 
-	i := f.findIndexByID(id)
-	if i < 0 {
+	idx := f.findIndexByID(userID)
+	if idx < 0 {
 		return nil, repository.ErrUserNotFound
 	}
 
-	f.users[i].AuthProvider = provider
-	f.users[i].ProviderUserID = &providerUserID
+	f.users[idx].AuthProvider = provider
+	f.users[idx].ProviderUserID = &providerUserID
 
 	if avatarURL != nil {
-		f.users[i].AvatarURL = avatarURL
+		f.users[idx].AvatarURL = avatarURL
 	}
 
-	if f.users[i].Bio == nil || *f.users[i].Bio == "" {
+	if f.users[idx].Bio == nil || *f.users[idx].Bio == "" {
 		if bio != nil {
-			f.users[i].Bio = bio
+			f.users[idx].Bio = bio
 		}
 	}
 
-	f.users[i].UpdatedAt = time.Now()
+	f.users[idx].UpdatedAt = time.Now()
 
-	cp := f.users[i]
+	cp := f.users[idx]
 
 	return &cp, nil
 }
 
+// CountByRole returns the number of users with the given role.
 func (f *UserRepository) CountByRole(_ context.Context, role string) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -373,6 +381,7 @@ func (f *UserRepository) CountByRole(_ context.Context, role string) (int64, err
 	return count, nil
 }
 
+// ListAuthProviders returns the count of users per auth provider.
 func (f *UserRepository) ListAuthProviders(_ context.Context) ([]repository.AuthProviderCount, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -394,6 +403,7 @@ func (f *UserRepository) ListAuthProviders(_ context.Context) ([]repository.Auth
 	return list, nil
 }
 
+// ListForAdmin returns admin rows for users, optionally filtered by provider.
 func (f *UserRepository) ListForAdmin(_ context.Context, provider string) ([]repository.AdminUserRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -415,7 +425,8 @@ func (f *UserRepository) ListForAdmin(_ context.Context, provider string) ([]rep
 	return list, nil
 }
 
-func (f *UserRepository) GetForAdmin(_ context.Context, id uuid.UUID) (*repository.AdminUserDetailRow, error) {
+// GetForAdmin returns the admin detail row for the user with the given id.
+func (f *UserRepository) GetForAdmin(_ context.Context, userID uuid.UUID) (*repository.AdminUserDetailRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -423,7 +434,7 @@ func (f *UserRepository) GetForAdmin(_ context.Context, id uuid.UUID) (*reposito
 		return nil, f.Err
 	}
 
-	i := f.findIndexByID(id)
+	i := f.findIndexByID(userID)
 	if i < 0 {
 		return nil, repository.ErrUserNotFound
 	}
@@ -437,6 +448,7 @@ func (f *UserRepository) GetForAdmin(_ context.Context, id uuid.UUID) (*reposito
 	}, nil
 }
 
+// adminUserRowFromModel converts u into its admin listing row representation.
 func adminUserRowFromModel(u models.User) repository.AdminUserRow {
 	return repository.AdminUserRow{
 		ID: u.ID.String(), Username: u.Username, Email: u.Email, Role: u.Role, IsActive: u.IsActive,
@@ -444,8 +456,9 @@ func adminUserRowFromModel(u models.User) repository.AdminUserRow {
 	}
 }
 
+// UpdateAdminFields applies non-nil admin-editable fields to the user.
 func (f *UserRepository) UpdateAdminFields(
-	_ context.Context, id uuid.UUID, username, bio, avatarURL *string, isActive *bool, role *string,
+	_ context.Context, userID uuid.UUID, username, bio, avatarURL *string, isActive *bool, role *string,
 ) (*models.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -454,39 +467,40 @@ func (f *UserRepository) UpdateAdminFields(
 		return nil, f.Err
 	}
 
-	i := f.findIndexByID(id)
-	if i < 0 {
+	idx := f.findIndexByID(userID)
+	if idx < 0 {
 		return nil, repository.ErrUserNotFound
 	}
 
 	if username != nil {
-		f.users[i].Username = *username
+		f.users[idx].Username = *username
 	}
 
 	if bio != nil {
-		f.users[i].Bio = bio
+		f.users[idx].Bio = bio
 	}
 
 	if avatarURL != nil {
-		f.users[i].AvatarURL = avatarURL
+		f.users[idx].AvatarURL = avatarURL
 	}
 
 	if isActive != nil {
-		f.users[i].IsActive = *isActive
+		f.users[idx].IsActive = *isActive
 	}
 
 	if role != nil {
-		f.users[i].Role = *role
+		f.users[idx].Role = *role
 	}
 
-	f.users[i].UpdatedAt = time.Now()
+	f.users[idx].UpdatedAt = time.Now()
 
-	cp := f.users[i]
+	cp := f.users[idx]
 
 	return &cp, nil
 }
 
-func (f *UserRepository) Delete(_ context.Context, id uuid.UUID) error {
+// Delete removes the user with the given id, if present.
+func (f *UserRepository) Delete(_ context.Context, userID uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -494,7 +508,7 @@ func (f *UserRepository) Delete(_ context.Context, id uuid.UUID) error {
 		return f.Err
 	}
 
-	i := f.findIndexByID(id)
+	i := f.findIndexByID(userID)
 	if i < 0 {
 		return nil
 	}
@@ -504,6 +518,7 @@ func (f *UserRepository) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// Search returns users whose username or email contains query.
 func (f *UserRepository) Search(_ context.Context, query string) ([]repository.UserSearchRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -525,6 +540,7 @@ func (f *UserRepository) Search(_ context.Context, query string) ([]repository.U
 	return results, nil
 }
 
+// Leaderboard returns active students for the leaderboard listing.
 func (f *UserRepository) Leaderboard(_ context.Context) ([]repository.LeaderboardRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -535,19 +551,20 @@ func (f *UserRepository) Leaderboard(_ context.Context) ([]repository.Leaderboar
 
 	list := make([]repository.LeaderboardRow, 0)
 
-	for _, u := range f.users {
-		if u.Role != "student" || !u.IsActive {
+	for _, student := range f.users {
+		if student.Role != groupsRoleStudent || !student.IsActive {
 			continue
 		}
 
 		list = append(list, repository.LeaderboardRow{
-			ID: u.ID.String(), Username: u.Username, Email: u.Email, AvatarURL: u.AvatarURL,
+			ID: student.ID.String(), Username: student.Username, Email: student.Email, AvatarURL: student.AvatarURL,
 		})
 	}
 
 	return list, nil
 }
 
+// CreateAdminIfAbsent seeds an admin user unless email already exists.
 func (f *UserRepository) CreateAdminIfAbsent(_ context.Context, username, email, hash string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -559,13 +576,14 @@ func (f *UserRepository) CreateAdminIfAbsent(_ context.Context, username, email,
 	}
 
 	f.users = append(f.users, models.User{
-		ID: uuid.New(), Username: username, Email: email, PasswordHash: &hash, Role: "admin",
-		IsActive: true, AuthProvider: "local", CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		ID: uuid.New(), Username: username, Email: email, PasswordHash: &hash, Role: groupsRoleAdmin,
+		IsActive: true, AuthProvider: authProviderLocal, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	})
 
 	return nil
 }
 
+// UpsertAdminPassword sets the admin's hash, creating the admin if absent.
 func (f *UserRepository) UpsertAdminPassword(_ context.Context, username, email, hash string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -580,13 +598,14 @@ func (f *UserRepository) UpsertAdminPassword(_ context.Context, username, email,
 	}
 
 	f.users = append(f.users, models.User{
-		ID: uuid.New(), Username: username, Email: email, PasswordHash: &hash, Role: "admin",
-		IsActive: true, AuthProvider: "local", CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		ID: uuid.New(), Username: username, Email: email, PasswordHash: &hash, Role: groupsRoleAdmin,
+		IsActive: true, AuthProvider: authProviderLocal, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	})
 
 	return nil
 }
 
+// UpsertMockStudent upserts a student by email, returning its ID.
 func (f *UserRepository) UpsertMockStudent(_ context.Context, username, email, hash string) (uuid.UUID, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -599,11 +618,22 @@ func (f *UserRepository) UpsertMockStudent(_ context.Context, username, email, h
 		}
 	}
 
-	id := uuid.New()
+	newID := uuid.New()
 	f.users = append(f.users, models.User{
-		ID: id, Username: username, Email: email, PasswordHash: &hash, Role: "student",
-		IsActive: true, AuthProvider: "local", CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		ID: newID, Username: username, Email: email, PasswordHash: &hash, Role: groupsRoleStudent,
+		IsActive: true, AuthProvider: authProviderLocal, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	})
 
-	return id, nil
+	return newID, nil
+}
+
+// findIndexByID returns the index of the user with the given id, or -1.
+func (f *UserRepository) findIndexByID(id uuid.UUID) int {
+	for i := range f.users {
+		if f.users[i].ID == id {
+			return i
+		}
+	}
+
+	return -1
 }

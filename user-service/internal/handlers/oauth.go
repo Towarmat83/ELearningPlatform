@@ -626,7 +626,7 @@ func upsertSSOUser(
 
 	err = users.Create(ctx, newUser)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	metrics.ActiveUsers.Inc()

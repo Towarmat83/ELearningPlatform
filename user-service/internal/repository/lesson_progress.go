@@ -28,16 +28,21 @@ type LessonProgressRepository interface {
 	CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error)
 }
 
+// gormLessonProgressRepository is the GORM-backed LessonProgressRepository.
 type gormLessonProgressRepository struct {
 	db *gorm.DB
 }
 
 // NewGormLessonProgressRepository builds a LessonProgressRepository backed
 // by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormLessonProgressRepository(db *gorm.DB) LessonProgressRepository {
 	return &gormLessonProgressRepository{db: db}
 }
 
+// MarkComplete records that userID viewed lessonSlug in courseSlug, doing
+// nothing if already recorded.
 func (r *gormLessonProgressRepository) MarkComplete(ctx context.Context, userID, courseSlug, lessonSlug string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO lesson_progress (userid, courseslug, lessonslug)
@@ -51,6 +56,7 @@ func (r *gormLessonProgressRepository) MarkComplete(ctx context.Context, userID,
 	return nil
 }
 
+// ViewedSlugs returns the lesson slugs userID has viewed in courseSlug.
 func (r *gormLessonProgressRepository) ViewedSlugs(ctx context.Context, userID, courseSlug string) ([]string, error) {
 	var slugs []string
 
@@ -64,6 +70,7 @@ func (r *gormLessonProgressRepository) ViewedSlugs(ctx context.Context, userID, 
 	return slugs, nil
 }
 
+// CountViewed returns how many lessons userID has viewed in courseSlug.
 func (r *gormLessonProgressRepository) CountViewed(ctx context.Context, userID, courseSlug string) (int64, error) {
 	var count int64
 
@@ -76,6 +83,8 @@ func (r *gormLessonProgressRepository) CountViewed(ctx context.Context, userID, 
 	return count, nil
 }
 
+// CompletedCourseSlugs returns the subset of slugs userID has marked
+// complete via the __complete__ sentinel.
 func (r *gormLessonProgressRepository) CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error) {
 	var completed []string
 

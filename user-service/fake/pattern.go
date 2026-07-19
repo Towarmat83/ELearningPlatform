@@ -29,36 +29,7 @@ func NewPatternRepository(seed ...models.MarkdownPattern) *PatternRepository {
 	return &PatternRepository{patterns: append([]models.MarkdownPattern{}, seed...)}
 }
 
-func (f *PatternRepository) findIndexByID(id uuid.UUID) int {
-	for i := range f.patterns {
-		if f.patterns[i].ID == id {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func (f *PatternRepository) findIndexByName(name string) int {
-	for i := range f.patterns {
-		if f.patterns[i].Name == name {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func (f *PatternRepository) findIndexByNameScope(name, scope string) int {
-	for i := range f.patterns {
-		if f.patterns[i].Name == name && f.patterns[i].Scope == scope {
-			return i
-		}
-	}
-
-	return -1
-}
-
+// ListGlobal returns every pattern with global scope.
 func (f *PatternRepository) ListGlobal(_ context.Context) ([]models.MarkdownPattern, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -78,6 +49,7 @@ func (f *PatternRepository) ListGlobal(_ context.Context) ([]models.MarkdownPatt
 	return list, nil
 }
 
+// ListForCourse returns global patterns plus patterns scoped to courseSlug.
 func (f *PatternRepository) ListForCourse(_ context.Context, courseSlug string) ([]models.MarkdownPattern, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -97,7 +69,8 @@ func (f *PatternRepository) ListForCourse(_ context.Context, courseSlug string) 
 	return list, nil
 }
 
-func (f *PatternRepository) Get(_ context.Context, id uuid.UUID) (*models.MarkdownPattern, error) {
+// Get returns the pattern with the given id.
+func (f *PatternRepository) Get(_ context.Context, patternID uuid.UUID) (*models.MarkdownPattern, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -105,7 +78,7 @@ func (f *PatternRepository) Get(_ context.Context, id uuid.UUID) (*models.Markdo
 		return nil, f.Err
 	}
 
-	i := f.findIndexByID(id)
+	i := f.findIndexByID(patternID)
 	if i < 0 {
 		return nil, repository.ErrPatternNotFound
 	}
@@ -115,8 +88,9 @@ func (f *PatternRepository) Get(_ context.Context, id uuid.UUID) (*models.Markdo
 	return &cp, nil
 }
 
+// Create adds a new pattern and returns it.
 func (f *PatternRepository) Create(
-	_ context.Context, name, label, description, parameter, html, css, js, scope, createdBy string,
+	_ context.Context, name, label, description, parameter, html, css, jsCode, scope, createdBy string,
 ) (*models.MarkdownPattern, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -140,7 +114,7 @@ func (f *PatternRepository) Create(
 
 	pattern := models.MarkdownPattern{
 		ID: uuid.New(), Name: name, Label: label, Description: description, Parameter: parameter,
-		HTML: html, CSS: css, JS: js, Scope: scope, CreatedBy: createdByPtr,
+		HTML: html, CSS: css, JS: jsCode, Scope: scope, CreatedBy: createdByPtr,
 		CreatedAt: now, UpdatedAt: now,
 	}
 
@@ -149,8 +123,9 @@ func (f *PatternRepository) Create(
 	return &pattern, nil
 }
 
+// UpdateByName replaces the pattern named oldName and returns the update.
 func (f *PatternRepository) UpdateByName(
-	_ context.Context, oldName, name, label, description, parameter, html, css, js, scope string,
+	_ context.Context, oldName, name, label, description, parameter, html, css, jsCode, scope string,
 ) (*models.MarkdownPattern, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -159,27 +134,28 @@ func (f *PatternRepository) UpdateByName(
 		return nil, f.Err
 	}
 
-	i := f.findIndexByName(oldName)
-	if i < 0 {
+	idx := f.findIndexByName(oldName)
+	if idx < 0 {
 		return nil, repository.ErrPatternNotFound
 	}
 
-	f.patterns[i].Name = name
-	f.patterns[i].Label = label
-	f.patterns[i].Description = description
-	f.patterns[i].Parameter = parameter
-	f.patterns[i].HTML = html
-	f.patterns[i].CSS = css
-	f.patterns[i].JS = js
-	f.patterns[i].Scope = scope
-	f.patterns[i].FromConfig = false
-	f.patterns[i].UpdatedAt = time.Now()
+	f.patterns[idx].Name = name
+	f.patterns[idx].Label = label
+	f.patterns[idx].Description = description
+	f.patterns[idx].Parameter = parameter
+	f.patterns[idx].HTML = html
+	f.patterns[idx].CSS = css
+	f.patterns[idx].JS = jsCode
+	f.patterns[idx].Scope = scope
+	f.patterns[idx].FromConfig = false
+	f.patterns[idx].UpdatedAt = time.Now()
 
-	cp := f.patterns[i]
+	cp := f.patterns[idx]
 
 	return &cp, nil
 }
 
+// DeleteByName removes the pattern with the given name.
 func (f *PatternRepository) DeleteByName(_ context.Context, name string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -198,7 +174,8 @@ func (f *PatternRepository) DeleteByName(_ context.Context, name string) (bool, 
 	return true, nil
 }
 
-func (f *PatternRepository) DeleteByIDAndScope(_ context.Context, id uuid.UUID, scope string) (bool, error) {
+// DeleteByIDAndScope removes the pattern with the given id and scope.
+func (f *PatternRepository) DeleteByIDAndScope(_ context.Context, patternID uuid.UUID, scope string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -206,7 +183,7 @@ func (f *PatternRepository) DeleteByIDAndScope(_ context.Context, id uuid.UUID, 
 		return false, f.Err
 	}
 
-	i := f.findIndexByID(id)
+	i := f.findIndexByID(patternID)
 	if i < 0 || f.patterns[i].Scope != scope {
 		return false, nil
 	}
@@ -216,8 +193,9 @@ func (f *PatternRepository) DeleteByIDAndScope(_ context.Context, id uuid.UUID, 
 	return true, nil
 }
 
+// UpsertFromConfig inserts or updates a pattern sourced from config.
 func (f *PatternRepository) UpsertFromConfig(
-	_ context.Context, name, label, description, parameter, html, css, js, scope string,
+	_ context.Context, name, label, description, parameter, html, css, jsCode, scope string,
 ) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -228,29 +206,32 @@ func (f *PatternRepository) UpsertFromConfig(
 
 	now := time.Now()
 
-	i := f.findIndexByNameScope(name, scope)
-	if i >= 0 {
-		f.patterns[i].Label = label
-		f.patterns[i].Description = description
-		f.patterns[i].Parameter = parameter
-		f.patterns[i].HTML = html
-		f.patterns[i].CSS = css
-		f.patterns[i].JS = js
-		f.patterns[i].FromConfig = true
-		f.patterns[i].UpdatedAt = now
+	idx := f.findIndexByNameScope(name, scope)
+	if idx >= 0 {
+		f.patterns[idx].Label = label
+		f.patterns[idx].Description = description
+		f.patterns[idx].Parameter = parameter
+		f.patterns[idx].HTML = html
+		f.patterns[idx].CSS = css
+		f.patterns[idx].JS = jsCode
+		f.patterns[idx].FromConfig = true
+		f.patterns[idx].UpdatedAt = now
 
 		return nil
 	}
 
 	f.patterns = append(f.patterns, models.MarkdownPattern{
 		ID: uuid.New(), Name: name, Label: label, Description: description, Parameter: parameter,
-		HTML: html, CSS: css, JS: js, Scope: scope, FromConfig: true, CreatedAt: now, UpdatedAt: now,
+		HTML: html, CSS: css, JS: jsCode, Scope: scope, FromConfig: true, CreatedAt: now, UpdatedAt: now,
 	})
 
 	return nil
 }
 
-func (f *PatternRepository) UpsertFromCRD(_ context.Context, name, label, description, html, css, js, scope string) error {
+// UpsertFromCRD inserts or updates a pattern sourced from a CRD.
+func (f *PatternRepository) UpsertFromCRD(
+	_ context.Context, name, label, description, html, css, jsCode, scope string,
+) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -260,27 +241,28 @@ func (f *PatternRepository) UpsertFromCRD(_ context.Context, name, label, descri
 
 	now := time.Now()
 
-	i := f.findIndexByNameScope(name, scope)
-	if i >= 0 {
-		f.patterns[i].Label = label
-		f.patterns[i].Description = description
-		f.patterns[i].HTML = html
-		f.patterns[i].CSS = css
-		f.patterns[i].JS = js
-		f.patterns[i].FromConfig = true
-		f.patterns[i].UpdatedAt = now
+	idx := f.findIndexByNameScope(name, scope)
+	if idx >= 0 {
+		f.patterns[idx].Label = label
+		f.patterns[idx].Description = description
+		f.patterns[idx].HTML = html
+		f.patterns[idx].CSS = css
+		f.patterns[idx].JS = jsCode
+		f.patterns[idx].FromConfig = true
+		f.patterns[idx].UpdatedAt = now
 
 		return nil
 	}
 
 	f.patterns = append(f.patterns, models.MarkdownPattern{
 		ID: uuid.New(), Name: name, Label: label, Description: description,
-		HTML: html, CSS: css, JS: js, Scope: scope, FromConfig: true, CreatedAt: now, UpdatedAt: now,
+		HTML: html, CSS: css, JS: jsCode, Scope: scope, FromConfig: true, CreatedAt: now, UpdatedAt: now,
 	})
 
 	return nil
 }
 
+// DeleteFromCRD removes a pattern previously created from a CRD.
 func (f *PatternRepository) DeleteFromCRD(_ context.Context, name, scope string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -297,4 +279,38 @@ func (f *PatternRepository) DeleteFromCRD(_ context.Context, name, scope string)
 	f.patterns = append(f.patterns[:i], f.patterns[i+1:]...)
 
 	return nil
+}
+
+// findIndexByID returns the index of the pattern with the given id, or -1.
+func (f *PatternRepository) findIndexByID(id uuid.UUID) int {
+	for i := range f.patterns {
+		if f.patterns[i].ID == id {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// findIndexByName returns the index of the pattern with the given name, or -1.
+func (f *PatternRepository) findIndexByName(name string) int {
+	for i := range f.patterns {
+		if f.patterns[i].Name == name {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// findIndexByNameScope returns the index of the pattern with the given name
+// and scope, or -1.
+func (f *PatternRepository) findIndexByNameScope(name, scope string) int {
+	for i := range f.patterns {
+		if f.patterns[i].Name == name && f.patterns[i].Scope == scope {
+			return i
+		}
+	}
+
+	return -1
 }

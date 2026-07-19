@@ -25,17 +25,8 @@ func NewModuleProgressRepository(seed ...models.ModuleProgress) *ModuleProgressR
 	return &ModuleProgressRepository{progress: append([]models.ModuleProgress{}, seed...)}
 }
 
-func (f *ModuleProgressRepository) findIndex(userID, courseSlug string, moduleIndex int) int {
-	for i := range f.progress {
-		p := f.progress[i]
-		if p.UserID == userID && p.CourseSlug == courseSlug && p.ModuleIndex == moduleIndex {
-			return i
-		}
-	}
-
-	return -1
-}
-
+// RecordProgress upserts a module attempt: it keeps the best score, ORs the
+// passed flag across attempts, and increments the attempt count.
 func (f *ModuleProgressRepository) RecordProgress(
 	_ context.Context, userID, courseSlug string, moduleIndex int, moduleSlug string, score, maxScore int, passed bool,
 ) error {
@@ -48,8 +39,8 @@ func (f *ModuleProgressRepository) RecordProgress(
 
 	now := time.Now()
 
-	i := f.findIndex(userID, courseSlug, moduleIndex)
-	if i < 0 {
+	idx := f.findIndex(userID, courseSlug, moduleIndex)
+	if idx < 0 {
 		var completedAt *time.Time
 		if passed {
 			completedAt = &now
@@ -69,29 +60,38 @@ func (f *ModuleProgressRepository) RecordProgress(
 		return nil
 	}
 
-	p := &f.progress[i]
-	p.Attempts++
-
-	if score > p.BestScore {
-		p.BestScore = score
-	}
-
-	p.MaxScore = maxScore
-	p.Passed = p.Passed || passed
-
-	if p.ModuleSlug == nil && moduleSlug != "" {
-		p.ModuleSlug = &moduleSlug
-	}
-
-	if passed && p.CompletedAt == nil {
-		p.CompletedAt = &now
-	}
-
-	p.UpdatedAt = now
+	entry := &f.progress[idx]
+	updateModuleProgress(entry, moduleSlug, score, maxScore, passed, now)
 
 	return nil
 }
 
+// updateModuleProgress applies a new attempt onto an existing progress
+// entry, keeping the best score and OR-ing the passed flag, as
+// RecordProgress documents.
+func updateModuleProgress(entry *models.ModuleProgress, moduleSlug string, score, maxScore int, passed bool, now time.Time) {
+	entry.Attempts++
+
+	if score > entry.BestScore {
+		entry.BestScore = score
+	}
+
+	entry.MaxScore = maxScore
+	entry.Passed = entry.Passed || passed
+
+	if entry.ModuleSlug == nil && moduleSlug != "" {
+		entry.ModuleSlug = &moduleSlug
+	}
+
+	if passed && entry.CompletedAt == nil {
+		entry.CompletedAt = &now
+	}
+
+	entry.UpdatedAt = now
+}
+
+// TotalScore returns the sum of best scores for userID's modules in
+// courseSlug.
 func (f *ModuleProgressRepository) TotalScore(_ context.Context, userID, courseSlug string) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -111,6 +111,8 @@ func (f *ModuleProgressRepository) TotalScore(_ context.Context, userID, courseS
 	return total, nil
 }
 
+// PassedModuleSlugs returns the slugs of modules userID has passed in
+// courseSlug.
 func (f *ModuleProgressRepository) PassedModuleSlugs(_ context.Context, userID, courseSlug string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -130,6 +132,8 @@ func (f *ModuleProgressRepository) PassedModuleSlugs(_ context.Context, userID, 
 	return slugs, nil
 }
 
+// ListByUserCourse returns all module progress rows for userID in
+// courseSlug.
 func (f *ModuleProgressRepository) ListByUserCourse(_ context.Context, userID, courseSlug string) ([]models.ModuleProgress, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -149,6 +153,8 @@ func (f *ModuleProgressRepository) ListByUserCourse(_ context.Context, userID, c
 	return list, nil
 }
 
+// CompletedCourseSlugs returns the subset of slugs the user has passed at
+// least one module in.
 func (f *ModuleProgressRepository) CompletedCourseSlugs(_ context.Context, userID string, slugs []string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -174,4 +180,16 @@ func (f *ModuleProgressRepository) CompletedCourseSlugs(_ context.Context, userI
 	}
 
 	return completed, nil
+}
+
+// findIndex returns the index of the matching progress row, or -1.
+func (f *ModuleProgressRepository) findIndex(userID, courseSlug string, moduleIndex int) int {
+	for i := range f.progress {
+		p := f.progress[i]
+		if p.UserID == userID && p.CourseSlug == courseSlug && p.ModuleIndex == moduleIndex {
+			return i
+		}
+	}
+
+	return -1
 }

@@ -34,16 +34,20 @@ type PathEnrollmentRepository interface {
 	Unenroll(ctx context.Context, userID, pathSlug string) error
 }
 
+// gormPathEnrollmentRepository is the GORM-backed PathEnrollmentRepository.
 type gormPathEnrollmentRepository struct {
 	db *gorm.DB
 }
 
 // NewGormPathEnrollmentRepository builds a PathEnrollmentRepository backed by
 // db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormPathEnrollmentRepository(db *gorm.DB) PathEnrollmentRepository {
 	return &gormPathEnrollmentRepository{db: db}
 }
 
+// MyEnrollments returns userID's path enrollments, most recent first.
 func (r *gormPathEnrollmentRepository) MyEnrollments(
 	ctx context.Context, userID string, limit *int, offset int,
 ) ([]PathEnrollmentRow, error) {
@@ -85,6 +89,7 @@ func (r *gormPathEnrollmentRepository) ListBySlug(ctx context.Context, pathSlug 
 	return rows, nil
 }
 
+// Enroll enrolls userID in pathSlug, doing nothing if already enrolled.
 func (r *gormPathEnrollmentRepository) Enroll(ctx context.Context, userID, pathSlug string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO path_enrollments (userid, path_slug) VALUES (?::uuid, ?) ON CONFLICT DO NOTHING`,
@@ -96,6 +101,7 @@ func (r *gormPathEnrollmentRepository) Enroll(ctx context.Context, userID, pathS
 	return nil
 }
 
+// Unenroll removes userID's enrollment in pathSlug.
 func (r *gormPathEnrollmentRepository) Unenroll(ctx context.Context, userID, pathSlug string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		DELETE FROM path_enrollments WHERE userid = ?::uuid AND path_slug = ?`, userID, pathSlug).Error

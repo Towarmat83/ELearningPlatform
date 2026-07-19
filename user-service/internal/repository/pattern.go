@@ -43,15 +43,19 @@ type PatternRepository interface {
 	DeleteFromCRD(ctx context.Context, name, scope string) error
 }
 
+// gormPatternRepository is the GORM-backed PatternRepository implementation.
 type gormPatternRepository struct {
 	db *gorm.DB
 }
 
 // NewGormPatternRepository builds a PatternRepository backed by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormPatternRepository(db *gorm.DB) PatternRepository {
 	return &gormPatternRepository{db: db}
 }
 
+// ListGlobal returns every pattern with global scope, ordered by name.
 func (r *gormPatternRepository) ListGlobal(ctx context.Context) ([]models.MarkdownPattern, error) {
 	patterns := make([]models.MarkdownPattern, 0)
 
@@ -63,6 +67,8 @@ func (r *gormPatternRepository) ListGlobal(ctx context.Context) ([]models.Markdo
 	return patterns, nil
 }
 
+// ListForCourse returns every pattern visible to courseSlug: global-scope
+// patterns plus patterns scoped to courseSlug itself.
 func (r *gormPatternRepository) ListForCourse(ctx context.Context, courseSlug string) ([]models.MarkdownPattern, error) {
 	patterns := make([]models.MarkdownPattern, 0)
 
@@ -76,6 +82,7 @@ func (r *gormPatternRepository) ListForCourse(ctx context.Context, courseSlug st
 	return patterns, nil
 }
 
+// Get returns the pattern identified by id, or ErrPatternNotFound.
 func (r *gormPatternRepository) Get(ctx context.Context, id uuid.UUID) (*models.MarkdownPattern, error) {
 	var pattern models.MarkdownPattern
 
@@ -91,8 +98,9 @@ func (r *gormPatternRepository) Get(ctx context.Context, id uuid.UUID) (*models.
 	return &pattern, nil
 }
 
+// Create inserts a new pattern and returns the stored row.
 func (r *gormPatternRepository) Create(
-	ctx context.Context, name, label, description, parameter, html, css, js, scope, createdBy string,
+	ctx context.Context, name, label, description, parameter, html, css, jsCode, scope, createdBy string,
 ) (*models.MarkdownPattern, error) {
 	var pattern models.MarkdownPattern
 
@@ -100,7 +108,7 @@ func (r *gormPatternRepository) Create(
 		INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, createdby)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING `+patternReturning,
-		name, label, description, parameter, html, css, js, scope, createdBy).Scan(&pattern).Error
+		name, label, description, parameter, html, css, jsCode, scope, createdBy).Scan(&pattern).Error
 	if err != nil {
 		return nil, fmt.Errorf("create pattern: %w", err)
 	}
@@ -108,8 +116,10 @@ func (r *gormPatternRepository) Create(
 	return &pattern, nil
 }
 
+// UpdateByName replaces the pattern named oldName with the given fields and
+// returns the updated row, or ErrPatternNotFound if no row matched.
 func (r *gormPatternRepository) UpdateByName(
-	ctx context.Context, oldName, name, label, description, parameter, html, css, js, scope string,
+	ctx context.Context, oldName, name, label, description, parameter, html, css, jsCode, scope string,
 ) (*models.MarkdownPattern, error) {
 	var pattern models.MarkdownPattern
 
@@ -119,7 +129,7 @@ func (r *gormPatternRepository) UpdateByName(
 		    scope = ?, from_config = FALSE, updatedat = NOW()
 		WHERE name = ?
 		RETURNING `+patternReturning,
-		name, label, description, parameter, html, css, js, scope, oldName).Scan(&pattern).Error
+		name, label, description, parameter, html, css, jsCode, scope, oldName).Scan(&pattern).Error
 	if err != nil {
 		return nil, fmt.Errorf("update pattern: %w", err)
 	}
@@ -131,6 +141,8 @@ func (r *gormPatternRepository) UpdateByName(
 	return &pattern, nil
 }
 
+// DeleteByName removes the pattern named name, reporting whether a row was
+// deleted.
 func (r *gormPatternRepository) DeleteByName(ctx context.Context, name string) (bool, error) {
 	result := r.db.WithContext(ctx).Where("name = ?", name).Delete(&models.MarkdownPattern{})
 	if result.Error != nil {
@@ -140,6 +152,8 @@ func (r *gormPatternRepository) DeleteByName(ctx context.Context, name string) (
 	return result.RowsAffected > 0, nil
 }
 
+// DeleteByIDAndScope removes the pattern identified by id and scope,
+// reporting whether a row was deleted.
 func (r *gormPatternRepository) DeleteByIDAndScope(ctx context.Context, id uuid.UUID, scope string) (bool, error) {
 	result := r.db.WithContext(ctx).Where("id = ? AND scope = ?", id, scope).Delete(&models.MarkdownPattern{})
 	if result.Error != nil {
@@ -149,8 +163,10 @@ func (r *gormPatternRepository) DeleteByIDAndScope(ctx context.Context, id uuid.
 	return result.RowsAffected > 0, nil
 }
 
+// UpsertFromConfig inserts or updates a pattern loaded from static config,
+// refreshing every field including parameter.
 func (r *gormPatternRepository) UpsertFromConfig(
-	ctx context.Context, name, label, description, parameter, html, css, js, scope string,
+	ctx context.Context, name, label, description, parameter, html, css, jsCode, scope string,
 ) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, from_config)
@@ -164,7 +180,7 @@ func (r *gormPatternRepository) UpsertFromConfig(
 		      js          = EXCLUDED.js,
 		      from_config = TRUE,
 		      updatedat   = NOW()`,
-		name, label, description, parameter, html, css, js, scope).Error
+		name, label, description, parameter, html, css, jsCode, scope).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern %q: %w", name, err)
 	}
@@ -172,8 +188,10 @@ func (r *gormPatternRepository) UpsertFromConfig(
 	return nil
 }
 
+// UpsertFromCRD inserts or updates a pattern synced from a Kubernetes CRD,
+// leaving parameter untouched.
 func (r *gormPatternRepository) UpsertFromCRD(
-	ctx context.Context, name, label, description, html, css, js, scope string,
+	ctx context.Context, name, label, description, html, css, jsCode, scope string,
 ) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO markdown_patterns (name, label, description, html, css, js, scope, from_config)
@@ -186,7 +204,7 @@ func (r *gormPatternRepository) UpsertFromCRD(
 			js          = EXCLUDED.js,
 			from_config = TRUE,
 			updatedat   = NOW()`,
-		name, label, description, html, css, js, scope).Error
+		name, label, description, html, css, jsCode, scope).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern from CRD %q: %w", name, err)
 	}
@@ -194,6 +212,7 @@ func (r *gormPatternRepository) UpsertFromCRD(
 	return nil
 }
 
+// DeleteFromCRD removes a CRD-sourced pattern by name and scope.
 func (r *gormPatternRepository) DeleteFromCRD(ctx context.Context, name, scope string) error {
 	err := r.db.WithContext(ctx).Exec(
 		`DELETE FROM markdown_patterns WHERE name = ? AND scope = ? AND from_config = TRUE`, name, scope).Error

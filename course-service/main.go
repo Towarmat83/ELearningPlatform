@@ -19,7 +19,6 @@ import (
 	coursedb "github.com/genesary/pupitre/course-service/internal/db"
 	"github.com/genesary/pupitre/course-service/internal/handlers"
 	"github.com/genesary/pupitre/course-service/internal/repository"
-	"github.com/genesary/pupitre/course-service/migrations"
 )
 
 const (
@@ -118,7 +117,7 @@ func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.St
 		return
 	}
 
-	err = coursedb.RunMigrations(ctx, pool, migrations.FS)
+	err = coursedb.RunMigrations(ctx, pool)
 	if err != nil {
 		zap.L().Warn("db migration failed", zap.Error(err))
 

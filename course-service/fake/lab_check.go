@@ -5,6 +5,7 @@ package fake
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	"github.com/genesary/pupitre/course-service/internal/models"
@@ -29,8 +30,7 @@ func (f *LabCheckRepository) List(_ context.Context, courseSlug string) ([]model
 
 	results := make([]models.LabCheck, 0, len(f.checks))
 
-	for i := len(f.checks) - 1; i >= 0; i-- {
-		check := f.checks[i]
+	for _, check := range slices.Backward(f.checks) {
 		if courseSlug != "" && check.CourseSlug != courseSlug {
 			continue
 		}

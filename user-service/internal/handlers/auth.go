@@ -29,6 +29,8 @@ const (
 	authMinUsernameLen      = 3
 	authMsgUsernameTooShort = "Username must be at least 3 characters"
 	authProviderLocal       = "local"
+	errNoLocalPassword      = "This account uses SSO login and has no local password."
+	errDatabase             = "Database error"
 )
 
 // passwordHasUpper reports whether password contains an uppercase letter.
@@ -119,17 +121,17 @@ type authResponse struct {
 }
 
 // toUserPublicRow converts a persisted user into its public representation.
-func toUserPublicRow(u *models.User) userPublicRow {
+func toUserPublicRow(user *models.User) userPublicRow {
 	return userPublicRow{
-		ID:           u.ID.String(),
-		Username:     u.Username,
-		Email:        u.Email,
-		Role:         u.Role,
-		AvatarURL:    u.AvatarURL,
-		Bio:          u.Bio,
-		IsActive:     u.IsActive,
-		AuthProvider: u.AuthProvider,
-		CreatedAt:    u.CreatedAt.Format(time.RFC3339),
+		ID:           user.ID.String(),
+		Username:     user.Username,
+		Email:        user.Email,
+		Role:         user.Role,
+		AvatarURL:    user.AvatarURL,
+		Bio:          user.Bio,
+		IsActive:     user.IsActive,
+		AuthProvider: user.AuthProvider,
+		CreatedAt:    user.CreatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -206,7 +208,7 @@ func (s *State) createUser(ctx context.Context, req registerRequest) (userPublic
 
 	err = s.Repos.Users.Create(ctx, user)
 	if err != nil {
-		return userPublicRow{}, err
+		return userPublicRow{}, fmt.Errorf("create user: %w", err)
 	}
 
 	return toUserPublicRow(user), nil
@@ -243,7 +245,7 @@ func (s *State) Register(writer http.ResponseWriter, request *http.Request) {
 
 	taken, err := s.Repos.Users.ExistsByEmailOrUsername(ctx, req.Email, req.Username)
 	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, errDatabase)
 
 		return
 	}
@@ -256,7 +258,7 @@ func (s *State) Register(writer http.ResponseWriter, request *http.Request) {
 
 	user, err := s.createUser(ctx, req)
 	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, errDatabase)
 
 		return
 	}
@@ -286,7 +288,7 @@ type loginUserRow struct {
 func (s *State) loginLookup(ctx context.Context, email string) (loginUserRow, error) {
 	user, err := s.Repos.Users.FindByEmailActive(ctx, email)
 	if err != nil {
-		return loginUserRow{}, err
+		return loginUserRow{}, fmt.Errorf("find user: %w", err)
 	}
 
 	return loginUserRow{user: toUserPublicRow(user), passwordHash: user.PasswordHash}, nil
@@ -362,14 +364,14 @@ func (s *State) Login(writer http.ResponseWriter, request *http.Request) {
 func (s *State) Me(writer http.ResponseWriter, request *http.Request) {
 	claims := s.claims(request)
 
-	id, err := uuid.Parse(claims.Subject)
+	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
 		return
 	}
 
-	user, err := s.Repos.Users.FindByID(request.Context(), id)
+	user, err := s.Repos.Users.FindByID(request.Context(), userID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
@@ -445,16 +447,16 @@ func (s *State) UpdateProfile(writer http.ResponseWriter, request *http.Request)
 		}
 	}
 
-	id, err := uuid.Parse(claims.Subject)
+	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, errDatabase)
 
 		return
 	}
 
-	user, err := s.Repos.Users.UpdateProfile(ctx, id, body.Username, body.Bio, body.AvatarURL)
+	user, err := s.Repos.Users.UpdateProfile(ctx, userID, body.Username, body.Bio, body.AvatarURL)
 	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
+		s.Error(writer, http.StatusInternalServerError, errDatabase)
 
 		return
 	}
@@ -470,12 +472,12 @@ func (s *State) UpdateProfile(writer http.ResponseWriter, request *http.Request)
 func (s *State) verifyCurrentPassword(ctx context.Context, userID, candidate string) (int, string, bool) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
-		return http.StatusBadRequest, "This account uses SSO login and has no local password.", false
+		return http.StatusBadRequest, errNoLocalPassword, false
 	}
 
 	passwordHash, err := s.Repos.Users.GetPasswordHash(ctx, id)
 	if err != nil || passwordHash == nil {
-		return http.StatusBadRequest, "This account uses SSO login and has no local password.", false
+		return http.StatusBadRequest, errNoLocalPassword, false
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(*passwordHash), []byte(candidate))
@@ -531,33 +533,43 @@ func (s *State) ChangePassword(writer http.ResponseWriter, request *http.Request
 	ctx := request.Context()
 	claims := s.claims(request)
 
-	status, msg, ok := s.verifyCurrentPassword(ctx, claims.Subject, body.OldPassword)
-	if !ok {
+	status, msg, verified := s.verifyCurrentPassword(ctx, claims.Subject, body.OldPassword)
+	if !verified {
 		s.Error(writer, status, msg)
 
 		return
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcryptCost)
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Hash error")
-
-		return
-	}
-
-	id, err := uuid.Parse(claims.Subject)
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
-
-		return
-	}
-
-	err = s.Repos.Users.UpdatePasswordHash(ctx, id, string(newHash))
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
+	status, msg, applied := s.applyNewPassword(ctx, claims.Subject, body.NewPassword)
+	if !applied {
+		s.Error(writer, status, msg)
 
 		return
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Password changed successfully"})
+}
+
+// applyNewPassword hashes newPassword and persists it for the user
+// identified by subject. It returns the HTTP status/message to send back
+// when the update fails, or ok == true to proceed.
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
+func (s *State) applyNewPassword(ctx context.Context, subject, newPassword string) (int, string, bool) {
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
+	if err != nil {
+		return http.StatusInternalServerError, "Hash error", false
+	}
+
+	userID, err := uuid.Parse(subject)
+	if err != nil {
+		return http.StatusInternalServerError, errDatabase, false
+	}
+
+	err = s.Repos.Users.UpdatePasswordHash(ctx, userID, string(newHash))
+	if err != nil {
+		return http.StatusInternalServerError, errDatabase, false
+	}
+
+	return 0, "", true
 }

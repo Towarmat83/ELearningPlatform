@@ -27,6 +27,9 @@ func NewSettingRepository(seed ...models.PlatformSetting) *SettingRepository {
 	return &SettingRepository{settings: m}
 }
 
+// Get returns the value for key, whether it was found, and any error.
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func (f *SettingRepository) Get(_ context.Context, key string) (string, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -43,6 +46,7 @@ func (f *SettingRepository) Get(_ context.Context, key string) (string, bool, er
 	return s.Value, true, nil
 }
 
+// List returns all platform settings.
 func (f *SettingRepository) List(_ context.Context) ([]models.PlatformSetting, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -59,6 +63,7 @@ func (f *SettingRepository) List(_ context.Context) ([]models.PlatformSetting, e
 	return list, nil
 }
 
+// Upsert creates or updates the setting identified by key with value.
 func (f *SettingRepository) Upsert(_ context.Context, key, value string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

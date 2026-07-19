@@ -18,15 +18,21 @@ type SettingRepository interface {
 	Upsert(ctx context.Context, key, value string) error
 }
 
+// gormSettingRepository is the GORM-backed SettingRepository implementation.
 type gormSettingRepository struct {
 	db *gorm.DB
 }
 
 // NewGormSettingRepository builds a SettingRepository backed by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormSettingRepository(db *gorm.DB) SettingRepository {
 	return &gormSettingRepository{db: db}
 }
 
+// Get returns the value for key, whether it was found, and any error.
+//
+//nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func (r *gormSettingRepository) Get(ctx context.Context, key string) (string, bool, error) {
 	var setting models.PlatformSetting
 
@@ -42,6 +48,7 @@ func (r *gormSettingRepository) Get(ctx context.Context, key string) (string, bo
 	return setting.Value, true, nil
 }
 
+// List returns every platform setting, ordered by key.
 func (r *gormSettingRepository) List(ctx context.Context) ([]models.PlatformSetting, error) {
 	settings := make([]models.PlatformSetting, 0)
 
@@ -53,6 +60,7 @@ func (r *gormSettingRepository) List(ctx context.Context) ([]models.PlatformSett
 	return settings, nil
 }
 
+// Upsert creates or updates the setting identified by key with value.
 func (r *gormSettingRepository) Upsert(ctx context.Context, key, value string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO platform_settings (key, value, updatedat)

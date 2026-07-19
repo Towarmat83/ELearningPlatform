@@ -2,6 +2,7 @@ package fake
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ func NewPathEnrollmentRepository(seed ...models.PathEnrollment) *PathEnrollmentR
 	return &PathEnrollmentRepository{enrollments: append([]models.PathEnrollment{}, seed...)}
 }
 
+// MyEnrollments returns userID's path enrollments, most recent first.
 func (f *PathEnrollmentRepository) MyEnrollments(
 	_ context.Context, userID string, limit *int, offset int,
 ) ([]repository.PathEnrollmentRow, error) {
@@ -68,6 +70,7 @@ func (f *PathEnrollmentRepository) MyEnrollments(
 	return rows, nil
 }
 
+// ListBySlug returns every enrollment in pathSlug, joined with user identity.
 func (f *PathEnrollmentRepository) ListBySlug(_ context.Context, pathSlug string) ([]repository.PathEnrolledUserRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -78,15 +81,15 @@ func (f *PathEnrollmentRepository) ListBySlug(_ context.Context, pathSlug string
 
 	rows := make([]repository.PathEnrolledUserRow, 0)
 
-	for _, e := range f.enrollments {
-		if e.PathSlug != pathSlug {
+	for _, enrollment := range f.enrollments {
+		if enrollment.PathSlug != pathSlug {
 			continue
 		}
 
-		row := repository.PathEnrolledUserRow{UserID: e.UserID.String(), EnrolledAt: e.EnrolledAt}
+		row := repository.PathEnrolledUserRow{UserID: enrollment.UserID.String(), EnrolledAt: enrollment.EnrolledAt}
 
 		if f.Users != nil {
-			if i := f.Users.findIndexByID(e.UserID); i >= 0 {
+			if i := f.Users.findIndexByID(enrollment.UserID); i >= 0 {
 				row.Email = f.Users.users[i].Email
 				row.Role = f.Users.users[i].Role
 			}
@@ -100,6 +103,7 @@ func (f *PathEnrollmentRepository) ListBySlug(_ context.Context, pathSlug string
 	return rows, nil
 }
 
+// Enroll enrolls userID in pathSlug, doing nothing if already enrolled.
 func (f *PathEnrollmentRepository) Enroll(_ context.Context, userID, pathSlug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -108,22 +112,25 @@ func (f *PathEnrollmentRepository) Enroll(_ context.Context, userID, pathSlug st
 		return f.Err
 	}
 
-	id, err := uuid.Parse(userID)
+	parsedID, err := uuid.Parse(userID)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse user id: %w", err)
 	}
 
 	for _, e := range f.enrollments {
-		if e.UserID == id && e.PathSlug == pathSlug {
+		if e.UserID == parsedID && e.PathSlug == pathSlug {
 			return nil
 		}
 	}
 
-	f.enrollments = append(f.enrollments, models.PathEnrollment{UserID: id, PathSlug: pathSlug, EnrolledAt: time.Now()})
+	f.enrollments = append(
+		f.enrollments, models.PathEnrollment{UserID: parsedID, PathSlug: pathSlug, EnrolledAt: time.Now()},
+	)
 
 	return nil
 }
 
+// Unenroll removes userID's enrollment in pathSlug.
 func (f *PathEnrollmentRepository) Unenroll(_ context.Context, userID, pathSlug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -132,13 +139,13 @@ func (f *PathEnrollmentRepository) Unenroll(_ context.Context, userID, pathSlug 
 		return f.Err
 	}
 
-	id, err := uuid.Parse(userID)
+	parsedID, err := uuid.Parse(userID)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse user id: %w", err)
 	}
 
 	for i, e := range f.enrollments {
-		if e.UserID == id && e.PathSlug == pathSlug {
+		if e.UserID == parsedID && e.PathSlug == pathSlug {
 			f.enrollments = append(f.enrollments[:i], f.enrollments[i+1:]...)
 
 			return nil

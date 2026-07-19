@@ -17,6 +17,12 @@ var ErrUserNotFound = errors.New("user not found")
 // searchUsersLimit caps the number of rows returned by Search.
 const searchUsersLimit = 10
 
+// Column-map keys shared by the profile-update Updates() calls below.
+const (
+	colAvatarURL = "avatarurl"
+	colBio       = "bio"
+)
+
 // AuthProviderCount is a single row of the admin auth-provider breakdown.
 type AuthProviderCount struct {
 	Provider string
@@ -112,15 +118,20 @@ type UserRepository interface {
 	UpsertMockStudent(ctx context.Context, username, email, hash string) (uuid.UUID, error)
 }
 
+// gormUserRepository is the GORM-backed UserRepository implementation.
 type gormUserRepository struct {
 	db *gorm.DB
 }
 
 // NewGormUserRepository builds a UserRepository backed by db.
+//
+//nolint:ireturn // repository constructors return the interface type by design
 func NewGormUserRepository(db *gorm.DB) UserRepository {
 	return &gormUserRepository{db: db}
 }
 
+// ExistsByEmailOrUsername reports whether a user with email or username
+// already exists.
 func (r *gormUserRepository) ExistsByEmailOrUsername(ctx context.Context, email, username string) (bool, error) {
 	var count int64
 
@@ -133,6 +144,7 @@ func (r *gormUserRepository) ExistsByEmailOrUsername(ctx context.Context, email,
 	return count > 0, nil
 }
 
+// Create inserts a new user row.
 func (r *gormUserRepository) Create(ctx context.Context, u *models.User) error {
 	err := r.db.WithContext(ctx).Create(u).Error
 	if err != nil {
@@ -142,6 +154,8 @@ func (r *gormUserRepository) Create(ctx context.Context, u *models.User) error {
 	return nil
 }
 
+// FindByEmailActive returns the active user with the given email, or
+// ErrUserNotFound.
 func (r *gormUserRepository) FindByEmailActive(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 
@@ -155,6 +169,7 @@ func (r *gormUserRepository) FindByEmailActive(ctx context.Context, email string
 	return &user, nil
 }
 
+// FindByID returns the user identified by id, or ErrUserNotFound.
 func (r *gormUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	var user models.User
 
@@ -166,6 +181,8 @@ func (r *gormUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*model
 	return &user, nil
 }
 
+// ExistsUsernameExcluding reports whether username is taken by a user other
+// than excludeID.
 func (r *gormUserRepository) ExistsUsernameExcluding(ctx context.Context, username string, excludeID uuid.UUID) (bool, error) {
 	var count int64
 
@@ -178,24 +195,28 @@ func (r *gormUserRepository) ExistsUsernameExcluding(ctx context.Context, userna
 	return count > 0, nil
 }
 
-func (r *gormUserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, username, bio, avatarURL *string) (*models.User, error) {
+// UpdateProfile updates the non-nil fields of the user identified by id and
+// returns the updated row.
+func (r *gormUserRepository) UpdateProfile(
+	ctx context.Context, userID uuid.UUID, username, bio, avatarURL *string,
+) (*models.User, error) {
 	updates := map[string]any{}
 	if username != nil {
 		updates["username"] = *username
 	}
 
 	if bio != nil {
-		updates["bio"] = *bio
+		updates[colBio] = *bio
 	}
 
 	if avatarURL != nil {
-		updates["avatarurl"] = *avatarURL
+		updates[colAvatarURL] = *avatarURL
 	}
 
 	var user models.User
 
 	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
-		Where("id = ?", id).Updates(updates).Error
+		Where("id = ?", userID).Updates(updates).Error
 	if err != nil {
 		return nil, fmt.Errorf("update profile: %w", err)
 	}
@@ -203,6 +224,7 @@ func (r *gormUserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, us
 	return &user, nil
 }
 
+// GetPasswordHash returns the password hash for the user identified by id.
 func (r *gormUserRepository) GetPasswordHash(ctx context.Context, id uuid.UUID) (*string, error) {
 	var user models.User
 
@@ -214,6 +236,7 @@ func (r *gormUserRepository) GetPasswordHash(ctx context.Context, id uuid.UUID) 
 	return user.PasswordHash, nil
 }
 
+// UpdatePasswordHash sets the password hash for the user identified by id.
 func (r *gormUserRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
 	err := r.db.WithContext(ctx).Model(&models.User{}).
 		Where("id = ?", id).Update("password_hash", hash).Error
@@ -224,6 +247,7 @@ func (r *gormUserRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUI
 	return nil
 }
 
+// ExistsByUsername reports whether a user with username already exists.
 func (r *gormUserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
 	var count int64
 
@@ -236,6 +260,8 @@ func (r *gormUserRepository) ExistsByUsername(ctx context.Context, username stri
 	return count > 0, nil
 }
 
+// FindByProviderIdentity returns the user linked to the given SSO provider
+// and provider user ID, or ErrUserNotFound.
 func (r *gormUserRepository) FindByProviderIdentity(ctx context.Context, provider, providerUserID string) (*models.User, error) {
 	var user models.User
 
@@ -249,6 +275,7 @@ func (r *gormUserRepository) FindByProviderIdentity(ctx context.Context, provide
 	return &user, nil
 }
 
+// FindByEmail returns the user with the given email, or ErrUserNotFound.
 func (r *gormUserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 
@@ -264,14 +291,16 @@ func (r *gormUserRepository) FindByEmail(ctx context.Context, email string) (*mo
 // CASE-WHEN: only overwrite bio when it is currently NULL/empty.
 const bioIfBlank = "CASE WHEN (bio IS NULL OR bio = '') THEN ? ELSE bio END"
 
+// RefreshSSOProfile updates avatar/bio from the SSO provider, only
+// overwriting bio when it is currently blank, and returns the updated row.
 func (r *gormUserRepository) RefreshSSOProfile(ctx context.Context, id uuid.UUID, avatarURL, bio *string) (*models.User, error) {
 	var user models.User
 
 	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
 		Where("id = ?", id).
 		Updates(map[string]any{
-			"avatarurl": gorm.Expr("COALESCE(?, avatarurl)", avatarURL),
-			"bio":       gorm.Expr(bioIfBlank, bio),
+			colAvatarURL: gorm.Expr("COALESCE(?, avatarurl)", avatarURL),
+			colBio:       gorm.Expr(bioIfBlank, bio),
 		}).Error
 	if err != nil {
 		return nil, fmt.Errorf("refresh sso profile: %w", err)
@@ -280,6 +309,8 @@ func (r *gormUserRepository) RefreshSSOProfile(ctx context.Context, id uuid.UUID
 	return &user, nil
 }
 
+// LinkProviderIdentity attaches an SSO provider identity to the user
+// identified by id and refreshes avatar/bio, returning the updated row.
 func (r *gormUserRepository) LinkProviderIdentity(
 	ctx context.Context, id uuid.UUID, provider, providerUserID string, avatarURL, bio *string,
 ) (*models.User, error) {
@@ -290,8 +321,8 @@ func (r *gormUserRepository) LinkProviderIdentity(
 		Updates(map[string]any{
 			"authprovider":     provider,
 			"provider_user_id": providerUserID,
-			"avatarurl":        gorm.Expr("COALESCE(?, avatarurl)", avatarURL),
-			"bio":              gorm.Expr(bioIfBlank, bio),
+			colAvatarURL:       gorm.Expr("COALESCE(?, avatarurl)", avatarURL),
+			colBio:             gorm.Expr(bioIfBlank, bio),
 		}).Error
 	if err != nil {
 		return nil, fmt.Errorf("link provider identity: %w", err)
@@ -300,6 +331,7 @@ func (r *gormUserRepository) LinkProviderIdentity(
 	return &user, nil
 }
 
+// CountByRole returns the number of users with the given role.
 func (r *gormUserRepository) CountByRole(ctx context.Context, role string) (int64, error) {
 	var count int64
 
@@ -311,6 +343,7 @@ func (r *gormUserRepository) CountByRole(ctx context.Context, role string) (int6
 	return count, nil
 }
 
+// ListAuthProviders returns the number of users per auth provider.
 func (r *gormUserRepository) ListAuthProviders(ctx context.Context) ([]AuthProviderCount, error) {
 	var list []AuthProviderCount
 
@@ -326,6 +359,8 @@ func (r *gormUserRepository) ListAuthProviders(ctx context.Context) ([]AuthProvi
 	return list, nil
 }
 
+// ListForAdmin returns every user for the admin listing, optionally filtered
+// by auth provider, most recently created first.
 func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) ([]AdminUserRow, error) {
 	query := `
 		SELECT u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
@@ -341,6 +376,7 @@ func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) 
 
 	if provider != "" {
 		query += ` WHERE u.authprovider = ?`
+
 		args = append(args, provider)
 	}
 
@@ -354,7 +390,9 @@ func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) 
 	return list, nil
 }
 
-func (r *gormUserRepository) GetForAdmin(ctx context.Context, id uuid.UUID) (*AdminUserDetailRow, error) {
+// GetForAdmin returns the admin detail projection for the user identified
+// by id.
+func (r *gormUserRepository) GetForAdmin(ctx context.Context, userID uuid.UUID) (*AdminUserDetailRow, error) {
 	var row AdminUserDetailRow
 
 	err := r.db.WithContext(ctx).Raw(`
@@ -366,7 +404,7 @@ func (r *gormUserRepository) GetForAdmin(ctx context.Context, id uuid.UUID) (*Ad
 		LEFT JOIN enrollments e ON e.userid = u.id
 		LEFT JOIN lesson_progress lp ON lp.userid = u.id
 		WHERE u.id = ?
-		GROUP BY u.id`, id).Scan(&row).Error
+		GROUP BY u.id`, userID).Scan(&row).Error
 	if err != nil {
 		return nil, fmt.Errorf("get admin user: %w", err)
 	}
@@ -378,8 +416,10 @@ func (r *gormUserRepository) GetForAdmin(ctx context.Context, id uuid.UUID) (*Ad
 	return &row, nil
 }
 
+// UpdateAdminFields updates the non-nil fields of the user identified by id
+// and returns the updated row, or ErrUserNotFound if no row matched.
 func (r *gormUserRepository) UpdateAdminFields(
-	ctx context.Context, id uuid.UUID, username, bio, avatarURL *string, isActive *bool, role *string,
+	ctx context.Context, userID uuid.UUID, username, bio, avatarURL *string, isActive *bool, role *string,
 ) (*models.User, error) {
 	updates := map[string]any{}
 	if username != nil {
@@ -387,11 +427,11 @@ func (r *gormUserRepository) UpdateAdminFields(
 	}
 
 	if bio != nil {
-		updates["bio"] = *bio
+		updates[colBio] = *bio
 	}
 
 	if avatarURL != nil {
-		updates["avatarurl"] = *avatarURL
+		updates[colAvatarURL] = *avatarURL
 	}
 
 	if isActive != nil {
@@ -405,7 +445,7 @@ func (r *gormUserRepository) UpdateAdminFields(
 	var user models.User
 
 	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
-		Where("id = ?", id).Updates(updates).Error
+		Where("id = ?", userID).Updates(updates).Error
 	if err != nil {
 		return nil, fmt.Errorf("update admin fields: %w", err)
 	}
@@ -417,6 +457,7 @@ func (r *gormUserRepository) UpdateAdminFields(
 	return &user, nil
 }
 
+// Delete removes the user identified by id.
 func (r *gormUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	err := r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
 	if err != nil {
@@ -426,6 +467,8 @@ func (r *gormUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// Search returns users whose username or email matches query, up to
+// searchUsersLimit rows.
 func (r *gormUserRepository) Search(ctx context.Context, query string) ([]UserSearchRow, error) {
 	pattern := "%" + query + "%"
 
@@ -442,6 +485,7 @@ func (r *gormUserRepository) Search(ctx context.Context, query string) ([]UserSe
 	return results, nil
 }
 
+// Leaderboard returns every user ranked by total quiz score, highest first.
 func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow, error) {
 	var list []LeaderboardRow
 
@@ -463,6 +507,8 @@ func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow,
 	return list, nil
 }
 
+// CreateAdminIfAbsent inserts the default admin account, doing nothing if a
+// conflicting row already exists.
 func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, email, hash string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO users (username, email, password_hash, role)
@@ -475,6 +521,8 @@ func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, 
 	return nil
 }
 
+// UpsertAdminPassword creates the admin account with hash, or updates the
+// password hash of the existing one matching email.
 func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, email, hash string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		INSERT INTO users (username, email, password_hash, role)
@@ -489,24 +537,26 @@ func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, 
 	return nil
 }
 
+// UpsertMockStudent creates the mock student account with hash, or updates
+// the username of the existing one matching email, returning its ID.
 func (r *gormUserRepository) UpsertMockStudent(ctx context.Context, username, email, hash string) (uuid.UUID, error) {
-	var id uuid.UUID
+	var studentID uuid.UUID
 
 	err := r.db.WithContext(ctx).Raw(`
 		INSERT INTO users (username, email, password_hash, role)
 		VALUES (?, ?, ?, 'student')
 		ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username
-		RETURNING id`, username, email, hash).Scan(&id).Error
+		RETURNING id`, username, email, hash).Scan(&studentID).Error
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("upsert mock student: %w", err)
 	}
 
-	return id, nil
+	return studentID, nil
 }
 
 // wrapNotFound maps gorm.ErrRecordNotFound to sentinel, leaving other errors
 // wrapped with their original context.
-func wrapNotFound(err error, sentinel error) error {
+func wrapNotFound(err, sentinel error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return sentinel
 	}

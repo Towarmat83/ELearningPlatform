@@ -105,6 +105,13 @@ func main() {
 // runs pending migrations, and wires the resulting pool into state. It logs
 // and continues without a database (disabling lab result tracking) if any
 // step fails, since the database is optional for course-service.
+//
+// TODO: this only attempts the connection once, at startup. If Postgres
+// isn't ready yet at that moment (e.g. its pod is still starting up
+// alongside this one), lab result tracking stays disabled for the rest of
+// this pod's lifetime instead of retrying/reconnecting later.
+//
+//nolint:godox // tracked follow-up, not a lint-worthy code smell: see the TODO body below
 func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.State) {
 	if cfg.DatabaseURL == "" {
 		return

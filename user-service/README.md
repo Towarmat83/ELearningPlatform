@@ -66,7 +66,19 @@ Configured via environment variables:
 
 ## Database
 
-Uses PostgreSQL with automatic migrations on startup. Migrations are embedded SQL files in `migrations/`.
+Uses PostgreSQL via [GORM](https://gorm.io). Schema management runs automatically on startup and
+is split in two:
+
+- **Additive changes** (new tables, columns, indexes) are handled entirely by GORM's `AutoMigrate`,
+  driven by the `gorm` tags on the structs in `internal/models/`. This runs on every startup and is
+  safe to run repeatedly.
+- **Breaking changes** that `AutoMigrate` can't express (renaming/dropping a column, data transforms)
+  are one-off Go functions tracked in a `_schema_migrations` bookkeeping table, so each runs exactly
+  once. See `internal/db/db.go`.
+
+A handful of foreign keys aren't expressible via `AutoMigrate` without full GORM associations (which
+this codebase's flat repository style avoids) — those are added idempotently right after `AutoMigrate`
+runs, also in `internal/db/db.go`.
 
 ### Schema
 
@@ -74,8 +86,13 @@ Uses PostgreSQL with automatic migrations on startup. Migrations are embedded SQ
 - `platform_settings` — key/value app configuration
 - `enrollments` — course enrollment records
 - `lesson_progress` — per-user per-lesson tracking
-- `course_settings` — publishing and auto-enroll overrides
-- `git_repos` — user-connected git repository tokens
+- `module_progress` — per-user per-module quiz/lab scoring
+- `path_enrollments` — learning-path enrollment records
+- `groups` — local + IdP-synced groups
+- `group_role_mappings` — group name → platform role mapping
+- `group_enrollments` — group-level course enrollments
+- `user_groups` — user ↔ group membership
+- `markdown_patterns` — reusable markdown snippets (admin-managed)
 
 ## Running
 

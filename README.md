@@ -54,8 +54,8 @@ graph LR
 
 | Service | Role | Tech |
 |---------|------|------|
-| **Course Service** | Course content, media, quiz, inline lab rendering, checker proxy, lab_checks persistence | Go + chi + client-go + pgx |
-| **User Service** | Auth (local · OAuth2/OIDC), enrollments, progress, admin | Go + chi + pgx |
+| **Course Service** | Course content, media, quiz, inline lab rendering, checker proxy, lab_checks persistence | Go + chi + client-go + GORM |
+| **User Service** | Auth (local · OAuth2/OIDC), enrollments, progress, admin | Go + chi + GORM |
 | **Checker Service** | Fetch live GitLab state, evaluate OPA/Rego policy, return violations | Go + chi + go-gitlab + OPA |
 | **Frontend** | Astro SSR, API proxy, markdown lab rendering, admin Labs page | Astro |
 
@@ -130,21 +130,23 @@ See `CONTRIBUTING.md` for the full step-by-step guide, troubleshooting, and depl
 │       ├── handlers/     # POST /evaluate
 │       └── config/       # Env config
 ├── course-service/       # Go service (port 8082)
-│   ├── internal/
-│   │   ├── content/      # Store, K8s watcher, git fetch, quiz scoring
-│   │   ├── db/           # PG connect + migrations
-│   │   ├── handlers/     # HTTP routes + CheckModule + lab_results
-│   │   ├── middleware/   # JWT auth
-│   │   ├── config/       # Env config
-│   │   └── metrics/      # Prometheus
-│   └── migrations/       # Embedded SQL migrations
+│   └── internal/
+│       ├── content/      # Store, K8s watcher, git fetch, quiz scoring
+│       ├── db/           # GORM connect + schema management (AutoMigrate)
+│       ├── models/       # GORM-mapped structs
+│       ├── repository/   # Repository interfaces + GORM implementations
+│       ├── handlers/     # HTTP routes + CheckModule + lab_results
+│       ├── middleware/   # JWT auth
+│       ├── config/       # Env config
+│       └── metrics/      # Prometheus
 ├── user-service/         # Go service (port 8081)
-│   ├── internal/
-│   │   ├── db/           # PG + migrations
-│   │   ├── handlers/     # Auth, OAuth, admin, progress
-│   │   ├── middleware/   # JWT
-│   │   └── config/       # Env config
-│   └── migrations/       # Embedded SQL migrations
+│   └── internal/
+│       ├── db/           # GORM connect + schema management (AutoMigrate)
+│       ├── models/       # GORM-mapped structs
+│       ├── repository/   # Repository interfaces + GORM implementations
+│       ├── handlers/     # Auth, OAuth, admin, progress
+│       ├── middleware/   # JWT
+│       └── config/       # Env config
 ├── frontend/             # Astro
 ├── helm/                 # Helm chart (submodule: pupitre-helm)
 ├── infra/                # Kind config + manifests + course CRDs

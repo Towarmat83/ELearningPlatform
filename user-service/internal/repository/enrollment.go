@@ -140,7 +140,7 @@ func (r *gormEnrollmentRepository) CountDistinctCourses(ctx context.Context) (in
 	var count int64
 
 	err := r.db.WithContext(ctx).Model(&models.Enrollment{}).
-		Distinct("courseslug").Count(&count).Error
+		Distinct(colCourseSlug).Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("count distinct enrolled courses: %w", err)
 	}

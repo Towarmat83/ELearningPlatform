@@ -67,7 +67,7 @@ func (r *gormSettingRepository) Upsert(ctx context.Context, key, value string) e
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "key"}},
-		DoUpdates: clause.AssignmentColumns([]string{"value", "updatedat"}),
+		DoUpdates: clause.AssignmentColumns([]string{"value", colUpdatedAt}),
 	}).Create(&setting).Error
 	if err != nil {
 		return fmt.Errorf("upsert setting %s: %w", key, err)

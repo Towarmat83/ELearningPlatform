@@ -55,6 +55,7 @@ func (r *gormModuleProgressRepository) RecordProgress(
 	}
 
 	var completedAt *time.Time
+
 	if passed {
 		now := time.Now()
 		completedAt = &now
@@ -73,7 +74,7 @@ func (r *gormModuleProgressRepository) RecordProgress(
 	}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "userid"}, {Name: "courseslug"}, {Name: "moduleindex"}},
+		Columns: []clause.Column{{Name: colUserID}, {Name: colCourseSlug}, {Name: "moduleindex"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"attempts":   gorm.Expr("module_progress.attempts + 1"),
 			"bestscore":  gorm.Expr("GREATEST(module_progress.bestscore, ?)", score),
@@ -82,7 +83,7 @@ func (r *gormModuleProgressRepository) RecordProgress(
 			"moduleslug": gorm.Expr("COALESCE(module_progress.moduleslug, ?)", moduleSlugPtr),
 			"completed_at": gorm.Expr(
 				"CASE WHEN ? AND module_progress.completed_at IS NULL THEN NOW() ELSE module_progress.completed_at END", passed),
-			"updatedat": gorm.Expr("NOW()"),
+			colUpdatedAt: gorm.Expr("NOW()"),
 		}),
 	}).Create(&progress).Error
 	if err != nil {
@@ -145,7 +146,7 @@ func (r *gormModuleProgressRepository) CompletedCourseSlugs(ctx context.Context,
 
 	err := r.db.WithContext(ctx).Model(&models.ModuleProgress{}).
 		Where("userid = ?::uuid AND passed = true AND courseslug = ANY(?)", userID, pq.StringArray(slugs)).
-		Distinct().Pluck("courseslug", &completed).Error
+		Distinct().Pluck(colCourseSlug, &completed).Error
 	if err != nil {
 		return nil, fmt.Errorf("list completed course slugs: %w", err)
 	}

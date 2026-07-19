@@ -491,7 +491,7 @@ func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow,
 			COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses`).
 		Joins("LEFT JOIN module_progress mp ON mp.userid = u.id").
 		Joins("LEFT JOIN enrollments e ON e.userid = u.id").
-		Where("u.role = ? AND u.isactive = TRUE", "student").
+		Where("u.role = ? AND u.isactive = TRUE", roleStudent).
 		Group("u.id, u.username, u.email, u.avatarurl").
 		Order("total_score DESC, passed_modules DESC").
 		Scan(&list).Error
@@ -505,7 +505,7 @@ func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow,
 // CreateAdminIfAbsent inserts the default admin account, doing nothing if a
 // conflicting row already exists.
 func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, email, hash string) error {
-	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: "admin"}
+	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: roleAdmin}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&user).Error
 	if err != nil {
@@ -518,11 +518,11 @@ func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, 
 // UpsertAdminPassword creates the admin account with hash, or updates the
 // password hash of the existing one matching email.
 func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, email, hash string) error {
-	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: "admin"}
+	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: roleAdmin}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "email"}},
-		DoUpdates: clause.AssignmentColumns([]string{"password_hash", "updatedat"}),
+		Columns:   []clause.Column{{Name: colEmail}},
+		DoUpdates: clause.AssignmentColumns([]string{"password_hash", colUpdatedAt}),
 	}).Create(&user).Error
 	if err != nil {
 		return fmt.Errorf("upsert admin password: %w", err)
@@ -534,10 +534,10 @@ func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, 
 // UpsertMockStudent creates the mock student account with hash, or updates
 // the username of the existing one matching email, returning its ID.
 func (r *gormUserRepository) UpsertMockStudent(ctx context.Context, username, email, hash string) (uuid.UUID, error) {
-	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: "student"}
+	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: roleStudent}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "email"}},
+		Columns:   []clause.Column{{Name: colEmail}},
 		DoUpdates: clause.AssignmentColumns([]string{"username"}),
 	}).Create(&user).Error
 	if err != nil {

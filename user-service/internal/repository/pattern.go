@@ -19,6 +19,18 @@ var ErrPatternNotFound = errors.New("pattern not found")
 // course, as opposed to a single course-specific scope.
 const patternGlobalScope = "global"
 
+// markdown_patterns column names reused across Create/Update/Upsert calls
+// below.
+const (
+	colLabel       = "label"
+	colDescription = "description"
+	colParameter   = "parameter"
+	colHTML        = "html"
+	colCSS         = "css"
+	colScope       = "scope"
+	colFromConfig  = "from_config"
+)
+
 // PatternRepository is the persistence boundary for the markdown_patterns
 // table.
 type PatternRepository interface {
@@ -55,7 +67,7 @@ func NewGormPatternRepository(db *gorm.DB) PatternRepository {
 func (r *gormPatternRepository) ListGlobal(ctx context.Context) ([]models.MarkdownPattern, error) {
 	patterns := make([]models.MarkdownPattern, 0)
 
-	err := r.db.WithContext(ctx).Where("scope = ?", patternGlobalScope).Order("name").Find(&patterns).Error
+	err := r.db.WithContext(ctx).Where("scope = ?", patternGlobalScope).Order(colName).Find(&patterns).Error
 	if err != nil {
 		return nil, fmt.Errorf("list global patterns: %w", err)
 	}
@@ -115,7 +127,8 @@ func (r *gormPatternRepository) Create(
 		CreatedBy:   &createdByID,
 	}
 
-	if err := r.db.WithContext(ctx).Create(&pattern).Error; err != nil {
+	err = r.db.WithContext(ctx).Create(&pattern).Error
+	if err != nil {
 		return nil, fmt.Errorf("create pattern: %w", err)
 	}
 
@@ -132,15 +145,15 @@ func (r *gormPatternRepository) UpdateByName(
 	err := r.db.WithContext(ctx).Model(&pattern).Clauses(returningAll).
 		Where("name = ?", oldName).
 		Updates(map[string]any{
-			"name":        name,
-			"label":       label,
-			"description": description,
-			"parameter":   parameter,
-			"html":        html,
-			"css":         css,
-			"js":          jsCode,
-			"scope":       scope,
-			"from_config": false,
+			colName:        name,
+			colLabel:       label,
+			colDescription: description,
+			colParameter:   parameter,
+			colHTML:        html,
+			colCSS:         css,
+			"js":           jsCode,
+			colScope:       scope,
+			colFromConfig:  false,
 		}).Error
 	if err != nil {
 		return nil, fmt.Errorf("update pattern: %w", err)
@@ -193,9 +206,9 @@ func (r *gormPatternRepository) UpsertFromConfig(
 	}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "name"}, {Name: "scope"}},
+		Columns: []clause.Column{{Name: colName}, {Name: colScope}},
 		DoUpdates: clause.AssignmentColumns(
-			[]string{"label", "description", "parameter", "html", "css", "js", "from_config", "updatedat"}),
+			[]string{colLabel, colDescription, colParameter, colHTML, colCSS, "js", colFromConfig, colUpdatedAt}),
 	}).Create(&pattern).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern %q: %w", name, err)
@@ -221,9 +234,9 @@ func (r *gormPatternRepository) UpsertFromCRD(
 	}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "name"}, {Name: "scope"}},
+		Columns: []clause.Column{{Name: colName}, {Name: colScope}},
 		DoUpdates: clause.AssignmentColumns(
-			[]string{"label", "description", "html", "css", "js", "from_config", "updatedat"}),
+			[]string{colLabel, colDescription, colHTML, colCSS, "js", colFromConfig, colUpdatedAt}),
 	}).Create(&pattern).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern from CRD %q: %w", name, err)

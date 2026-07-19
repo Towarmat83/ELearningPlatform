@@ -9,3 +9,20 @@ import "gorm.io/gorm/clause"
 // *) so an Updates() call against a zero-value struct populates every
 // column, not just the ones that were written.
 var returningAll = clause.Returning{} //nolint:gochecknoglobals // stateless clause value, reused as a query modifier
+
+// Column names shared by ON CONFLICT clauses and Updates() maps across
+// multiple repository files.
+const (
+	colName       = "name"
+	colEmail      = "email"
+	colUpdatedAt  = "updatedat"
+	colCourseSlug = "courseslug"
+	colUserID     = "userid"
+)
+
+// Platform role values, shared by group-role-mapping derivation and the
+// admin/mock-student seeding helpers.
+const (
+	roleAdmin   = "admin"
+	roleStudent = "student"
+)

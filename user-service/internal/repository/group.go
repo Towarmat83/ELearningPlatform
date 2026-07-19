@@ -11,18 +11,13 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
 
-const (
-	// defaultGroupName is the name of the group every user is automatically
-	// made a member of via AddToDefault.
-	defaultGroupName = "everyone"
+// defaultGroupName is the name of the group every user is automatically
+// made a member of via AddToDefault.
+const defaultGroupName = "everyone"
 
-	// groupsRoleAdmin is the platform role applied when a synced group maps
-	// to admin in group_role_mappings.
-	groupsRoleAdmin = "admin"
-	// groupsRoleStudent is the platform role used when no synced group maps
-	// to a higher role.
-	groupsRoleStudent = "student"
-)
+// groupSourceLocal is the source value for groups created directly by an
+// admin, as opposed to one mirrored from an IdP during SSO login.
+const groupSourceLocal = "local"
 
 // GroupRow is a single row of the admin group listing, joined with its
 // member count and any mapped platform role.
@@ -88,7 +83,7 @@ func NewGormGroupRepository(db *gorm.DB) GroupRepository {
 // Create inserts a new local group named name, doing nothing if it already
 // exists, and returns its ID.
 func (r *gormGroupRepository) Create(ctx context.Context, name string) (string, error) {
-	group := models.Group{Name: name, Source: "local"}
+	group := models.Group{Name: name, Source: groupSourceLocal}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&group).Error
 	if err != nil {
@@ -106,7 +101,7 @@ func (r *gormGroupRepository) Create(ctx context.Context, name string) (string, 
 // was deleted.
 func (r *gormGroupRepository) Delete(ctx context.Context, id string) (bool, error) {
 	result := r.db.WithContext(ctx).
-		Where("id = ?::uuid AND source = ?", id, "local").
+		Where("id = ?::uuid AND source = ?", id, groupSourceLocal).
 		Delete(&models.Group{})
 	if result.Error != nil {
 		return false, fmt.Errorf("delete group: %w", result.Error)
@@ -182,11 +177,11 @@ func (r *gormGroupRepository) DeleteMapping(ctx context.Context, groupName strin
 // userID to it.
 func (r *gormGroupRepository) AddToDefault(ctx context.Context, userID string) error {
 	description := "Default group — all users are members automatically"
-	group := models.Group{Name: defaultGroupName, Source: "local", Description: &description}
+	group := models.Group{Name: defaultGroupName, Source: groupSourceLocal, Description: &description}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoUpdates: clause.Assignments(map[string]any{"updatedat": gorm.Expr("NOW()")}),
+		Columns:   []clause.Column{{Name: colName}},
+		DoUpdates: clause.Assignments(map[string]any{colUpdatedAt: gorm.Expr("NOW()")}),
 	}).Create(&group).Error
 	if err != nil {
 		return fmt.Errorf("upsert default group: %w", err)
@@ -248,7 +243,7 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 ) (string, error) {
 	var dbRole string
 
-	role := groupsRoleStudent
+	role := roleStudent
 
 	err := r.db.WithContext(ctx).Transaction(func(groupTx *gorm.DB) error {
 		selErr := groupTx.Model(&models.User{}).Select("role").Where("id = ?::uuid", userID).Scan(&dbRole).Error
@@ -395,8 +390,8 @@ func syncGroupMembership(groupTx *gorm.DB, userID, name, source, currentRole str
 	group := models.Group{Name: name, Source: source}
 
 	err := groupTx.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoUpdates: clause.Assignments(map[string]any{"source": source, "updatedat": gorm.Expr("NOW()")}),
+		Columns:   []clause.Column{{Name: colName}},
+		DoUpdates: clause.Assignments(map[string]any{"source": source, colUpdatedAt: gorm.Expr("NOW()")}),
 	}).Create(&group).Error
 	if err != nil {
 		return currentRole, false, fmt.Errorf("upsert group %q: %w", name, err)
@@ -422,9 +417,9 @@ func syncGroupMembership(groupTx *gorm.DB, userID, name, source, currentRole str
 	}
 
 	updatedRole := currentRole
-	if mappedRole == groupsRoleAdmin {
-		updatedRole = groupsRoleAdmin
-	} else if updatedRole != groupsRoleAdmin {
+	if mappedRole == roleAdmin {
+		updatedRole = roleAdmin
+	} else if updatedRole != roleAdmin {
 		updatedRole = mappedRole
 	}
 

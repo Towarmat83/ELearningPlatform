@@ -48,7 +48,7 @@ func (r *gormLessonProgressRepository) MarkComplete(ctx context.Context, userID,
 	progress := models.LessonProgress{UserID: userID, CourseSlug: courseSlug, LessonSlug: lessonSlug}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "userid"}, {Name: "courseslug"}, {Name: "lessonslug"}},
+		Columns:   []clause.Column{{Name: colUserID}, {Name: colCourseSlug}, {Name: "lessonslug"}},
 		DoNothing: true,
 	}).Create(&progress).Error
 	if err != nil {
@@ -92,7 +92,7 @@ func (r *gormLessonProgressRepository) CompletedCourseSlugs(ctx context.Context,
 
 	err := r.db.WithContext(ctx).Model(&models.LessonProgress{}).
 		Where("userid = ?::uuid AND lessonslug = ? AND courseslug = ANY(?)", userID, lessonSlugComplete, pq.StringArray(slugs)).
-		Distinct().Pluck("courseslug", &completed).Error
+		Distinct().Pluck(colCourseSlug, &completed).Error
 	if err != nil {
 		return nil, fmt.Errorf("list completed course slugs: %w", err)
 	}

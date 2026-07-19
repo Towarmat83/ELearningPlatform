@@ -15,12 +15,10 @@ import (
 	"github.com/genesary/pupitre/course-service/internal/models"
 )
 
-// maxConns is the maximum number of connections held open in the pool.
-const maxConns = 10
-
 // Connect opens a GORM/Postgres connection and verifies connectivity with a
-// ping before returning it.
-func Connect(ctx context.Context, connURL string) (*gorm.DB, error) {
+// ping before returning it. maxOpenConns and maxIdleConns cap the
+// connection pool size.
+func Connect(ctx context.Context, connURL string, maxOpenConns, maxIdleConns int) (*gorm.DB, error) {
 	gdb, err := gorm.Open(postgres.Open(connURL), &gorm.Config{
 		Logger:                 gormlogger.Default.LogMode(gormlogger.Warn),
 		SkipDefaultTransaction: true,
@@ -34,8 +32,8 @@ func Connect(ctx context.Context, connURL string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("unwrap sql.DB: %w", err)
 	}
 
-	sqlDB.SetMaxOpenConns(maxConns)
-	sqlDB.SetMaxIdleConns(maxConns)
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	sqlDB.SetMaxIdleConns(maxIdleConns)
 
 	err = sqlDB.PingContext(ctx)
 	if err != nil {

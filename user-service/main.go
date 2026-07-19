@@ -75,7 +75,7 @@ func run() error {
 
 	ctx := context.Background()
 
-	gdb, err := db.Connect(ctx, cfg.DatabaseURL)
+	gdb, err := db.Connect(ctx, cfg.DatabaseURL, cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}

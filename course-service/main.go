@@ -117,7 +117,7 @@ func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.St
 		return
 	}
 
-	pool, err := coursedb.Connect(ctx, cfg.DatabaseURL)
+	pool, err := coursedb.Connect(ctx, cfg.DatabaseURL, cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
 	if err != nil {
 		zap.L().Warn("database unavailable, lab result tracking disabled", zap.Error(err))
 

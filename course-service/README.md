@@ -52,6 +52,8 @@ All config via environment variables:
 | `GIT_CREDENTIALS_PATH` | `/etc/course-service/git-credentials.yaml` | Path to per-repo credential mappings |
 | `GIT_CACHE_TTL` | `10` | Git cache TTL in minutes (how long before re-cloning remote repos) |
 | `DATABASE_URL` | (empty) | PostgreSQL connection string; see [Database](#database) |
+| `DB_MAX_OPEN_CONNS` | `10` | Maximum open database connections in the pool |
+| `DB_MAX_IDLE_CONNS` | `10` | Maximum idle database connections in the pool |
 
 ## Database
 

@@ -52,6 +52,8 @@ Configured via environment variables:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `postgres://pupitre:pupitre@localhost:5432/pupitre` | PostgreSQL connection string |
+| `DB_MAX_OPEN_CONNS` | `20` | Maximum open database connections in the pool |
+| `DB_MAX_IDLE_CONNS` | `20` | Maximum idle database connections in the pool |
 | `JWT_SECRET` | `change-me-in-production-use-a-long-random-string` | HMAC key for JWT signing |
 | `JWT_EXPIRY_HOURS` | `24` | Token lifetime in hours |
 | `PORT` | `8081` | HTTP listen port |

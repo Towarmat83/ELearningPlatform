@@ -155,7 +155,7 @@ func TestAuth_Valid(t *testing.T) {
 
 	token, _ := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 
-	mw := Auth(nil, testSecret)
+	mw := Auth(testSecret)
 
 	var captured *Claims
 
@@ -186,7 +186,7 @@ func TestAuth_Valid(t *testing.T) {
 func TestAuth_MissingHeader(t *testing.T) {
 	t.Parallel()
 
-	mw := Auth(nil, testSecret)
+	mw := Auth(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -204,7 +204,7 @@ func TestAuth_MissingHeader(t *testing.T) {
 func TestAuth_InvalidToken(t *testing.T) {
 	t.Parallel()
 
-	mw := Auth(nil, testSecret)
+	mw := Auth(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -236,7 +236,7 @@ func TestAuth_MissingSubject(t *testing.T) {
 	}
 	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
 
-	mw := Auth(nil, testSecret)
+	mw := Auth(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -259,7 +259,7 @@ func TestAdmin_ValidAdminToken(t *testing.T) {
 
 	token, _ := CreateToken("admin-1", "admin@example.com", "admin", "admin-1", testSecret, 24)
 
-	mw := Admin(nil, testSecret)
+	mw := Admin(testSecret)
 
 	var captured *Claims
 
@@ -290,7 +290,7 @@ func TestAdmin_StudentForbidden(t *testing.T) {
 
 	token, _ := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
 
-	mw := Admin(nil, testSecret)
+	mw := Admin(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -311,7 +311,7 @@ func TestAdmin_StudentForbidden(t *testing.T) {
 func TestAdmin_MissingHeader(t *testing.T) {
 	t.Parallel()
 
-	mw := Admin(nil, testSecret)
+	mw := Admin(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -344,7 +344,7 @@ func TestVerifyToken_NonHMACMethod(t *testing.T) {
 func TestAdmin_InvalidToken(t *testing.T) {
 	t.Parallel()
 
-	mw := Admin(nil, testSecret)
+	mw := Admin(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer invalid-token")
@@ -371,7 +371,7 @@ func TestAdmin_MissingSubject(t *testing.T) {
 		},
 	}
 	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
-	mw := Admin(nil, testSecret)
+	mw := Admin(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+tok)

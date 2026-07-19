@@ -1,11 +1,10 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"sync"
 
-	"github.com/genesary/pupitre/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // Platform setting keys read from more than one file; pulled out to satisfy
@@ -83,19 +82,6 @@ var secretSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide redac
 	},
 }
 
-// ReadSetting reads a platform setting value by key, returning fallback when
-// the key is unset or the query fails.
-func ReadSetting(ctx context.Context, pool db.Pool, key, fallback string) string {
-	var val string
-
-	err := pool.QueryRow(ctx, "SELECT value FROM platform_settings WHERE key = $1", key).Scan(&val)
-	if err != nil {
-		return fallback
-	}
-
-	return val
-}
-
 // PublicSettings godoc
 // @Summary  Get public platform settings
 // @Tags     Settings
@@ -111,7 +97,7 @@ func (s *State) PublicSettings(writer http.ResponseWriter, request *http.Request
 
 	out := make(map[string]string, len(keys))
 	for _, key := range keys {
-		out[key] = ReadSetting(request.Context(), s.Pool, key, "")
+		out[key] = repository.ReadSetting(request.Context(), s.Repos.Settings, key, "")
 	}
 
 	s.JSON(writer, http.StatusOK, out)
@@ -125,14 +111,12 @@ func (s *State) PublicSettings(writer http.ResponseWriter, request *http.Request
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/settings [get].
 func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
-	rows, err := s.Pool.Query(request.Context(),
-		"SELECT key, value, description FROM platform_settings ORDER BY key")
+	rows, err := s.Repos.Settings.List(request.Context())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type setting struct {
 		Key         string  `json:"key"`
@@ -140,17 +124,10 @@ func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
 		Description *string `json:"description"`
 	}
 
-	var settings []setting
+	settings := make([]setting, 0, len(rows))
 
-	for rows.Next() {
-		var current setting
-
-		err := rows.Scan(&current.Key, &current.Value, &current.Description)
-		if err != nil {
-			s.Error(writer, http.StatusInternalServerError, "Scan error")
-
-			return
-		}
+	for _, row := range rows {
+		current := setting{Key: row.Key, Value: row.Value, Description: row.Description}
 
 		if secretSettingKeys.contains(current.Key) && current.Value != "" {
 			current.Value = settingRedactedValue
@@ -202,11 +179,7 @@ func (s *State) UpdateSettings(writer http.ResponseWriter, request *http.Request
 			return
 		}
 
-		_, err := s.Pool.Exec(request.Context(),
-			`INSERT INTO platform_settings (key, value, updatedAt)
-			 VALUES ($1, $2, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = $2, updatedAt = NOW()`,
-			key, val)
+		err := s.Repos.Settings.Upsert(request.Context(), key, val)
 		if err != nil {
 			s.Error(writer, http.StatusInternalServerError, "Database error")
 

@@ -12,6 +12,8 @@ import (
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // oidcProviderKey identifies the dedicated single-instance OIDC login flow,
@@ -37,18 +39,18 @@ type oidcSettings struct {
 // validates that OIDC is enabled and fully configured.
 func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 	cfg := oidcSettings{
-		Enabled:            ReadSetting(ctx, s.Pool, "oidc_enabled", "false") == authSettingTrue,
-		ProviderURL:        ReadSetting(ctx, s.Pool, "oidc_provider_url", ""),
-		IssuerURL:          ReadSetting(ctx, s.Pool, "oidc_issuer_url", ""),
-		ClientID:           ReadSetting(ctx, s.Pool, "oidc_client_id", ""),
-		ClientSecret:       ReadSetting(ctx, s.Pool, "oidc_client_secret", ""),
-		GroupClaim:         ReadSetting(ctx, s.Pool, "oidc_group_claim", "groups"),
-		RedirectBase:       ReadSetting(ctx, s.Pool, "oidc_redirect_base", s.Config.OAuthRedirectBase),
-		BrowserBaseURL:     ReadSetting(ctx, s.Pool, "oidc_browser_base_url", ""),
-		InsecureSkipVerify: ReadSetting(ctx, s.Pool, "oidc_insecure_skip_verify", "false") == authSettingTrue,
+		Enabled:            repository.ReadSetting(ctx, s.Repos.Settings, "oidc_enabled", "false") == authSettingTrue,
+		ProviderURL:        repository.ReadSetting(ctx, s.Repos.Settings, "oidc_provider_url", ""),
+		IssuerURL:          repository.ReadSetting(ctx, s.Repos.Settings, "oidc_issuer_url", ""),
+		ClientID:           repository.ReadSetting(ctx, s.Repos.Settings, "oidc_client_id", ""),
+		ClientSecret:       repository.ReadSetting(ctx, s.Repos.Settings, "oidc_client_secret", ""),
+		GroupClaim:         repository.ReadSetting(ctx, s.Repos.Settings, "oidc_group_claim", "groups"),
+		RedirectBase:       repository.ReadSetting(ctx, s.Repos.Settings, "oidc_redirect_base", s.Config.OAuthRedirectBase),
+		BrowserBaseURL:     repository.ReadSetting(ctx, s.Repos.Settings, "oidc_browser_base_url", ""),
+		InsecureSkipVerify: repository.ReadSetting(ctx, s.Repos.Settings, "oidc_insecure_skip_verify", "false") == authSettingTrue,
 	}
 
-	scopes := ReadSetting(ctx, s.Pool, "oidc_scopes", "openid email profile groups")
+	scopes := repository.ReadSetting(ctx, s.Repos.Settings, "oidc_scopes", "openid email profile groups")
 	for sc := range strings.SplitSeq(scopes, " ") {
 		if sc = strings.TrimSpace(sc); sc != "" {
 			cfg.Scopes = append(cfg.Scopes, sc)

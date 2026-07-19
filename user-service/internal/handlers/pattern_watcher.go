@@ -14,19 +14,19 @@ import (
 	crcache "sigs.k8s.io/controller-runtime/pkg/cache"
 
 	patternv1 "github.com/genesary/pupitre/user-service/api/v1"
-	"github.com/genesary/pupitre/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // PatternWatcher watches MarkdownPattern CRDs and syncs them into the DB.
 // It uses controller-runtime's informer-backed cache, which relists on
 // watch errors/reconnects automatically instead of only once at startup.
 type PatternWatcher struct {
-	pool  db.Pool
-	cache crcache.Cache
+	patterns repository.PatternRepository
+	cache    crcache.Cache
 }
 
 // NewPatternWatcher builds a PatternWatcher for the given Kubernetes cluster.
-func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatcher, error) {
+func NewPatternWatcher(patterns repository.PatternRepository, kubeconfig, namespace string) (*PatternWatcher, error) {
 	cfg, err := buildRestConfig(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("k8s config: %w", err)
@@ -47,7 +47,7 @@ func NewPatternWatcher(pool db.Pool, kubeconfig, namespace string) (*PatternWatc
 		return nil, fmt.Errorf("create cache: %w", err)
 	}
 
-	return &PatternWatcher{pool: pool, cache: patternCache}, nil
+	return &PatternWatcher{patterns: patterns, cache: patternCache}, nil
 }
 
 // Start begins watching MarkdownPattern CRDs until ctx is cancelled.
@@ -106,26 +106,7 @@ func (w *PatternWatcher) upsert(ctx context.Context, obj any) {
 		scope = patternsGlobalScope
 	}
 
-	_, err := w.pool.Exec(ctx, `
-		INSERT INTO markdown_patterns (name, label, description, html, css, js, scope, from_config)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
-		ON CONFLICT (name, scope) DO UPDATE SET
-			label       = EXCLUDED.label,
-			description = EXCLUDED.description,
-			html        = EXCLUDED.html,
-			css         = EXCLUDED.css,
-			js          = EXCLUDED.js,
-			from_config = TRUE,
-			updatedAt  = NOW()
-	`,
-		name,
-		label,
-		spec.Description,
-		spec.HTML,
-		spec.CSS,
-		spec.JS,
-		scope,
-	)
+	err := w.patterns.UpsertFromCRD(ctx, name, label, spec.Description, spec.HTML, spec.CSS, spec.JS, scope)
 	if err != nil {
 		zap.L().Error("failed to upsert pattern from CRD", zap.String("name", name), zap.Error(err))
 
@@ -156,7 +137,7 @@ func (w *PatternWatcher) delete(ctx context.Context, obj any) {
 		scope = patternsGlobalScope
 	}
 
-	_, err := w.pool.Exec(ctx, `DELETE FROM markdown_patterns WHERE name = $1 AND scope = $2 AND from_config = TRUE`, name, scope)
+	err := w.patterns.DeleteFromCRD(ctx, name, scope)
 	if err != nil {
 		zap.L().Error("failed to delete pattern from CRD", zap.String("name", name), zap.Error(err))
 

@@ -20,11 +20,11 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 
-	"github.com/genesary/pupitre/user-service/internal/db"
-
 	"github.com/genesary/pupitre/user-service/internal/config"
 	"github.com/genesary/pupitre/user-service/internal/metrics"
 	"github.com/genesary/pupitre/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/internal/models"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // Repeated OAuth/OIDC literals and tunables, pulled out to satisfy goconst
@@ -247,7 +247,7 @@ func (s *State) OAuthCallback(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 
-	user, err := upsertSSOUser(request.Context(), s.Pool, email, displayName, avatarURL, bioStr, providerID, providerUserID)
+	user, err := upsertSSOUser(request.Context(), s.Repos.Users, email, displayName, avatarURL, bioStr, providerID, providerUserID)
 	if err != nil {
 		zap.L().Error("upsert SSO user failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "failed to update user identity from SSO")
@@ -276,8 +276,8 @@ func fetchOAuthProfile(
 // oauthFinishLogin enrolls the user in their default/group courses, issues
 // a session JWT, and writes the login response.
 func (s *State) oauthFinishLogin(writer http.ResponseWriter, request *http.Request, user *userPublicRow) {
-	addToDefaultGroup(request.Context(), s.Pool, user.ID)
-	syncGroupEnrollments(request.Context(), s.Pool, user.ID)
+	addToDefaultGroup(request.Context(), s.Repos.Groups, user.ID)
+	syncGroupEnrollments(request.Context(), s.Repos.Groups, user.ID)
 
 	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
@@ -594,39 +594,44 @@ func doGet(client *http.Client, rawURL, bearer string, out any) error {
 // provider-identity match first, then an email match, and finally creating
 // a brand-new account.
 func upsertSSOUser(
-	ctx context.Context, pool db.Pool, email, displayName string, avatarURL, bio *string, provider, providerUserID string,
+	ctx context.Context, users repository.UserRepository, email, displayName string, avatarURL, bio *string, provider, providerUserID string,
 ) (*userPublicRow, error) {
-	const sel = `SELECT id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text FROM users`
-
-	user := upsertSSOUserByProvider(ctx, pool, sel, provider, providerUserID, avatarURL, bio)
+	user := upsertSSOUserByProvider(ctx, users, provider, providerUserID, avatarURL, bio)
 	if user != nil {
 		return user, nil
 	}
 
-	user, err := upsertSSOUserByEmail(ctx, pool, sel, email, provider, providerUserID, avatarURL, bio)
+	user, err := upsertSSOUserByEmail(ctx, users, email, provider, providerUserID, avatarURL, bio)
 	if user != nil || err != nil {
 		return user, err //nolint:nilnil // cascading lookup: (nil,nil) means "no match, fall through to create a new user"
 	}
 
 	username := sanitizeUsername(displayName)
 
-	var taken int64
-
-	_ = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE username = $1", username).Scan(&taken)
-	if taken > 0 {
+	taken, _ := users.ExistsByUsername(ctx, username)
+	if taken {
 		username = username + "_" + uuid.New().String()[:6]
 	}
 
-	created, err := scanUserPublic(pool.QueryRow(ctx,
-		`INSERT INTO users (username, email, authProvider, provider_user_id, role, avatarUrl, bio)
-		 VALUES ($1, $2, $3, $4, 'student', $5, $6)
-		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
-		username, email, provider, providerUserID, avatarURL, bio))
+	newUser := &models.User{
+		Username:       username,
+		Email:          email,
+		Role:           groupsRoleStudent,
+		IsActive:       true,
+		AuthProvider:   provider,
+		ProviderUserID: &providerUserID,
+		AvatarURL:      avatarURL,
+		Bio:            bio,
+	}
+
+	err = users.Create(ctx, newUser)
 	if err != nil {
 		return nil, err
 	}
 
 	metrics.ActiveUsers.Inc()
+
+	created := toUserPublicRow(newUser)
 
 	return &created, nil
 }
@@ -638,7 +643,7 @@ func (s *State) completeSSOLogin(
 	ctx context.Context, writer http.ResponseWriter,
 	email, displayName string, avatarURL, bio *string, provider, providerUserID string, groups []string,
 ) {
-	user, err := upsertSSOUser(ctx, s.Pool, email, displayName, avatarURL, bio, provider, providerUserID)
+	user, err := upsertSSOUser(ctx, s.Repos.Users, email, displayName, avatarURL, bio, provider, providerUserID)
 	if err != nil {
 		zap.L().Error("upsert SSO user failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "failed to update user identity from SSO")
@@ -646,13 +651,13 @@ func (s *State) completeSSOLogin(
 		return
 	}
 
-	role, err := syncGroupsAndDeriveRole(ctx, s.Pool, user.ID, groups, provider)
+	role, err := syncGroupsAndDeriveRole(ctx, s.Repos.Groups, user.ID, groups, provider)
 	if err != nil {
 		role = user.Role
 	}
 
-	addToDefaultGroup(ctx, s.Pool, user.ID)
-	syncGroupEnrollments(ctx, s.Pool, user.ID)
+	addToDefaultGroup(ctx, s.Repos.Groups, user.ID)
+	syncGroupEnrollments(ctx, s.Repos.Groups, user.ID)
 
 	token, err := middleware.CreateToken(user.ID, user.Email, role, user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {
@@ -670,38 +675,34 @@ func (s *State) completeSSOLogin(
 // when no such user exists yet; lookup/update failures are not fatal to
 // the overall SSO login, so no error is returned here.
 func upsertSSOUserByProvider(
-	ctx context.Context, pool db.Pool, sel, provider, providerUserID string, avatarURL, bio *string,
+	ctx context.Context, users repository.UserRepository, provider, providerUserID string, avatarURL, bio *string,
 ) *userPublicRow {
-	existing, err := scanUserPublic(pool.QueryRow(ctx,
-		sel+` WHERE authProvider = $1 AND provider_user_id = $2`, provider, providerUserID))
+	existing, err := users.FindByProviderIdentity(ctx, provider, providerUserID)
 	if err != nil {
 		return nil
 	}
 
-	updated, err := scanUserPublic(pool.QueryRow(ctx,
-		`UPDATE users SET
-		   avatarUrl = COALESCE($1, avatarUrl),
-		   bio        = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($2, bio) ELSE bio END,
-		   updatedAt = NOW()
-		 WHERE id = $3::uuid
-		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
-		avatarURL, bio, existing.ID))
+	updated, err := users.RefreshSSOProfile(ctx, existing.ID, avatarURL, bio)
 	if err != nil {
-		zap.L().Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", zap.Error(err), zap.String("userId", existing.ID))
+		zap.L().Warn("upsertSSOUser: UPDATE by provider failed, using SELECT result", zap.Error(err), zap.String("userId", existing.ID.String()))
 
-		return &existing
+		row := toUserPublicRow(existing)
+
+		return &row
 	}
 
-	return &updated
+	row := toUserPublicRow(updated)
+
+	return &row
 }
 
 // upsertSSOUserByEmail looks up a user by email and, unless it is already
 // linked to a different provider, links it to this provider and refreshes
 // their avatar/bio. It returns nil, nil when no such user exists yet.
 func upsertSSOUserByEmail(
-	ctx context.Context, pool db.Pool, sel, email, provider, providerUserID string, avatarURL, bio *string,
+	ctx context.Context, users repository.UserRepository, email, provider, providerUserID string, avatarURL, bio *string,
 ) (*userPublicRow, error) {
-	existing, err := scanUserPublic(pool.QueryRow(ctx, sel+` WHERE email = $1`, email))
+	existing, err := users.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, nil //nolint:nilerr,nilnil // sentinel: no user matched this email yet, try creating one
 	}
@@ -712,23 +713,18 @@ func upsertSSOUserByEmail(
 		return nil, fmt.Errorf("an account with this email already exists with a different login method (%s)", existing.AuthProvider)
 	}
 
-	updated, err := scanUserPublic(pool.QueryRow(ctx,
-		`UPDATE users SET
-		   authProvider    = $1,
-		   provider_user_id = $2,
-		   avatarUrl       = COALESCE($3, avatarUrl),
-		   bio              = CASE WHEN (bio IS NULL OR bio = '') THEN COALESCE($4, bio) ELSE bio END,
-		   updatedAt       = NOW()
-		 WHERE id = $5::uuid
-		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
-		provider, providerUserID, avatarURL, bio, existing.ID))
+	updated, err := users.LinkProviderIdentity(ctx, existing.ID, provider, providerUserID, avatarURL, bio)
 	if err != nil {
-		zap.L().Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", zap.Error(err), zap.String("userId", existing.ID))
+		zap.L().Warn("upsertSSOUser: UPDATE by email failed, using SELECT result", zap.Error(err), zap.String("userId", existing.ID.String()))
 
-		return &existing, nil
+		row := toUserPublicRow(existing)
+
+		return &row, nil
 	}
 
-	return &updated, nil
+	row := toUserPublicRow(updated)
+
+	return &row, nil
 }
 
 // sanitizeUsername derives a URL/DB-safe username from an OAuth display

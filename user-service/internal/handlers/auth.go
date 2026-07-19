@@ -6,12 +6,16 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/genesary/pupitre/user-service/internal/metrics"
 	"github.com/genesary/pupitre/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/internal/models"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // bcryptCost is the bcrypt hashing cost used for all stored passwords.
@@ -24,6 +28,7 @@ const (
 	authEmailDomainParts    = 2
 	authMinUsernameLen      = 3
 	authMsgUsernameTooShort = "Username must be at least 3 characters"
+	authProviderLocal       = "local"
 )
 
 // passwordHasUpper reports whether password contains an uppercase letter.
@@ -55,7 +60,7 @@ func passwordHasDigit(password string) bool {
 func (s *State) validatePasswordPolicy(request *http.Request, password string) (string, bool) {
 	ctx := request.Context()
 
-	minLen, _ := strconv.Atoi(ReadSetting(ctx, s.Pool, settingKeyPasswordMinLength, "8"))
+	minLen, _ := strconv.Atoi(repository.ReadSetting(ctx, s.Repos.Settings, settingKeyPasswordMinLength, "8"))
 	if minLen < 1 {
 		minLen = 8
 	}
@@ -64,12 +69,12 @@ func (s *State) validatePasswordPolicy(request *http.Request, password string) (
 		return "Password must be at least " + strconv.Itoa(minLen) + " characters", false
 	}
 
-	requireUpper := ReadSetting(ctx, s.Pool, settingKeyPasswordRequireUppercase, "false") == authSettingTrue
+	requireUpper := repository.ReadSetting(ctx, s.Repos.Settings, settingKeyPasswordRequireUppercase, "false") == authSettingTrue
 	if requireUpper && !passwordHasUpper(password) {
 		return "Password must contain at least one uppercase letter", false
 	}
 
-	requireDigit := ReadSetting(ctx, s.Pool, settingKeyPasswordRequireNumber, "false") == authSettingTrue
+	requireDigit := repository.ReadSetting(ctx, s.Repos.Settings, settingKeyPasswordRequireNumber, "false") == authSettingTrue
 	if requireDigit && !passwordHasDigit(password) {
 		return "Password must contain at least one number", false
 	}
@@ -91,7 +96,7 @@ type loginRequest struct {
 }
 
 // userPublicRow is the public-facing representation of a user account,
-// as returned by the auth and profile endpoints.
+// returned by the auth/profile endpoints.
 type userPublicRow struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
@@ -107,32 +112,32 @@ type userPublicRow struct {
 }
 
 // authResponse wraps a JWT and the authenticated user's public profile,
-// as returned by register/login.
+// returned by register/login.
 type authResponse struct {
 	Token string        `json:"token"`
 	User  userPublicRow `json:"user"`
 }
 
-// scanUserPublic scans a users-table row into a userPublicRow.
-func scanUserPublic(row interface {
-	Scan(dest ...any) error
-}) (userPublicRow, error) {
-	var user userPublicRow
-
-	err := row.Scan(&user.ID, &user.Username, &user.Email, &user.Role,
-		&user.AvatarURL, &user.Bio, &user.IsActive, &user.AuthProvider, &user.CreatedAt)
-	if err != nil {
-		return userPublicRow{}, fmt.Errorf("scan user row: %w", err)
+// toUserPublicRow converts a persisted user into its public representation.
+func toUserPublicRow(u *models.User) userPublicRow {
+	return userPublicRow{
+		ID:           u.ID.String(),
+		Username:     u.Username,
+		Email:        u.Email,
+		Role:         u.Role,
+		AvatarURL:    u.AvatarURL,
+		Bio:          u.Bio,
+		IsActive:     u.IsActive,
+		AuthProvider: u.AuthProvider,
+		CreatedAt:    u.CreatedAt.Format(time.RFC3339),
 	}
-
-	return user, nil
 }
 
 // registrationAllowedForEmail reports whether email's domain is allowed
 // by the registration_email_whitelist setting. An empty/unset whitelist
 // permits every domain.
 func (s *State) registrationAllowedForEmail(ctx context.Context, email string) bool {
-	whitelist := ReadSetting(ctx, s.Pool, "registration_email_whitelist", "")
+	whitelist := repository.ReadSetting(ctx, s.Repos.Settings, "registration_email_whitelist", "")
 	if strings.TrimSpace(whitelist) == "" {
 		return true
 	}
@@ -162,7 +167,7 @@ func (s *State) registrationAllowedForEmail(ctx context.Context, email string) b
 func (s *State) registerValidationCheck(request *http.Request, req registerRequest) (int, string, bool) {
 	ctx := request.Context()
 
-	if ReadSetting(ctx, s.Pool, settingKeyRegistrationEnabled, authSettingTrue) != authSettingTrue {
+	if repository.ReadSetting(ctx, s.Repos.Settings, settingKeyRegistrationEnabled, authSettingTrue) != authSettingTrue {
 		return http.StatusForbidden, "New user registration is currently disabled.", false
 	}
 
@@ -181,21 +186,6 @@ func (s *State) registerValidationCheck(request *http.Request, req registerReque
 	return http.StatusOK, "", true
 }
 
-// emailOrUsernameTaken reports whether email or username already
-// belongs to an existing account.
-func (s *State) emailOrUsernameTaken(ctx context.Context, email, username string) (bool, error) {
-	var count int64
-
-	err := s.Pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM users WHERE email = $1 OR username = $2",
-		email, username).Scan(&count)
-	if err != nil {
-		return false, fmt.Errorf("check existing user: %w", err)
-	}
-
-	return count > 0, nil
-}
-
 // createUser hashes req.Password and inserts a new user row, returning
 // its public representation.
 func (s *State) createUser(ctx context.Context, req registerRequest) (userPublicRow, error) {
@@ -204,11 +194,22 @@ func (s *State) createUser(ctx context.Context, req registerRequest) (userPublic
 		return userPublicRow{}, fmt.Errorf("hash password: %w", err)
 	}
 
-	return scanUserPublic(s.Pool.QueryRow(ctx,
-		`INSERT INTO users (username, email, password_hash, role)
-		 VALUES ($1, $2, $3, 'student')
-		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
-		req.Username, req.Email, string(hash)))
+	passwordHash := string(hash)
+	user := &models.User{
+		Username:     req.Username,
+		Email:        req.Email,
+		PasswordHash: &passwordHash,
+		Role:         groupsRoleStudent,
+		IsActive:     true,
+		AuthProvider: authProviderLocal,
+	}
+
+	err = s.Repos.Users.Create(ctx, user)
+	if err != nil {
+		return userPublicRow{}, err
+	}
+
+	return toUserPublicRow(user), nil
 }
 
 // Register godoc
@@ -240,7 +241,7 @@ func (s *State) Register(writer http.ResponseWriter, request *http.Request) {
 
 	ctx := request.Context()
 
-	taken, err := s.emailOrUsernameTaken(ctx, req.Email, req.Username)
+	taken, err := s.Repos.Users.ExistsByEmailOrUsername(ctx, req.Email, req.Username)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -267,8 +268,8 @@ func (s *State) Register(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	addToDefaultGroup(ctx, s.Pool, user.ID)
-	syncGroupEnrollments(ctx, s.Pool, user.ID)
+	addToDefaultGroup(ctx, s.Repos.Groups, user.ID)
+	syncGroupEnrollments(ctx, s.Repos.Groups, user.ID)
 	metrics.ActiveUsers.Inc()
 	s.JSON(writer, http.StatusCreated, authResponse{Token: token, User: user})
 }
@@ -283,18 +284,12 @@ type loginUserRow struct {
 // loginLookup fetches the local-login row for email, including its
 // password hash (nil for SSO-only accounts). Only active accounts match.
 func (s *State) loginLookup(ctx context.Context, email string) (loginUserRow, error) {
-	var row loginUserRow
-
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id::text, username, email, password_hash, role, avatarUrl, bio, isActive, authProvider, createdAt::text
-		 FROM users WHERE email = $1 AND isActive = TRUE`, email).
-		Scan(&row.user.ID, &row.user.Username, &row.user.Email, &row.passwordHash, &row.user.Role,
-			&row.user.AvatarURL, &row.user.Bio, &row.user.IsActive, &row.user.AuthProvider, &row.user.CreatedAt)
+	user, err := s.Repos.Users.FindByEmailActive(ctx, email)
 	if err != nil {
-		return loginUserRow{}, fmt.Errorf("lookup local user: %w", err)
+		return loginUserRow{}, err
 	}
 
-	return row, nil
+	return loginUserRow{user: toUserPublicRow(user), passwordHash: user.PasswordHash}, nil
 }
 
 // Login godoc
@@ -318,7 +313,7 @@ func (s *State) Login(writer http.ResponseWriter, request *http.Request) {
 
 	ctx := request.Context()
 
-	if ReadSetting(ctx, s.Pool, settingKeySSOLocalLoginEnabled, authSettingTrue) != authSettingTrue {
+	if repository.ReadSetting(ctx, s.Repos.Settings, settingKeySSOLocalLoginEnabled, authSettingTrue) != authSettingTrue {
 		s.Error(writer, http.StatusForbidden, "Local login is disabled. Please sign in using an SSO provider.")
 
 		return
@@ -351,8 +346,8 @@ func (s *State) Login(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	addToDefaultGroup(ctx, s.Pool, row.user.ID)
-	syncGroupEnrollments(ctx, s.Pool, row.user.ID)
+	addToDefaultGroup(ctx, s.Repos.Groups, row.user.ID)
+	syncGroupEnrollments(ctx, s.Repos.Groups, row.user.ID)
 	s.JSON(writer, http.StatusOK, authResponse{Token: token, User: row.user})
 }
 
@@ -367,16 +362,21 @@ func (s *State) Login(writer http.ResponseWriter, request *http.Request) {
 func (s *State) Me(writer http.ResponseWriter, request *http.Request) {
 	claims := s.claims(request)
 
-	user, err := scanUserPublic(s.Pool.QueryRow(request.Context(),
-		`SELECT id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text
-		 FROM users WHERE id = $1::uuid`, claims.Subject))
+	id, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, user)
+	user, err := s.Repos.Users.FindByID(request.Context(), id)
+	if err != nil {
+		s.Error(writer, http.StatusNotFound, "User not found")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, toUserPublicRow(user))
 }
 
 // usernameChangeCheck validates a requested username change against
@@ -386,7 +386,7 @@ func (s *State) Me(writer http.ResponseWriter, request *http.Request) {
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func (s *State) usernameChangeCheck(ctx context.Context, uname, currentUserID string) (int, string, bool) {
-	if ReadSetting(ctx, s.Pool, "profile_allow_username_change", authSettingTrue) != authSettingTrue {
+	if repository.ReadSetting(ctx, s.Repos.Settings, "profile_allow_username_change", authSettingTrue) != authSettingTrue {
 		return http.StatusForbidden, "Username changes are not allowed.", false
 	}
 
@@ -394,13 +394,12 @@ func (s *State) usernameChangeCheck(ctx context.Context, uname, currentUserID st
 		return http.StatusBadRequest, authMsgUsernameTooShort, false
 	}
 
-	var taken int64
-
-	_ = s.Pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM users WHERE username = $1 AND id != $2::uuid",
-		uname, currentUserID).Scan(&taken)
-	if taken > 0 {
-		return http.StatusConflict, "Username already taken", false
+	id, err := uuid.Parse(currentUserID)
+	if err == nil {
+		taken, _ := s.Repos.Users.ExistsUsernameExcluding(ctx, uname, id)
+		if taken {
+			return http.StatusConflict, "Username already taken", false
+		}
 	}
 
 	return http.StatusOK, "", true
@@ -446,22 +445,21 @@ func (s *State) UpdateProfile(writer http.ResponseWriter, request *http.Request)
 		}
 	}
 
-	user, err := scanUserPublic(s.Pool.QueryRow(ctx,
-		`UPDATE users SET
-			username   = COALESCE($1, username),
-			bio        = COALESCE($2, bio),
-			avatarUrl = COALESCE($3, avatarUrl),
-			updatedAt = NOW()
-		 WHERE id = $4::uuid
-		 RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
-		body.Username, body.Bio, body.AvatarURL, claims.Subject))
+	id, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, user)
+	user, err := s.Repos.Users.UpdateProfile(ctx, id, body.Username, body.Bio, body.AvatarURL)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, toUserPublicRow(user))
 }
 
 // verifyCurrentPassword checks that candidate matches userID's stored
@@ -470,10 +468,12 @@ func (s *State) UpdateProfile(writer http.ResponseWriter, request *http.Request)
 //
 //nolint:gocritic // named results here would trip nonamedreturns instead; see doc comment above for the meaning of each value
 func (s *State) verifyCurrentPassword(ctx context.Context, userID, candidate string) (int, string, bool) {
-	var passwordHash *string
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return http.StatusBadRequest, "This account uses SSO login and has no local password.", false
+	}
 
-	err := s.Pool.QueryRow(ctx,
-		"SELECT password_hash FROM users WHERE id = $1::uuid", userID).Scan(&passwordHash)
+	passwordHash, err := s.Repos.Users.GetPasswordHash(ctx, id)
 	if err != nil || passwordHash == nil {
 		return http.StatusBadRequest, "This account uses SSO login and has no local password.", false
 	}
@@ -545,9 +545,14 @@ func (s *State) ChangePassword(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	_, err = s.Pool.Exec(ctx,
-		"UPDATE users SET password_hash = $1, updatedAt = NOW() WHERE id = $2::uuid",
-		string(newHash), claims.Subject)
+	id, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	err = s.Repos.Users.UpdatePasswordHash(ctx, id, string(newHash))
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 

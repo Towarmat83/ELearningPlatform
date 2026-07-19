@@ -14,11 +14,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/genesary/pupitre/user-service/internal/config"
 	"github.com/genesary/pupitre/user-service/internal/db"
 	"github.com/genesary/pupitre/user-service/internal/handlers"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 	"github.com/genesary/pupitre/user-service/migrations"
 )
 
@@ -75,15 +76,22 @@ func run() error {
 
 	ctx := context.Background()
 
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	gdb, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}
-	defer pool.Close()
+
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		return fmt.Errorf("unwrap sql.DB: %w", err)
+	}
+	defer sqlDB.Close()
 
 	zap.L().Info("database connected")
 
-	err = seedDatabase(ctx, pool, cfg)
+	repos := repository.NewGormRepositories(gdb)
+
+	err = seedDatabase(ctx, gdb, repos, cfg)
 	if err != nil {
 		return err
 	}
@@ -94,19 +102,19 @@ func run() error {
 	defer watchCancel()
 
 	if cfg.AdminPasswordFile != "" {
-		go db.WatchAdminPassword(watchCtx, pool, cfg.AdminPasswordFile)
+		go db.WatchAdminPassword(watchCtx, repos.Users, cfg.AdminPasswordFile)
 	}
 
 	// MarkdownPattern CRD watcher — syncs CRDs into the markdown_patterns
 	// table. Disabled when K8sNamespace is empty (local dev without cluster).
-	defer startPatternWatcher(ctx, cfg, pool)()
+	defer startPatternWatcher(ctx, cfg, repos.Patterns)()
 
 	state := &handlers.State{
-		Pool:   db.NewAdapter(pool),
+		Repos:  repos,
 		Config: cfg,
 	}
 
-	r := handlers.BuildRouter(state, cfg, db.NewAdapter(pool), true)
+	r := handlers.BuildRouter(state, cfg, true)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := &http.Server{
@@ -122,8 +130,8 @@ func run() error {
 
 // seedDatabase runs migrations and seeds the default admin user, OIDC
 // settings, and (if enabled) mock demo data.
-func seedDatabase(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
-	err := db.RunMigrations(ctx, pool, migrations.FS)
+func seedDatabase(ctx context.Context, gdb *gorm.DB, repos *repository.Repositories, cfg *config.Config) error {
+	err := db.RunMigrations(ctx, gdb, migrations.FS)
 	if err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
@@ -131,20 +139,20 @@ func seedDatabase(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) e
 	zap.L().Info("migrations applied")
 
 	// Seed default admin (idempotent — safe to run on every startup).
-	err = db.SeedAdmin(ctx, pool, cfg.AdminPassword)
+	err = db.SeedAdmin(ctx, repos.Users, cfg.AdminPassword)
 	if err != nil {
 		return fmt.Errorf("seed admin user: %w", err)
 	}
 
 	// Bootstrap OIDC settings from deploy-time config (no-op unless OIDC_ENABLED).
-	err = db.SeedOIDC(ctx, pool, cfg)
+	err = db.SeedOIDC(ctx, repos.Settings, cfg)
 	if err != nil {
 		return fmt.Errorf("seed OIDC settings: %w", err)
 	}
 
 	// Seed mock users and enrollments (dev/demo only).
 	if os.Getenv("SEED_MOCK_DATA") == seedMockDataValue {
-		err := db.SeedMockData(ctx, pool)
+		err := db.SeedMockData(ctx, repos.Users, gdb)
 		if err != nil {
 			zap.L().Error("failed to seed mock data", zap.Error(err))
 		}
@@ -157,14 +165,14 @@ func seedDatabase(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) e
 // cfg.K8sNamespace is configured. It returns a cancel function that the
 // caller must defer to stop the watcher on shutdown; when the watcher is
 // disabled or fails to start, the returned function is still safe to call.
-func startPatternWatcher(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool) context.CancelFunc {
+func startPatternWatcher(ctx context.Context, cfg *config.Config, patterns repository.PatternRepository) context.CancelFunc {
 	if cfg.K8sNamespace == "" {
 		return func() {}
 	}
 
 	watchCtx, cancel := context.WithCancel(ctx)
 
-	patternWatcher, err := handlers.NewPatternWatcher(db.NewAdapter(pool), cfg.Kubeconfig, cfg.K8sNamespace)
+	patternWatcher, err := handlers.NewPatternWatcher(patterns, cfg.Kubeconfig, cfg.K8sNamespace)
 	if err != nil {
 		zap.L().Warn("pattern CRD watcher disabled", zap.NamedError("reason", err))
 

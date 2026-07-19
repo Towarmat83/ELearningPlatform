@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 
 	ldap "github.com/go-ldap/ldap/v3"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // ldapTimeout bounds how long an LDAP login attempt may take end-to-end.
@@ -31,14 +33,14 @@ type ldapSettings struct {
 // loadLDAPSettings reads the LDAP configuration and validates it is usable.
 func (s *State) loadLDAPSettings(ctx context.Context) (ldapSettings, error) {
 	cfg := ldapSettings{
-		Enabled:      ReadSetting(ctx, s.Pool, "ldap_enabled", "false") == authSettingTrue,
-		ServerURL:    ReadSetting(ctx, s.Pool, "ldap_server_url", ""),
-		BindDN:       ReadSetting(ctx, s.Pool, "ldap_bind_dn", ""),
-		BindPassword: ReadSetting(ctx, s.Pool, "ldap_bind_password", ""),
-		UserBaseDN:   ReadSetting(ctx, s.Pool, "ldap_user_base_dn", ""),
-		UserFilter:   ReadSetting(ctx, s.Pool, "ldap_user_filter", "(mail=%s)"),
-		GroupBaseDN:  ReadSetting(ctx, s.Pool, "ldap_group_base_dn", ""),
-		GroupFilter:  ReadSetting(ctx, s.Pool, "ldap_group_filter", "(|(member=%s)(uniqueMember=%s)(memberUid=%s))"),
+		Enabled:      repository.ReadSetting(ctx, s.Repos.Settings, "ldap_enabled", "false") == authSettingTrue,
+		ServerURL:    repository.ReadSetting(ctx, s.Repos.Settings, "ldap_server_url", ""),
+		BindDN:       repository.ReadSetting(ctx, s.Repos.Settings, "ldap_bind_dn", ""),
+		BindPassword: repository.ReadSetting(ctx, s.Repos.Settings, "ldap_bind_password", ""),
+		UserBaseDN:   repository.ReadSetting(ctx, s.Repos.Settings, "ldap_user_base_dn", ""),
+		UserFilter:   repository.ReadSetting(ctx, s.Repos.Settings, "ldap_user_filter", "(mail=%s)"),
+		GroupBaseDN:  repository.ReadSetting(ctx, s.Repos.Settings, "ldap_group_base_dn", ""),
+		GroupFilter:  repository.ReadSetting(ctx, s.Repos.Settings, "ldap_group_filter", "(|(member=%s)(uniqueMember=%s)(memberUid=%s))"),
 	}
 	if !cfg.Enabled {
 		return cfg, errors.New("LDAP authentication is not enabled")

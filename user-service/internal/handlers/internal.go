@@ -6,6 +6,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// courseCompleteLessonSlug is the sentinel lesson slug used to mark an
+// entire course as complete (for courses with no individual lessons to
+// track, e.g. quiz-only courses).
+const courseCompleteLessonSlug = "__complete__"
+
 // courseBody is the request body for endpoints keyed by user+course.
 type courseBody struct {
 	UserID string `json:"userId"`
@@ -90,9 +95,7 @@ func (s *State) InternalAutoEnroll(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	_, err := s.Pool.Exec(req.Context(),
-		`INSERT INTO enrollments (userId, courseSlug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
-		body.UserID, body.CourseSlug)
+	err := s.Repos.Enrollments.Create(req.Context(), body.UserID, body.CourseSlug)
 	internalRespondExecResult(s, writer, err, "failed to auto-enroll user",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
 }
@@ -109,11 +112,7 @@ func (s *State) InternalCheckEnrollment(writer http.ResponseWriter, req *http.Re
 	userID := req.URL.Query().Get("userId")
 	courseSlug := req.URL.Query().Get("courseSlug")
 
-	var enrolled bool
-
-	err := s.Pool.QueryRow(req.Context(),
-		`SELECT COUNT(*) > 0 FROM enrollments WHERE userId = $1::uuid AND courseSlug = $2`,
-		userID, courseSlug).Scan(&enrolled)
+	enrolled, err := s.Repos.Enrollments.Exists(req.Context(), userID, courseSlug)
 	if err != nil {
 		zap.L().Error("failed to check enrollment", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "DB error")
@@ -136,24 +135,12 @@ func (s *State) InternalViewedLessons(writer http.ResponseWriter, req *http.Requ
 	userID := req.URL.Query().Get("userId")
 	courseSlug := req.URL.Query().Get("courseSlug")
 
-	rows, err := s.Pool.Query(req.Context(),
-		`SELECT lessonSlug FROM lesson_progress WHERE userId = $1::uuid AND courseSlug = $2`,
-		userID, courseSlug)
+	slugs, err := s.Repos.LessonProgress.ViewedSlugs(req.Context(), userID, courseSlug)
 	if err != nil {
 		zap.L().Error("failed to query viewed lessons", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
-	}
-	defer rows.Close()
-
-	var slugs []string
-
-	for rows.Next() {
-		var slug string
-		if rows.Scan(&slug) == nil {
-			slugs = append(slugs, slug)
-		}
 	}
 
 	if slugs == nil {
@@ -177,11 +164,7 @@ func (s *State) InternalMarkComplete(writer http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	_, err := s.Pool.Exec(req.Context(),
-		`INSERT INTO lesson_progress (userId, courseSlug, lessonSlug, viewed_at)
-		 VALUES ($1::uuid, $2, $3, NOW())
-		 ON CONFLICT (userId, courseSlug, lessonSlug) DO NOTHING`,
-		body.UserID, body.CourseSlug, body.LessonSlug)
+	err := s.Repos.LessonProgress.MarkComplete(req.Context(), body.UserID, body.CourseSlug, body.LessonSlug)
 	internalRespondExecResult(s, writer, err, "failed to mark lesson complete",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.String("lessonSlug", body.LessonSlug))
 }
@@ -200,11 +183,7 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 		return
 	}
 
-	_, err := s.Pool.Exec(req.Context(),
-		`INSERT INTO lesson_progress (userId, courseSlug, lessonSlug, viewed_at)
-		 VALUES ($1::uuid, $2, '__complete__', NOW())
-		 ON CONFLICT (userId, courseSlug, lessonSlug) DO NOTHING`,
-		body.UserID, body.CourseSlug)
+	err := s.Repos.LessonProgress.MarkComplete(req.Context(), body.UserID, body.CourseSlug, courseCompleteLessonSlug)
 	internalRespondExecResult(s, writer, err, "failed to mark course complete",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
 }
@@ -223,18 +202,8 @@ func (s *State) InternalRecordModuleProgress(writer http.ResponseWriter, req *ht
 		return
 	}
 
-	_, err := s.Pool.Exec(req.Context(), `
-		INSERT INTO module_progress (userId, courseSlug, moduleIndex, moduleSlug, bestScore, maxScore, passed, attempts, completed_at)
-		VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, 1, CASE WHEN $7 THEN NOW() ELSE NULL END)
-		ON CONFLICT (userId, courseSlug, moduleIndex) DO UPDATE SET
-			attempts     = module_progress.attempts + 1,
-			bestScore   = GREATEST(module_progress.bestScore, $5),
-			maxScore    = $6,
-			passed       = module_progress.passed OR $7,
-			moduleSlug  = COALESCE(module_progress.moduleSlug, NULLIF($4, '')),
-			completed_at = CASE WHEN ($7 AND module_progress.completed_at IS NULL) THEN NOW() ELSE module_progress.completed_at END,
-			updatedAt   = NOW()`,
-		body.UserID, body.CourseSlug, body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
+	err := s.Repos.ModuleProgress.RecordProgress(req.Context(), body.UserID, body.CourseSlug,
+		body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
 	internalRespondExecResult(s, writer, err, "failed to record module progress",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
 }
@@ -251,12 +220,7 @@ func (s *State) InternalCourseSummary(writer http.ResponseWriter, req *http.Requ
 	userID := req.URL.Query().Get("userId")
 	courseSlug := req.URL.Query().Get("courseSlug")
 
-	var totalScore int
-
-	err := s.Pool.QueryRow(req.Context(),
-		`SELECT COALESCE(SUM(bestScore), 0) FROM module_progress
-		 WHERE userId = $1::uuid AND courseSlug = $2`,
-		userID, courseSlug).Scan(&totalScore)
+	totalScore, err := s.Repos.ModuleProgress.TotalScore(req.Context(), userID, courseSlug)
 	if err != nil {
 		zap.L().Error("failed to query course score", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "DB error")
@@ -264,35 +228,17 @@ func (s *State) InternalCourseSummary(writer http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	rows, err := s.Pool.Query(req.Context(),
-		`SELECT moduleSlug FROM module_progress
-		 WHERE userId = $1::uuid AND courseSlug = $2
-		   AND passed = true AND moduleSlug IS NOT NULL`,
-		userID, courseSlug)
+	passedModules, err := s.Repos.ModuleProgress.PassedModuleSlugs(req.Context(), userID, courseSlug)
 	if err != nil {
 		zap.L().Error("failed to query passed modules", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
 	}
-	defer rows.Close()
-
-	passedModules := []string{}
-
-	for rows.Next() {
-		var slug string
-		if rows.Scan(&slug) == nil {
-			passedModules = append(passedModules, slug)
-		}
-	}
 
 	// Also count viewed lessons (text/video/image modules marked complete).
 	// This allows text-only courses to satisfy "any progress" prerequisites.
-	var viewedCount int
-
-	_ = s.Pool.QueryRow(req.Context(),
-		`SELECT COUNT(*) FROM lesson_progress WHERE userId = $1::uuid AND courseSlug = $2`,
-		userID, courseSlug).Scan(&viewedCount)
+	viewedCount, _ := s.Repos.LessonProgress.CountViewed(req.Context(), userID, courseSlug)
 
 	s.JSON(writer, http.StatusOK, map[string]any{
 		"totalScore":    totalScore,
@@ -313,26 +259,19 @@ func (s *State) InternalGetModuleProgress(writer http.ResponseWriter, req *http.
 	userID := req.URL.Query().Get("userId")
 	courseSlug := req.URL.Query().Get("courseSlug")
 
-	rows, err := s.Pool.Query(req.Context(),
-		`SELECT moduleIndex, bestScore, maxScore, passed, attempts
-		 FROM module_progress
-		 WHERE userId = $1::uuid AND courseSlug = $2`,
-		userID, courseSlug)
+	list, err := s.Repos.ModuleProgress.ListByUserCourse(req.Context(), userID, courseSlug)
 	if err != nil {
 		zap.L().Error("failed to query module progress", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
 	}
-	defer rows.Close()
 
-	progress := make([]moduleProgressRow, 0)
-
-	for rows.Next() {
-		var row moduleProgressRow
-		if rows.Scan(&row.ModuleIndex, &row.BestScore, &row.MaxScore, &row.Passed, &row.Attempts) == nil {
-			progress = append(progress, row)
-		}
+	progress := make([]moduleProgressRow, 0, len(list))
+	for _, p := range list {
+		progress = append(progress, moduleProgressRow{
+			ModuleIndex: p.ModuleIndex, BestScore: p.BestScore, MaxScore: p.MaxScore, Passed: p.Passed, Attempts: p.Attempts,
+		})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{"progress": progress})

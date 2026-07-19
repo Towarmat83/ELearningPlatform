@@ -1,0 +1,515 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/genesary/pupitre/user-service/internal/models"
+)
+
+// ErrUserNotFound is returned by lookups that find no matching user.
+var ErrUserNotFound = errors.New("user not found")
+
+// searchUsersLimit caps the number of rows returned by Search.
+const searchUsersLimit = 10
+
+// AuthProviderCount is a single row of the admin auth-provider breakdown.
+type AuthProviderCount struct {
+	Provider string
+	Count    int64
+}
+
+// AdminUserRow is a single row of the admin user listing, including the
+// enrollment count computed via a LEFT JOIN against enrollments.
+type AdminUserRow struct {
+	ID              string
+	Username        string
+	Email           string
+	Role            string
+	IsActive        bool
+	AvatarURL       *string
+	Bio             *string
+	AuthProvider    string
+	CreatedAt       string
+	EnrolledCourses int64
+}
+
+// AdminUserDetailRow is the admin single-user detail projection, including
+// enrollment and viewed-lesson counts.
+type AdminUserDetailRow struct {
+	ID              string
+	Username        string
+	Email           string
+	Role            string
+	IsActive        bool
+	AvatarURL       *string
+	Bio             *string
+	AuthProvider    string
+	CreatedAt       string
+	EnrolledCourses int64
+	ViewedLessons   int64
+}
+
+// UserSearchRow is a single row returned by Search.
+type UserSearchRow struct {
+	ID       string
+	Username string
+	Email    string
+}
+
+// LeaderboardRow is a single row of the admin leaderboard, ranked by total
+// quiz score.
+type LeaderboardRow struct {
+	ID              string
+	Username        string
+	Email           string
+	AvatarURL       *string
+	TotalScore      int64
+	PassedModules   int64
+	EnrolledCourses int64
+}
+
+// UserRepository is the persistence boundary for the users table, covering
+// registration/login, profile self-service, SSO provisioning, and admin
+// user management.
+type UserRepository interface {
+	// Registration / login
+	ExistsByEmailOrUsername(ctx context.Context, email, username string) (bool, error)
+	Create(ctx context.Context, u *models.User) error
+	FindByEmailActive(ctx context.Context, email string) (*models.User, error)
+
+	// Profile self-service
+	FindByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	ExistsUsernameExcluding(ctx context.Context, username string, excludeID uuid.UUID) (bool, error)
+	UpdateProfile(ctx context.Context, id uuid.UUID, username, bio, avatarURL *string) (*models.User, error)
+	GetPasswordHash(ctx context.Context, id uuid.UUID) (*string, error)
+	UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error
+
+	// SSO provisioning (oauth.go)
+	ExistsByUsername(ctx context.Context, username string) (bool, error)
+	FindByProviderIdentity(ctx context.Context, provider, providerUserID string) (*models.User, error)
+	FindByEmail(ctx context.Context, email string) (*models.User, error)
+	RefreshSSOProfile(ctx context.Context, id uuid.UUID, avatarURL, bio *string) (*models.User, error)
+	LinkProviderIdentity(ctx context.Context, id uuid.UUID, provider, providerUserID string, avatarURL, bio *string) (*models.User, error)
+
+	// Admin
+	CountByRole(ctx context.Context, role string) (int64, error)
+	ListAuthProviders(ctx context.Context) ([]AuthProviderCount, error)
+	ListForAdmin(ctx context.Context, provider string) ([]AdminUserRow, error)
+	GetForAdmin(ctx context.Context, id uuid.UUID) (*AdminUserDetailRow, error)
+	UpdateAdminFields(ctx context.Context, id uuid.UUID, username, bio, avatarURL *string, isActive *bool, role *string) (*models.User, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	Search(ctx context.Context, query string) ([]UserSearchRow, error)
+	Leaderboard(ctx context.Context) ([]LeaderboardRow, error)
+
+	// Seeding
+	CreateAdminIfAbsent(ctx context.Context, username, email, hash string) error
+	UpsertAdminPassword(ctx context.Context, username, email, hash string) error
+	UpsertMockStudent(ctx context.Context, username, email, hash string) (uuid.UUID, error)
+}
+
+type gormUserRepository struct {
+	db *gorm.DB
+}
+
+// NewGormUserRepository builds a UserRepository backed by db.
+func NewGormUserRepository(db *gorm.DB) UserRepository {
+	return &gormUserRepository{db: db}
+}
+
+func (r *gormUserRepository) ExistsByEmailOrUsername(ctx context.Context, email, username string) (bool, error) {
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Where("email = ? OR username = ?", email, username).Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check existing user: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+func (r *gormUserRepository) Create(ctx context.Context, u *models.User) error {
+	err := r.db.WithContext(ctx).Create(u).Error
+	if err != nil {
+		return fmt.Errorf("create user: %w", err)
+	}
+
+	return nil
+}
+
+func (r *gormUserRepository) FindByEmailActive(ctx context.Context, email string) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).
+		Where("email = ? AND isactive = TRUE", email).
+		First(&user).Error
+	if err != nil {
+		return nil, wrapNotFound(err, ErrUserNotFound)
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
+	if err != nil {
+		return nil, wrapNotFound(err, ErrUserNotFound)
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) ExistsUsernameExcluding(ctx context.Context, username string, excludeID uuid.UUID) (bool, error) {
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Where("username = ? AND id != ?", username, excludeID).Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check username taken: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+func (r *gormUserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, username, bio, avatarURL *string) (*models.User, error) {
+	updates := map[string]any{}
+	if username != nil {
+		updates["username"] = *username
+	}
+
+	if bio != nil {
+		updates["bio"] = *bio
+	}
+
+	if avatarURL != nil {
+		updates["avatarurl"] = *avatarURL
+	}
+
+	var user models.User
+
+	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
+		Where("id = ?", id).Updates(updates).Error
+	if err != nil {
+		return nil, fmt.Errorf("update profile: %w", err)
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) GetPasswordHash(ctx context.Context, id uuid.UUID) (*string, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).Select("password_hash").First(&user, "id = ?", id).Error
+	if err != nil {
+		return nil, wrapNotFound(err, ErrUserNotFound)
+	}
+
+	return user.PasswordHash, nil
+}
+
+func (r *gormUserRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ?", id).Update("password_hash", hash).Error
+	if err != nil {
+		return fmt.Errorf("update password hash: %w", err)
+	}
+
+	return nil
+}
+
+func (r *gormUserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Where("username = ?", username).Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check username exists: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+func (r *gormUserRepository) FindByProviderIdentity(ctx context.Context, provider, providerUserID string) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).
+		Where("authprovider = ? AND provider_user_id = ?", provider, providerUserID).
+		First(&user).Error
+	if err != nil {
+		return nil, wrapNotFound(err, ErrUserNotFound)
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	if err != nil {
+		return nil, wrapNotFound(err, ErrUserNotFound)
+	}
+
+	return &user, nil
+}
+
+// bioIfBlank is the raw SQL fragment mirroring the original handler's
+// CASE-WHEN: only overwrite bio when it is currently NULL/empty.
+const bioIfBlank = "CASE WHEN (bio IS NULL OR bio = '') THEN ? ELSE bio END"
+
+func (r *gormUserRepository) RefreshSSOProfile(ctx context.Context, id uuid.UUID, avatarURL, bio *string) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"avatarurl": gorm.Expr("COALESCE(?, avatarurl)", avatarURL),
+			"bio":       gorm.Expr(bioIfBlank, bio),
+		}).Error
+	if err != nil {
+		return nil, fmt.Errorf("refresh sso profile: %w", err)
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) LinkProviderIdentity(
+	ctx context.Context, id uuid.UUID, provider, providerUserID string, avatarURL, bio *string,
+) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"authprovider":     provider,
+			"provider_user_id": providerUserID,
+			"avatarurl":        gorm.Expr("COALESCE(?, avatarurl)", avatarURL),
+			"bio":              gorm.Expr(bioIfBlank, bio),
+		}).Error
+	if err != nil {
+		return nil, fmt.Errorf("link provider identity: %w", err)
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) CountByRole(ctx context.Context, role string) (int64, error) {
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.User{}).Where("role = ?", role).Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("count users by role: %w", err)
+	}
+
+	return count, nil
+}
+
+func (r *gormUserRepository) ListAuthProviders(ctx context.Context) ([]AuthProviderCount, error) {
+	var list []AuthProviderCount
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT authprovider AS provider, COUNT(*)::bigint AS count
+		FROM users
+		GROUP BY authprovider
+		ORDER BY authprovider`).Scan(&list).Error
+	if err != nil {
+		return nil, fmt.Errorf("list auth providers: %w", err)
+	}
+
+	return list, nil
+}
+
+func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) ([]AdminUserRow, error) {
+	query := `
+		SELECT u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
+		       u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
+		       COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses
+		FROM users u
+		LEFT JOIN enrollments e ON e.userid = u.id`
+
+	var (
+		args []any
+		list []AdminUserRow
+	)
+
+	if provider != "" {
+		query += ` WHERE u.authprovider = ?`
+		args = append(args, provider)
+	}
+
+	query += ` GROUP BY u.id ORDER BY u.createdat DESC`
+
+	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&list).Error
+	if err != nil {
+		return nil, fmt.Errorf("list admin users: %w", err)
+	}
+
+	return list, nil
+}
+
+func (r *gormUserRepository) GetForAdmin(ctx context.Context, id uuid.UUID) (*AdminUserDetailRow, error) {
+	var row AdminUserDetailRow
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
+		       u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
+		       COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses,
+		       COUNT(DISTINCT lp.lessonslug)::bigint AS viewed_lessons
+		FROM users u
+		LEFT JOIN enrollments e ON e.userid = u.id
+		LEFT JOIN lesson_progress lp ON lp.userid = u.id
+		WHERE u.id = ?
+		GROUP BY u.id`, id).Scan(&row).Error
+	if err != nil {
+		return nil, fmt.Errorf("get admin user: %w", err)
+	}
+
+	if row.ID == "" {
+		return nil, ErrUserNotFound
+	}
+
+	return &row, nil
+}
+
+func (r *gormUserRepository) UpdateAdminFields(
+	ctx context.Context, id uuid.UUID, username, bio, avatarURL *string, isActive *bool, role *string,
+) (*models.User, error) {
+	updates := map[string]any{}
+	if username != nil {
+		updates["username"] = *username
+	}
+
+	if bio != nil {
+		updates["bio"] = *bio
+	}
+
+	if avatarURL != nil {
+		updates["avatarurl"] = *avatarURL
+	}
+
+	if isActive != nil {
+		updates["isactive"] = *isActive
+	}
+
+	if role != nil {
+		updates["role"] = *role
+	}
+
+	var user models.User
+
+	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
+		Where("id = ?", id).Updates(updates).Error
+	if err != nil {
+		return nil, fmt.Errorf("update admin fields: %w", err)
+	}
+
+	if user.ID == uuid.Nil {
+		return nil, ErrUserNotFound
+	}
+
+	return &user, nil
+}
+
+func (r *gormUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	err := r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+
+	return nil
+}
+
+func (r *gormUserRepository) Search(ctx context.Context, query string) ([]UserSearchRow, error) {
+	pattern := "%" + query + "%"
+
+	var results []UserSearchRow
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT id::text AS id, username, email FROM users
+		WHERE LOWER(username) LIKE ? OR LOWER(email) LIKE ?
+		ORDER BY username LIMIT ?`, pattern, pattern, searchUsersLimit).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("search users: %w", err)
+	}
+
+	return results, nil
+}
+
+func (r *gormUserRepository) Leaderboard(ctx context.Context) ([]LeaderboardRow, error) {
+	var list []LeaderboardRow
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT u.id::text AS id, u.username, u.email, u.avatarurl AS avatar_url,
+		       COALESCE(SUM(mp.bestscore), 0)::bigint AS total_score,
+		       COUNT(DISTINCT CASE WHEN mp.passed THEN mp.courseslug || ':' || mp.moduleindex::text END)::bigint AS passed_modules,
+		       COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses
+		FROM users u
+		LEFT JOIN module_progress mp ON mp.userid = u.id
+		LEFT JOIN enrollments e ON e.userid = u.id
+		WHERE u.role = 'student' AND u.isactive = TRUE
+		GROUP BY u.id, u.username, u.email, u.avatarurl
+		ORDER BY total_score DESC, passed_modules DESC`).Scan(&list).Error
+	if err != nil {
+		return nil, fmt.Errorf("leaderboard: %w", err)
+	}
+
+	return list, nil
+}
+
+func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, email, hash string) error {
+	err := r.db.WithContext(ctx).Exec(`
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES (?, ?, ?, 'admin')
+		ON CONFLICT DO NOTHING`, username, email, hash).Error
+	if err != nil {
+		return fmt.Errorf("insert default admin: %w", err)
+	}
+
+	return nil
+}
+
+func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, email, hash string) error {
+	err := r.db.WithContext(ctx).Exec(`
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES (?, ?, ?, 'admin')
+		ON CONFLICT (email) DO UPDATE SET
+			password_hash = EXCLUDED.password_hash,
+			updatedat     = NOW()`, username, email, hash).Error
+	if err != nil {
+		return fmt.Errorf("upsert admin password: %w", err)
+	}
+
+	return nil
+}
+
+func (r *gormUserRepository) UpsertMockStudent(ctx context.Context, username, email, hash string) (uuid.UUID, error) {
+	var id uuid.UUID
+
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES (?, ?, ?, 'student')
+		ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username
+		RETURNING id`, username, email, hash).Scan(&id).Error
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("upsert mock student: %w", err)
+	}
+
+	return id, nil
+}
+
+// wrapNotFound maps gorm.ErrRecordNotFound to sentinel, leaving other errors
+// wrapped with their original context.
+func wrapNotFound(err error, sentinel error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return sentinel
+	}
+
+	return fmt.Errorf("query user: %w", err)
+}

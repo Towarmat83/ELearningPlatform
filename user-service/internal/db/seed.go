@@ -10,8 +10,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 const (
@@ -36,7 +37,7 @@ const (
 // admin password.
 //
 // The goroutine exits cleanly when ctx is cancelled (graceful shutdown).
-func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string) {
+func WatchAdminPassword(ctx context.Context, users repository.UserRepository, filePath string) {
 	ticker := time.NewTicker(adminPasswordPollInterval)
 	defer ticker.Stop()
 
@@ -68,7 +69,7 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 
 			zap.L().Info("admin password file changed — re-seeding admin account")
 
-			err = SeedAdmin(ctx, pool, password)
+			err = SeedAdmin(ctx, users, password)
 			if err != nil {
 				zap.L().Error("re-seed admin failed", zap.Error(err))
 			} else {
@@ -95,7 +96,7 @@ func WatchAdminPassword(ctx context.Context, pool *pgxpool.Pool, filePath string
 //     updated so deployers can rotate the credential by restarting the pod.
 //   - If no password was provided (case 3) the existing row is left untouched
 //     so a previously changed password is not overwritten.
-func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) error {
+func SeedAdmin(ctx context.Context, users repository.UserRepository, adminPassword string) error {
 	var hash string
 
 	useDefault := false
@@ -130,11 +131,7 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 	if useDefault {
 		// Only insert if no admin exists yet; never overwrite a potentially
 		// customised password when running with the built-in fallback.
-		_, err := pool.Exec(ctx, `
-			INSERT INTO users (username, email, password_hash, role)
-			VALUES ($1, $2, $3, 'admin')
-			ON CONFLICT DO NOTHING`,
-			defaultAdminUsername, defaultAdminEmail, hash)
+		err := users.CreateAdminIfAbsent(ctx, defaultAdminUsername, defaultAdminEmail, hash)
 		if err != nil {
 			return fmt.Errorf("insert default admin: %w", err)
 		}
@@ -145,13 +142,7 @@ func SeedAdmin(ctx context.Context, pool *pgxpool.Pool, adminPassword string) er
 	// Custom password: upsert so the hash is refreshed on every restart.
 	// This lets operators rotate the password by updating the secret and
 	// rolling the pod — no manual SQL required.
-	_, err := pool.Exec(ctx, `
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES ($1, $2, $3, 'admin')
-		ON CONFLICT (email) DO UPDATE SET
-			password_hash = EXCLUDED.password_hash,
-			updatedAt    = NOW()`,
-		defaultAdminUsername, defaultAdminEmail, hash)
+	err := users.UpsertAdminPassword(ctx, defaultAdminUsername, defaultAdminEmail, hash)
 	if err != nil {
 		return fmt.Errorf("upsert admin password: %w", err)
 	}

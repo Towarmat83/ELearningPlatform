@@ -13,8 +13,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/golang-jwt/jwt/v5"
-
-	"github.com/genesary/pupitre/user-service/internal/db"
 )
 
 // roleAdmin is the role name granted administrative access.
@@ -106,7 +104,7 @@ func httpErr(writer http.ResponseWriter, status int, msg string) {
 }
 
 // Auth returns middleware that requires a valid bearer token.
-func Auth(_ db.Pool, secret string) func(http.Handler) http.Handler {
+func Auth(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 			auth := req.Header.Get("Authorization")
@@ -138,7 +136,7 @@ func Auth(_ db.Pool, secret string) func(http.Handler) http.Handler {
 
 // Admin returns middleware that requires a valid bearer token whose
 // claims carry the admin role.
-func Admin(_ db.Pool, secret string) func(http.Handler) http.Handler {
+func Admin(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 			auth := req.Header.Get("Authorization")

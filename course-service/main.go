@@ -18,6 +18,7 @@ import (
 	"github.com/genesary/pupitre/course-service/internal/content"
 	coursedb "github.com/genesary/pupitre/course-service/internal/db"
 	"github.com/genesary/pupitre/course-service/internal/handlers"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 	"github.com/genesary/pupitre/course-service/migrations"
 )
 
@@ -124,7 +125,7 @@ func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.St
 		return
 	}
 
-	state.DB = pool
+	state.LabChecks = repository.NewGormLabCheckRepository(pool)
 
 	zap.L().Info("database connected, lab tracking enabled")
 }

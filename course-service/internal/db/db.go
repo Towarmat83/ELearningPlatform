@@ -1,5 +1,5 @@
-// Package db provides the database connection pool and migration runner
-// used by course-service to persist optional lab result tracking data.
+// Package db provides the database connection and migration runner used by
+// course-service to persist optional lab result tracking data.
 package db
 
 import (
@@ -12,45 +12,52 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // maxConns is the maximum number of connections held open in the pool.
 const maxConns = 10
 
-// Connect opens a pgx connection pool to connURL and verifies connectivity
-// with a ping before returning it.
-func Connect(ctx context.Context, connURL string) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(connURL)
+// Connect opens a GORM/Postgres connection and verifies connectivity with a
+// ping before returning it. Schema is managed exclusively through
+// RunMigrations below (GORM's AutoMigrate is never used).
+func Connect(ctx context.Context, connURL string) (*gorm.DB, error) {
+	gdb, err := gorm.Open(postgres.Open(connURL), &gorm.Config{
+		Logger:                 gormlogger.Default.LogMode(gormlogger.Warn),
+		SkipDefaultTransaction: true,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse db url: %w", err)
+		return nil, fmt.Errorf("open db: %w", err)
 	}
 
-	cfg.MaxConns = maxConns
-
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	sqlDB, err := gdb.DB()
 	if err != nil {
-		return nil, fmt.Errorf("open pool: %w", err)
+		return nil, fmt.Errorf("unwrap sql.DB: %w", err)
 	}
 
-	err = pool.Ping(ctx)
+	sqlDB.SetMaxOpenConns(maxConns)
+	sqlDB.SetMaxIdleConns(maxConns)
+
+	err = sqlDB.PingContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	return pool, nil
+	return gdb, nil
 }
 
 // RunMigrations creates the _migrations bookkeeping table if needed and
 // applies any *.sql files under migrationsFS that have not yet been
 // recorded as applied, in filename order.
-func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.FS) error {
-	err := ensureMigrationsTable(ctx, pool)
+func RunMigrations(ctx context.Context, gdb *gorm.DB, migrationsFS embed.FS) error {
+	err := ensureMigrationsTable(ctx, gdb)
 	if err != nil {
 		return err
 	}
 
-	applied, err := loadAppliedMigrations(ctx, pool)
+	applied, err := loadAppliedMigrations(ctx, gdb)
 	if err != nil {
 		return err
 	}
@@ -72,7 +79,7 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.F
 			continue
 		}
 
-		err = applyMigration(ctx, pool, migrationsFS, name)
+		err = applyMigration(ctx, gdb, migrationsFS, name)
 		if err != nil {
 			return err
 		}
@@ -83,12 +90,12 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.F
 
 // ensureMigrationsTable creates the _migrations bookkeeping table if it does
 // not already exist.
-func ensureMigrationsTable(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
+func ensureMigrationsTable(ctx context.Context, gdb *gorm.DB) error {
+	err := gdb.WithContext(ctx).Exec(`
 		CREATE TABLE IF NOT EXISTS _migrations (
 			filename   TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)`)
+		)`).Error
 	if err != nil {
 		return fmt.Errorf("create migrations table: %w", err)
 	}
@@ -98,29 +105,17 @@ func ensureMigrationsTable(ctx context.Context, pool *pgxpool.Pool) error {
 
 // loadAppliedMigrations returns the set of migration filenames that have
 // already been recorded in the _migrations table.
-func loadAppliedMigrations(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {
-	rows, err := pool.Query(ctx, "SELECT filename FROM _migrations")
+func loadAppliedMigrations(ctx context.Context, gdb *gorm.DB) (map[string]bool, error) {
+	var filenames []string
+
+	err := gdb.WithContext(ctx).Raw("SELECT filename FROM _migrations").Scan(&filenames).Error
 	if err != nil {
 		return nil, fmt.Errorf("query applied migrations: %w", err)
 	}
-	defer rows.Close()
 
-	applied := make(map[string]bool)
-
-	for rows.Next() {
-		var filename string
-
-		err = rows.Scan(&filename)
-		if err != nil {
-			return nil, fmt.Errorf("scan applied migration: %w", err)
-		}
-
+	applied := make(map[string]bool, len(filenames))
+	for _, filename := range filenames {
 		applied[filename] = true
-	}
-
-	err = rows.Err()
-	if err != nil {
-		return nil, fmt.Errorf("iterate applied migrations: %w", err)
 	}
 
 	return applied, nil
@@ -128,18 +123,18 @@ func loadAppliedMigrations(ctx context.Context, pool *pgxpool.Pool) (map[string]
 
 // applyMigration reads the named migration file from migrationsFS, executes
 // it, and records it as applied.
-func applyMigration(ctx context.Context, pool *pgxpool.Pool, migrationsFS embed.FS, name string) error {
+func applyMigration(ctx context.Context, gdb *gorm.DB, migrationsFS embed.FS, name string) error {
 	content, err := fs.ReadFile(migrationsFS, name)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", name, err)
 	}
 
-	_, err = pool.Exec(ctx, string(content))
+	err = gdb.WithContext(ctx).Exec(string(content)).Error
 	if err != nil {
 		return fmt.Errorf("apply %s: %w", name, err)
 	}
 
-	_, err = pool.Exec(ctx, "INSERT INTO _migrations (filename) VALUES ($1)", name)
+	err = gdb.WithContext(ctx).Exec("INSERT INTO _migrations (filename) VALUES (?)", name).Error
 	if err != nil {
 		return fmt.Errorf("record %s: %w", name, err)
 	}

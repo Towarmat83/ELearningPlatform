@@ -13,11 +13,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
 	"github.com/genesary/pupitre/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
@@ -111,7 +111,7 @@ type State struct {
 	GitCreds        *content.GitCredentialStore
 	CooldownTracker *content.CooldownTracker
 	GitCache        *content.GitCache
-	DB              *pgxpool.Pool
+	LabChecks       repository.LabCheckRepository
 }
 
 // NewState builds a State from the given config and content stores,

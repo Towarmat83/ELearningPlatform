@@ -25,6 +25,12 @@ const (
 	defaultK8sNamespace = "default"
 	// defaultGitCacheTTLMinutes is the default git cache TTL, in minutes.
 	defaultGitCacheTTLMinutes = 10
+	// defaultDBMaxOpenConns is the default maximum number of open database
+	// connections held in the pool.
+	defaultDBMaxOpenConns = 10
+	// defaultDBMaxIdleConns is the default maximum number of idle database
+	// connections held in the pool.
+	defaultDBMaxIdleConns = 10
 )
 
 // Config holds the application configuration for course-service.
@@ -53,6 +59,10 @@ type Config struct {
 
 	DatabaseURL string `yaml:"databaseUrl"`
 
+	// DBMaxOpenConns and DBMaxIdleConns cap the database connection pool size.
+	DBMaxOpenConns int `yaml:"dbMaxOpenConns"`
+	DBMaxIdleConns int `yaml:"dbMaxIdleConns"`
+
 	// InternalSecret is the shared secret sent in X-Internal-Secret on calls to
 	// user-service and checker-service internal routes.
 	InternalSecret string `yaml:"-"`
@@ -79,6 +89,8 @@ func Load() *Config {
 	cfg.GitCacheTTL = positiveIntFromEnv("GIT_CACHE_TTL", cfg.GitCacheTTL)
 	cfg.CheckerServiceURL = stringFromEnv("CHECKER_SERVICE_URL", cfg.CheckerServiceURL)
 	cfg.DatabaseURL = stringFromEnv("DATABASE_URL", cfg.DatabaseURL)
+	cfg.DBMaxOpenConns = positiveIntFromEnv("DB_MAX_OPEN_CONNS", cfg.DBMaxOpenConns)
+	cfg.DBMaxIdleConns = positiveIntFromEnv("DB_MAX_IDLE_CONNS", cfg.DBMaxIdleConns)
 	cfg.InternalSecret = stringFromEnv("INTERNAL_SERVICE_SECRET", cfg.InternalSecret)
 
 	return cfg
@@ -98,6 +110,8 @@ func defaultConfig() *Config {
 		GitCredentialsPath: "/etc/course-service/git-credentials.yaml",
 		GitCacheTTL:        defaultGitCacheTTLMinutes,
 		CheckerServiceURL:  "http://checker-service:8083",
+		DBMaxOpenConns:     defaultDBMaxOpenConns,
+		DBMaxIdleConns:     defaultDBMaxIdleConns,
 	}
 }
 

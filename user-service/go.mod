@@ -6,16 +6,19 @@ require (
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/cors v1.2.1
+	github.com/go-chi/httprate v0.16.0
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.2
 	github.com/joho/godotenv v1.5.1
+	github.com/lib/pq v1.12.3
 	github.com/prometheus/client_golang v1.23.2
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
+	gorm.io/driver/postgres v1.6.0
+	gorm.io/gorm v1.31.2
 	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.36.0
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -30,7 +33,6 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
-	github.com/go-chi/httprate v0.16.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
@@ -39,7 +41,10 @@ require (
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.7.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect

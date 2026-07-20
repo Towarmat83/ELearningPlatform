@@ -33,6 +33,12 @@ const (
 	defaultAuthRateLimitRequests = 10
 	// defaultAuthRateLimitWindowSeconds is the auth rate-limit window length.
 	defaultAuthRateLimitWindowSeconds = 60
+	// defaultDBMaxOpenConns is the default maximum number of open database
+	// connections held in the pool.
+	defaultDBMaxOpenConns = 20
+	// defaultDBMaxIdleConns is the default maximum number of idle database
+	// connections held in the pool.
+	defaultDBMaxIdleConns = 20
 )
 
 // ProviderConfig holds the configuration for a single SSO/OAuth provider
@@ -91,6 +97,10 @@ func (o OIDCBootstrap) ResolveClientSecret() string {
 // Config holds the application configuration for user-service.
 type Config struct {
 	DatabaseURL string `yaml:"databaseUrl"`
+
+	// DBMaxOpenConns and DBMaxIdleConns cap the database connection pool size.
+	DBMaxOpenConns int `yaml:"dbMaxOpenConns"`
+	DBMaxIdleConns int `yaml:"dbMaxIdleConns"`
 
 	JWTSecret string `yaml:"jwtSecret"`
 
@@ -156,6 +166,8 @@ func Load() *Config {
 	loadFromFile(cfg)
 
 	cfg.DatabaseURL = stringFromEnv("DATABASE_URL", cfg.DatabaseURL)
+	cfg.DBMaxOpenConns = positiveIntFromEnv("DB_MAX_OPEN_CONNS", cfg.DBMaxOpenConns)
+	cfg.DBMaxIdleConns = positiveIntFromEnv("DB_MAX_IDLE_CONNS", cfg.DBMaxIdleConns)
 	cfg.JWTSecret = stringFromEnv("JWT_SECRET", cfg.JWTSecret)
 	cfg.OAuthStateSecret = stringFromEnv("OAUTH_STATE_SECRET", cfg.JWTSecret)
 	cfg.JWTExpiryH = intFromEnv("JWT_EXPIRY_HOURS", cfg.JWTExpiryH)
@@ -183,6 +195,8 @@ func Load() *Config {
 func defaultConfig() *Config {
 	return &Config{
 		DatabaseURL:                "postgres://pupitre:pupitre@localhost:5432/pupitre",
+		DBMaxOpenConns:             defaultDBMaxOpenConns,
+		DBMaxIdleConns:             defaultDBMaxIdleConns,
 		JWTSecret:                  defaultJWTSecret,
 		InternalSecret:             defaultInternalSecret,
 		JWTExpiryH:                 defaultJWTExpiryHours,
@@ -245,6 +259,17 @@ func intFromEnv(key string, current int) int {
 
 	n, err := strconv.Atoi(v)
 	if err != nil {
+		return current
+	}
+
+	return n
+}
+
+// positiveIntFromEnv behaves like intFromEnv but also falls back to current
+// when the parsed value is not strictly positive.
+func positiveIntFromEnv(key string, current int) int {
+	n := intFromEnv(key, current)
+	if n <= 0 {
 		return current
 	}
 

@@ -6,8 +6,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // mockStudentPassword is the cleartext password used for all mock students.
@@ -128,7 +129,7 @@ var mockEnrollments = map[string][]string{
 // SeedMockData inserts mock student users and their enrollments.
 // It is idempotent: existing rows are skipped via ON CONFLICT DO NOTHING.
 // Activate with SEED_MOCK_DATA=true at startup.
-func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
+func SeedMockData(ctx context.Context, users repository.UserRepository, enrollments repository.EnrollmentRepository) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(mockStudentPassword), bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash mock student password: %w", err)
@@ -137,15 +138,7 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 	passwordHash := string(hash)
 
 	for _, student := range mockUsers {
-		var userID string
-
-		err := pool.QueryRow(ctx, `
-			INSERT INTO users (username, email, password_hash, role)
-			VALUES ($1, $2, $3, 'student')
-			ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username
-			RETURNING id`,
-			student.username, student.email, passwordHash,
-		).Scan(&userID)
+		userID, err := users.UpsertMockStudent(ctx, student.username, student.email, passwordHash)
 		if err != nil {
 			zap.L().Error("mock seed: failed to upsert user", zap.String("username", student.username), zap.Error(err))
 
@@ -153,12 +146,7 @@ func SeedMockData(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 
 		for _, slug := range mockEnrollments[student.username] {
-			_, err := pool.Exec(ctx, `
-				INSERT INTO enrollments (userId, courseSlug)
-				VALUES ($1, $2)
-				ON CONFLICT DO NOTHING`,
-				userID, slug,
-			)
+			err := enrollments.Create(ctx, userID.String(), slug)
 			if err != nil {
 				zap.L().Error("mock seed: failed to enroll user", zap.String("username", student.username), zap.String("course", slug), zap.Error(err))
 			}

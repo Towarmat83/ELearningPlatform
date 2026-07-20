@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/user-service/internal/metrics"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // myCoursesRespKeyCourses is the JSON response field holding the course list.
@@ -29,9 +30,7 @@ func (s *State) Enroll(writer http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
 
-	_, err := s.Pool.Exec(r.Context(),
-		`INSERT INTO enrollments (userId, courseSlug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
-		claims.Subject, slug)
+	err := s.Repos.Enrollments.Create(r.Context(), claims.Subject, slug)
 	if err != nil {
 		zap.L().Error("enroll failed", zap.String("userId", claims.Subject), zap.String("courseSlug", slug), zap.Error(err))
 
@@ -60,9 +59,7 @@ func (s *State) Unenroll(writer http.ResponseWriter, r *http.Request) {
 	slug := param(r, "slug")
 	claims := s.claims(r)
 
-	_, err := s.Pool.Exec(r.Context(),
-		`DELETE FROM enrollments WHERE userId = $1::uuid AND courseSlug = $2`,
-		claims.Subject, slug)
+	err := s.Repos.Enrollments.Delete(r.Context(), claims.Subject, slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -155,51 +152,11 @@ func (s *State) MyCourses(writer http.ResponseWriter, req *http.Request) {
 	s.JSON(writer, http.StatusOK, map[string]any{myCoursesRespKeyCourses: courses})
 }
 
-// enrollmentRow is a single enrollment joined with its progress aggregates.
-type enrollmentRow struct {
-	Slug          string
-	CompletedLabs int64
-	TotalScore    int64
-	LastActivity  *string
-}
-
 // queryMyEnrollments loads the user's enrollments with progress aggregates.
-func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]enrollmentRow, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT e.courseSlug,
-		       COUNT(DISTINCT lp.lessonSlug) + COALESCE(mp.passedModules, 0) AS completedLabs,
-		       COALESCE(mp.totalScore, 0) AS totalScore,
-		       GREATEST(MAX(lp.viewed_at), mp.lastActivity)::text AS lastActivity
-		FROM enrollments e
-		LEFT JOIN lesson_progress lp ON lp.userId = e.userId AND lp.courseSlug = e.courseSlug
-		LEFT JOIN (
-			SELECT courseSlug,
-			       SUM(bestScore)                         AS totalScore,
-			       COUNT(*) FILTER (WHERE passed)          AS passedModules,
-			       MAX(updatedAt)                         AS lastActivity
-			FROM module_progress
-			WHERE userId = $1::uuid
-			GROUP BY courseSlug
-		) mp ON mp.courseSlug = e.courseSlug
-		WHERE e.userId = $1::uuid
-		GROUP BY e.courseSlug, mp.totalScore, mp.passedModules, mp.lastActivity, e.enrolledAt
-		ORDER BY e.enrolledAt DESC`, userID)
+func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]repository.EnrollmentRow, error) {
+	enrolled, err := s.Repos.Enrollments.MyEnrollments(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("querying enrollments: %w", err)
-	}
-	defer rows.Close()
-
-	var enrolled []enrollmentRow
-
-	for rows.Next() {
-		var enrollment enrollmentRow
-
-		err := rows.Scan(&enrollment.Slug, &enrollment.CompletedLabs, &enrollment.TotalScore, &enrollment.LastActivity)
-		if err != nil {
-			continue
-		}
-
-		enrolled = append(enrolled, enrollment)
 	}
 
 	return enrolled, nil
@@ -207,7 +164,7 @@ func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]enroll
 
 // buildMyCourses enriches each enrollment with course-service metadata, falling
 // back to the bare slug when course-service is unreachable.
-func (s *State) buildMyCourses(ctx context.Context, enrolled []enrollmentRow) []myCourse {
+func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.EnrollmentRow) []myCourse {
 	courses := make([]myCourse, 0, len(enrolled))
 
 	for _, row := range enrolled {

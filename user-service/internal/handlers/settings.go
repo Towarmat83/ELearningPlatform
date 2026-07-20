@@ -1,26 +1,38 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"sync"
 
-	"github.com/genesary/pupitre/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // Platform setting keys read from more than one file; pulled out to satisfy
 // goconst.
 const (
-	settingKeyRegistrationEnabled      = "registration_enabled"
-	settingKeySSOLocalLoginEnabled     = "sso_local_login_enabled"
-	settingKeyPasswordMinLength        = "password_min_length"
-	settingKeyPasswordRequireUppercase = "password_require_uppercase"
-	settingKeyPasswordRequireNumber    = "password_require_number"
-	settingKeyOIDCEnabled              = "oidc_enabled"
-	settingKeyLDAPEnabled              = "ldap_enabled"
-	settingKeyOIDCClientSecret         = "oidc_client_secret"
-	settingKeyLDAPBindPassword         = "ldap_bind_password"
-	settingRedactedValue               = "********"
+	settingKeyRegistrationEnabled        = "registration_enabled"
+	settingKeySSOLocalLoginEnabled       = "sso_local_login_enabled"
+	settingKeyPasswordMinLength          = "password_min_length"
+	settingKeyPasswordRequireUppercase   = "password_require_uppercase"
+	settingKeyPasswordRequireNumber      = "password_require_number"
+	settingKeyOIDCEnabled                = "oidc_enabled"
+	settingKeyLDAPEnabled                = "ldap_enabled"
+	settingKeyOIDCClientSecret           = "oidc_client_secret"
+	settingKeyLDAPBindPassword           = "ldap_bind_password"
+	settingRedactedValue                 = "********"
+	settingKeyRegistrationEmailWhitelist = "registration_email_whitelist"
+	settingKeyProfileAllowUsernameChange = "profile_allow_username_change"
+	settingKeyOIDCProviderURL            = "oidc_provider_url"
+	settingKeyOIDCIssuerURL              = "oidc_issuer_url"
+	settingKeyOIDCRedirectBase           = "oidc_redirect_base"
+	settingKeyOIDCBrowserBaseURL         = "oidc_browser_base_url"
+	settingKeyOIDCClientID               = "oidc_client_id"
+	settingKeyOIDCScopes                 = "oidc_scopes"
+	settingKeyOIDCGroupClaim             = "oidc_group_claim"
+	settingKeyLDAPServerURL              = "ldap_server_url"
+	settingKeyLDAPBindDN                 = "ldap_bind_dn"
+	settingKeyLDAPUserBaseDN             = "ldap_user_base_dn"
+	settingKeyLDAPUserFilter             = "ldap_user_filter"
 )
 
 // keySet is a concurrency-safe string set. A RWMutex guards the underlying
@@ -43,32 +55,32 @@ func (s *keySet) contains(key string) bool {
 // allowedSettingKeys is the set of platform setting keys clients may write.
 var allowedSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide allow-list for writable settings, guarded by keySet.mu
 	keys: map[string]struct{}{
-		"gitlab_url":                       {},
-		settingKeyRegistrationEnabled:      {},
-		"registration_email_whitelist":     {},
-		settingKeyPasswordMinLength:        {},
-		settingKeyPasswordRequireUppercase: {},
-		settingKeyPasswordRequireNumber:    {},
-		"profile_allow_username_change":    {},
-		settingKeySSOLocalLoginEnabled:     {},
+		"gitlab_url":                         {},
+		settingKeyRegistrationEnabled:        {},
+		settingKeyRegistrationEmailWhitelist: {},
+		settingKeyPasswordMinLength:          {},
+		settingKeyPasswordRequireUppercase:   {},
+		settingKeyPasswordRequireNumber:      {},
+		settingKeyProfileAllowUsernameChange: {},
+		settingKeySSOLocalLoginEnabled:       {},
 		// OIDC — oidc_insecure_skip_verify is intentionally absent: it must not be
 		// toggled at runtime via the API (deploy-time env var only).
-		settingKeyOIDCEnabled:      {},
-		"oidc_provider_url":        {},
-		"oidc_issuer_url":          {},
-		"oidc_redirect_base":       {},
-		"oidc_browser_base_url":    {},
-		"oidc_client_id":           {},
-		settingKeyOIDCClientSecret: {},
-		"oidc_scopes":              {},
-		"oidc_group_claim":         {},
+		settingKeyOIDCEnabled:        {},
+		settingKeyOIDCProviderURL:    {},
+		settingKeyOIDCIssuerURL:      {},
+		settingKeyOIDCRedirectBase:   {},
+		settingKeyOIDCBrowserBaseURL: {},
+		settingKeyOIDCClientID:       {},
+		settingKeyOIDCClientSecret:   {},
+		settingKeyOIDCScopes:         {},
+		settingKeyOIDCGroupClaim:     {},
 		// LDAP
 		settingKeyLDAPEnabled:      {},
-		"ldap_server_url":          {},
-		"ldap_bind_dn":             {},
+		settingKeyLDAPServerURL:    {},
+		settingKeyLDAPBindDN:       {},
 		settingKeyLDAPBindPassword: {},
-		"ldap_user_base_dn":        {},
-		"ldap_user_filter":         {},
+		settingKeyLDAPUserBaseDN:   {},
+		settingKeyLDAPUserFilter:   {},
 		"ldap_group_base_dn":       {},
 		"ldap_group_filter":        {},
 	},
@@ -81,19 +93,6 @@ var secretSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide redac
 		settingKeyOIDCClientSecret: {},
 		settingKeyLDAPBindPassword: {},
 	},
-}
-
-// ReadSetting reads a platform setting value by key, returning fallback when
-// the key is unset or the query fails.
-func ReadSetting(ctx context.Context, pool db.Pool, key, fallback string) string {
-	var val string
-
-	err := pool.QueryRow(ctx, "SELECT value FROM platform_settings WHERE key = $1", key).Scan(&val)
-	if err != nil {
-		return fallback
-	}
-
-	return val
 }
 
 // PublicSettings godoc
@@ -111,7 +110,7 @@ func (s *State) PublicSettings(writer http.ResponseWriter, request *http.Request
 
 	out := make(map[string]string, len(keys))
 	for _, key := range keys {
-		out[key] = ReadSetting(request.Context(), s.Pool, key, "")
+		out[key] = repository.ReadSetting(request.Context(), s.Repos.Settings, key, "")
 	}
 
 	s.JSON(writer, http.StatusOK, out)
@@ -125,14 +124,12 @@ func (s *State) PublicSettings(writer http.ResponseWriter, request *http.Request
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/settings [get].
 func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
-	rows, err := s.Pool.Query(request.Context(),
-		"SELECT key, value, description FROM platform_settings ORDER BY key")
+	rows, err := s.Repos.Settings.List(request.Context())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type setting struct {
 		Key         string  `json:"key"`
@@ -140,17 +137,10 @@ func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
 		Description *string `json:"description"`
 	}
 
-	var settings []setting
+	settings := make([]setting, 0, len(rows))
 
-	for rows.Next() {
-		var current setting
-
-		err := rows.Scan(&current.Key, &current.Value, &current.Description)
-		if err != nil {
-			s.Error(writer, http.StatusInternalServerError, "Scan error")
-
-			return
-		}
+	for _, row := range rows {
+		current := setting{Key: row.Key, Value: row.Value, Description: row.Description}
 
 		if secretSettingKeys.contains(current.Key) && current.Value != "" {
 			current.Value = settingRedactedValue
@@ -202,11 +192,7 @@ func (s *State) UpdateSettings(writer http.ResponseWriter, request *http.Request
 			return
 		}
 
-		_, err := s.Pool.Exec(request.Context(),
-			`INSERT INTO platform_settings (key, value, updatedAt)
-			 VALUES ($1, $2, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = $2, updatedAt = NOW()`,
-			key, val)
+		err := s.Repos.Settings.Upsert(request.Context(), key, val)
 		if err != nil {
 			s.Error(writer, http.StatusInternalServerError, "Database error")
 

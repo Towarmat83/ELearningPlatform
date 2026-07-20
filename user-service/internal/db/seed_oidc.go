@@ -6,9 +6,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 const (
@@ -34,14 +33,14 @@ const (
 // The client secret originates from a mounted Kubernetes Secret (file) or env
 // var; it is never hardcoded in the chart values. Rotating it requires a pod
 // restart so the new value is re-seeded.
-func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
+func SeedOIDC(ctx context.Context, settings repository.SettingRepository, cfg *config.Config) error {
 	oidcCfg := cfg.OIDC
 	if !oidcCfg.Enabled {
 		return nil
 	}
 
 	// key/value pairs to seed; empty values are skipped below.
-	settings := map[string]string{
+	bootstrapValues := map[string]string{
 		"oidc_enabled":             settingValueTrue,
 		"oidc_provider_url":        oidcCfg.ProviderURL,
 		"oidc_issuer_url":          oidcCfg.IssuerURL,
@@ -53,20 +52,16 @@ func SeedOIDC(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error
 		"oidc_browser_base_url":    oidcCfg.BrowserBaseURL,
 	}
 	if oidcCfg.InsecureSkipVerify {
-		settings["oidc_insecure_skip_verify"] = settingValueTrue
+		bootstrapValues["oidc_insecure_skip_verify"] = settingValueTrue
 	}
 
-	seeded := make([]string, 0, len(settings))
-	for key, val := range settings {
+	seeded := make([]string, 0, len(bootstrapValues))
+	for key, val := range bootstrapValues {
 		if val == "" {
 			continue
 		}
 
-		_, err := pool.Exec(ctx,
-			`INSERT INTO platform_settings (key, value, updatedAt)
-			 VALUES ($1, $2, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = $2, updatedAt = NOW()`,
-			key, val)
+		err := settings.Upsert(ctx, key, val)
 		if err != nil {
 			return fmt.Errorf("seed OIDC setting %s: %w", key, err)
 		}

@@ -10,17 +10,17 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/genesary/pupitre/user-service/internal/config"
-	"github.com/genesary/pupitre/user-service/internal/db"
 	"github.com/genesary/pupitre/user-service/internal/middleware"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
 const maxRequestBodyBytes = 1 << 20
 
 // State holds the shared dependencies used by every HTTP handler in
-// this package, such as the database pool and application config.
+// this package: the GORM-backed repositories and application config.
 type State struct {
-	Pool   db.Pool
+	Repos  *repository.Repositories
 	Config *config.Config
 }
 

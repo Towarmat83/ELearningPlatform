@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/models"
 )
 
 // checkSpec is the structure of check.yaml in the course git repo.
@@ -178,7 +179,7 @@ func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body 
 func (s *State) storeLabCheck(
 	ctx context.Context, username, courseSlug string, moduleIndex int, moduleName string, result CheckResponse, verified bool,
 ) {
-	if s.DB == nil {
+	if s.LabChecks == nil {
 		return
 	}
 
@@ -187,11 +188,15 @@ func (s *State) storeLabCheck(
 		violations = []string{}
 	}
 
-	_, err := s.DB.Exec(ctx,
-		`INSERT INTO lab_checks (username, courseSlug, moduleIndex, moduleName, allow, violations, verified)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		username, courseSlug, moduleIndex, moduleName, result.Allow, violations, verified,
-	)
+	err := s.LabChecks.Create(ctx, &models.LabCheck{
+		Username:    username,
+		CourseSlug:  courseSlug,
+		ModuleIndex: moduleIndex,
+		ModuleName:  moduleName,
+		Allow:       result.Allow,
+		Violations:  violations,
+		Verified:    verified,
+	})
 	if err != nil {
 		zap.L().Warn("failed to store lab check", zap.Error(err))
 	}

@@ -12,7 +12,8 @@ import (
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
-	"github.com/genesary/pupitre/user-service/internal/db"
+	"github.com/genesary/pupitre/user-service/internal/models"
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // MarkdownPattern is a reusable markdown rendering rule (global or
@@ -33,6 +34,34 @@ type MarkdownPattern struct {
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt is when the pattern was last modified.
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// patternDTO converts a repository-owned model into the wire-format DTO.
+func patternDTO(pattern models.MarkdownPattern) MarkdownPattern {
+	var createdBy *string
+
+	if pattern.CreatedBy != nil {
+		s := pattern.CreatedBy.String()
+		createdBy = &s
+	}
+
+	return MarkdownPattern{
+		ID: pattern.ID.String(), Name: pattern.Name, Label: pattern.Label,
+		Description: pattern.Description, Parameter: pattern.Parameter,
+		HTML: pattern.HTML, CSS: pattern.CSS, JS: pattern.JS, Scope: pattern.Scope,
+		FromConfig: pattern.FromConfig, CreatedBy: createdBy,
+		CreatedAt: pattern.CreatedAt, UpdatedAt: pattern.UpdatedAt,
+	}
+}
+
+// patternDTOs converts every repository-owned model into its wire-format DTO.
+func patternDTOs(patterns []models.MarkdownPattern) []MarkdownPattern {
+	out := make([]MarkdownPattern, len(patterns))
+	for i, pattern := range patterns {
+		out[i] = patternDTO(pattern)
+	}
+
+	return out
 }
 
 // patternConfigFile is the on-disk YAML shape used to seed markdown patterns
@@ -60,7 +89,7 @@ const patternsRespKeyPatterns = "patterns"
 // LoadPatternsFromConfig reads patterns from the YAML file at path (a
 // trusted, operator-supplied startup configuration path, not user input)
 // and upserts them into the database.
-func LoadPatternsFromConfig(ctx context.Context, pool db.Pool, path string) error {
+func LoadPatternsFromConfig(ctx context.Context, patterns repository.PatternRepository, path string) error {
 	data, err := os.ReadFile(path) //nolint:gosec // path is operator-supplied startup config, not user input
 	if err != nil {
 		return fmt.Errorf("reading pattern config file %q: %w", path, err)
@@ -79,19 +108,7 @@ func LoadPatternsFromConfig(ctx context.Context, pool db.Pool, path string) erro
 			scope = patternsGlobalScope
 		}
 
-		_, err := pool.Exec(ctx, `
-			INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, from_config)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
-			ON CONFLICT (name, scope) DO UPDATE
-			  SET label       = EXCLUDED.label,
-			      description = EXCLUDED.description,
-			      parameter   = EXCLUDED.parameter,
-			      html        = EXCLUDED.html,
-			      css         = EXCLUDED.css,
-			      js          = EXCLUDED.js,
-			      from_config = TRUE,
-			      updatedAt  = NOW()`,
-			entry.Name, entry.Label, entry.Description, entry.Parameter, entry.HTML, entry.CSS, entry.JS, scope)
+		err := patterns.UpsertFromConfig(ctx, entry.Name, entry.Label, entry.Description, entry.Parameter, entry.HTML, entry.CSS, entry.JS, scope)
 		if err != nil {
 			return fmt.Errorf("upserting pattern %q: %w", entry.Name, err)
 		}
@@ -102,32 +119,6 @@ func LoadPatternsFromConfig(ctx context.Context, pool db.Pool, path string) erro
 	return nil
 }
 
-// scanPattern scans a single row (from Query or QueryRow) into a
-// MarkdownPattern using the column order of patternSelect / patternReturning.
-func scanPattern(rows interface {
-	Scan(dest ...any) error
-}) (MarkdownPattern, error) {
-	var pattern MarkdownPattern
-
-	err := rows.Scan(
-		&pattern.ID, &pattern.Name, &pattern.Label, &pattern.Description, &pattern.Parameter,
-		&pattern.HTML, &pattern.CSS, &pattern.JS, &pattern.Scope,
-		&pattern.FromConfig, &pattern.CreatedBy, &pattern.CreatedAt, &pattern.UpdatedAt,
-	)
-	if err != nil {
-		return pattern, fmt.Errorf("scanning pattern row: %w", err)
-	}
-
-	return pattern, nil
-}
-
-// patternSelect is the base SELECT statement matching scanPattern's column
-// order; callers append a WHERE/ORDER BY clause.
-const patternSelect = `
-	SELECT id::text, name, label, description, parameter, html, css, js, scope,
-	       from_config, createdBy::text, createdAt, updatedAt
-	FROM markdown_patterns`
-
 // ListPatterns godoc
 // @Summary   List global markdown patterns
 // @Tags      Patterns
@@ -136,33 +127,14 @@ const patternSelect = `
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/patterns [get].
 func (s *State) ListPatterns(writer http.ResponseWriter, req *http.Request) {
-	rows, err := s.Pool.Query(req.Context(),
-		patternSelect+` WHERE scope = 'global' ORDER BY name`)
+	patterns, err := s.Repos.Patterns.ListGlobal(req.Context())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
-	var patterns []MarkdownPattern
-
-	for rows.Next() {
-		pattern, err := scanPattern(rows)
-		if err != nil {
-			s.Error(writer, http.StatusInternalServerError, "Scan error")
-
-			return
-		}
-
-		patterns = append(patterns, pattern)
-	}
-
-	if patterns == nil {
-		patterns = []MarkdownPattern{}
-	}
-
-	s.JSON(writer, http.StatusOK, map[string]any{patternsRespKeyPatterns: patterns})
+	s.JSON(writer, http.StatusOK, map[string]any{patternsRespKeyPatterns: patternDTOs(patterns)})
 }
 
 // GetPattern godoc
@@ -176,23 +148,21 @@ func (s *State) ListPatterns(writer http.ResponseWriter, req *http.Request) {
 func (s *State) GetPattern(writer http.ResponseWriter, req *http.Request) {
 	patternID := param(req, "id")
 
-	_, err := uuid.Parse(patternID)
+	patternUUID, err := uuid.Parse(patternID)
 	if err != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid pattern ID")
 
 		return
 	}
 
-	row := s.Pool.QueryRow(req.Context(), patternSelect+` WHERE id = $1`, patternID)
-
-	pattern, err := scanPattern(row)
+	pattern, err := s.Repos.Patterns.Get(req.Context(), patternUUID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "Pattern not found")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, pattern)
+	s.JSON(writer, http.StatusOK, patternDTO(*pattern))
 }
 
 // CreatePattern godoc
@@ -233,21 +203,16 @@ func (s *State) CreatePattern(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	claims := s.claims(req)
-	row := s.Pool.QueryRow(req.Context(), `
-		INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, createdBy)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING `+patternReturning,
-		body.Name, body.Label, body.Description, body.Parameter, body.HTML, body.CSS, body.JS,
-		body.Scope, claims.Subject)
 
-	pattern, err := scanPattern(row)
+	pattern, err := s.Repos.Patterns.Create(req.Context(), body.Name, body.Label, body.Description, body.Parameter,
+		body.HTML, body.CSS, body.JS, body.Scope, claims.Subject)
 	if err != nil {
 		s.Error(writer, http.StatusConflict, "Pattern with this name already exists in this scope")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusCreated, pattern)
+	s.JSON(writer, http.StatusCreated, patternDTO(*pattern))
 }
 
 // UpdatePattern godoc
@@ -299,22 +264,15 @@ func (s *State) UpdatePattern(writer http.ResponseWriter, req *http.Request) {
 		body.Scope = patternsGlobalScope
 	}
 
-	row := s.Pool.QueryRow(req.Context(), `
-		UPDATE markdown_patterns
-		SET name = $2, label = $3, description = $4, parameter = $5, html = $6, css = $7, js = $8,
-		    scope = $9, from_config = FALSE, updatedAt = NOW()
-		WHERE name = $1
-		RETURNING `+patternReturning,
-		name, body.Name, body.Label, body.Description, body.Parameter, body.HTML, body.CSS, body.JS, body.Scope)
-
-	pattern, err := scanPattern(row)
+	pattern, err := s.Repos.Patterns.UpdateByName(req.Context(), name, body.Name, body.Label, body.Description,
+		body.Parameter, body.HTML, body.CSS, body.JS, body.Scope)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "Pattern not found")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, pattern)
+	s.JSON(writer, http.StatusOK, patternDTO(*pattern))
 }
 
 // DeletePattern godoc
@@ -332,9 +290,8 @@ func (s *State) DeletePattern(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tag, err := s.Pool.Exec(req.Context(),
-		`DELETE FROM markdown_patterns WHERE name = $1`, name)
-	if err != nil || tag.RowsAffected() == 0 {
+	found, err := s.Repos.Patterns.DeleteByName(req.Context(), name)
+	if err != nil || !found {
 		s.Error(writer, http.StatusNotFound, "Pattern not found")
 
 		return
@@ -354,33 +311,14 @@ func (s *State) DeletePattern(writer http.ResponseWriter, req *http.Request) {
 func (s *State) ListCoursePatterns(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 
-	rows, err := s.Pool.Query(req.Context(),
-		patternSelect+` WHERE scope = 'global' OR scope = $1 ORDER BY scope, name`, slug)
+	patterns, err := s.Repos.Patterns.ListForCourse(req.Context(), slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
-	var patterns []MarkdownPattern
-
-	for rows.Next() {
-		pattern, err := scanPattern(rows)
-		if err != nil {
-			s.Error(writer, http.StatusInternalServerError, "Scan error")
-
-			return
-		}
-
-		patterns = append(patterns, pattern)
-	}
-
-	if patterns == nil {
-		patterns = []MarkdownPattern{}
-	}
-
-	s.JSON(writer, http.StatusOK, map[string]any{patternsRespKeyPatterns: patterns})
+	s.JSON(writer, http.StatusOK, map[string]any{patternsRespKeyPatterns: patternDTOs(patterns)})
 }
 
 // CreateCoursePattern godoc
@@ -419,21 +357,16 @@ func (s *State) CreateCoursePattern(writer http.ResponseWriter, req *http.Reques
 	}
 
 	claims := s.claims(req)
-	row := s.Pool.QueryRow(req.Context(), `
-		INSERT INTO markdown_patterns (name, label, description, parameter, html, css, js, scope, createdBy)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING `+patternReturning,
-		body.Name, body.Label, body.Description, body.Parameter, body.HTML, body.CSS, body.JS,
-		slug, claims.Subject)
 
-	pattern, err := scanPattern(row)
+	pattern, err := s.Repos.Patterns.Create(req.Context(), body.Name, body.Label, body.Description, body.Parameter,
+		body.HTML, body.CSS, body.JS, slug, claims.Subject)
 	if err != nil {
 		s.Error(writer, http.StatusConflict, "Pattern name already exists in scope")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusCreated, pattern)
+	s.JSON(writer, http.StatusCreated, patternDTO(*pattern))
 }
 
 // DeleteCoursePattern godoc
@@ -449,16 +382,15 @@ func (s *State) DeleteCoursePattern(writer http.ResponseWriter, req *http.Reques
 
 	patternID := param(req, "id")
 
-	_, err := uuid.Parse(patternID)
+	patternUUID, err := uuid.Parse(patternID)
 	if err != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid pattern ID")
 
 		return
 	}
 
-	tag, err := s.Pool.Exec(req.Context(),
-		`DELETE FROM markdown_patterns WHERE id = $1 AND scope = $2`, patternID, slug)
-	if err != nil || tag.RowsAffected() == 0 {
+	found, err := s.Repos.Patterns.DeleteByIDAndScope(req.Context(), patternUUID, slug)
+	if err != nil || !found {
 		s.Error(writer, http.StatusNotFound, "Pattern not found")
 
 		return
@@ -466,7 +398,3 @@ func (s *State) DeleteCoursePattern(writer http.ResponseWriter, req *http.Reques
 
 	writer.WriteHeader(http.StatusNoContent)
 }
-
-// patternReturning lists scanPattern's columns (no SELECT prefix).
-const patternReturning = `id::text, name, label, description, parameter, html, css, js, scope,
-	from_config, createdBy::text, createdAt, updatedAt`

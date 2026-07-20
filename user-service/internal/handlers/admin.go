@@ -2,10 +2,12 @@
 package handlers
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // Repeated literals used across the admin handlers, pulled out to satisfy
@@ -28,11 +30,9 @@ const (
 func (s *State) AdminStats(writer http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 
-	var totalUsers, totalEnrollments, totalCourses int64
-
-	_ = s.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE role = 'student'").Scan(&totalUsers)
-	_ = s.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM enrollments").Scan(&totalEnrollments)
-	_ = s.Pool.QueryRow(ctx, "SELECT COUNT(DISTINCT courseSlug) FROM enrollments").Scan(&totalCourses)
+	totalUsers, _ := s.Repos.Users.CountByRole(ctx, groupsRoleStudent)
+	totalEnrollments, _ := s.Repos.Enrollments.CountAll(ctx)
+	totalCourses, _ := s.Repos.Enrollments.CountDistinctCourses(ctx)
 
 	s.JSON(writer, http.StatusOK, map[string]any{
 		"total_users":       totalUsers,
@@ -52,30 +52,21 @@ func (s *State) AdminStats(writer http.ResponseWriter, request *http.Request) {
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/users/providers [get].
 func (s *State) ListAuthProviders(writer http.ResponseWriter, request *http.Request) {
-	rows, err := s.Pool.Query(request.Context(),
-		`SELECT authProvider, COUNT(*)::bigint
-		 FROM users
-		 GROUP BY authProvider
-		 ORDER BY authProvider`)
+	counts, err := s.Repos.Users.ListAuthProviders(request.Context())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type providerCount struct {
 		Provider string `json:"provider"`
 		Count    int64  `json:"count"`
 	}
 
-	list := make([]providerCount, 0)
-
-	for rows.Next() {
-		var p providerCount
-		if rows.Scan(&p.Provider, &p.Count) == nil {
-			list = append(list, p)
-		}
+	list := make([]providerCount, 0, len(counts))
+	for _, c := range counts {
+		list = append(list, providerCount{Provider: c.Provider, Count: c.Count})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyProviders: list})
@@ -100,6 +91,15 @@ type userAdminRow struct {
 	EnrolledCourses int64 `json:"enrolledCourses"`
 }
 
+// userAdminRowFromRepo converts a repository row into its DTO representation.
+func userAdminRowFromRepo(r repository.AdminUserRow) userAdminRow {
+	return userAdminRow{
+		ID: r.ID, Username: r.Username, Email: r.Email, Role: r.Role, IsActive: r.IsActive,
+		AvatarURL: r.AvatarURL, Bio: r.Bio, AuthProvider: r.AuthProvider, CreatedAt: r.CreatedAt,
+		EnrolledCourses: r.EnrolledCourses,
+	}
+}
+
 // ListUsers godoc
 // @Summary   List all users (admin)
 // @Tags      Admin - Users
@@ -111,57 +111,19 @@ type userAdminRow struct {
 func (s *State) ListUsers(writer http.ResponseWriter, request *http.Request) {
 	provider := request.URL.Query().Get("provider")
 
-	users, err := s.queryAdminUsers(request.Context(), provider)
+	rows, err := s.Repos.Users.ListForAdmin(request.Context(), provider)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
 
+	users := make([]userAdminRow, 0, len(rows))
+	for _, r := range rows {
+		users = append(users, userAdminRowFromRepo(r))
+	}
+
 	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyUsers: users, "total": len(users)})
-}
-
-// queryAdminUsers runs the admin user listing query, optionally filtered by
-// auth provider, and scans the results into userAdminRow values.
-func (s *State) queryAdminUsers(ctx context.Context, provider string) ([]userAdminRow, error) {
-	query := `
-		SELECT u.id::text, u.username, u.email, u.role, u.isActive, u.avatarUrl, u.bio,
-		       u.authProvider, u.createdAt::text,
-		       COUNT(DISTINCT e.courseSlug)::bigint AS enrolledCourses
-		FROM users u
-		LEFT JOIN enrollments e ON e.userId = u.id`
-
-	var args []any
-
-	if provider != "" {
-		query += ` WHERE u.authProvider = $1`
-
-		args = append(args, provider)
-	}
-
-	query += ` GROUP BY u.id ORDER BY u.createdAt DESC`
-
-	rows, err := s.Pool.Query(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("querying admin users: %w", err)
-	}
-	defer rows.Close()
-
-	users := make([]userAdminRow, 0)
-
-	for rows.Next() {
-		var user userAdminRow
-
-		err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.IsActive,
-			&user.AvatarURL, &user.Bio, &user.AuthProvider, &user.CreatedAt, &user.EnrolledCourses)
-		if err != nil {
-			return nil, fmt.Errorf("scanning admin user row: %w", err)
-		}
-
-		users = append(users, user)
-	}
-
-	return users, nil
 }
 
 // GetUser godoc
@@ -195,27 +157,25 @@ func (s *State) GetUser(writer http.ResponseWriter, request *http.Request) {
 		ViewedLessons   int64 `json:"viewedLessons"`
 	}
 
-	var user userDetailRow
-
-	err := s.Pool.QueryRow(request.Context(), `
-		SELECT u.id::text, u.username, u.email, u.role, u.isActive, u.avatarUrl, u.bio,
-		       u.authProvider, u.createdAt::text,
-		       COUNT(DISTINCT e.courseSlug)::bigint,
-		       COUNT(DISTINCT lp.lessonSlug)::bigint
-		FROM users u
-		LEFT JOIN enrollments e ON e.userId = u.id
-		LEFT JOIN lesson_progress lp ON lp.userId = u.id
-		WHERE u.id = $1::uuid
-		GROUP BY u.id`, userID).
-		Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.IsActive, &user.AvatarURL, &user.Bio,
-			&user.AuthProvider, &user.CreatedAt, &user.EnrolledCourses, &user.ViewedLessons)
+	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, user)
+	row, err := s.Repos.Users.GetForAdmin(request.Context(), userUUID)
+	if err != nil {
+		s.Error(writer, http.StatusNotFound, "User not found")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, userDetailRow{
+		ID: row.ID, Username: row.Username, Email: row.Email, Role: row.Role, IsActive: row.IsActive,
+		AvatarURL: row.AvatarURL, Bio: row.Bio, AuthProvider: row.AuthProvider, CreatedAt: row.CreatedAt,
+		EnrolledCourses: row.EnrolledCourses, ViewedLessons: row.ViewedLessons,
+	})
 }
 
 // UpdateUser godoc
@@ -255,24 +215,22 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	user, err := scanUserPublic(s.Pool.QueryRow(request.Context(), `
-		UPDATE users SET
-			username   = COALESCE($1, username),
-			bio        = COALESCE($2, bio),
-			avatarUrl = COALESCE($3, avatarUrl),
-			isActive  = COALESCE($4, isActive),
-			role       = COALESCE($5, role),
-			updatedAt = NOW()
-		WHERE id = $6::uuid
-		RETURNING id::text, username, email, role, avatarUrl, bio, isActive, authProvider, createdAt::text`,
-		body.Username, body.Bio, body.AvatarURL, body.IsActive, body.Role, userID))
+	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		s.Error(writer, http.StatusNotFound, "User not found")
 
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, user)
+	user, err := s.Repos.Users.UpdateAdminFields(
+		request.Context(), userUUID, body.Username, body.Bio, body.AvatarURL, body.IsActive, body.Role)
+	if err != nil {
+		s.Error(writer, http.StatusNotFound, "User not found")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, toUserPublicRow(user))
 }
 
 // DeleteUser godoc
@@ -286,7 +244,14 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 func (s *State) DeleteUser(writer http.ResponseWriter, request *http.Request) {
 	userID := param(request, "userId")
 
-	_, err := s.Pool.Exec(request.Context(), "DELETE FROM users WHERE id = $1::uuid", userID)
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	err = s.Repos.Users.Delete(request.Context(), userUUID)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -305,18 +270,14 @@ func (s *State) DeleteUser(writer http.ResponseWriter, request *http.Request) {
 // @Success   200   {object}  map[string]interface{}
 // @Router    /api/admin/users/search [get].
 func (s *State) SearchUsers(writer http.ResponseWriter, request *http.Request) {
-	q := "%" + strings.ToLower(request.URL.Query().Get("q")) + "%"
+	q := strings.ToLower(request.URL.Query().Get("q"))
 
-	rows, err := s.Pool.Query(request.Context(), `
-		SELECT id::text, username, email FROM users
-		WHERE LOWER(username) LIKE $1 OR LOWER(email) LIKE $1
-		ORDER BY username LIMIT 10`, q)
+	rows, err := s.Repos.Users.Search(request.Context(), q)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type result struct {
 		ID       string `json:"id"`
@@ -324,13 +285,9 @@ func (s *State) SearchUsers(writer http.ResponseWriter, request *http.Request) {
 		Email    string `json:"email"`
 	}
 
-	users := make([]result, 0)
-
-	for rows.Next() {
-		var u result
-		if rows.Scan(&u.ID, &u.Username, &u.Email) == nil {
-			users = append(users, u)
-		}
+	users := make([]result, 0, len(rows))
+	for _, r := range rows {
+		users = append(users, result{ID: r.ID, Username: r.Username, Email: r.Email})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyUsers: users})
@@ -347,18 +304,12 @@ func (s *State) SearchUsers(writer http.ResponseWriter, request *http.Request) {
 func (s *State) ListCourseEnrollments(writer http.ResponseWriter, request *http.Request) {
 	slug := param(request, "slug")
 
-	rows, err := s.Pool.Query(request.Context(), `
-		SELECT u.id::text, u.username, u.email, e.enrolledAt::text
-		FROM enrollments e
-		JOIN users u ON u.id = e.userId
-		WHERE e.courseSlug = $1
-		ORDER BY e.enrolledAt DESC`, slug)
+	rows, err := s.Repos.Enrollments.ListByCourse(request.Context(), slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type enrollment struct {
 		UserID   string `json:"userId"`
@@ -368,13 +319,9 @@ func (s *State) ListCourseEnrollments(writer http.ResponseWriter, request *http.
 		EnrolledAt string `json:"enrolledAt"`
 	}
 
-	list := make([]enrollment, 0)
-
-	for rows.Next() {
-		var e enrollment
-		if rows.Scan(&e.UserID, &e.Username, &e.Email, &e.EnrolledAt) == nil {
-			list = append(list, e)
-		}
+	list := make([]enrollment, 0, len(rows))
+	for _, r := range rows {
+		list = append(list, enrollment{UserID: r.UserID, Username: r.Username, Email: r.Email, EnrolledAt: r.EnrolledAt})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{"enrollments": list})
@@ -404,9 +351,7 @@ func (s *State) AdminEnrollUser(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	_, err = s.Pool.Exec(request.Context(),
-		`INSERT INTO enrollments (userId, courseSlug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
-		body.UserID, slug)
+	err = s.Repos.Enrollments.Create(request.Context(), body.UserID, slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -429,8 +374,7 @@ func (s *State) AdminUnenrollUser(writer http.ResponseWriter, request *http.Requ
 	slug := param(request, "slug")
 	userID := param(request, "userId")
 
-	_, err := s.Pool.Exec(request.Context(),
-		`DELETE FROM enrollments WHERE courseSlug = $1 AND userId = $2::uuid`, slug, userID)
+	err := s.Repos.Enrollments.Delete(request.Context(), userID, slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -465,28 +409,7 @@ func (s *State) AdminEnrollGroup(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	ctx := request.Context()
-
-	// Register the group → course link
-	_, err = s.Pool.Exec(ctx,
-		`INSERT INTO group_enrollments (groupId, courseSlug)
-		 VALUES ($1::uuid, $2)
-		 ON CONFLICT DO NOTHING`,
-		body.GroupID, slug)
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
-
-		return
-	}
-
-	// Backfill current members
-	tag, err := s.Pool.Exec(ctx,
-		`INSERT INTO enrollments (userId, courseSlug)
-		 SELECT ug.userId, $1
-		 FROM user_groups ug
-		 WHERE ug.groupId = $2::uuid
-		 ON CONFLICT DO NOTHING`,
-		slug, body.GroupID)
+	backfilled, err := s.Repos.Groups.EnrollCourse(request.Context(), body.GroupID, slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -495,7 +418,7 @@ func (s *State) AdminEnrollGroup(writer http.ResponseWriter, request *http.Reque
 
 	s.JSON(writer, http.StatusOK, map[string]any{
 		groupsRespKeyMessage: "Group enrolled",
-		adminJSONKeyEnrolled: tag.RowsAffected(),
+		adminJSONKeyEnrolled: backfilled,
 	})
 }
 
@@ -510,20 +433,12 @@ func (s *State) AdminEnrollGroup(writer http.ResponseWriter, request *http.Reque
 func (s *State) AdminListGroupEnrollments(writer http.ResponseWriter, request *http.Request) {
 	slug := param(request, "slug")
 
-	rows, err := s.Pool.Query(request.Context(),
-		`SELECT g.id::text, g.name, g.source, COUNT(ug.userId) AS memberCount, ge.createdAt::text
-		 FROM group_enrollments ge
-		 JOIN groups g ON g.id = ge.groupId
-		 LEFT JOIN user_groups ug ON ug.groupId = ge.groupId
-		 WHERE ge.courseSlug = $1
-		 GROUP BY g.id, g.name, g.source, ge.createdAt
-		 ORDER BY g.name`, slug)
+	rows, err := s.Repos.Groups.ListCourseEnrollments(request.Context(), slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type row struct {
 		ID     string `json:"id"`
@@ -535,13 +450,9 @@ func (s *State) AdminListGroupEnrollments(writer http.ResponseWriter, request *h
 		EnrolledAt string `json:"enrolledAt"`
 	}
 
-	list := make([]row, 0)
-
-	for rows.Next() {
-		var e row
-		if rows.Scan(&e.ID, &e.Name, &e.Source, &e.MemberCount, &e.EnrolledAt) == nil {
-			list = append(list, e)
-		}
+	list := make([]row, 0, len(rows))
+	for _, r := range rows {
+		list = append(list, row{ID: r.ID, Name: r.Name, Source: r.Source, MemberCount: r.MemberCount, EnrolledAt: r.EnrolledAt})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{groupsRespKeyGroups: list})
@@ -560,9 +471,7 @@ func (s *State) AdminUnenrollGroup(writer http.ResponseWriter, request *http.Req
 	slug := param(request, "slug")
 	groupID := param(request, "groupId")
 
-	_, err := s.Pool.Exec(request.Context(),
-		`DELETE FROM group_enrollments WHERE groupId = $1::uuid AND courseSlug = $2`,
-		groupID, slug)
+	err := s.Repos.Groups.UnenrollCourse(request.Context(), groupID, slug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -604,11 +513,7 @@ func (s *State) SyncProgress(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	_, err = s.Pool.Exec(request.Context(),
-		`INSERT INTO lesson_progress (userId, courseSlug, lessonSlug)
-		 VALUES ($1::uuid, $2, $3)
-		 ON CONFLICT (userId, courseSlug, lessonSlug) DO NOTHING`,
-		body.UserID, body.CourseSlug, body.LessonSlug)
+	err = s.Repos.LessonProgress.MarkComplete(request.Context(), body.UserID, body.CourseSlug, body.LessonSlug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -626,23 +531,12 @@ func (s *State) SyncProgress(writer http.ResponseWriter, request *http.Request) 
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/leaderboard [get].
 func (s *State) AdminLeaderboard(writer http.ResponseWriter, request *http.Request) {
-	rows, err := s.Pool.Query(request.Context(), `
-		SELECT u.id::text, u.username, u.email, u.avatarUrl,
-		       COALESCE(SUM(mp.bestScore), 0)::bigint AS totalScore,
-		       COUNT(DISTINCT CASE WHEN mp.passed THEN mp.courseSlug || ':' || mp.moduleIndex::text END)::bigint AS passedModules,
-		       COUNT(DISTINCT e.courseSlug)::bigint AS enrolledCourses
-		FROM users u
-		LEFT JOIN module_progress mp ON mp.userId = u.id
-		LEFT JOIN enrollments e ON e.userId = u.id
-		WHERE u.role = 'student' AND u.isActive = TRUE
-		GROUP BY u.id, u.username, u.email, u.avatarUrl
-		ORDER BY totalScore DESC, passedModules DESC`)
+	rows, err := s.Repos.Users.Leaderboard(request.Context())
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
 	type leaderboardRow struct {
 		ID       string `json:"id"`
@@ -658,16 +552,12 @@ func (s *State) AdminLeaderboard(writer http.ResponseWriter, request *http.Reque
 		EnrolledCourses int64 `json:"enrolledCourses"`
 	}
 
-	leaderboard := make([]leaderboardRow, 0)
-
-	for rows.Next() {
-		var row leaderboardRow
-
-		err := rows.Scan(&row.ID, &row.Username, &row.Email, &row.AvatarURL,
-			&row.TotalScore, &row.PassedModules, &row.EnrolledCourses)
-		if err == nil {
-			leaderboard = append(leaderboard, row)
-		}
+	leaderboard := make([]leaderboardRow, 0, len(rows))
+	for _, r := range rows {
+		leaderboard = append(leaderboard, leaderboardRow{
+			ID: r.ID, Username: r.Username, Email: r.Email, AvatarURL: r.AvatarURL,
+			TotalScore: r.TotalScore, PassedModules: r.PassedModules, EnrolledCourses: r.EnrolledCourses,
+		})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{"leaderboard": leaderboard})

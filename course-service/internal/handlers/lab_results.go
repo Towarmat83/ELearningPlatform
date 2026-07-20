@@ -29,7 +29,7 @@ type labCheckRow struct {
 // @Failure   503  {object}  map[string]string
 // @Router    /api/admin/lab-checks [get].
 func (s *State) GetLabResults(writer http.ResponseWriter, req *http.Request) {
-	if s.DB == nil {
+	if s.LabChecks == nil {
 		s.Error(writer, http.StatusServiceUnavailable, "database not configured")
 
 		return
@@ -37,40 +37,26 @@ func (s *State) GetLabResults(writer http.ResponseWriter, req *http.Request) {
 
 	courseSlug := req.URL.Query().Get("course")
 
-	var (
-		query string
-		args  []any
-	)
-
-	if courseSlug != "" {
-		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, verified, checkedAt
-		          FROM lab_checks WHERE courseSlug = $1 ORDER BY checkedAt DESC LIMIT 500`
-		args = []any{courseSlug}
-	} else {
-		query = `SELECT id, username, courseSlug, moduleIndex, moduleName, allow, violations, verified, checkedAt
-		          FROM lab_checks ORDER BY checkedAt DESC LIMIT 500`
-	}
-
-	rows, err := s.DB.Query(req.Context(), query, args...)
+	checks, err := s.LabChecks.List(req.Context(), courseSlug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "db query failed")
 
 		return
 	}
-	defer rows.Close()
 
-	results := make([]labCheckRow, 0)
-
-	for rows.Next() {
-		var row labCheckRow
-
-		err := rows.Scan(&row.ID, &row.Username, &row.CourseSlug, &row.ModuleIndex,
-			&row.ModuleName, &row.Allow, &row.Violations, &row.Verified, &row.CheckedAt)
-		if err != nil {
-			continue
-		}
-
-		results = append(results, row)
+	results := make([]labCheckRow, 0, len(checks))
+	for _, check := range checks {
+		results = append(results, labCheckRow{
+			ID:          check.ID,
+			Username:    check.Username,
+			CourseSlug:  check.CourseSlug,
+			ModuleIndex: check.ModuleIndex,
+			ModuleName:  check.ModuleName,
+			Allow:       check.Allow,
+			Violations:  []string(check.Violations),
+			Verified:    check.Verified,
+			CheckedAt:   check.CheckedAt,
+		})
 	}
 
 	s.JSON(writer, http.StatusOK, results)

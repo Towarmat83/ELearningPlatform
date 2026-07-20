@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/httprate"
 
 	"github.com/genesary/pupitre/user-service/internal/config"
-	"github.com/genesary/pupitre/user-service/internal/db"
 	"github.com/genesary/pupitre/user-service/internal/metrics"
 	apimiddleware "github.com/genesary/pupitre/user-service/internal/middleware"
 )
@@ -32,9 +31,9 @@ const corsMaxAgeSeconds = 300
 
 // BuildRouter assembles the HTTP router, wiring public, authenticated, admin,
 // pattern, and internal routes with their respective middleware.
-func BuildRouter(state *State, cfg *config.Config, pool db.Pool, withLogger bool) *chi.Mux {
-	authMW := apimiddleware.Auth(pool, cfg.JWTSecret)
-	adminMW := apimiddleware.Admin(pool, cfg.JWTSecret)
+func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
+	authMW := apimiddleware.Auth(cfg.JWTSecret)
+	adminMW := apimiddleware.Admin(cfg.JWTSecret)
 	internalMW := apimiddleware.InternalAuth(cfg.InternalSecret)
 
 	router := chi.NewRouter()
@@ -148,7 +147,7 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 		group.Delete("/api/admin/groups/{groupId}", state.DeleteGroup)
 		group.Get("/api/admin/groups/mappings", state.ListGroupMappings)
 		group.Post("/api/admin/groups/mappings", state.UpsertGroupMapping)
-		group.Delete("/api/admin/groups/mappings/{group_name}", state.DeleteGroupMapping)
+		group.Delete("/api/admin/groups/mappings/{groupName}", state.DeleteGroupMapping)
 	})
 }
 

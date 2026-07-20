@@ -7,21 +7,14 @@ import (
 // viewedLessons returns the set of lesson slugs the user has completed in a
 // course, keyed by lesson slug with value true.
 func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[string]bool {
-	rows, err := s.Pool.Query(r.Context(),
-		`SELECT lessonSlug FROM lesson_progress WHERE userId = $1::uuid AND courseSlug = $2`,
-		userID, courseSlug)
+	slugs, err := s.Repos.LessonProgress.ViewedSlugs(r.Context(), userID, courseSlug)
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
 
 	lessonsViewed := make(map[string]bool)
-
-	for rows.Next() {
-		var slug string
-		if rows.Scan(&slug) == nil {
-			lessonsViewed[slug] = true
-		}
+	for _, slug := range slugs {
+		lessonsViewed[slug] = true
 	}
 
 	return lessonsViewed
@@ -41,11 +34,7 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, r *http.Request) 
 	lessonSlug := param(r, "lessonSlug")
 	claims := s.claims(r)
 
-	_, err := s.Pool.Exec(r.Context(), `
-		INSERT INTO lesson_progress (userId, courseSlug, lessonSlug)
-		VALUES ($1::uuid, $2, $3)
-		ON CONFLICT (userId, courseSlug, lessonSlug) DO NOTHING`,
-		claims.Subject, courseSlug, lessonSlug)
+	err := s.Repos.LessonProgress.MarkComplete(r.Context(), claims.Subject, courseSlug, lessonSlug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 

@@ -8,8 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/genesary/pupitre/user-service/fake"
 	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/models"
 )
 
 // ── buildCourseStatuses ───────────────────────────────────────────────────────
@@ -31,14 +34,14 @@ func TestBuildCourseStatuses_Sequential(t *testing.T) {
 	}
 }
 
-// TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock verifies that a course
+// TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock verifies a course
 // completed in another path does not unlock the next course when preceding
 // courses in this path are not completed.
 func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
 	t.Parallel()
 
-	// Simulates security path where "secrets-management" (index 6) was
-	// completed via DevOps path, but "git-advanced" (index 5) is not done.
+	// Simulates security path where "secrets-management" (index 6)
+	// completed via DevOps path, but "git-advanced" (index 5) not done.
 	courses := []string{"linux-intro", "networking", "cyber", "net-ess", "python", "git-advanced", "secrets-management", "container-security"}
 	completed := map[string]bool{"secrets-management": true}
 
@@ -48,9 +51,9 @@ func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
 		t.Errorf("linux-intro: want available, got %q", out[0].Status)
 	}
 
-	for i := 1; i <= 5; i++ {
+	for i := 1; i < 6; i++ {
 		if out[i].Status != pathStatusLocked {
-			t.Errorf("course[%d]: want locked, got %q", i, out[i].Status)
+			t.Errorf("%s: want locked, got %q", courses[i], out[i].Status)
 		}
 	}
 
@@ -58,16 +61,47 @@ func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
 		t.Errorf("secrets-management: want completed, got %q", out[6].Status)
 	}
 
-	// container-security must remain locked — the chain was broken before it
 	if out[7].Status != pathStatusLocked {
 		t.Errorf("container-security: want locked, got %q", out[7].Status)
 	}
 }
 
-// TestBuildCourseStatuses_CrossPathCompletionUnlocksWhenChainComplete verifies
-// that a cross-path completed course DOES unlock the next course when all
-// preceding courses in this path are also completed.
-func TestBuildCourseStatuses_CrossPathCompletionUnlocksWhenChainComplete(t *testing.T) {
+// TestBuildCourseStatuses_AllCompleted verifies all-completed courses.
+func TestBuildCourseStatuses_AllCompleted(t *testing.T) {
+	t.Parallel()
+
+	courses := []string{"a", "b", "c"}
+	completed := map[string]bool{"a": true, "b": true, "c": true}
+
+	out := buildCourseStatuses(courses, completed)
+	for i, cs := range out {
+		if cs.Status != pathStatusCompleted {
+			t.Errorf("course[%d]: want completed, got %q", i, cs.Status)
+		}
+	}
+}
+
+// TestBuildCourseStatuses_NoneCompleted verifies none-completed courses.
+func TestBuildCourseStatuses_NoneCompleted(t *testing.T) {
+	t.Parallel()
+
+	courses := []string{"a", "b", "c", "shared"}
+	completed := map[string]bool{}
+
+	out := buildCourseStatuses(courses, completed)
+
+	if out[0].Status != pathStatusAvailable {
+		t.Errorf("a: want available, got %q", out[0].Status)
+	}
+
+	if out[1].Status != pathStatusLocked {
+		t.Errorf("b: want locked, got %q", out[1].Status)
+	}
+}
+
+// TestBuildCourseStatuses_SharedCourseUnlocks verifies a shared course
+// completed via another path still unlocks the following course.
+func TestBuildCourseStatuses_SharedCourseUnlocks(t *testing.T) {
 	t.Parallel()
 
 	courses := []string{"a", "b", "shared", "c"}
@@ -86,13 +120,15 @@ func TestBuildCourseStatuses_CrossPathCompletionUnlocksWhenChainComplete(t *test
 
 // ── MyPaths ───────────────────────────────────────────────────────────────────
 
-// TestMyPaths_DBError verifies my paths DB error behavior.
+// TestMyPaths_DBError verifies paths DB error behavior.
 func TestMyPaths_DBError(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushRows(errors.New("db down"))
-	r := newTestRouter(pool)
+	paths := fake.NewPathEnrollmentRepository()
+	paths.Err = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.Paths = paths
+	r := newTestRouterWithRepos(repos)
 
 	rec := htDo(t, r, "GET", "/api/my/paths", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusInternalServerError {
@@ -100,13 +136,11 @@ func TestMyPaths_DBError(t *testing.T) {
 	}
 }
 
-// TestMyPaths_Empty verifies my paths empty behavior.
+// TestMyPaths_Empty verifies paths empty behavior.
 func TestMyPaths_Empty(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushRows(nil) // path_enrollments → empty
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "GET", "/api/my/paths", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusOK {
@@ -122,22 +156,26 @@ func TestMyPaths_Empty(t *testing.T) {
 	}
 }
 
-// TestMyPaths_CourseServiceError verifies my paths course service error
+// TestMyPaths_CourseServiceError verifies paths course service error
 // behavior.
 func TestMyPaths_CourseServiceError(t *testing.T) {
 	t.Parallel()
 
 	// Enrollment found but course-service unreachable → fallback slug-only entry
-	pool := &fake.Pool{}
-	pool.PushRows(nil, []any{"devops-path", time.Now()})
+	userID := uuid.New()
+	repos := fake.NewRepositories()
+	repos.Paths = fake.NewPathEnrollmentRepository(models.PathEnrollment{
+		UserID: userID, PathSlug: "devops-path", EnrolledAt: time.Now(),
+	})
+
 	s := &State{
-		Pool:   pool,
+		Repos:  repos,
 		Config: &config.Config{JWTSecret: htSecret, JWTExpiryH: htExpiry, CourseServiceURL: "http://127.0.0.1:0"},
 	}
-	r := BuildRouter(s, s.Config, pool, false)
+	r := BuildRouter(s, s.Config, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/my/paths", http.NoBody)
-	req.Header.Set("Authorization", htAuthHeader(t, "student"))
+	req.Header.Set("Authorization", htAuthHeaderForSubject(t, "student", userID.String()))
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -173,18 +211,23 @@ func TestMyPaths_WithCourseService(t *testing.T) {
 	}))
 	defer courseSvc.Close()
 
-	pool := &fake.Pool{}
-	pool.PushRows(nil, []any{"devops-path", time.Now()}) // path_enrollments
-	pool.PushRows(nil, []any{"lab1"})                    // completedCoursesCtx → lab1 completed
+	userID := uuid.New()
+	repos := fake.NewRepositories()
+	repos.Paths = fake.NewPathEnrollmentRepository(models.PathEnrollment{
+		UserID: userID, PathSlug: "devops-path", EnrolledAt: time.Now(),
+	})
+	repos.ModuleProgress = fake.NewModuleProgressRepository(models.ModuleProgress{
+		UserID: userID.String(), CourseSlug: "lab1", Passed: true,
+	})
 
 	s := &State{
-		Pool:   pool,
+		Repos:  repos,
 		Config: &config.Config{JWTSecret: htSecret, JWTExpiryH: htExpiry, CourseServiceURL: courseSvc.URL},
 	}
-	r := BuildRouter(s, s.Config, pool, false)
+	r := BuildRouter(s, s.Config, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/my/paths", http.NoBody)
-	req.Header.Set("Authorization", htAuthHeader(t, "student"))
+	req.Header.Set("Authorization", htAuthHeaderForSubject(t, "student", userID.String()))
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -235,8 +278,7 @@ func TestMyPaths_WithCourseService(t *testing.T) {
 func TestMyPaths_RequiresAuth(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "GET", "/api/my/paths", "", "")
 	if rec.Code != http.StatusUnauthorized {
@@ -251,9 +293,11 @@ func TestMyPaths_RequiresAuth(t *testing.T) {
 func TestAdminListPathEnrollments_DBError(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushRows(errors.New("db down"))
-	r := newTestRouter(pool)
+	paths := fake.NewPathEnrollmentRepository()
+	paths.Err = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.Paths = paths
+	r := newTestRouterWithRepos(repos)
 
 	rec := htDo(t, r, "GET", "/api/admin/paths/devops-path/enrollments", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
@@ -266,9 +310,7 @@ func TestAdminListPathEnrollments_DBError(t *testing.T) {
 func TestAdminListPathEnrollments_Empty(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushRows(nil) // no users enrolled
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "GET", "/api/admin/paths/devops-path/enrollments", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
@@ -289,9 +331,16 @@ func TestAdminListPathEnrollments_Empty(t *testing.T) {
 func TestAdminListPathEnrollments_WithUsers(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushRows(nil, []any{"user-uuid-1", "user@test.com", "student", time.Now()})
-	r := newTestRouter(pool)
+	userID := uuid.New()
+	users := fake.NewUserRepository(models.User{ID: userID, Email: "user@test.com", Role: "student"})
+	paths := fake.NewPathEnrollmentRepository(models.PathEnrollment{
+		UserID: userID, PathSlug: "devops-path", EnrolledAt: time.Now(),
+	})
+	paths.Users = users
+	repos := fake.NewRepositories()
+	repos.Users = users
+	repos.Paths = paths
+	r := newTestRouterWithRepos(repos)
 
 	rec := htDo(t, r, "GET", "/api/admin/paths/devops-path/enrollments", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
@@ -315,8 +364,7 @@ func TestAdminListPathEnrollments_WithUsers(t *testing.T) {
 func TestAdminListPathEnrollments_RequiresAdmin(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "GET", "/api/admin/paths/devops-path/enrollments", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusForbidden {
@@ -331,8 +379,7 @@ func TestAdminListPathEnrollments_RequiresAdmin(t *testing.T) {
 func TestAdminEnrollUserInPath_MissingUserID(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "POST", "/api/admin/paths/devops-path/enrollments", `{}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
@@ -345,12 +392,14 @@ func TestAdminEnrollUserInPath_MissingUserID(t *testing.T) {
 func TestAdminEnrollUserInPath_DBError(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushExec(0, errors.New("db down"))
-	r := newTestRouter(pool)
+	paths := fake.NewPathEnrollmentRepository()
+	paths.Err = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.Paths = paths
+	r := newTestRouterWithRepos(repos)
 
 	rec := htDo(t, r, "POST", "/api/admin/paths/devops-path/enrollments",
-		`{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
+		`{"userId":"11111111-1111-1111-1111-111111111111"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -361,11 +410,10 @@ func TestAdminEnrollUserInPath_DBError(t *testing.T) {
 func TestAdminEnrollUserInPath_Success(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "POST", "/api/admin/paths/devops-path/enrollments",
-		`{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
+		`{"userId":"11111111-1111-1111-1111-111111111111"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -376,11 +424,10 @@ func TestAdminEnrollUserInPath_Success(t *testing.T) {
 func TestAdminEnrollUserInPath_RequiresAdmin(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
 	rec := htDo(t, r, "POST", "/api/admin/paths/devops-path/enrollments",
-		`{"userId":"user-uuid-1"}`, htAuthHeader(t, "student"))
+		`{"userId":"11111111-1111-1111-1111-111111111111"}`, htAuthHeader(t, "student"))
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("want 403, got %d", rec.Code)
 	}
@@ -393,11 +440,13 @@ func TestAdminEnrollUserInPath_RequiresAdmin(t *testing.T) {
 func TestAdminUnenrollUserFromPath_DBError(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushExec(0, errors.New("db down"))
-	r := newTestRouter(pool)
+	paths := fake.NewPathEnrollmentRepository()
+	paths.Err = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.Paths = paths
+	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/user-uuid-1", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/11111111-1111-1111-1111-111111111111", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -408,10 +457,9 @@ func TestAdminUnenrollUserFromPath_DBError(t *testing.T) {
 func TestAdminUnenrollUserFromPath_Success(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
-	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/user-uuid-1", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/11111111-1111-1111-1111-111111111111", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -422,10 +470,9 @@ func TestAdminUnenrollUserFromPath_Success(t *testing.T) {
 func TestAdminUnenrollUserFromPath_RequiresAdmin(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	r := newTestRouter(pool)
+	r := newTestRouterWithRepos(fake.NewRepositories())
 
-	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/user-uuid-1", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, "DELETE", "/api/admin/paths/devops-path/enrollments/11111111-1111-1111-1111-111111111111", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("want 403, got %d", rec.Code)
 	}
@@ -480,7 +527,7 @@ func TestFetchPathDetail_ValidSlug(t *testing.T) {
 func TestCompletedCoursesCtx_EmptySlugs(t *testing.T) {
 	t.Parallel()
 
-	s := &State{Pool: &fake.Pool{}}
+	s := &State{Repos: fake.NewRepositories()}
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	if result := s.completedCoursesCtx(req, "user-uuid-1", nil); result != nil {
@@ -493,9 +540,11 @@ func TestCompletedCoursesCtx_EmptySlugs(t *testing.T) {
 func TestCompletedCoursesCtx_DBError(t *testing.T) {
 	t.Parallel()
 
-	pool := &fake.Pool{}
-	pool.PushRows(errors.New("db down"))
-	s := &State{Pool: pool}
+	moduleProgress := fake.NewModuleProgressRepository()
+	moduleProgress.Err = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.ModuleProgress = moduleProgress
+	s := &State{Repos: repos}
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	if result := s.completedCoursesCtx(req, "user-uuid-1", []string{"course-a"}); result != nil {
@@ -519,15 +568,25 @@ func TestAdminListPathEnrollments_WithDetail(t *testing.T) {
 	}))
 	defer courseSvc.Close()
 
-	pool := &fake.Pool{}
-	pool.PushRows(nil, []any{"user-uuid-1", "user@test.com", "student", time.Now()})
-	pool.PushRows(nil, []any{"linux-intro"}) // completedCoursesCtx → linux-intro done
+	userID := uuid.New()
+	users := fake.NewUserRepository(models.User{ID: userID, Email: "user@test.com", Role: "student"})
+	paths := fake.NewPathEnrollmentRepository(models.PathEnrollment{
+		UserID: userID, PathSlug: "devops-path", EnrolledAt: time.Now(),
+	})
+	paths.Users = users
+
+	repos := fake.NewRepositories()
+	repos.Users = users
+	repos.Paths = paths
+	repos.ModuleProgress = fake.NewModuleProgressRepository(models.ModuleProgress{
+		UserID: userID.String(), CourseSlug: "linux-intro", Passed: true,
+	})
 
 	s := &State{
-		Pool:   pool,
+		Repos:  repos,
 		Config: &config.Config{JWTSecret: htSecret, JWTExpiryH: htExpiry, CourseServiceURL: courseSvc.URL},
 	}
-	r := BuildRouter(s, s.Config, pool, false)
+	r := BuildRouter(s, s.Config, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/admin/paths/devops-path/enrollments", http.NoBody)
 	req.Header.Set("Authorization", htAuthHeader(t, "admin"))

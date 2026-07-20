@@ -4,7 +4,8 @@ Stateless micro-service that serves course/module content for the e-learning pla
 
 ## Architecture
 
-- **Stateless** — no database. All course data comes from Kubernetes CRDs (`elearning.pupitre.io/v1`, kind `Course`) via an in-cluster watcher.
+- **Course content is stateless** — all course data comes from Kubernetes CRDs (`elearning.pupitre.io/v1`, kind `Course`) via an in-cluster watcher; nothing course-related is persisted to a database.
+- **Lab results are optionally persisted** — see [Database](#database) below.
 - **Source of truth** — courses are defined as Kubernetes custom resources. The service watches the K8s API and populates an in-memory store.
 - **Module types** — `text` (markdown from git), `video` / `image` (server-hosted URLs with optional replication), `quiz` (inline questions or git-fetched YAML).
 - **User Service calls** — enrollment checks, lesson progress (viewed, complete) are delegated to the User Service via HTTP:
@@ -50,6 +51,24 @@ All config via environment variables:
 | `GIT_TOKEN` | (empty) | Global token for private git repos (fallback) |
 | `GIT_CREDENTIALS_PATH` | `/etc/course-service/git-credentials.yaml` | Path to per-repo credential mappings |
 | `GIT_CACHE_TTL` | `10` | Git cache TTL in minutes (how long before re-cloning remote repos) |
+| `DATABASE_URL` | (empty) | PostgreSQL connection string; see [Database](#database) |
+| `DB_MAX_OPEN_CONNS` | `10` | Maximum open database connections in the pool |
+| `DB_MAX_IDLE_CONNS` | `10` | Maximum idle database connections in the pool |
+
+## Database
+
+Course content itself is never persisted (see [Architecture](#architecture)), but lab check results
+are, when `DATABASE_URL` is set. If it's empty, or the initial connection fails, the service logs a
+warning and keeps running with lab result tracking disabled (`GET`/`POST` on `/api/admin/lab-results`
+degrade rather than fail the whole service) — connectivity is only checked once at startup, so a
+Postgres instance that isn't ready yet at boot time stays disabled until the pod restarts.
+
+Uses PostgreSQL via [GORM](https://gorm.io), with the same `AutoMigrate` + one-off breaking-migration
+split as User Service — see `internal/db/db.go`.
+
+### Schema
+
+- `lab_checks` — recorded outcome of a lab module check (server-verified or client-reported)
 
 ## Git Credentials
 

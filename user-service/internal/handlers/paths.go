@@ -67,13 +67,6 @@ type myPath struct {
 	Courses     []courseStatus `json:"courses"`
 }
 
-// enrollment is a raw path_enrollments row: which path, and when the
-// current user enrolled in it.
-type enrollment struct {
-	slug       string
-	enrolledAt time.Time
-}
-
 // enrolledUser represents a user enrolled in a learning path,
 // along with their progress across the path's courses.
 type enrolledUser struct {
@@ -178,39 +171,23 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 	claims := s.claims(request)
 	limit, offset := parsePagination(request)
 
-	rows, err := s.Pool.Query(request.Context(),
-		`SELECT path_slug, enrolledAt FROM path_enrollments
-		 WHERE userId = $1::uuid ORDER BY enrolledAt DESC
-		 LIMIT $2 OFFSET $3`,
-		claims.Subject, limit, offset)
+	rows, err := s.Repos.Paths.MyEnrollments(request.Context(), claims.Subject, limit, offset)
 	if err != nil {
 		zap.L().Error("failed to query path enrollments", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
-	var enrollments []enrollment
-
-	for rows.Next() {
-		var enr enrollment
-
-		err := rows.Scan(&enr.slug, &enr.enrolledAt)
-		if err == nil {
-			enrollments = append(enrollments, enr)
-		}
-	}
-
-	result := make([]myPath, 0, len(enrollments))
-	for _, enr := range enrollments {
-		detail, err := s.fetchPathDetail(request, enr.slug)
+	result := make([]myPath, 0, len(rows))
+	for _, row := range rows {
+		detail, err := s.fetchPathDetail(request, row.Slug)
 		if err != nil {
-			zap.L().Warn("failed to fetch path detail", zap.String("slug", enr.slug), zap.Error(err))
+			zap.L().Warn("failed to fetch path detail", zap.String("slug", row.Slug), zap.Error(err))
 			result = append(result, myPath{
-				Slug:       enr.slug,
-				Title:      enr.slug,
-				EnrolledAt: enr.enrolledAt,
+				Slug:       row.Slug,
+				Title:      row.Slug,
+				EnrolledAt: row.EnrolledAt,
 				Courses:    []courseStatus{},
 			})
 
@@ -224,7 +201,7 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 			Slug:        detail.Slug,
 			Title:       detail.Title,
 			Description: detail.Description,
-			EnrolledAt:  enr.enrolledAt,
+			EnrolledAt:  row.EnrolledAt,
 			Courses:     courses,
 		})
 	}
@@ -241,29 +218,28 @@ func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs 
 		return nil
 	}
 
-	rows, err := s.Pool.Query(request.Context(),
-		`SELECT courseSlug FROM (
-		     SELECT DISTINCT courseSlug FROM module_progress
-		     WHERE userId = $1::uuid AND passed = true AND courseSlug = ANY($2)
-		     UNION
-		     SELECT DISTINCT courseSlug FROM lesson_progress
-		     WHERE userId = $1::uuid AND lessonSlug = '__complete__' AND courseSlug = ANY($2)
-		 ) sub`,
-		userID, slugs)
+	result := make(map[string]bool)
+
+	moduleCompleted, err := s.Repos.ModuleProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
 	if err != nil {
-		zap.L().Error("failed to query completed courses", zap.String("userID", userID), zap.Error(err))
+		zap.L().Error("failed to query completed courses via module progress", zap.String("userID", userID), zap.Error(err))
 
 		return nil
 	}
-	defer rows.Close()
 
-	result := make(map[string]bool)
+	for _, slug := range moduleCompleted {
+		result[slug] = true
+	}
 
-	for rows.Next() {
-		var slug string
-		if rows.Scan(&slug) == nil {
-			result[slug] = true
-		}
+	lessonCompleted, err := s.Repos.LessonProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
+	if err != nil {
+		zap.L().Error("failed to query completed courses via lesson progress", zap.String("userID", userID), zap.Error(err))
+
+		return nil
+	}
+
+	for _, slug := range lessonCompleted {
+		result[slug] = true
 	}
 
 	return result
@@ -287,29 +263,18 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 		zap.L().Warn("failed to fetch path detail for enrollments", zap.String("slug", slug), zap.Error(err))
 	}
 
-	rows, err := s.Pool.Query(request.Context(), `
-		SELECT u.id, u.email, u.role, pe.enrolledAt
-		FROM path_enrollments pe
-		JOIN users u ON u.id = pe.userId
-		WHERE pe.path_slug = $1
-		ORDER BY pe.enrolledAt DESC`, slug)
+	rows, err := s.Repos.Paths.ListBySlug(request.Context(), slug)
 	if err != nil {
 		zap.L().Error("failed to query path enrollments", zap.String("slug", slug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-	defer rows.Close()
 
-	var users []enrolledUser
+	users := make([]enrolledUser, 0, len(rows))
 
-	for rows.Next() {
-		var member enrolledUser
-
-		err := rows.Scan(&member.UserID, &member.Email, &member.Role, &member.EnrolledAt)
-		if err != nil {
-			continue
-		}
+	for _, row := range rows {
+		member := enrolledUser{UserID: row.UserID, Email: row.Email, Role: row.Role, EnrolledAt: row.EnrolledAt}
 
 		if detail != nil {
 			completed := s.completedCoursesCtx(request, member.UserID, detail.Courses)
@@ -324,10 +289,6 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 		}
 
 		users = append(users, member)
-	}
-
-	if users == nil {
-		users = []enrolledUser{}
 	}
 
 	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{"users": users})
@@ -359,9 +320,7 @@ func (s *State) AdminEnrollUserInPath(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	_, err = s.Pool.Exec(request.Context(),
-		`INSERT INTO path_enrollments (userId, path_slug) VALUES ($1::uuid, $2) ON CONFLICT DO NOTHING`,
-		body.UserID, slug)
+	err = s.Repos.Paths.Enroll(request.Context(), body.UserID, slug)
 	if err != nil {
 		zap.L().Error("failed to enroll user in path", zap.String("slug", slug), zap.String("userID", body.UserID), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Database error")
@@ -385,9 +344,7 @@ func (s *State) AdminUnenrollUserFromPath(writer http.ResponseWriter, request *h
 	slug := param(request, "slug")
 	userID := param(request, "userId")
 
-	_, err := s.Pool.Exec(request.Context(),
-		`DELETE FROM path_enrollments WHERE userId = $1::uuid AND path_slug = $2`,
-		userID, slug)
+	err := s.Repos.Paths.Unenroll(request.Context(), userID, slug)
 	if err != nil {
 		zap.L().Error("failed to unenroll user from path", zap.String("slug", slug), zap.String("userID", userID), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Database error")

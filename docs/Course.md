@@ -50,6 +50,23 @@ spec:
 
 Module types: `text` (markdown depuis git), `video` / `image` (URL hébergée sur le serveur), `quiz` (questions inline ou YAML depuis git), `modules` (index file — expansion en place de plusieurs modules depuis git).
 
+Le champ `skills` sur un module liste les **compétences** que ce module enseigne (tags libres en kebab-case). Les compétences sont agrégées automatiquement au niveau du cours (union de tous les modules) et exposées dans `/api/courses`.
+
+```yaml
+modules:
+  - name: "Introduction aux conteneurs"
+    type: text
+    src: "https://github.com/org/repo"
+    ref: "main"
+    path: "docker/intro.md"
+    skills: [conteneurs, docker]
+  - name: "Quiz Docker"
+    type: quiz
+    passingScore: 80
+    skills: [docker]
+    questions: [...]
+```
+
 - `metadata.name` : slug du cours (utilisé dans les URLs)
 - `spec.title` : titre du cours
 - `spec.description` : description du cours

@@ -69,6 +69,22 @@ spec:
                                             └──────────────────┘
 ```
 
+## CRD Path
+
+En plus des cours, le course-service watche les CRD `elearning.pupitre.io/v1` kind `Path`. Un parcours est une séquence ordonnée de cours (`kind: course`) ou de compétences (`kind: skill`). Voir `docs/Skills.md` pour le détail.
+
+```yaml
+apiVersion: elearning.pupitre.io/v1
+kind: Path
+metadata:
+  name: devops-path
+spec:
+  title: "Parcours DevOps"
+  kind: skill
+  level: 2
+  skills: [linux, docker, kubernetes, ci-cd]
+```
+
 ## Contrat API interne (Course → User)
 
 | Méthode | Path | Usage |
@@ -77,6 +93,23 @@ spec:
 | `POST` | `/internal/enrollments/auto` body: `{userId, courseSlug}` | Auto-enrôler (cours publics) — idempotent |
 | `GET` | `/internal/progress/viewed?userId=X&courseSlug=Y` | Récupérer les slugs vus |
 | `POST` | `/internal/progress/complete` body: `{userId, courseSlug, lessonSlug}` | Marquer complet |
+
+## Endpoints publics (user-service)
+
+| Méthode | Path | Description |
+|---|---|---|
+| `GET` | `/api/my/paths` | Parcours de l'utilisateur avec statut par cours/compétence |
+| `GET` | `/api/my/skills/{slug}` | Modules d'une compétence avec statut pour l'utilisateur |
+| `POST` | `/api/admin/paths/{slug}/enrollments` | Inscrire un utilisateur dans un parcours (admin) |
+| `DELETE` | `/api/admin/paths/{slug}/enrollments/{userId}` | Désinscrire (admin) |
+
+## Endpoints publics (course-service)
+
+| Méthode | Path | Description |
+|---|---|---|
+| `GET` | `/api/paths` | Liste tous les parcours |
+| `GET` | `/api/paths/{slug}` | Détail d'un parcours |
+| `GET` | `/api/skills/{slug}/modules` | Modules enseignant une compétence |
 
 ## Périmètre des services
 

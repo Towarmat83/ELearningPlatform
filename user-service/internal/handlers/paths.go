@@ -97,22 +97,20 @@ type enrolledUser struct {
 //
 // Rules:
 //   - "completed" if the user finished the course (cross-path counts).
-//   - "available" if the immediately preceding course is completed (or first).
-//   - "locked" otherwise.
+//   - "available" for the first non-completed course in an unbroken chain.
+//   - "locked" otherwise. A cross-path completion mid-path does not
+//     unlock the next course if preceding courses are not yet done.
 func buildCourseStatuses(courses []string, completed map[string]bool) []courseStatus {
 	out := make([]courseStatus, len(courses))
+	sequential := true // true while no non-completed course has been seen yet
 
 	for idx, slug := range courses {
-		prevDone := true
-		if idx > 0 {
-			prevDone = completed[courses[idx-1]] //nolint:gosec // idx>0 guards the slice access
-		}
-
 		switch {
 		case completed[slug]:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusCompleted}
-		case prevDone:
+		case sequential:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusAvailable}
+			sequential = false
 		default:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusLocked}
 		}

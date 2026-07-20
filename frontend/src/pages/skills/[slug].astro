@@ -10,7 +10,10 @@ const { slug } = Astro.params;
     .skill-chip { display: inline-flex; align-items: center; gap: 6px; background: #f3e8ff; color: #7c3aed; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: .95rem; }
     .skill-prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; background: var(--fill); border-radius: 10px; font-size: .82rem; color: var(--ink-soft); }
     .skill-prog-pct { font-weight: 700; font-size: 1rem; }
-    .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 24px; }
+    .level-section { margin-top: 28px; }
+    .level-section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .level-section-title::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+    .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
     .course-card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: box-shadow .15s, border-color .15s; cursor: pointer; }
     .course-card:hover { box-shadow: 0 4px 16px -4px rgba(30,60,120,.15); border-color: var(--blue); }
     .course-card-title { font-size: 1rem; font-weight: 700; color: var(--ink); }
@@ -41,7 +44,7 @@ const { slug } = Astro.params;
       <div class="section-title" id="courses-section-title"></div>
       <div class="section-sub" id="courses-section-sub"></div>
 
-      <div class="courses-grid" id="courses-grid"></div>
+      <div id="courses-by-level"></div>
 
       <div id="skill-empty" class="skill-empty" style="display:none">
         Aucun cours trouvé pour cette compétence.
@@ -131,9 +134,10 @@ const { slug } = Astro.params;
 
         // Filter courses that teach this skill
         const allCourses = coursesData.courses ?? coursesData ?? [];
-        const related = allCourses.filter(c =>
-          Array.isArray(c.skills) && c.skills.includes(slug)
-        );
+        const DIFF_ORDER = { beginner: 0, intermediate: 1, advanced: 2 };
+        const related = allCourses
+          .filter(c => Array.isArray(c.skills) && c.skills.includes(slug))
+          .sort((a, b) => (DIFF_ORDER[a.difficulty] ?? 99) - (DIFF_ORDER[b.difficulty] ?? 99));
 
         if (related.length === 0) {
           document.getElementById('skill-empty').style.display = 'block';
@@ -141,12 +145,35 @@ const { slug } = Astro.params;
         }
 
         document.getElementById('courses-section-title').textContent =
-          `${related.length} cours${related.length > 1 ? '' : ''} impliqué${related.length > 1 ? 's' : ''}`;
+          `${related.length} cours impliqué${related.length > 1 ? 's' : ''}`;
         document.getElementById('courses-section-sub').textContent =
           `Ces cours contiennent des modules qui développent la compétence « ${label} »`;
 
-        document.getElementById('courses-grid').innerHTML =
-          related.map(c => renderCourseCard(c, skillModules)).join('');
+        const LEVELS = [
+          { key: 'beginner',     label: 'Débutant'      },
+          { key: 'intermediate', label: 'Intermédiaire' },
+          { key: 'advanced',     label: 'Avancé'        },
+          { key: '',             label: 'Autre'         },
+        ];
+
+        const grouped = Object.fromEntries(LEVELS.map(l => [l.key, []]));
+        for (const c of related) {
+          const key = grouped[c.difficulty] !== undefined ? c.difficulty : '';
+          grouped[key].push(c);
+        }
+
+        const html = LEVELS
+          .filter(l => grouped[l.key].length > 0)
+          .map(l => `
+            <div class="level-section">
+              <div class="level-section-title">${l.label}</div>
+              <div class="courses-grid">
+                ${grouped[l.key].map(c => renderCourseCard(c, skillModules)).join('')}
+              </div>
+            </div>`)
+          .join('');
+
+        document.getElementById('courses-by-level').innerHTML = html;
 
       } catch (e) {
         document.getElementById('loading').style.display = 'none';

@@ -17,6 +17,7 @@ import App from '../layouts/App.astro';
           <nav class="sidebar-nav">
             <a class="sidebar-link active" href="#compte" data-section="compte">👤 Compte</a>
             <a class="sidebar-link" href="#securite" data-section="securite">🔒 Sécurité</a>
+            <a class="sidebar-link" href="#badges" data-section="badges">🏅 Badges</a>
           </nav>
         </aside>
 
@@ -76,6 +77,12 @@ import App from '../layouts/App.astro';
             <div id="security-content"></div>
           </div>
 
+          <!-- Badges section -->
+          <div id="section-badges" class="card" style="display:none">
+            <h2 style="font-size:1.1rem;margin-bottom:20px">Mes badges</h2>
+            <div id="badges-content"></div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -121,8 +128,16 @@ import App from '../layouts/App.astro';
 
       // Sidebar mini-profile
       const avatarArea = document.getElementById('avatar-area')!;
-      if (user.avatarUrl) {
+      const avatarIsUrl = user.avatarUrl && (user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://'));
+      if (avatarIsUrl) {
         avatarArea.innerHTML = `<img src="${user.avatarUrl}" alt="${user.username}" class="avatar-circle" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="avatar-initial" style="display:none">${initial}</div>`;
+      } else if (user.avatarUrl) {
+        const emojiDiv = document.createElement('div');
+        emojiDiv.className = 'avatar-initial';
+        emojiDiv.style.fontSize = '2rem';
+        emojiDiv.textContent = user.avatarUrl;
+        avatarArea.innerHTML = '';
+        avatarArea.appendChild(emojiDiv);
       } else {
         avatarArea.innerHTML = `<div class="avatar-initial">${initial}</div>`;
       }
@@ -148,7 +163,8 @@ import App from '../layouts/App.astro';
       // Edit mode setup
       if (!isSso) {
         document.getElementById('avatar-field')!.style.display = 'block';
-        (document.getElementById('edit-avatar') as HTMLInputElement).value = user.avatarUrl || '';
+        const currentAvatarForInput = (user.avatarUrl && (user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://'))) ? user.avatarUrl : '';
+        (document.getElementById('edit-avatar') as HTMLInputElement).value = currentAvatarForInput;
       } else {
         const notice = document.getElementById('sso-avatar-notice')!;
         notice.style.display = 'block';
@@ -225,6 +241,60 @@ import App from '../layouts/App.astro';
 
     }
 
+    // Badges
+    function esc(s: string) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    let badgesLoaded = false;
+    async function loadBadges() {
+      if (badgesLoaded) return;
+      badgesLoaded = true;
+      const content = document.getElementById('badges-content')!;
+      content.innerHTML = '<div class="loading-state" style="justify-content:flex-start;padding:0"><div class="spinner" style="width:20px;height:20px"></div><span style="font-size:.9rem">Chargement…</span></div>';
+      try {
+        const data = await apiFetch('/my/badges', { token: token! }) as any;
+        const badges: any[] = data.badges || [];
+        if (badges.length === 0) {
+          content.innerHTML = '<p class="text-soft text-sm">Tu n\'as pas encore gagné de badge. Termine des cours pour en obtenir !</p>';
+          return;
+        }
+        content.innerHTML = `
+          <p class="text-soft text-sm" style="margin-bottom:16px">Clique sur <em>Utiliser comme avatar</em> pour afficher un badge sur ton profil.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:16px">
+            ${badges.map(b => `
+              <div class="badge-card" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;border:1px solid var(--border);border-radius:var(--radius);text-align:center;min-width:140px;max-width:180px;flex:1">
+                <div style="font-size:2.5rem;line-height:1">${esc(b.icon || '🏅')}</div>
+                <div style="font-weight:600;font-size:.9rem">${esc(b.name || b.courseSlug)}</div>
+                <div style="font-size:.8rem;color:var(--ink-soft)">${esc(b.courseTitle || b.courseSlug)}</div>
+                <div style="font-size:.75rem;color:var(--ink-soft)">${b.earnedBy} apprenant${b.earnedBy > 1 ? 's' : ''}</div>
+                <button class="btn btn-secondary btn-sm badge-avatar-btn" data-icon="${esc(b.icon || '🏅')}" style="margin-top:4px;width:100%">Utiliser comme avatar</button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        content.querySelectorAll<HTMLElement>('.badge-avatar-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const icon = btn.dataset.icon!;
+            btn.disabled = true;
+            btn.textContent = '…';
+            try {
+              const updated = await apiFetch('/auth/profile', { method: 'PUT', body: { avatarUrl: icon }, token: token! }) as any;
+              user = updated;
+              localStorage.setItem('user', JSON.stringify(updated));
+              render();
+              (window as any).showToast?.('Avatar mis à jour', 'success');
+            } catch (err: any) {
+              (window as any).showToast?.('Erreur lors de la mise à jour', 'error');
+            } finally {
+              btn.disabled = false;
+              btn.textContent = 'Utiliser comme avatar';
+            }
+          });
+        });
+      } catch {
+        content.innerHTML = '<p class="text-soft text-sm">Erreur lors du chargement des badges.</p>';
+      }
+    }
+
     // Edit profile events
     document.getElementById('edit-btn')!.addEventListener('click', () => {
       document.getElementById('view-mode')!.style.display = 'none';
@@ -278,6 +348,7 @@ import App from '../layouts/App.astro';
       link.addEventListener('click', e => {
         e.preventDefault();
         switchSection(link.dataset.section!);
+        if (link.dataset.section === 'badges') loadBadges();
         history.replaceState(null, '', `#${link.dataset.section}`);
       });
     });
@@ -286,7 +357,10 @@ import App from '../layouts/App.astro';
       window.location.href = '/login?redirect=/profile';
     } else {
       const hash = location.hash.replace('#', '');
-      if (hash) switchSection(hash);
+      if (hash) {
+        switchSection(hash);
+        if (hash === 'badges') loadBadges();
+      }
       init();
     }
   </script>

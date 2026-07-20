@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -122,34 +120,11 @@ func (s *State) fetchPathDetail(request *http.Request, slug string) (*pathDetail
 		return nil, fmt.Errorf("invalid path slug: %q", slug)
 	}
 
-	rawURL := fmt.Sprintf("%s/api/paths/%s", s.Config.CourseServiceURL, slug)
-
-	//nolint:gosec // slug is validated against slugRE above; CourseServiceURL is trusted server config, not user input
-	req, err := http.NewRequestWithContext(request.Context(), http.MethodGet, rawURL, http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("build path detail request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // rawURL is built from a validated slug and trusted server config
-	if err != nil {
-		return nil, fmt.Errorf("fetch path detail: %w", err)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-
-		return nil, fmt.Errorf("course-service returned %d for path %s: %s", resp.StatusCode, slug, body)
-	}
-
 	var detail pathDetail
 
-	err = json.NewDecoder(resp.Body).Decode(&detail)
+	err := s.fetchCourseServiceJSON(request, "/api/paths/"+slug, &detail)
 	if err != nil {
-		return nil, fmt.Errorf("decode path detail: %w", err)
+		return nil, fmt.Errorf("fetch path detail: %w", err)
 	}
 
 	return &detail, nil

@@ -111,6 +111,11 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		modules = append(modules, moduleFromCR(i, crModule))
 	}
 
+	var badge *Badge
+	if spec.Badge != nil {
+		badge = &Badge{Name: spec.Badge.Name, Icon: spec.Badge.Icon}
+	}
+
 	return &Course{
 		Slug:          slug,
 		Title:         title,
@@ -120,6 +125,7 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		IsPublic:      spec.Public,
 		Prerequisites: prerequisites,
 		Modules:       modules,
+		Badge:         badge,
 		Source:        sourceK8s(slug),
 	}
 }

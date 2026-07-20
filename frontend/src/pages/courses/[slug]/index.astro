@@ -165,6 +165,7 @@ import App from '../../../layouts/App.astro';
       <h1 id="course-title" style="font-size:1.1rem;font-weight:700;line-height:1.35"></h1>
       <div id="course-tags" class="course-tags"></div>
       <p id="course-desc" class="text-soft text-sm" style="line-height:1.6;font-size:.85rem"></p>
+      <div id="course-badge-area"></div>
       <div id="enroll-area"></div>
       <div id="course-meta" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px;margin-top:4px"></div>
     </aside>
@@ -303,6 +304,28 @@ import App from '../../../layouts/App.astro';
         }
         if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
         tagsEl.innerHTML = tagParts.join('');
+
+        // Badge à gagner
+        if (course.badge) {
+          const badgeArea = document.getElementById('course-badge-area')!;
+          const iconEl = document.createElement('div');
+          iconEl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--fill);border:1px solid var(--line);border-radius:var(--radius);margin-top:8px';
+          const iconSpan = document.createElement('span');
+          iconSpan.style.fontSize = '1.6rem';
+          iconSpan.textContent = course.badge.icon || '🏅';
+          const textDiv = document.createElement('div');
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = 'font-weight:600;font-size:.8rem';
+          nameDiv.textContent = course.badge.name || 'Badge';
+          const labelDiv = document.createElement('div');
+          labelDiv.style.cssText = 'font-size:.72rem;color:var(--ink-soft)';
+          labelDiv.textContent = 'Badge à obtenir';
+          textDiv.appendChild(labelDiv);
+          textDiv.appendChild(nameDiv);
+          iconEl.appendChild(iconSpan);
+          iconEl.appendChild(textDiv);
+          badgeArea.appendChild(iconEl);
+        }
 
         document.getElementById('course-meta')!.style.display = 'none';
 

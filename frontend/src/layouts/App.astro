@@ -41,9 +41,19 @@ const { title, description, activePage } = Astro.props;
         if (!navUser) return;
 
         const initial = (user.username || '?')[0].toUpperCase();
-        const avatarEl = user.avatarUrl
-          ? `<img src="${user.avatarUrl}" alt="${user.username}" class="nav-avatar" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="nav-avatar-initial" style="display:none">${initial}</div>`
-          : `<div class="nav-avatar-initial">${initial}</div>`;
+        const isUrl = user.avatarUrl && (user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://'));
+        let avatarEl: string;
+        if (isUrl) {
+          avatarEl = `<img src="${user.avatarUrl}" alt="${user.username}" class="nav-avatar" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="nav-avatar-initial" style="display:none">${initial}</div>`;
+        } else if (user.avatarUrl) {
+          const span = document.createElement('div');
+          span.className = 'nav-avatar-initial';
+          span.style.fontSize = '1.2rem';
+          span.textContent = user.avatarUrl;
+          avatarEl = span.outerHTML;
+        } else {
+          avatarEl = `<div class="nav-avatar-initial">${initial}</div>`;
+        }
 
         navUser.innerHTML = `
           <a href="/profile" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit" title="${user.username}">

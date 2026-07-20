@@ -38,6 +38,12 @@ type CoursePrerequisite struct {
 	Modules  []string `json:"modules,omitempty"  yaml:"modules,omitempty"`
 }
 
+// Badge is the reward earned when a learner completes a course.
+type Badge struct {
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
+}
+
 // Course is the in-memory representation of a course loaded from disk.
 type Course struct {
 	Slug        string `json:"slug"`
@@ -50,6 +56,8 @@ type Course struct {
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
 	Lessons       []Lesson             `json:"lessons"`
 	Modules       []Module             `json:"modules,omitempty"`
+	Skills        []string             `json:"skills,omitempty"`
+	Badge         *Badge               `json:"badge,omitempty"`
 	Source        string               `json:"source,omitempty"`
 }
 
@@ -147,6 +155,12 @@ func (m Module) HasGitContent() bool {
 	return m.Src != "" && m.Ref != "" && m.Path != ""
 }
 
+// BadgeYAML is the badge definition in the flat course.yaml format.
+type BadgeYAML struct {
+	Name string `yaml:"name"`
+	Icon string `yaml:"icon,omitempty"`
+}
+
 // CourseYAML represents the course.yaml file (CRD or flat format).
 type CourseYAML struct {
 	APIVersion string      `yaml:"apiVersion,omitempty"`
@@ -160,6 +174,7 @@ type CourseYAML struct {
 	Public        bool                 `yaml:"public,omitempty"`
 	Prerequisites []CoursePrerequisite `yaml:"prerequisites,omitempty"`
 	Modules       []ModuleYAML         `yaml:"modules,omitempty"`
+	Badge         *BadgeYAML           `yaml:"badge,omitempty"`
 }
 
 // CourseSpec holds the nested spec content in the CRD format.
@@ -171,6 +186,7 @@ type CourseSpec struct {
 	Difficulty    string               `yaml:"difficulty,omitempty"`
 	Prerequisites []CoursePrerequisite `yaml:"prerequisites,omitempty"`
 	Modules       []ModuleYAML         `yaml:"modules"`
+	Badge         *BadgeYAML           `yaml:"badge,omitempty"`
 }
 
 // ModuleYAML is a module entry in the CRD spec.modules[].
@@ -253,4 +269,8 @@ func (c *CourseYAML) MergeSpec() {
 	mergeIfZero(&c.Difficulty, c.Spec.Difficulty)
 	mergeIfEmpty(&c.Prerequisites, c.Spec.Prerequisites)
 	mergeIfEmpty(&c.Modules, c.Spec.Modules)
+
+	if c.Badge == nil && c.Spec.Badge != nil {
+		c.Badge = c.Spec.Badge
+	}
 }

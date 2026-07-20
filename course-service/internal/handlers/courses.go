@@ -16,6 +16,12 @@ type prerequisiteResponse struct {
 	Modules  []string `json:"modules,omitempty"`
 }
 
+// badgeSpec is the public representation of a course badge.
+type badgeSpec struct {
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
+}
+
 // courseResponse is the public API representation of a course.
 type courseResponse struct {
 	Slug            string                 `json:"slug"`
@@ -30,6 +36,7 @@ type courseResponse struct {
 	EnrollmentCount int                    `json:"enrollmentCount"`
 	Source          string                 `json:"source,omitempty"`
 	Prerequisites   []prerequisiteResponse `json:"prerequisites,omitempty"`
+	Badge           *badgeSpec             `json:"badge,omitempty"`
 }
 
 // toCourseResponse converts an internal content.Course into the public
@@ -45,6 +52,11 @@ func toCourseResponse(course *content.Course) courseResponse {
 		})
 	}
 
+	var badge *badgeSpec
+	if course.Badge != nil {
+		badge = &badgeSpec{Name: course.Badge.Name, Icon: course.Badge.Icon}
+	}
+
 	return courseResponse{
 		Slug:            course.Slug,
 		ID:              course.Slug,
@@ -58,6 +70,7 @@ func toCourseResponse(course *content.Course) courseResponse {
 		EnrollmentCount: 0,
 		Source:          course.Source,
 		Prerequisites:   prereqs,
+		Badge:           badge,
 	}
 }
 

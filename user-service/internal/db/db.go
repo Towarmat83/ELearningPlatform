@@ -61,6 +61,7 @@ var allModels = []any{
 	&models.GroupEnrollment{},
 	&models.MarkdownPattern{},
 	&models.PathEnrollment{},
+	&models.UserBadge{},
 }
 
 // RunMigrations brings the database schema up to date. Schema management is

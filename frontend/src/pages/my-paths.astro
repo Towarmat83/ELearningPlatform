@@ -26,6 +26,10 @@ import App from '../layouts/App.astro';
     .path-list-chevron { color: rgba(0,0,0,.25); font-size: 1.2rem; margin-left: 4px; flex-shrink: 0; }
     .path-list-progress { height: 8px; background: rgba(0,0,0,.1); }
     .path-list-progress-fill { height: 100%; transition: width .4s ease; }
+    .level-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .level-1 { background: #dcfce7; color: #15803d; }
+    .level-2 { background: #fef9c3; color: #a16207; }
+    .level-3 { background: #fee2e2; color: #b91c1c; }
 
     .detail-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 20px; background: none; border: none; padding: 0; }
     .detail-back:hover { text-decoration: underline; }
@@ -65,6 +69,17 @@ import App from '../layouts/App.astro';
   <script>
     const token = localStorage.getItem('token');
     if (!token) { window.location.href = '/login?redirect=/my-paths'; }
+
+    const LEVELS: Record<number,{label:string;cls:string}> = {
+      1: { label: 'Niveau 1 · Débutant',      cls: 'level-1' },
+      2: { label: 'Niveau 2 · Intermédiaire', cls: 'level-2' },
+      3: { label: 'Niveau 3 · Avancé',        cls: 'level-3' },
+    };
+    function levelBadge(level: number): string {
+      const l = LEVELS[level];
+      if (!l) return '';
+      return `<span class="level-badge ${l.cls}">${l.label}</span>`;
+    }
 
     const SHORT: Record<string,string> = {
       'linux-intro':         'Linux',
@@ -110,7 +125,8 @@ import App from '../layouts/App.astro';
             <div class="path-list-icon" style="background:${colors.iconBg}">${PATH_ICONS[p.slug]??'🗺️'}</div>
             <div class="path-list-body">
               <div class="path-list-title">${p.title||p.slug}</div>
-              <div class="path-list-sub">${sub}</div>
+              ${p.level ? levelBadge(p.level) : ''}
+              <div class="path-list-sub" style="margin-top:4px">${sub}</div>
             </div>
             <span class="path-list-pct" style="color:${colors.accent}">${pct}%</span>
             <span class="path-list-chevron" style="color:${colors.accent}">›</span>
@@ -279,6 +295,7 @@ import App from '../layouts/App.astro';
       return `
         <div class="detail-header">
           <div class="detail-title">${p.title||p.slug}</div>
+          ${p.level ? `<div style="margin:.4rem 0">${levelBadge(p.level)}</div>` : ''}
           ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
           ${p.skills?.length && !isSkillPath ? `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin:.4rem 0 .2rem">${(p.skills as string[]).map(sk=>`<a href="/skills/${sk}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none" onclick="localStorage.setItem('skillReturnPath','${p.slug}')">🎯 ${sk}</a>`).join('')}</div>` : ''}
           <div class="detail-prog">

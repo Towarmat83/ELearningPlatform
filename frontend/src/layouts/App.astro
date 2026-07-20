@@ -54,6 +54,13 @@ const { title, description, activePage } = Astro.props;
           <button id="nav-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
         `;
 
+        if (user.role === 'admin') {
+          const pathsLink = document.getElementById('nav-my-paths');
+          if (pathsLink) pathsLink.style.display = 'none';
+          const coursesLink = document.getElementById('nav-my-courses');
+          if (coursesLink) coursesLink.style.display = 'none';
+        }
+
         document.getElementById('nav-logout')?.addEventListener('click', () => {
           localStorage.removeItem('token');
           localStorage.removeItem('user');

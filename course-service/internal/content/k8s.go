@@ -379,6 +379,7 @@ func pathFromCR(pathCR *coursev1.Path) *Path {
 		Title:       title,
 		Description: pathCR.Spec.Description,
 		Kind:        kind,
+		Level:       pathCR.Spec.Level,
 		Courses:     courses,
 		Skills:      skills,
 		Source:      sourceK8s(slug),

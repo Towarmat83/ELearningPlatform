@@ -149,7 +149,7 @@ import App from '../layouts/App.astro';
             <div class="mb-card-icon">${b.icon || '🏅'}</div>
             <div class="mb-card-name">${b.name || b.courseSlug}</div>
             <div class="mb-card-course">${b.courseTitle || b.courseSlug}</div>
-            ${b.earnedBy > 1 ? `<div class="mb-card-earned-by">${b.earnedBy} personnes</div>` : ''}
+            <div class="mb-card-earned-by">${b.earnedBy} apprenant${b.earnedBy > 1 ? 's' : ''}</div>
             <div class="mb-card-date">Obtenu le ${formatDate(b.earnedAt)}</div>
           </a>
         `).join('');

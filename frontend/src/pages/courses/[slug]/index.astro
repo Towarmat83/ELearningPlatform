@@ -305,40 +305,25 @@ import App from '../../../layouts/App.astro';
         if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
         tagsEl.innerHTML = tagParts.join('');
 
-        // Badge à gagner
-        if (course.badge) {
-          const badgeArea = document.getElementById('course-badge-area')!;
-          const iconEl = document.createElement('div');
-          iconEl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--fill);border:1px solid var(--line);border-radius:var(--radius);margin-top:8px';
-          const iconSpan = document.createElement('span');
-          iconSpan.style.fontSize = '1.6rem';
-          iconSpan.textContent = course.badge.icon || '🏅';
-          const textDiv = document.createElement('div');
-          const nameDiv = document.createElement('div');
-          nameDiv.style.cssText = 'font-weight:600;font-size:.8rem';
-          nameDiv.textContent = course.badge.name || 'Badge';
-          const labelDiv = document.createElement('div');
-          labelDiv.style.cssText = 'font-size:.72rem;color:var(--ink-soft)';
-          labelDiv.textContent = 'Badge à obtenir';
-          textDiv.appendChild(labelDiv);
-          textDiv.appendChild(nameDiv);
-          iconEl.appendChild(iconSpan);
-          iconEl.appendChild(textDiv);
-          badgeArea.appendChild(iconEl);
-        }
-
         document.getElementById('course-meta')!.style.display = 'none';
 
-        // Enrollment check
+        // Enrollment check + badges (parallel when logged in)
         let enrolled = false;
         let modules: any[] = [];
         let prereqBlocked = false;
+        let earnedSlugs = new Set<string>();
 
         if (token) {
-          try {
-            const myRes = await apiFetch('/my/courses', { token: token! }) as any;
-            enrolled = (myRes.courses || []).some((c: any) => c.slug === slug || c.id === slug);
-          } catch { /* ignore */ }
+          const [myCoursesRes, myBadgesRes] = await Promise.allSettled([
+            apiFetch('/my/courses', { token: token! }),
+            apiFetch('/my/badges', { token: token! }),
+          ]);
+          if (myCoursesRes.status === 'fulfilled') {
+            enrolled = ((myCoursesRes.value as any).courses || []).some((c: any) => c.slug === slug || c.id === slug);
+          }
+          if (myBadgesRes.status === 'fulfilled') {
+            ((myBadgesRes.value as any).badges || []).forEach((b: any) => earnedSlugs.add(b.courseSlug));
+          }
 
           if (enrolled) {
             try {
@@ -348,6 +333,30 @@ import App from '../../../layouts/App.astro';
               if (e.status === 403) prereqBlocked = true;
             }
           }
+        }
+
+        // Badge card
+        if (course.badge) {
+          const badgeArea = document.getElementById('course-badge-area')!;
+          const earned = earnedSlugs.has(slug);
+          const iconEl = document.createElement('a');
+          iconEl.href = earned ? '/my-badges' : '#';
+          iconEl.style.cssText = `display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);margin-top:8px;border:1.5px solid ${earned ? 'var(--green,#22c55e)' : 'var(--line)'};background:${earned ? 'var(--green-soft,#f0fdf4)' : 'var(--fill)'};text-decoration:none;color:inherit;${earned ? 'cursor:pointer' : 'cursor:default'}`;
+          const iconSpan = document.createElement('span');
+          iconSpan.style.fontSize = '1.6rem';
+          iconSpan.textContent = course.badge.icon || '🏅';
+          const textDiv = document.createElement('div');
+          const labelDiv = document.createElement('div');
+          labelDiv.style.cssText = `font-size:.72rem;font-weight:600;${earned ? 'color:var(--green,#16a34a)' : 'color:var(--ink-soft)'}`;
+          labelDiv.textContent = earned ? '✓ Badge obtenu' : 'Badge à obtenir';
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = 'font-weight:600;font-size:.8rem';
+          nameDiv.textContent = course.badge.name || 'Badge';
+          textDiv.appendChild(labelDiv);
+          textDiv.appendChild(nameDiv);
+          iconEl.appendChild(iconSpan);
+          iconEl.appendChild(textDiv);
+          badgeArea.appendChild(iconEl);
         }
 
         // Inline quizzes are embedded in previous modules — exclude from standalone list and counts

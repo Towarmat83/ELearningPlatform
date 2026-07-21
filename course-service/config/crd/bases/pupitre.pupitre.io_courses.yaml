@@ -54,6 +54,18 @@ spec:
             spec:
               description: Spec defines the desired state of the Course.
               properties:
+                badge:
+                  description: Badge is the reward earned when a learner completes the course.
+                  properties:
+                    icon:
+                      description: Icon is an emoji or short string displayed alongside the badge name.
+                      type: string
+                    name:
+                      description: Name is the display name of the badge.
+                      type: string
+                  required:
+                    - name
+                  type: object
                 category:
                   description: Category groups the course for browsing/filtering purposes.
                   type: string

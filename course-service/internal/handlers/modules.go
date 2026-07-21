@@ -941,21 +941,25 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.finalizeSubmission(writer, req, mod, questions, passingScore, cooldownSpec, userID, courseSlug, idx) //nolint:contextcheck // fire-and-forget async POST intentionally detached from the request context (see recordModuleProgress)
+	passed := s.finalizeSubmission(writer, req, mod, questions, passingScore, cooldownSpec, userID, courseSlug, idx) //nolint:contextcheck // fire-and-forget async POST intentionally detached from the request context (see recordModuleProgress)
+	if passed && isLastMeaningfulModule(modules, idx) {
+		s.notifyCourseComplete(req, userID, courseSlug)
+	}
 }
 
 // finalizeSubmission decodes a quiz submission body, rejects it if any of
 // the resolved questions is still under a cooldown, then scores it, records
 // per-question cooldowns and overall module progress, and writes the
-// resulting submitResponse to the client.
-func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, mod content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
+// resulting submitResponse to the client. It returns true when the quiz was
+// passed so the caller can trigger course-complete notifications.
+func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, mod content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) bool {
 	var submission content.SubmitRequest
 
 	err := json.NewDecoder(req.Body).Decode(&submission)
 	if err != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid request body")
 
-		return
+		return false
 	}
 
 	// Check cooldowns for each question before scoring.
@@ -965,7 +969,7 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 			"cooldowns": cooldowns,
 		})
 
-		return
+		return false
 	}
 
 	effectiveQuiz := &content.Quiz{
@@ -1001,6 +1005,8 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 		QuestionResults: apiResults,
 		Cooldowns:       respCooldowns,
 	})
+
+	return result.Passed
 }
 
 // resolveSubmitQuiz resolves the questions, passing score, and cooldown spec

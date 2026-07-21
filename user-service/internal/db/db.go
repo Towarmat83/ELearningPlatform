@@ -122,7 +122,56 @@ type breakingMigration struct {
 //	}
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{}
+var breakingMigrations = []breakingMigration{
+	{
+		// GORM v1.31+ expects unique constraints named uni_<table>_<column> but
+		// PostgreSQL auto-named them <table>_<column>_key when the old image ran
+		// AutoMigrate. Rename them so AutoMigrate can drop them without errors.
+		Name: "20260721_rename_pg_constraints_to_gorm_names",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			return gdb.WithContext(ctx).Exec(`
+				DO $$ BEGIN
+					IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uni_users_username') AND
+					   EXISTS    (SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key')
+					THEN ALTER TABLE users RENAME CONSTRAINT users_username_key TO uni_users_username; END IF;
+
+					IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uni_users_email') AND
+					   EXISTS    (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_key')
+					THEN ALTER TABLE users RENAME CONSTRAINT users_email_key TO uni_users_email; END IF;
+
+				END $$`).Error
+		},
+	},
+	{
+		Name: "20260721_rename_groups_constraint_to_gorm_name",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			return gdb.WithContext(ctx).Exec(`
+				DO $$ BEGIN
+					IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uni_groups_name') AND
+					   EXISTS    (SELECT 1 FROM pg_constraint WHERE conname = 'groups_name_key')
+					THEN ALTER TABLE groups RENAME CONSTRAINT groups_name_key TO uni_groups_name; END IF;
+				END $$`).Error
+		},
+	},
+	{
+		// quiz-last-module courses never triggered notifyCourseComplete before the
+		// SubmitModule fix. Backfill badges for every user whose lesson_progress
+		// contains the __complete__ sentinel but who has no user_badges row yet.
+		Name: "20260721_backfill_badges_from_course_completions",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			return gdb.WithContext(ctx).Exec(`
+				INSERT INTO user_badges (userid, courseslug, earnedat)
+				SELECT lp.userid, lp.courseslug, lp.viewed_at
+				FROM   lesson_progress lp
+				WHERE  lp.lessonslug = '__complete__'
+				AND    NOT EXISTS (
+					SELECT 1 FROM user_badges ub
+					WHERE ub.userid = lp.userid AND ub.courseslug = lp.courseslug
+				)
+				ON CONFLICT DO NOTHING`).Error
+		},
+	},
+}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own
@@ -239,6 +288,10 @@ var foreignKeys = []foreignKey{
 	{
 		Name: "path_enrollments_userid_fkey",
 		DDL:  "ALTER TABLE path_enrollments ADD CONSTRAINT path_enrollments_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
+	},
+	{
+		Name: "user_badges_userid_fkey",
+		DDL:  "ALTER TABLE user_badges ADD CONSTRAINT user_badges_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
 	},
 }
 

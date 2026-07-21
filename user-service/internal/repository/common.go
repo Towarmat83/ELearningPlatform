@@ -15,6 +15,7 @@ var returningAll = clause.Returning{} //nolint:gochecknoglobals // stateless cla
 const (
 	colName       = "name"
 	colEmail      = "email"
+	colUsername   = "username"
 	colUpdatedAt  = "updatedat"
 	colCourseSlug = "courseslug"
 	colUserID     = "userid"

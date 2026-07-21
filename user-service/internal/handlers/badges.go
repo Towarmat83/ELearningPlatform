@@ -7,6 +7,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/google/uuid"
+
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
@@ -102,6 +104,35 @@ func (s *State) MyBadges(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{badgeResponseKey: s.enrichBadgeRows(request, rows)})
+}
+
+// PublicUser godoc
+// @Summary  Get public profile of a user
+// @Tags     Users
+// @Produce  json
+// @Param    id  path  string  true  "User UUID"
+// @Success  200  {object}  map[string]interface{}
+// @Router   /api/users/{id} [get].
+func (s *State) PublicUser(writer http.ResponseWriter, request *http.Request) {
+	userID, err := uuid.Parse(param(request, "id"))
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid user ID")
+
+		return
+	}
+
+	found, err := s.Repos.Users.FindByID(request.Context(), userID)
+	if err != nil {
+		s.Error(writer, http.StatusNotFound, "User not found")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{
+		"id":        found.ID,
+		"username":  found.Username,
+		"avatarUrl": found.AvatarURL,
+	})
 }
 
 // UserBadges godoc

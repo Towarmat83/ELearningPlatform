@@ -156,6 +156,94 @@ func (s *State) UserBadges(writer http.ResponseWriter, request *http.Request) {
 	s.JSON(writer, http.StatusOK, map[string]any{badgeResponseKey: s.enrichBadgeRows(request, rows)})
 }
 
+const (
+	// leaderboardMaxEntries caps rows returned by the public badge leaderboard.
+	leaderboardMaxEntries = 20
+	// leaderboardResponseKey is the JSON key used in leaderboard responses.
+	leaderboardResponseKey = "leaderboard"
+)
+
+// leaderboardEntry is one row of the public badge leaderboard response.
+type leaderboardEntry struct {
+	Rank      int      `json:"rank"`
+	UserID    string   `json:"userId"`
+	Username  string   `json:"username"`
+	AvatarURL *string  `json:"avatarUrl"`
+	Count     int64    `json:"count"`
+	Icons     []string `json:"icons"`
+}
+
+// buildIconCache fetches badge icons for each unique slug.
+func (s *State) buildIconCache(req *http.Request, slugs []string) map[string]string {
+	cache := make(map[string]string, len(slugs))
+	for _, slug := range slugs {
+		if _, seen := cache[slug]; seen {
+			continue
+		}
+
+		icon := "🏅"
+
+		info, err := s.fetchCourseBadgeInfo(req, slug)
+		if err == nil && info.Badge != nil && info.Badge.Icon != "" {
+			icon = info.Badge.Icon
+		}
+
+		cache[slug] = icon
+	}
+
+	return cache
+}
+
+// BadgeLeaderboard godoc
+// @Summary  List users ranked by badge count (public)
+// @Tags     Badges
+// @Produce  json
+// @Success  200  {object}  map[string]interface{}
+// @Router   /api/leaderboard [get].
+func (s *State) BadgeLeaderboard(writer http.ResponseWriter, request *http.Request) {
+	rows, err := s.Repos.Badges.Leaderboard(request.Context(), leaderboardMaxEntries)
+	if err != nil {
+		zap.L().Error("failed to query badge leaderboard", zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	// Collect all slugs for deduped icon fetching.
+	var allSlugs []string
+	for _, row := range rows {
+		allSlugs = append(allSlugs, row.Slugs...)
+	}
+
+	iconCache := s.buildIconCache(request, allSlugs)
+
+	entries := make([]leaderboardEntry, 0, len(rows))
+
+	for idx, row := range rows {
+		icons := make([]string, 0, len(row.Slugs))
+
+		for _, slug := range row.Slugs {
+			icon := iconCache[slug]
+			if icon == "" {
+				icon = "🏅"
+			}
+
+			icons = append(icons, icon)
+		}
+
+		entries = append(entries, leaderboardEntry{
+			Rank:      idx + 1,
+			UserID:    row.UserID,
+			Username:  row.Username,
+			AvatarURL: row.AvatarURL,
+			Count:     row.Count,
+			Icons:     icons,
+		})
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{leaderboardResponseKey: entries})
+}
+
 // BadgeStats godoc
 // @Summary  Get global stats for a course badge
 // @Tags     Badges

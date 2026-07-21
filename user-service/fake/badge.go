@@ -73,6 +73,18 @@ func (f *BadgeRepository) UserBadges(ctx context.Context, userID string) ([]repo
 	return f.MyBadges(ctx, userID)
 }
 
+// Leaderboard returns an empty leaderboard (stub).
+func (f *BadgeRepository) Leaderboard(_ context.Context, _ int) ([]repository.BadgeLeaderboardRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	return nil, nil
+}
+
 // EarnedCount returns how many distinct users have earned the badge
 // for courseSlug.
 func (f *BadgeRepository) EarnedCount(_ context.Context, courseSlug string) (int64, error) {

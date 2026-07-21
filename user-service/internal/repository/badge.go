@@ -17,6 +17,15 @@ type BadgeRow struct {
 	EarnedAt   time.Time
 }
 
+// BadgeLeaderboardRow is one entry in the badge leaderboard.
+type BadgeLeaderboardRow struct {
+	UserID    string
+	Username  string
+	AvatarURL *string
+	Count     int64
+	Slugs     []string
+}
+
 // BadgeRepository is the persistence boundary for the user_badges table.
 type BadgeRepository interface {
 	// Award grants courseSlug's badge to userID. Idempotent: re-awarding an
@@ -28,6 +37,8 @@ type BadgeRepository interface {
 	UserBadges(ctx context.Context, userID string) ([]BadgeRow, error)
 	// EarnedCount returns how many distinct users have earned the badge for courseSlug.
 	EarnedCount(ctx context.Context, courseSlug string) (int64, error)
+	// Leaderboard returns users ranked by badge count, most badges first.
+	Leaderboard(ctx context.Context, limit int) ([]BadgeLeaderboardRow, error)
 }
 
 // gormBadgeRepository is the GORM-backed BadgeRepository.
@@ -88,4 +99,71 @@ func (r *gormBadgeRepository) EarnedCount(ctx context.Context, courseSlug string
 	}
 
 	return count, nil
+}
+
+// Leaderboard returns up to limit users ranked by badge count descending,
+// with the list of earned course slugs for each user.
+func (r *gormBadgeRepository) Leaderboard(ctx context.Context, limit int) ([]BadgeLeaderboardRow, error) {
+	type rawRow struct {
+		UserID    string
+		Username  string
+		AvatarURL *string
+		Count     int64
+		Slugs     string // comma-separated
+	}
+
+	var raw []rawRow
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT ub.userid             AS user_id,
+		       u.username            AS username,
+		       u.avatarurl           AS avatar_url,
+		       COUNT(*)              AS count,
+		       STRING_AGG(ub.courseslug, ',' ORDER BY ub.earnedat DESC) AS slugs
+		FROM   user_badges ub
+		JOIN   users u ON u.id = ub.userid
+		GROUP  BY ub.userid, u.username, u.avatarurl
+		ORDER  BY count DESC, u.username ASC
+		LIMIT  ?`, limit).Scan(&raw).Error
+	if err != nil {
+		return nil, fmt.Errorf("leaderboard query: %w", err)
+	}
+
+	rows := make([]BadgeLeaderboardRow, 0, len(raw))
+
+	for _, entry := range raw {
+		var slugs []string
+		if entry.Slugs != "" {
+			slugs = splitCSV(entry.Slugs)
+		}
+
+		rows = append(rows, BadgeLeaderboardRow{
+			UserID:    entry.UserID,
+			Username:  entry.Username,
+			AvatarURL: entry.AvatarURL,
+			Count:     entry.Count,
+			Slugs:     slugs,
+		})
+	}
+
+	return rows, nil
+}
+
+// splitCSV splits a comma-separated string into a slice of non-empty parts.
+func splitCSV(csv string) []string {
+	if csv == "" {
+		return nil
+	}
+
+	parts := make([]string, 0)
+	start := 0
+
+	for i := 0; i <= len(csv); i++ {
+		if i == len(csv) || csv[i] == ',' {
+			parts = append(parts, csv[start:i])
+			start = i + 1
+		}
+	}
+
+	return parts
 }

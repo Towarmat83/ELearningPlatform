@@ -19,6 +19,7 @@ const { title, description, activePage } = Astro.props;
     <a href="/my-courses" class={`navlink${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
     <a href="/my-paths" class={`navlink${activePage === 'paths' ? ' active' : ''}`} id="nav-my-paths">Mes parcours</a>
     <a href="/my-badges" class={`navlink${activePage === 'badges' ? ' active' : ''}`} id="nav-my-badges">Mes badges</a>
+    <a href="/leaderboard" class={`navlink${activePage === 'leaderboard' ? ' active' : ''}`} id="nav-leaderboard">Classement</a>
     <div class="nav-spacer"></div>
     <slot name="nav-extra" />
     <div id="nav-user">

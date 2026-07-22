@@ -14,6 +14,7 @@ import (
 // membership synced from an IdP.
 const (
 	groupsRoleAdmin   = "admin"
+	groupsRoleManager = "manager"
 	groupsRoleStudent = "student"
 )
 
@@ -205,8 +206,8 @@ func (s *State) UpsertGroupMapping(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if body.PlatformRole != groupsRoleAdmin && body.PlatformRole != groupsRoleStudent {
-		s.Error(writer, http.StatusBadRequest, "platformRole must be 'admin' or 'student'")
+	if body.PlatformRole != groupsRoleAdmin && body.PlatformRole != groupsRoleStudent && body.PlatformRole != groupsRoleManager {
+		s.Error(writer, http.StatusBadRequest, "platformRole must be 'admin', 'manager' or 'student'")
 
 		return
 	}

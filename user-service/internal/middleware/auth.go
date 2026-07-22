@@ -18,6 +18,9 @@ import (
 // roleAdmin is the role name granted administrative access.
 const roleAdmin = "admin"
 
+// roleManager is the role name granted scoped management access.
+const roleManager = "manager"
+
 // jwtIssuer is the iss claim set on every session token.
 const jwtIssuer = "user-service"
 
@@ -134,9 +137,10 @@ func Auth(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-// Admin returns middleware that requires a valid bearer token whose
-// claims carry the admin role.
-func Admin(secret string) func(http.Handler) http.Handler {
+// requireRole builds middleware that validates a bearer token and enforces
+// that its claims carry the expected role value. The forbidden message is
+// role-specific so callers get a clear error.
+func requireRole(secret, role, forbiddenMsg string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 			auth := req.Header.Get("Authorization")
@@ -160,8 +164,8 @@ func Admin(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			if claims.Role != roleAdmin {
-				httpErr(resp, http.StatusForbidden, "Admin access required")
+			if claims.Role != role {
+				httpErr(resp, http.StatusForbidden, forbiddenMsg)
 
 				return
 			}
@@ -170,4 +174,16 @@ func Admin(secret string) func(http.Handler) http.Handler {
 			next.ServeHTTP(resp, req.WithContext(ctx))
 		})
 	}
+}
+
+// Manager returns middleware that requires a valid bearer token whose
+// claims carry the manager role.
+func Manager(secret string) func(http.Handler) http.Handler {
+	return requireRole(secret, roleManager, "Manager access required")
+}
+
+// Admin returns middleware that requires a valid bearer token whose
+// claims carry the admin role.
+func Admin(secret string) func(http.Handler) http.Handler {
+	return requireRole(secret, roleAdmin, "Admin access required")
 }

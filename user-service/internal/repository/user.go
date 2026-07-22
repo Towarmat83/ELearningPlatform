@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -33,16 +34,16 @@ type AuthProviderCount struct {
 // AdminUserRow is a single row of the admin user listing, including the
 // enrollment count computed via a LEFT JOIN against enrollments.
 type AdminUserRow struct {
-	ID              string
-	Username        string
-	Email           string
-	Role            string
-	IsActive        bool
-	AvatarURL       *string
-	Bio             *string
-	AuthProvider    string
-	CreatedAt       string
-	EnrolledCourses int64
+	ID              string  `json:"id"`
+	Username        string  `json:"username"`
+	Email           string  `json:"email"`
+	Role            string  `json:"role"`
+	IsActive        bool    `json:"isActive"`
+	AvatarURL       *string `json:"avatarUrl,omitempty"`
+	Bio             *string `json:"bio,omitempty"`
+	AuthProvider    string  `json:"authProvider"`
+	CreatedAt       string  `json:"createdAt"`
+	EnrolledCourses int64   `json:"enrolledCourses"`
 }
 
 // AdminUserDetailRow is the admin single-user detail projection, including
@@ -112,6 +113,7 @@ type UserRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	Search(ctx context.Context, query string) ([]UserSearchRow, error)
 	Leaderboard(ctx context.Context) ([]LeaderboardRow, error)
+	ListByGroupIDs(ctx context.Context, groupIDs []string) ([]AdminUserRow, error)
 
 	// Seeding
 	CreateAdminIfAbsent(ctx context.Context, username, email, hash string) error
@@ -378,6 +380,32 @@ func (r *gormUserRepository) ListForAdmin(ctx context.Context, provider string) 
 	err := query.Group("u.id").Order("u.createdat DESC").Scan(&list).Error
 	if err != nil {
 		return nil, fmt.Errorf("list admin users: %w", err)
+	}
+
+	return list, nil
+}
+
+// ListByGroupIDs returns the admin projection for every user belonging to at
+// least one of the given group IDs (as UUID strings), ordered by username.
+func (r *gormUserRepository) ListByGroupIDs(ctx context.Context, groupIDs []string) ([]AdminUserRow, error) {
+	if len(groupIDs) == 0 {
+		return nil, nil
+	}
+
+	var list []AdminUserRow
+
+	err := r.db.WithContext(ctx).Table("users AS u").
+		Select(`u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
+			u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider, u.createdat::text AS created_at,
+			COUNT(DISTINCT e.courseslug)::bigint AS enrolled_courses`).
+		Joins("JOIN user_groups ug ON ug.userid = u.id").
+		Joins("LEFT JOIN enrollments e ON e.userid = u.id").
+		Where("ug.groupid::text = ANY(?)", pq.Array(groupIDs)).
+		Group("u.id").
+		Order("u.username").
+		Scan(&list).Error
+	if err != nil {
+		return nil, fmt.Errorf("list users by group ids: %w", err)
 	}
 
 	return list, nil

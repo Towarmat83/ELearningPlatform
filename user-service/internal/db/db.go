@@ -110,18 +110,32 @@ type breakingMigration struct {
 	Apply func(ctx context.Context, gdb *gorm.DB) error
 }
 
-// breakingMigrations is empty for now — see the RunMigrations doc comment.
-// To add one:
-//
-//	{
-//		Name: "2026xxxx_rename_foo_to_bar",
-//		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-//			return gdb.WithContext(ctx).Migrator().RenameColumn(&models.X{}, "foo", "bar")
-//		},
-//	}
+// breakingMigrations lists one-off schema changes that AutoMigrate cannot
+// express safely (constraint drops, renames, data transforms). Each entry
+// runs at most once, tracked by Name in _schema_migrations.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{}
+var breakingMigrations = []breakingMigration{
+	{
+		Name: "20260722_drop_role_check_constraints",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			return gdb.WithContext(ctx).Exec(`
+				ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role;
+				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS chk_group_role_mappings_platform_role;
+			`).Error
+		},
+	},
+	{
+		Name: "20260722_drop_role_check_constraints_v2",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			return gdb.WithContext(ctx).Exec(`
+				ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS chk_group_role_mappings_platformrole;
+				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS group_role_mappings_platformrole_check;
+			`).Error
+		},
+	},
+}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own

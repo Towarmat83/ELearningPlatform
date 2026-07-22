@@ -2,6 +2,7 @@ package fake
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -354,6 +355,178 @@ func (f *GroupRepository) UnenrollCourse(_ context.Context, groupID, courseSlug 
 	}
 
 	return nil
+}
+
+// ListMembers returns every user belonging to the group identified by groupID.
+// In the fake, user details are not available (cross-aggregate join); an empty
+// list is returned to satisfy the interface.
+func (f *GroupRepository) ListMembers(_ context.Context, groupID string) ([]repository.AdminUserRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	gid, err := uuid.Parse(groupID)
+	if err != nil {
+		return nil, nil
+	}
+
+	var rows []repository.AdminUserRow
+
+	for _, ug := range f.UserGroup {
+		if ug.GroupID == gid {
+			rows = append(rows, repository.AdminUserRow{ID: ug.UserID})
+		}
+	}
+
+	return rows, nil
+}
+
+// AddMember links userID to the group identified by groupID.
+func (f *GroupRepository) AddMember(_ context.Context, groupID, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
+
+	gid, err := uuid.Parse(groupID)
+	if err != nil {
+		return fmt.Errorf("parse group uuid: %w", err)
+	}
+
+	for _, member := range f.UserGroup {
+		if member.GroupID == gid && member.UserID == userID {
+			return nil
+		}
+	}
+
+	f.UserGroup = append(f.UserGroup, models.UserGroup{UserID: userID, GroupID: gid})
+
+	return nil
+}
+
+// RemoveMember unlinks userID from the group identified by groupID.
+func (f *GroupRepository) RemoveMember(_ context.Context, groupID, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
+
+	for i, ug := range f.UserGroup {
+		if ug.GroupID.String() == groupID && ug.UserID == userID {
+			f.UserGroup = append(f.UserGroup[:i], f.UserGroup[i+1:]...)
+
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// GetGroupsByUserID returns all groups the given user belongs to.
+func (f *GroupRepository) GetGroupsByUserID(_ context.Context, userID string) ([]repository.GroupRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	var rows []repository.GroupRow
+
+	for _, membership := range f.UserGroup {
+		if membership.UserID != userID {
+			continue
+		}
+
+		for _, grp := range f.Groups {
+			if grp.ID != membership.GroupID {
+				continue
+			}
+
+			memberCount := int64(0)
+
+			for _, m := range f.UserGroup {
+				if m.GroupID == grp.ID {
+					memberCount++
+				}
+			}
+
+			mappedRole := ""
+
+			for _, mapping := range f.Mappings {
+				if mapping.GroupName == grp.Name {
+					mappedRole = mapping.PlatformRole
+
+					break
+				}
+			}
+
+			rows = append(rows, repository.GroupRow{
+				ID:          grp.ID.String(),
+				Name:        grp.Name,
+				Source:      grp.Source,
+				MemberCount: memberCount,
+				MappedRole:  mappedRole,
+			})
+
+			break
+		}
+	}
+
+	return rows, nil
+}
+
+// UserInAnyGroup reports whether userID belongs to at least one group in
+// groupIDs.
+func (f *GroupRepository) UserInAnyGroup(_ context.Context, userID string, groupIDs []string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return false, f.Err
+	}
+
+	idSet := make(map[string]struct{}, len(groupIDs))
+	for _, id := range groupIDs {
+		idSet[id] = struct{}{}
+	}
+
+	for _, ug := range f.UserGroup {
+		if ug.UserID == userID {
+			if _, ok := idSet[ug.GroupID.String()]; ok {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// ListMemberIDs returns the user IDs of every member of groupID.
+func (f *GroupRepository) ListMemberIDs(_ context.Context, groupID string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	var ids []string
+
+	for _, membership := range f.UserGroup {
+		if membership.GroupID.String() == groupID {
+			ids = append(ids, membership.UserID)
+		}
+	}
+
+	return ids, nil
 }
 
 // applyGroupMembership adds userID to the group named name (creating it if

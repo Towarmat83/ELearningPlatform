@@ -350,7 +350,7 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 		users = append(users, member)
 	}
 
-	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{"users": users})
+	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
 }
 
 // AdminEnrollUserInPath enrolls a user in a learning path. Idempotent:

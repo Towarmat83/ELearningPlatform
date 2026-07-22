@@ -9,6 +9,9 @@ spec:
   category: linux
   difficulty: beginner
   public: true
+  badge:
+    name: "Explorateur Linux"
+    icon: "🐧"
   modules:
     - name: "Navigation et système de fichiers"
       type: text

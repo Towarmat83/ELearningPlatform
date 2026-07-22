@@ -9,6 +9,9 @@ spec:
   category: security
   difficulty: advanced
   public: true
+  badge:
+    name: "Expert DevSecOps"
+    icon: "🔐"
   modules:
     - name: "Shift-left security"
       type: text

@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: beginner
   public: true
+  badge:
+    name: "Capitaine Docker"
+    icon: "🐳"
   modules:
     - name: "Images et conteneurs"
       type: text

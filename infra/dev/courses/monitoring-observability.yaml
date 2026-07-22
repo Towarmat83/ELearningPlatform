@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: intermediate
   public: true
+  badge:
+    name: "Sentinelle des systèmes"
+    icon: "📊"
   modules:
     - name: "Les trois piliers de l'observabilité"
       type: text

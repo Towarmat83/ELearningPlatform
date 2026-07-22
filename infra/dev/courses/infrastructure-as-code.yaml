@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: intermediate
   public: true
+  badge:
+    name: "Architecte IaC"
+    icon: "🏗️"
   modules:
     - name: "Principes de l'IaC"
       type: text

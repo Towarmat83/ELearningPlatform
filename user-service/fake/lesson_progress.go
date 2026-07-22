@@ -10,6 +10,10 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
 
+// lessonSlugComplete is the sentinel lesson slug value that marks a course as
+// fully completed.
+const lessonSlugComplete = "__complete__"
+
 // LessonProgressRepository is an in-memory repository.LessonProgressRepository
 // for tests.
 type LessonProgressRepository struct {
@@ -88,6 +92,27 @@ func (f *LessonProgressRepository) CountViewed(_ context.Context, userID, course
 	return count, nil
 }
 
+// ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for
+// all non-sentinel lessons the user has viewed.
+func (f *LessonProgressRepository) ViewedKeys(_ context.Context, userID string) (map[string]struct{}, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	out := make(map[string]struct{})
+
+	for _, p := range f.progress {
+		if p.UserID == userID && p.LessonSlug != "" && p.LessonSlug != lessonSlugComplete {
+			out[p.CourseSlug+"/"+p.LessonSlug] = struct{}{}
+		}
+	}
+
+	return out, nil
+}
+
 // CompletedCourseSlugs filters slugs down to the courses userID has
 // completed.
 func (f *LessonProgressRepository) CompletedCourseSlugs(_ context.Context, userID string, slugs []string) ([]string, error) {
@@ -107,7 +132,7 @@ func (f *LessonProgressRepository) CompletedCourseSlugs(_ context.Context, userI
 	completed := make([]string, 0)
 
 	for _, p := range f.progress {
-		if p.UserID == userID && p.LessonSlug == "__complete__" && wanted[p.CourseSlug] && !seen[p.CourseSlug] {
+		if p.UserID == userID && p.LessonSlug == lessonSlugComplete && wanted[p.CourseSlug] && !seen[p.CourseSlug] {
 			seen[p.CourseSlug] = true
 
 			completed = append(completed, p.CourseSlug)

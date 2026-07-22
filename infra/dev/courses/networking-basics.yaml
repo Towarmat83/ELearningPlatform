@@ -9,6 +9,9 @@ spec:
   category: networking
   difficulty: beginner
   public: true
+  badge:
+    name: "Architecte réseau"
+    icon: "🌐"
   modules:
     - name: "Modèle TCP/IP et protocoles"
       type: text

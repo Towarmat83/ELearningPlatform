@@ -18,12 +18,15 @@ const (
 // difficultyMedium is the default question/course difficulty.
 const difficultyMedium = "medium"
 
-// Path is a sequential learning path composed of ordered course slugs.
+// Path is a sequential learning path composed of course slugs or skill tags.
 type Path struct {
 	Slug        string   `json:"slug"`
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
-	Courses     []string `json:"courses"` // ordered — index N+1 unlocks after N completed
+	Kind        string   `json:"kind"`              // "course" | "skill"
+	Level       string   `json:"level,omitempty"`   // "beginner" | "intermediate" | "advanced"
+	Courses     []string `json:"courses,omitempty"` // ordered — index N+1 unlocks after N completed
+	Skills      []string `json:"skills,omitempty"`  // ordered skill tags (kind=skill paths)
 	Source      string   `json:"source,omitempty"`
 }
 
@@ -50,6 +53,7 @@ type Course struct {
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
 	Lessons       []Lesson             `json:"lessons"`
 	Modules       []Module             `json:"modules,omitempty"`
+	Skills        []string             `json:"skills,omitempty"` // aggregated from all modules
 	Source        string               `json:"source,omitempty"`
 }
 
@@ -90,6 +94,7 @@ type Module struct {
 
 	CheckParams map[string]any `json:"checkParams,omitempty"`
 	Steps       []CheckStep    `json:"steps,omitempty"`
+	Skills      []string       `json:"skills,omitempty"` // competency tags this module teaches
 }
 
 // CheckStep is one verifiable step inside a lab module.
@@ -202,6 +207,7 @@ type ModuleYAML struct {
 
 	CheckParams map[string]any `yaml:"checkParams,omitempty"`
 	Steps       []CheckStep    `yaml:"steps,omitempty"`
+	Skills      []string       `yaml:"skills,omitempty"`
 }
 
 // ModuleIndexEntry is one entry in a module index YAML file (type: modules).

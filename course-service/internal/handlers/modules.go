@@ -112,6 +112,7 @@ type moduleResponse struct {
 	CheckType     string                   `json:"checkType,omitempty"`
 	CheckParams   map[string]any           `json:"checkParams,omitempty"`
 	Steps         []content.CheckStep      `json:"steps,omitempty"`
+	Skills        []string                 `json:"skills,omitempty"`
 	// Admin-only fields (omitted for regular users)
 	Src  string `json:"src,omitempty"`
 	Ref  string `json:"ref,omitempty"`
@@ -491,9 +492,18 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 	done := completedSlugs(modules, viewed, progress)
 
 	out := make([]moduleResponse, 0, len(modules))
+	prevDone := true // first module is always available
+
 	for idx, mod := range modules {
-		locked := !isAdmin && isLocked(mod.Prerequisites, done)
+		explicitLocked := isLocked(mod.Prerequisites, done)
+		seqLocked := !mod.Inline && !prevDone
+		locked := !isAdmin && (explicitLocked || seqLocked)
+
 		out = append(out, buildModuleListEntry(mod, idx, isAdmin, locked, viewed, progress))
+
+		if !mod.Inline {
+			prevDone = done[mod.Slug()]
+		}
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{"modules": out})
@@ -555,6 +565,7 @@ func buildModuleListEntry(mod content.Module, idx int, isAdmin, locked bool, vie
 		MaxScore:      prog.MaxScore,
 		Passed:        prog.Passed,
 		Attempts:      prog.Attempts,
+		Skills:        mod.Skills,
 	}
 	if isAdmin {
 		resp.Src = mod.Src
@@ -657,6 +668,7 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 		Type:   mod.Type,
 		Hidden: mod.Hidden,
 		Inline: mod.Inline,
+		Skills: mod.Skills,
 	}
 	if mod.Type == moduleTypeQuiz && mod.HasQuestions() {
 		resp.QuestionCount = len(mod.Questions)

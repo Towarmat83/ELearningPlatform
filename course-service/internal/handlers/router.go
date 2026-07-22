@@ -67,6 +67,8 @@ func registerPublicRoutes(router chi.Router, state *State) {
 	router.Get("/api/paths", state.ListPaths)
 	router.Get("/api/paths/{slug}", state.GetPath)
 
+	router.Get("/api/skills/{slug}/modules", state.ListSkillModules)
+
 	router.Get("/uploads/{filename}", state.ServeUpload)
 }
 

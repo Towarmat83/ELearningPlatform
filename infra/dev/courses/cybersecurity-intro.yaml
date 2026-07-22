@@ -9,6 +9,9 @@ spec:
   category: security
   difficulty: intermediate
   public: true
+  badge:
+    name: "Sentinelle du Web"
+    icon: "🛡️"
   modules:
     - name: "Les menaces du web"
       type: text

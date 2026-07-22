@@ -26,6 +26,10 @@ import App from '../layouts/App.astro';
     .path-list-chevron { color: rgba(0,0,0,.25); font-size: 1.2rem; margin-left: 4px; flex-shrink: 0; }
     .path-list-progress { height: 8px; background: rgba(0,0,0,.1); }
     .path-list-progress-fill { height: 100%; transition: width .4s ease; }
+    .level-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .level-1 { background: #dcfce7; color: #15803d; }
+    .level-2 { background: #fef9c3; color: #a16207; }
+    .level-3 { background: #fee2e2; color: #b91c1c; }
 
     .detail-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 20px; background: none; border: none; padding: 0; }
     .detail-back:hover { text-decoration: underline; }
@@ -66,6 +70,17 @@ import App from '../layouts/App.astro';
     const token = localStorage.getItem('token');
     if (!token) { window.location.href = '/login?redirect=/my-paths'; }
 
+    const LEVELS: Record<string,{label:string;cls:string}> = {
+      beginner:     { label: 'Niveau 1 · Débutant',      cls: 'level-1' },
+      intermediate: { label: 'Niveau 2 · Intermédiaire', cls: 'level-2' },
+      advanced:     { label: 'Niveau 3 · Avancé',        cls: 'level-3' },
+    };
+    function levelBadge(level: string): string {
+      const l = LEVELS[level];
+      if (!l) return '';
+      return `<span class="level-badge ${l.cls}">${l.label}</span>`;
+    }
+
     const SHORT: Record<string,string> = {
       'linux-intro':         'Linux',
       'docker-fundamentals': 'Docker',
@@ -95,19 +110,23 @@ import App from '../layouts/App.astro';
 
     function renderList(): string {
       return allPaths.map((p:any) => {
-        const total = p.courses?.length ?? 0;
+        const isSkillPath = p.kind === 'skill';
+        const total = (p.courses?.length ?? 0);
         const done  = (p.courses??[]).filter((c:any)=>c.status==='completed').length;
         const pct   = total>0 ? Math.round(done/total*100) : 0;
         const allDone = pct===100;
         const col = allDone?'var(--good)':pct>0?'var(--blue)':'var(--ink-soft)';
-        const sub = `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
+        const sub = isSkillPath
+          ? `${total} compétence${total>1?'s':''} · ${allDone?'✓ Acquises':done>0?`${done}/${total} acquises`:'À commencer'}`
+          : `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
         const colors = PATH_COLORS[p.slug] ?? DEFAULT_COLOR;
         return `<div class="path-list-card" data-slug="${p.slug}" style="border-color:${colors.accent}40">
           <div class="path-list-banner" style="background:${colors.bg}">
             <div class="path-list-icon" style="background:${colors.iconBg}">${PATH_ICONS[p.slug]??'🗺️'}</div>
             <div class="path-list-body">
               <div class="path-list-title">${p.title||p.slug}</div>
-              <div class="path-list-sub">${sub}</div>
+              ${p.level ? levelBadge(p.level) : ''}
+              <div class="path-list-sub" style="margin-top:4px">${sub}</div>
             </div>
             <span class="path-list-pct" style="color:${colors.accent}">${pct}%</span>
             <span class="path-list-chevron" style="color:${colors.accent}">›</span>
@@ -151,7 +170,12 @@ import App from '../layouts/App.astro';
     }
 
     function renderDetail(p: any): string {
+      const isSkillPath = p.kind === 'skill';
+
+      // Both path kinds: courses contains the ordered node statuses
+      // (course slugs for kind=course, skill slugs for kind=skill)
       const courses: any[] = p.courses ?? [];
+
       const total = courses.length;
       const done  = courses.filter((c:any)=>c.status==='completed').length;
       const pct   = total>0 ? Math.round(done/total*100) : 0;
@@ -245,9 +269,15 @@ import App from '../layouts/App.astro';
           ${nameEls}
           ${badgeEl}`;
 
+        const href = isSkillPath
+          ? `/skills/${c.slug}`
+          : `/courses/${c.slug}`;
+        const onclick = isSkillPath
+          ? `onclick="localStorage.setItem('skillReturnPath','${p.slug}')"`
+          : `onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')"`;
         nodesSVG += isLocked
           ? `<g>${inner}</g>`
-          : `<a href="/courses/${c.slug}" onclick="localStorage.setItem('courseReturnTo','/my-paths');localStorage.setItem('courseReturnPath','${p.slug}')" style="cursor:pointer">${inner}</a>`;
+          : `<a href="${href}" ${onclick} style="cursor:pointer">${inner}</a>`;
       });
 
       const lastPt = pts[pts.length - 1];
@@ -265,13 +295,15 @@ import App from '../layouts/App.astro';
       return `
         <div class="detail-header">
           <div class="detail-title">${p.title||p.slug}</div>
+          ${p.level ? `<div style="margin:.4rem 0">${levelBadge(p.level)}</div>` : ''}
           ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
+          ${p.skills?.length && !isSkillPath ? `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin:.4rem 0 .2rem">${(p.skills as string[]).map(sk=>`<a href="/skills/${sk}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none" onclick="localStorage.setItem('skillReturnPath','${p.slug}')">🎯 ${sk}</a>`).join('')}</div>` : ''}
           <div class="detail-prog">
             <div class="progress-bar" style="flex:1">
               <div class="progress-bar-fill" style="width:${pct}%;background:${pBarCol}"></div>
             </div>
             <span class="detail-prog-pct" style="color:${pBarCol}">${pct}%</span>
-            <span>${done}/${total} cours</span>
+            <span>${done}/${total} ${isSkillPath ? `compétence${total>1?'s':''}` : `cours`}</span>
           </div>
         </div>
         <div class="snake-wrap">${svgEl}</div>
@@ -313,9 +345,10 @@ import App from '../layouts/App.astro';
         });
         document.getElementById('btn-back')!.addEventListener('click', showList);
 
-        const returnPath = localStorage.getItem('courseReturnPath');
+        const returnPath = localStorage.getItem('courseReturnPath') ?? localStorage.getItem('skillReturnPath');
         if (returnPath) {
           localStorage.removeItem('courseReturnPath');
+          localStorage.removeItem('skillReturnPath');
           showDetail(returnPath);
         }
       } catch {

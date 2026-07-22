@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: intermediate
   public: true
+  badge:
+    name: "Pilote Kubernetes"
+    icon: "☸️"
   modules:
     - name: "Concepts fondamentaux"
       type: text

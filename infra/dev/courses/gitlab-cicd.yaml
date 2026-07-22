@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: beginner
   public: true
+  badge:
+    name: "Maître CI/CD"
+    icon: "🚀"
   modules:
     - name: Introduction au CI/CD avec GitLab
       type: text

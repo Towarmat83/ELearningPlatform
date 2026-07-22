@@ -22,7 +22,7 @@ const roleAdmin = "admin"
 const jwtIssuer = "user-service"
 
 // jwtAudience is the aud claim expected on every session token.
-const jwtAudience = "pupitre-api"
+const jwtAudience = "elearning-api"
 
 // Claims holds the JWT claims used by course-service, combining the
 // standard registered claims with the application-specific user fields.

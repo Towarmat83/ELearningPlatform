@@ -9,6 +9,9 @@ spec:
   category: networking
   difficulty: intermediate
   public: true
+  badge:
+    name: "Expert réseau"
+    icon: "🔌"
   modules:
     - name: "Le modèle OSI"
       type: "text"

@@ -29,6 +29,10 @@ type ModuleProgressRepository interface {
 	// method, so each repository (and its fake) only ever touches its own
 	// table.
 	CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error)
+
+	// PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
+	// all quiz and lab modules the user has passed, across all courses.
+	PassedKeys(ctx context.Context, userID string) (map[string]struct{}, error)
 }
 
 // gormModuleProgressRepository is the GORM-backed ModuleProgressRepository.
@@ -137,6 +141,30 @@ func (r *gormModuleProgressRepository) ListByUserCourse(ctx context.Context, use
 	}
 
 	return list, nil
+}
+
+// PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
+// all modules userID has passed, across all courses.
+func (r *gormModuleProgressRepository) PassedKeys(ctx context.Context, userID string) (map[string]struct{}, error) {
+	var rows []struct {
+		CourseSlug string `gorm:"column:courseslug"`
+		ModuleSlug string `gorm:"column:moduleslug"`
+	}
+
+	err := r.db.WithContext(ctx).Model(&models.ModuleProgress{}).
+		Select("courseslug, moduleslug").
+		Where("userid = ?::uuid AND passed = true AND moduleslug IS NOT NULL", userID).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list passed module keys: %w", err)
+	}
+
+	out := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		out[row.CourseSlug+"/"+row.ModuleSlug] = struct{}{}
+	}
+
+	return out, nil
 }
 
 // CompletedCourseSlugs returns the subset of slugs userID has passed at

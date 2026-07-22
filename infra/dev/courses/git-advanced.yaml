@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: intermediate
   public: false
+  badge:
+    name: "Maître Git"
+    icon: "🌿"
   modules:
     - name: "Rappels Git essentiels"
       type: "text"

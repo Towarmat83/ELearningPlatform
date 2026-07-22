@@ -43,6 +43,7 @@ import Admin from '../../../layouts/Admin.astro';
           <label class="label">Rôle</label>
           <select id="modal-role" class="input" style="height:auto;padding:9px 14px">
             <option value="student">Étudiant</option>
+            <option value="manager">Manager de groupe</option>
             <option value="admin">Administrateur</option>
           </select>
         </div>
@@ -130,7 +131,7 @@ import Admin from '../../../layouts/Admin.astro';
             </div>
           </td>
           <td style="padding:12px 16px">
-            <span class="badge ${u.role === 'admin' ? 'badge-red' : 'badge-blue'}">${u.role === 'admin' ? 'Admin' : 'Étudiant'}</span>
+            <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'}">${u.role === 'admin' ? 'Admin' : u.role === 'manager' ? 'Manager' : 'Étudiant'}</span>
             ${!u.isActive ? '<span class="badge badge-gray" style="margin-left:4px">Inactif</span>' : ''}
           </td>
           <td style="padding:12px 16px">

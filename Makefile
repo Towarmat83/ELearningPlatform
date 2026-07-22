@@ -2,9 +2,12 @@
 # Pupitre Platform — KinD Dev Environment
 # ─────────────────────────────────────────────────────────────────────────────
 
-KIND_CLUSTER   := pupitre
+KIND_CLUSTER   ?= pupitre
 HELM_DIR       := helm
-HELM_RELEASE   := pupitre
+HELM_RELEASE   ?= pupitre
+
+# Local overrides (git-ignored) — create local.mk to set KIND_CLUSTER, HELM_RELEASE, etc.
+-include local.mk
 HELM_VALUES    := infra/kind/kind-values.yaml
 PORT_FWDS_LOG  := /tmp/pupitre-port-forwards.log
 COURSE_DIR     := examples/courses

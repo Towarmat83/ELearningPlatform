@@ -51,6 +51,7 @@ const { title, description, activePage } = Astro.props;
             <span style="font-size:.875rem;font-weight:500;color:var(--ink-soft);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${user.username}</span>
           </a>
           ${user.role === 'admin' ? '<a href="/admin" class="btn btn-secondary btn-sm">Admin</a>' : ''}
+          ${user.role === 'manager' ? '<a href="/manager/users" class="btn btn-secondary btn-sm">Mes membres</a>' : ''}
           <button id="nav-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
         `;
 

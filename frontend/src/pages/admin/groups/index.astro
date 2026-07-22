@@ -2,9 +2,12 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Groupes">
-  <div style="margin-bottom:28px">
-    <h1 style="font-size:1.5rem">Groupes</h1>
-    <p class="text-soft text-sm" style="margin-top:4px">Groupes synchronisés depuis les providers SSO/LDAP et mappings de rôles</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 style="font-size:1.5rem">Groupes</h1>
+      <p class="text-soft text-sm" style="margin-top:4px">Groupes synchronisés depuis les providers SSO/LDAP et groupes locaux</p>
+    </div>
+    <button class="btn btn-primary" id="new-group-btn">+ Nouveau groupe</button>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
@@ -23,7 +26,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     <!-- Role mappings -->
     <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="margin-bottom:14px">
         <h2 style="font-size:1.1rem">Mappings de rôles</h2>
       </div>
       <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
@@ -31,8 +34,6 @@ import Admin from '../../../layouts/Admin.astro';
           <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
         </div>
       </div>
-
-      <!-- Add mapping form -->
       <div class="card">
         <h3 style="font-size:.95rem;margin-bottom:14px">Ajouter un mapping</h3>
         <div class="stack" style="gap:10px">
@@ -44,6 +45,7 @@ import Admin from '../../../layouts/Admin.astro';
             <label class="label">Rôle plateforme</label>
             <select id="new-group-role" class="input" style="height:auto;padding:9px 14px">
               <option value="student">Étudiant</option>
+              <option value="manager">Manager de groupe</option>
               <option value="admin">Administrateur</option>
             </select>
           </div>
@@ -53,33 +55,101 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
   </div>
 
-  <script>
-    const token = localStorage.getItem('token');
+  <!-- Create group modal -->
+  <div id="create-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
+    <div class="card" style="width:380px;max-width:95vw;padding:28px">
+      <h3 style="margin-bottom:20px">Nouveau groupe local</h3>
+      <div class="form-group" style="margin-bottom:20px">
+        <label class="label">Nom du groupe</label>
+        <input id="create-group-name" class="input" placeholder="ex : equipe-rh" />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary" id="create-cancel">Annuler</button>
+        <button class="btn btn-primary" id="create-confirm">Créer</button>
+      </div>
+    </div>
+  </div>
 
+  <!-- Members modal -->
+  <div id="members-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
+    <div class="card" style="width:520px;max-width:95vw;padding:28px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h3 id="members-modal-title">Membres du groupe</h3>
+        <button id="members-close" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--ink-soft)">✕</button>
+      </div>
+
+      <!-- Current members -->
+      <div style="margin-bottom:20px">
+        <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Membres actuels</h4>
+        <div id="members-list">
+          <div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>
+        </div>
+      </div>
+
+      <!-- Add member -->
+      <div style="border-top:1px solid var(--line);padding-top:20px">
+        <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Ajouter un membre</h4>
+        <div style="display:flex;gap:8px">
+          <select id="add-member-select" class="input" style="flex:1;height:auto;padding:9px 14px">
+            <option value="">Choisir un utilisateur…</option>
+          </select>
+          <button class="btn btn-primary" id="add-member-btn">Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
     async function api(path: string, opts: { method?: string; body?: unknown } = {}) {
+      const token = localStorage.getItem('token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
       const res = await fetch('/api' + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as any).error || `HTTP ${res.status}`); }
       return res.status === 204 ? null : res.json();
     }
 
+    let allUsers: any[] = [];
+    let selectedGroupId = '';
+
     async function loadGroups() {
       try {
         const { groups } = await api('/admin/groups');
         document.getElementById('groups-count')!.textContent = String(groups.length);
         const el = document.getElementById('groups-list')!;
-        if (!groups.length) { el.innerHTML = '<p class="text-soft text-sm" style="padding:16px">Aucun groupe synchronisé.</p>'; return; }
+        if (!groups.length) {
+          el.innerHTML = '<p class="text-soft text-sm" style="padding:16px">Aucun groupe.</p>';
+          return;
+        }
         el.innerHTML = groups.map((g: any) => `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)">
             <div style="flex:1;min-width:0">
               <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''} · ${g.source}</div>
+              <div style="font-size:.75rem;color:var(--ink-soft)">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">${g.source}</span></div>
             </div>
-            ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : 'badge-blue'}">${g.mappedRole}</span>` : '<span class="badge badge-gray">Non mappé</span>'}
+            ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : g.mappedRole === 'manager' ? 'badge-orange' : 'badge-blue'}">${g.mappedRole}</span>` : '<span class="badge badge-gray">Non mappé</span>'}
+            <button class="btn btn-secondary btn-sm members-btn" data-id="${g.id}" data-name="${g.name}">Membres</button>
+            ${g.source === 'local' && g.name !== 'everyone' ? `<button class="btn btn-sm del-group-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${g.id}" data-name="${g.name}">✕</button>` : ''}
           </div>
         `).join('');
+        el.querySelectorAll<HTMLButtonElement>('.members-btn').forEach(btn => {
+          btn.addEventListener('click', () => openMembers(btn.dataset.id!, btn.dataset.name!));
+        });
+        el.querySelectorAll<HTMLButtonElement>('.del-group-btn').forEach(btn => {
+          btn.addEventListener('click', () => deleteGroup(btn.dataset.id!, btn.dataset.name!));
+        });
       } catch (e: any) {
         document.getElementById('groups-list')!.innerHTML = `<p style="color:var(--bad);padding:16px">${e.message}</p>`;
+      }
+    }
+
+    async function deleteGroup(id: string, name: string) {
+      if (!confirm(`Supprimer le groupe "${name}" ? Cette action est irréversible.`)) return;
+      try {
+        await api(`/admin/groups/${id}`, { method: 'DELETE' });
+        loadGroups();
+        (window as any).showToast?.('Groupe supprimé', 'success');
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
       }
     }
 
@@ -89,10 +159,10 @@ import Admin from '../../../layouts/Admin.astro';
         const el = document.getElementById('mappings-list')!;
         if (!mappings.length) { el.innerHTML = '<p class="text-soft text-sm" style="padding:16px">Aucun mapping défini.</p>'; return; }
         el.innerHTML = mappings.map((m: any) => `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)">
             <code style="flex:1;font-size:.82rem;background:var(--fill);padding:3px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.groupName}</code>
             <span style="color:var(--ink-soft);flex-shrink:0">→</span>
-            <span class="badge ${m.platformRole === 'admin' ? 'badge-red' : 'badge-blue'}" style="flex-shrink:0">${m.platformRole}</span>
+            <span class="badge ${m.platformRole === 'admin' ? 'badge-red' : m.platformRole === 'manager' ? 'badge-orange' : 'badge-blue'}" style="flex-shrink:0">${m.platformRole}</span>
             <button class="btn btn-sm del-mapping-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-group="${m.groupName}">✕</button>
           </div>
         `).join('');
@@ -100,8 +170,7 @@ import Admin from '../../../layouts/Admin.astro';
           btn.addEventListener('click', async () => {
             try {
               await api(`/admin/groups/mappings/${encodeURIComponent(btn.dataset.group!)}`, { method: 'DELETE' });
-              loadMappings();
-              loadGroups();
+              loadMappings(); loadGroups();
               (window as any).showToast?.('Mapping supprimé', 'success');
             } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
           });
@@ -111,15 +180,118 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
+    async function openMembers(groupId: string, groupName: string) {
+      selectedGroupId = groupId;
+      document.getElementById('members-modal-title')!.textContent = `Membres — ${groupName}`;
+      document.getElementById('members-modal')!.style.display = 'flex';
+      await refreshMembers();
+
+      // Populate user picker (filter out users already member — done server-side via ON CONFLICT DO NOTHING)
+      const sel = document.getElementById('add-member-select') as HTMLSelectElement;
+      if (allUsers.length === 0) {
+        try {
+          const r = await api('/admin/users');
+          allUsers = r.users || [];
+        } catch (e: any) {
+          (window as any).showToast?.('Impossible de charger les utilisateurs : ' + (e.message || 'Erreur'), 'error');
+        }
+      }
+      sel.innerHTML = '<option value="">Choisir un utilisateur…</option>' +
+        allUsers.map((u: any) => `<option value="${u.id}">${u.username} (${u.email})</option>`).join('');
+    }
+
+    async function refreshMembers() {
+      const el = document.getElementById('members-list')!;
+      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      try {
+        const { members } = await api(`/admin/groups/${selectedGroupId}/members`);
+        const list: any[] = members || [];
+        if (!list.length) { el.innerHTML = '<p class="text-soft text-sm">Aucun membre.</p>'; return; }
+        el.innerHTML = list.map((u: any) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+            <div style="width:30px;height:30px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;color:var(--blue);flex-shrink:0">${(u.username||'?')[0].toUpperCase()}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.875rem;font-weight:500">${u.username}</div>
+              <div style="font-size:.75rem;color:var(--ink-soft)">${u.email}</div>
+            </div>
+            <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'}" style="flex-shrink:0">${u.role}</span>
+            <button class="btn btn-sm remove-member-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-uid="${u.id}">Retirer</button>
+          </div>
+        `).join('');
+        el.querySelectorAll<HTMLButtonElement>('.remove-member-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              await api(`/admin/groups/${selectedGroupId}/members/${btn.dataset.uid}`, { method: 'DELETE' });
+              (window as any).showToast?.('Membre retiré', 'success');
+              await refreshMembers(); loadGroups();
+            } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
+          });
+        });
+      } catch (e: any) {
+        el.innerHTML = `<p style="color:var(--bad);font-size:.875rem">${e.message}</p>`;
+      }
+    }
+
+    document.getElementById('add-member-btn')!.addEventListener('click', async () => {
+      const userId = (document.getElementById('add-member-select') as HTMLSelectElement).value;
+      if (!userId) { (window as any).showToast?.('Choisissez un utilisateur', 'error'); return; }
+      const btn = document.getElementById('add-member-btn') as HTMLButtonElement;
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        await api(`/admin/groups/${selectedGroupId}/members`, { method: 'POST', body: { userId } });
+        (document.getElementById('add-member-select') as HTMLSelectElement).value = '';
+        (window as any).showToast?.('Membre ajouté', 'success');
+        await refreshMembers(); loadGroups();
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Ajouter';
+      }
+    });
+
+    document.getElementById('members-close')!.addEventListener('click', () => {
+      document.getElementById('members-modal')!.style.display = 'none';
+    });
+    document.getElementById('members-modal')!.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('members-modal')) document.getElementById('members-modal')!.style.display = 'none';
+    });
+
+    // Create group modal
+    document.getElementById('new-group-btn')!.addEventListener('click', () => {
+      (document.getElementById('create-group-name') as HTMLInputElement).value = '';
+      document.getElementById('create-modal')!.style.display = 'flex';
+    });
+    document.getElementById('create-cancel')!.addEventListener('click', () => {
+      document.getElementById('create-modal')!.style.display = 'none';
+    });
+    document.getElementById('create-modal')!.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('create-modal')) document.getElementById('create-modal')!.style.display = 'none';
+    });
+    document.getElementById('create-confirm')!.addEventListener('click', async () => {
+      const name = (document.getElementById('create-group-name') as HTMLInputElement).value.trim();
+      if (!name) { (window as any).showToast?.('Nom requis', 'error'); return; }
+      const btn = document.getElementById('create-confirm') as HTMLButtonElement;
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        await api('/admin/groups', { method: 'POST', body: { name } });
+        document.getElementById('create-modal')!.style.display = 'none';
+        (window as any).showToast?.('Groupe créé', 'success');
+        await loadGroups();
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Créer';
+      }
+    });
+
     document.getElementById('add-mapping-btn')!.addEventListener('click', async () => {
       const groupName = (document.getElementById('new-group-name') as HTMLInputElement).value.trim();
       const role = (document.getElementById('new-group-role') as HTMLSelectElement).value;
       if (!groupName) { (window as any).showToast?.('Nom du groupe requis', 'error'); return; }
       try {
-        await api('/admin/groups/mappings', { method: 'POST', body: { groupName: groupName, platformRole: role } });
+        await api('/admin/groups/mappings', { method: 'POST', body: { groupName, platformRole: role } });
         (document.getElementById('new-group-name') as HTMLInputElement).value = '';
-        loadMappings();
-        loadGroups();
+        loadMappings(); loadGroups();
         (window as any).showToast?.('Mapping ajouté', 'success');
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
     });

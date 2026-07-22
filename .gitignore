@@ -20,3 +20,4 @@ coverage.out
 
 # Logs
 *.log
+local.mk

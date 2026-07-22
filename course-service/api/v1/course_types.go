@@ -270,6 +270,9 @@ type CourseSpec struct {
 	// Prerequisites lists the conditions that must be met before a user can enroll.
 	// +kubebuilder:validation:Optional
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
+	// Scope restricts enrollment management to users within the named group.
+	// +kubebuilder:validation:Optional
+	Scope string `json:"scope,omitempty"`
 }
 
 // Course is the Schema for the courses API.

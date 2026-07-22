@@ -54,6 +54,7 @@ type Course struct {
 	Lessons       []Lesson             `json:"lessons"`
 	Modules       []Module             `json:"modules,omitempty"`
 	Skills        []string             `json:"skills,omitempty"` // aggregated from all modules
+	Scope         string               `json:"scope,omitempty"`
 	Source        string               `json:"source,omitempty"`
 }
 

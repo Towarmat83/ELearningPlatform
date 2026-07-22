@@ -28,6 +28,7 @@ type courseResponse struct {
 	ModuleCount     int                    `json:"moduleCount"`
 	LabCount        int                    `json:"labCount"`
 	EnrollmentCount int                    `json:"enrollmentCount"`
+	Scope           string                 `json:"scope,omitempty"`
 	Source          string                 `json:"source,omitempty"`
 	Prerequisites   []prerequisiteResponse `json:"prerequisites,omitempty"`
 	Skills          []string               `json:"skills,omitempty"`
@@ -57,6 +58,7 @@ func toCourseResponse(course *content.Course) courseResponse {
 		ModuleCount:     len(course.Modules),
 		LabCount:        len(course.Modules),
 		EnrollmentCount: 0,
+		Scope:           course.Scope,
 		Source:          course.Source,
 		Prerequisites:   prereqs,
 		Skills:          course.Skills,

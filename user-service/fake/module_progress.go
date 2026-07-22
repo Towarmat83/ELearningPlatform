@@ -155,7 +155,7 @@ func (f *ModuleProgressRepository) ListByUserCourse(_ context.Context, userID, c
 
 // PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
 // all modules the user has passed, across all courses.
-func (f *ModuleProgressRepository) PassedKeys(_ context.Context, userID string) (map[string]bool, error) {
+func (f *ModuleProgressRepository) PassedKeys(_ context.Context, userID string) (map[string]struct{}, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -163,11 +163,11 @@ func (f *ModuleProgressRepository) PassedKeys(_ context.Context, userID string) 
 		return nil, f.Err
 	}
 
-	out := make(map[string]bool)
+	out := make(map[string]struct{})
 
 	for _, p := range f.progress {
 		if p.UserID == userID && p.Passed && p.ModuleSlug != nil {
-			out[p.CourseSlug+"/"+*p.ModuleSlug] = true
+			out[p.CourseSlug+"/"+*p.ModuleSlug] = struct{}{}
 		}
 	}
 

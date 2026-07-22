@@ -362,11 +362,16 @@ func pathFromCR(pathCR *coursev1.Path) *Path {
 		}
 	}
 
-	skills := make([]string, 0, len(pathCR.Spec.Skills))
+	skillSet := make(map[string]struct{}, len(pathCR.Spec.Skills))
 	for _, skill := range pathCR.Spec.Skills {
 		if skill != "" {
-			skills = append(skills, skill)
+			skillSet[skill] = struct{}{}
 		}
+	}
+
+	skills := make([]string, 0, len(skillSet))
+	for skill := range skillSet {
+		skills = append(skills, skill)
 	}
 
 	kind := pathCR.Spec.Kind
@@ -483,11 +488,11 @@ func watchCRD(
 // aggregateSkills returns a deduplicated list of all skill tags declared
 // across the given modules.
 func aggregateSkills(modules []Module) []string {
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 
 	for _, m := range modules {
 		for _, s := range m.Skills {
-			seen[s] = true
+			seen[s] = struct{}{}
 		}
 	}
 

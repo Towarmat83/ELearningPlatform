@@ -70,12 +70,12 @@ import App from '../layouts/App.astro';
     const token = localStorage.getItem('token');
     if (!token) { window.location.href = '/login?redirect=/my-paths'; }
 
-    const LEVELS: Record<number,{label:string;cls:string}> = {
-      1: { label: 'Niveau 1 · Débutant',      cls: 'level-1' },
-      2: { label: 'Niveau 2 · Intermédiaire', cls: 'level-2' },
-      3: { label: 'Niveau 3 · Avancé',        cls: 'level-3' },
+    const LEVELS: Record<string,{label:string;cls:string}> = {
+      beginner:     { label: 'Niveau 1 · Débutant',      cls: 'level-1' },
+      intermediate: { label: 'Niveau 2 · Intermédiaire', cls: 'level-2' },
+      advanced:     { label: 'Niveau 3 · Avancé',        cls: 'level-3' },
     };
-    function levelBadge(level: number): string {
+    function levelBadge(level: string): string {
       const l = LEVELS[level];
       if (!l) return '';
       return `<span class="level-badge ${l.cls}">${l.label}</span>`;

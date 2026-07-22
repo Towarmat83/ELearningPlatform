@@ -94,7 +94,7 @@ func (f *LessonProgressRepository) CountViewed(_ context.Context, userID, course
 
 // ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for
 // all non-sentinel lessons the user has viewed.
-func (f *LessonProgressRepository) ViewedKeys(_ context.Context, userID string) (map[string]bool, error) {
+func (f *LessonProgressRepository) ViewedKeys(_ context.Context, userID string) (map[string]struct{}, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -102,11 +102,11 @@ func (f *LessonProgressRepository) ViewedKeys(_ context.Context, userID string) 
 		return nil, f.Err
 	}
 
-	out := make(map[string]bool)
+	out := make(map[string]struct{})
 
 	for _, p := range f.progress {
 		if p.UserID == userID && p.LessonSlug != "" && p.LessonSlug != lessonSlugComplete {
-			out[p.CourseSlug+"/"+p.LessonSlug] = true
+			out[p.CourseSlug+"/"+p.LessonSlug] = struct{}{}
 		}
 	}
 

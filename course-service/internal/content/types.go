@@ -24,7 +24,7 @@ type Path struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
 	Kind        string   `json:"kind"`              // "course" | "skill"
-	Level       int      `json:"level,omitempty"`   // 1=beginner, 2=intermediate, 3=advanced
+	Level       string   `json:"level,omitempty"`   // "beginner" | "intermediate" | "advanced"
 	Courses     []string `json:"courses,omitempty"` // ordered — index N+1 unlocks after N completed
 	Skills      []string `json:"skills,omitempty"`  // ordered skill tags (kind=skill paths)
 	Source      string   `json:"source,omitempty"`

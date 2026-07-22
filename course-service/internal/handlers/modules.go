@@ -495,9 +495,9 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 	prevDone := true // first module is always available
 
 	for idx, mod := range modules {
-		explicitLocked := !isAdmin && isLocked(mod.Prerequisites, done)
-		seqLocked := !isAdmin && !mod.Inline && !prevDone
-		locked := explicitLocked || seqLocked
+		explicitLocked := isLocked(mod.Prerequisites, done)
+		seqLocked := !mod.Inline && !prevDone
+		locked := !isAdmin && (explicitLocked || seqLocked)
 
 		out = append(out, buildModuleListEntry(mod, idx, isAdmin, locked, viewed, progress))
 

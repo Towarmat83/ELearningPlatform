@@ -32,7 +32,7 @@ type ModuleProgressRepository interface {
 
 	// PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
 	// all quiz and lab modules the user has passed, across all courses.
-	PassedKeys(ctx context.Context, userID string) (map[string]bool, error)
+	PassedKeys(ctx context.Context, userID string) (map[string]struct{}, error)
 }
 
 // gormModuleProgressRepository is the GORM-backed ModuleProgressRepository.
@@ -145,7 +145,7 @@ func (r *gormModuleProgressRepository) ListByUserCourse(ctx context.Context, use
 
 // PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
 // all modules userID has passed, across all courses.
-func (r *gormModuleProgressRepository) PassedKeys(ctx context.Context, userID string) (map[string]bool, error) {
+func (r *gormModuleProgressRepository) PassedKeys(ctx context.Context, userID string) (map[string]struct{}, error) {
 	var rows []struct {
 		CourseSlug string `gorm:"column:courseslug"`
 		ModuleSlug string `gorm:"column:moduleslug"`
@@ -159,9 +159,9 @@ func (r *gormModuleProgressRepository) PassedKeys(ctx context.Context, userID st
 		return nil, fmt.Errorf("list passed module keys: %w", err)
 	}
 
-	out := make(map[string]bool, len(rows))
+	out := make(map[string]struct{}, len(rows))
 	for _, row := range rows {
-		out[row.CourseSlug+"/"+row.ModuleSlug] = true
+		out[row.CourseSlug+"/"+row.ModuleSlug] = struct{}{}
 	}
 
 	return out, nil

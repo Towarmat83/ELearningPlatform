@@ -30,7 +30,7 @@ type LessonProgressRepository interface {
 
 	// ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for
 	// all non-sentinel lesson entries the user has viewed, across all courses.
-	ViewedKeys(ctx context.Context, userID string) (map[string]bool, error)
+	ViewedKeys(ctx context.Context, userID string) (map[string]struct{}, error)
 }
 
 // gormLessonProgressRepository is the GORM-backed LessonProgressRepository.
@@ -91,7 +91,7 @@ func (r *gormLessonProgressRepository) CountViewed(ctx context.Context, userID, 
 
 // ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for
 // all non-sentinel lesson entries userID has viewed, across all courses.
-func (r *gormLessonProgressRepository) ViewedKeys(ctx context.Context, userID string) (map[string]bool, error) {
+func (r *gormLessonProgressRepository) ViewedKeys(ctx context.Context, userID string) (map[string]struct{}, error) {
 	var rows []struct {
 		CourseSlug string `gorm:"column:courseslug"`
 		LessonSlug string `gorm:"column:lessonslug"`
@@ -105,9 +105,9 @@ func (r *gormLessonProgressRepository) ViewedKeys(ctx context.Context, userID st
 		return nil, fmt.Errorf("list viewed lesson keys: %w", err)
 	}
 
-	out := make(map[string]bool, len(rows))
+	out := make(map[string]struct{}, len(rows))
 	for _, row := range rows {
-		out[row.CourseSlug+"/"+row.LessonSlug] = true
+		out[row.CourseSlug+"/"+row.LessonSlug] = struct{}{}
 	}
 
 	return out, nil

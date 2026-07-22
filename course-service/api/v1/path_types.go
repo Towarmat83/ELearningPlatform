@@ -16,11 +16,10 @@ type PathSpec struct {
 	// +kubebuilder:default=course
 	// +kubebuilder:validation:Optional
 	Kind string `json:"kind,omitempty"`
-	// Level indicates the difficulty of the path: 1=beginner, 2=intermediate, 3=advanced.
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=3
+	// Level indicates the difficulty of the path: beginner, intermediate, advanced.
+	// +kubebuilder:validation:Enum=beginner;intermediate;advanced
 	// +kubebuilder:validation:Optional
-	Level int `json:"level,omitempty"`
+	Level string `json:"level,omitempty"`
 	// Courses is the ordered list of course slugs that compose this path (kind=course).
 	// Each slug must match an existing Course resource in the same namespace.
 	// +kubebuilder:validation:Optional

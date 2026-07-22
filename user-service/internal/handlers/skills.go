@@ -52,7 +52,7 @@ func (s *State) fetchSkillModules(req *http.Request, skill string) ([]skillModul
 		return nil, fmt.Errorf("fetch skill modules: %w", err)
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck // closing a response body never needs to be acted upon
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -74,7 +74,7 @@ func (s *State) fetchSkillModules(req *http.Request, skill string) ([]skillModul
 
 // passedModulesCtx returns the set of "courseSlug/moduleSlug" for all
 // modules the user has passed, across all courses.
-func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bool {
+func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]struct{} {
 	out, err := s.Repos.ModuleProgress.PassedKeys(req.Context(), userID)
 	if err != nil {
 		zap.L().Error("failed to query passed module keys", zap.String("userID", userID), zap.Error(err))
@@ -87,7 +87,7 @@ func (s *State) passedModulesCtx(req *http.Request, userID string) map[string]bo
 
 // viewedLessonsCtx returns the set of "courseSlug/lessonSlug" for all
 // non-quiz/lab lessons the user has viewed.
-func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]bool {
+func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]struct{} {
 	out, err := s.Repos.LessonProgress.ViewedKeys(req.Context(), userID)
 	if err != nil {
 		zap.L().Error("failed to query viewed lesson keys", zap.String("userID", userID), zap.Error(err))
@@ -101,7 +101,7 @@ func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]bo
 // skillIsCompleted returns true when all assessable (quiz/lab) modules in the
 // list have been completed by the user. Skills with no assessable modules are
 // never considered completed. Quizzes: passed in module_progress; labs: viewed.
-func skillIsCompleted(modules []skillModuleEntry, passed, viewed map[string]bool) bool {
+func skillIsCompleted(modules []skillModuleEntry, passed, viewed map[string]struct{}) bool {
 	hasAssessable := false
 
 	for _, mod := range modules {
@@ -114,11 +114,11 @@ func skillIsCompleted(modules []skillModuleEntry, passed, viewed map[string]bool
 		key := mod.CourseSlug + "/" + mod.Slug
 
 		if mod.Type == skillModuleTypeQuiz {
-			if !passed[key] {
+			if _, ok := passed[key]; !ok {
 				return false
 			}
 		} else {
-			if !viewed[key] {
+			if _, ok := viewed[key]; !ok {
 				return false
 			}
 		}
@@ -139,6 +139,12 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 	claims := s.claims(request)
 	skill := param(request, "slug")
 
+	if !slugRE.MatchString(skill) {
+		s.Error(writer, http.StatusBadRequest, "Invalid skill slug")
+
+		return
+	}
+
 	modules, err := s.fetchSkillModules(request, skill)
 	if err != nil {
 		zap.L().Warn("failed to fetch skill modules", zap.String("skill", skill), zap.Error(err))
@@ -158,9 +164,9 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 
 		var isDone bool
 		if mod.Type == skillModuleTypeQuiz {
-			isDone = passed[key]
+			_, isDone = passed[key]
 		} else {
-			isDone = viewed[key] // labs and text/video: viewed in lesson_progress
+			_, isDone = viewed[key] // labs and text/video: viewed in lesson_progress
 		}
 
 		var status string

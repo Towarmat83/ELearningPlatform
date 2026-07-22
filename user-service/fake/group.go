@@ -509,6 +509,26 @@ func (f *GroupRepository) UserInAnyGroup(_ context.Context, userID string, group
 	return false, nil
 }
 
+// GetGroupCourses returns the course slugs enrolled by groupID.
+func (f *GroupRepository) GetGroupCourses(_ context.Context, groupID string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	var slugs []string
+
+	for _, enrollment := range f.GroupEnrollments {
+		if enrollment.GroupID.String() == groupID {
+			slugs = append(slugs, enrollment.CourseSlug)
+		}
+	}
+
+	return slugs, nil
+}
+
 // ListMemberIDs returns the user IDs of every member of groupID.
 func (f *GroupRepository) ListMemberIDs(_ context.Context, groupID string) ([]string, error) {
 	f.mu.Lock()

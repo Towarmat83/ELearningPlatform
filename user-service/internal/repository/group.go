@@ -77,6 +77,9 @@ type GroupRepository interface {
 	GetGroupsByUserID(ctx context.Context, userID string) ([]GroupRow, error)
 	UserInAnyGroup(ctx context.Context, userID string, groupIDs []string) (bool, error)
 	ListMemberIDs(ctx context.Context, groupID string) ([]string, error)
+
+	// User-facing group queries (my_groups.go)
+	GetGroupCourses(ctx context.Context, groupID string) ([]string, error)
 }
 
 // gormGroupRepository is the GORM-backed GroupRepository implementation.
@@ -469,6 +472,20 @@ func (r *gormGroupRepository) GetGroupsByUserID(ctx context.Context, userID stri
 	}
 
 	return rows, nil
+}
+
+// GetGroupCourses returns the course slugs that groupID is enrolled in.
+func (r *gormGroupRepository) GetGroupCourses(ctx context.Context, groupID string) ([]string, error) {
+	var slugs []string
+
+	err := r.db.WithContext(ctx).Table("group_enrollments").
+		Where("groupid = ?::uuid", groupID).
+		Pluck("courseslug", &slugs).Error
+	if err != nil {
+		return nil, fmt.Errorf("get group courses: %w", err)
+	}
+
+	return slugs, nil
 }
 
 // ListMemberIDs returns the user IDs (as strings) of every member of groupID.

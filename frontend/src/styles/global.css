@@ -245,11 +245,12 @@ textarea.input { resize: vertical; min-height: 90px; }
   border-radius: 100px;
 }
 
-.badge-blue { background: var(--blue-soft); color: var(--blue-deep); }
-.badge-green { background: var(--good-soft); color: #1d7a4a; }
+.badge-blue   { background: var(--blue-soft); color: var(--blue-deep); }
+.badge-green  { background: var(--good-soft); color: #1d7a4a; }
 .badge-orange { background: var(--orange-soft); color: #b86800; }
-.badge-red { background: var(--bad-soft); color: var(--bad); }
-.badge-gray { background: var(--fill); color: var(--ink-soft); }
+.badge-red    { background: var(--bad-soft); color: var(--bad); }
+.badge-gray   { background: var(--fill); color: var(--ink-soft); }
+.badge-purple { background: #f3e8ff; color: #7c3aed; }
 
 /* ── Loading spinner ─────────────────────────────────────────────────── */
 .spinner {

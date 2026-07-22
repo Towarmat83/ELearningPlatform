@@ -238,19 +238,20 @@ import App from '../../../layouts/App.astro';
       return `/courses/${slug}/lessons/${m.index}`;
     }
 
-    function moduleIcon(m: any) {
+    function moduleIcon(m: any): string | null {
       if (m.locked) return '🔒';
       if (m.type === 'video') return '🎬';
       if (m.type === 'image') return '🖼️';
       if (m.type === 'quiz') return '🧩';
       if (m.type === 'lab') return '🧪';
-      return '📝';
+      return null;
     }
 
     function moduleStatusBadges(m: any): string {
       const parts: string[] = [];
       const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lab: 'Lab', lesson: 'Lecture' };
-      parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeLabel[m.type] || m.type}</span>`);
+      const typeStr = typeLabel[m.type];
+      if (typeStr) parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeStr}</span>`);
       if (m.locked) {
         parts.push(`<span class="badge badge-gray" style="font-size:.7rem">Verrouillé</span>`);
       } else if (m.type === 'quiz') {
@@ -263,16 +264,24 @@ import App from '../../../layouts/App.astro';
       return parts.join('');
     }
 
+    function moduleSkillBadges(m: any): string {
+      return (m.skills ?? []).map((s: string) =>
+        `<span class="badge badge-purple" style="font-size:.65rem;cursor:pointer" onclick="event.preventDefault();event.stopPropagation();window.location.href='/skills/${s}'">🎯 ${s}</span>`
+      ).join('');
+    }
+
     function renderModules(modules: any[]) {
       return modules.map(m => {
         const href = moduleHref(m);
         const tag = href ? 'a' : 'div';
         const hrefAttr = href ? `href="${href}"` : '';
+        const icon = moduleIcon(m);
         const iconCls = m.locked ? '' : m.type === 'quiz' ? ' quiz' : (m.viewed || m.passed) ? ' done' : m.type === 'lab' ? ' lab' : '';
+        const skillBadges = moduleSkillBadges(m);
         return `
           <${tag} ${hrefAttr} class="mod-row${m.locked ? ' locked' : ''}">
-            <div class="mod-icon${iconCls}">${moduleIcon(m)}</div>
-            <div class="mod-name">${m.name}</div>
+            ${icon ? `<div class="mod-icon${iconCls}">${icon}</div>` : ''}
+            <div class="mod-name">${m.name}${skillBadges ? `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:8px;vertical-align:middle">${skillBadges}</span>` : ''}</div>
             <div class="mod-badges">${moduleStatusBadges(m)}</div>
             ${href ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>` : ''}
           </${tag}>
@@ -303,6 +312,7 @@ import App from '../../../layouts/App.astro';
           tagParts.push(`<span class="badge ${map[course.difficulty] || 'badge-blue'}">${labels[course.difficulty] || course.difficulty}</span>`);
         }
         if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
+        (course.skills ?? []).forEach((s: string) => tagParts.push(`<a href="/skills/${s}" class="badge badge-purple" style="font-size:.75rem;text-decoration:none">🎯 ${s}</a>`));
         tagsEl.innerHTML = tagParts.join('');
 
         document.getElementById('course-meta')!.style.display = 'none';

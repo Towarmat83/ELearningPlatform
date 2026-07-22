@@ -9,6 +9,9 @@ spec:
   category: security
   difficulty: intermediate
   public: true
+  badge:
+    name: "Gardien des conteneurs"
+    icon: "🛡️"
   modules:
     - name: "Surface d'attaque des conteneurs"
       type: text

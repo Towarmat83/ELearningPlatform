@@ -10,12 +10,26 @@ type PathSpec struct {
 	// Description provides a brief overview of the path's goals and content.
 	// +kubebuilder:validation:Optional
 	Description string `json:"description,omitempty"`
-	// Courses is the ordered list of course slugs that compose this path.
+	// Kind distinguishes course-based paths ("course") from skill-based paths ("skill").
+	// Defaults to "course".
+	// +kubebuilder:validation:Enum=course;skill
+	// +kubebuilder:default=course
+	// +kubebuilder:validation:Optional
+	Kind string `json:"kind,omitempty"`
+	// Level indicates the difficulty of the path: beginner, intermediate, advanced.
+	// +kubebuilder:validation:Enum=beginner;intermediate;advanced
+	// +kubebuilder:validation:Optional
+	Level string `json:"level,omitempty"`
+	// Courses is the ordered list of course slugs that compose this path (kind=course).
 	// Each slug must match an existing Course resource in the same namespace.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:items:MinLength=1
 	// +kubebuilder:validation:items:Pattern=`^[a-z0-9][a-z0-9-]*$`
 	Courses []string `json:"courses,omitempty"`
+	// Skills is the ordered list of skill tags that compose this path (kind=skill).
+	// Completion of a skill is driven by completing all modules that teach it.
+	// +kubebuilder:validation:Optional
+	Skills []string `json:"skills,omitempty"`
 }
 
 // Path is the Schema for the paths API.

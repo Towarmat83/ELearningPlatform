@@ -9,6 +9,9 @@ spec:
   category: devops
   difficulty: beginner
   public: true
+  badge:
+    name: "Maître Distrobox"
+    icon: "📦"
   modules:
     - name: "Distrobox Creation and Application Export"
       type: lab

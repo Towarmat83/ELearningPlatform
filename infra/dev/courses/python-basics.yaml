@@ -9,6 +9,9 @@ spec:
   category: programming
   difficulty: beginner
   public: true
+  badge:
+    name: "Pythoniste"
+    icon: "🐍"
   modules:
     - name: "Introduction à Python"
       type: "text"

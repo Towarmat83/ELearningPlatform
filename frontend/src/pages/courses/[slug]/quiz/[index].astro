@@ -461,6 +461,8 @@ import App from '../../../../layouts/App.astro';
         ]);
         allModules = (modRes as any).modules || [];
         quiz = quizMod;
+        const currentMod = allModules.find((m: any) => m.index === moduleIndex);
+        if (currentMod?.locked) { window.location.href = `/courses/${slug}`; return; }
 
         // Inline quizzes are embedded in the previous lesson — redirect there
         if (quiz.inline) {

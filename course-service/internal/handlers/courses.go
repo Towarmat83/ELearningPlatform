@@ -70,37 +70,70 @@ func toCourseResponse(course *content.Course) courseResponse {
 // @Param    category   query  string  false  "Filter by category"
 // @Param    difficulty query  string  false  "Filter by difficulty"
 // @Param    search     query  string  false  "Search by title or description"
+// @Param    skill      query  string  false  "Filter by skill (slug)"
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/courses [get].
 func (s *State) ListCourses(writer http.ResponseWriter, req *http.Request) {
 	q := req.URL.Query()
-	category := strings.ToLower(q.Get("category"))
-	difficulty := strings.ToLower(q.Get("difficulty"))
-	search := strings.ToLower(q.Get("search"))
+	filters := courseFilters{
+		category:   strings.ToLower(q.Get("category")),
+		difficulty: strings.ToLower(q.Get("difficulty")),
+		search:     strings.ToLower(q.Get("search")),
+		skill:      strings.ToLower(q.Get("skill")),
+	}
 
 	all := s.Content.List()
 
 	out := make([]courseResponse, 0, len(all))
 	for _, course := range all {
-		if category != "" && !strings.EqualFold(course.Category, category) {
-			continue
+		if filters.matches(course) {
+			out = append(out, toCourseResponse(course))
 		}
-
-		if difficulty != "" && !strings.EqualFold(course.Difficulty, difficulty) {
-			continue
-		}
-
-		if search != "" {
-			if !strings.Contains(strings.ToLower(course.Title), search) &&
-				!strings.Contains(strings.ToLower(course.Description), search) {
-				continue
-			}
-		}
-
-		out = append(out, toCourseResponse(course))
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{coursesJSONKey: out, totalJSONKey: len(out)})
+}
+
+// courseFilters holds the parsed query parameters for ListCourses.
+type courseFilters struct {
+	category, difficulty, search, skill string
+}
+
+// matches reports whether course passes all active filters.
+func (f courseFilters) matches(course *content.Course) bool {
+	if f.category != "" && !strings.EqualFold(course.Category, f.category) {
+		return false
+	}
+
+	if f.difficulty != "" && !strings.EqualFold(course.Difficulty, f.difficulty) {
+		return false
+	}
+
+	if f.search != "" {
+		title := strings.ToLower(course.Title)
+		desc := strings.ToLower(course.Description)
+
+		if !strings.Contains(title, f.search) && !strings.Contains(desc, f.search) {
+			return false
+		}
+	}
+
+	if f.skill != "" && !courseHasSkill(course.Skills, f.skill) {
+		return false
+	}
+
+	return true
+}
+
+// courseHasSkill reports whether skill appears in the course's skill list.
+func courseHasSkill(skills []string, skill string) bool {
+	for _, s := range skills {
+		if strings.EqualFold(s, skill) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ListAdminCourses godoc

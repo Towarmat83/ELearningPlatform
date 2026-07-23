@@ -449,9 +449,11 @@ import Admin from '../../../layouts/Admin.astro';
           <hr style="border:none;border-top:1px solid var(--line)" />
           <div>
             <p class="section-label">Utilisateurs individuels</p>
-            <p class="text-soft text-sm" style="margin-bottom:8px">Trouver l'ID sur la page Utilisateurs.</p>
-            <div class="flex-row" style="margin-bottom:12px">
-              <input id="enroll-user-input" class="input" type="text" style="flex:1;font-family:monospace;font-size:.82rem" placeholder="UUID de l'utilisateur…" />
+            <div class="flex-row" style="margin-bottom:12px;position:relative">
+              <div style="flex:1;position:relative">
+                <input id="enroll-user-search" class="input" type="text" placeholder="Rechercher un utilisateur…" autocomplete="off" />
+                <div id="enroll-user-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;max-height:200px;overflow-y:auto;margin-top:4px"></div>
+              </div>
               <button class="btn btn-primary btn-sm" data-action="enroll-user" data-course="${courseId}">Inscrire</button>
             </div>
             ${!users.length ? '<p class="text-soft text-sm">Aucune inscription individuelle.</p>' : `
@@ -627,13 +629,14 @@ import Admin from '../../../layouts/Admin.astro';
         try {
           const [uRes, gRes] = await Promise.all([
             api(`/admin/courses/${courseId}/enrollments`),
-            api(`/admin/courses/${courseId}/enrollments/groups`).catch(() => ({ enrollments: [] })),
+            api(`/admin/courses/${courseId}/enrollments/groups`).catch(() => ({ groups: [] })),
           ]);
           panelEnrollments = uRes.enrollments || [];
-          panelGroupEnrollments = gRes.enrollments || [];
+          panelGroupEnrollments = gRes.groups || [];
         } catch { panelEnrollments = []; panelGroupEnrollments = []; }
       }
       render();
+      if (tab === 'enrollments') initUserSearch();
     }
 
     // ── Module management ──
@@ -751,13 +754,60 @@ import Admin from '../../../layouts/Admin.astro';
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
     }
 
+    let enrollUserSelectedId = '';
+
+    function initUserSearch() {
+      const searchEl = document.getElementById('enroll-user-search') as HTMLInputElement;
+      const suggestEl = document.getElementById('enroll-user-suggestions') as HTMLDivElement;
+      if (!searchEl || !suggestEl) return;
+
+      let debounce: ReturnType<typeof setTimeout>;
+
+      searchEl.addEventListener('input', () => {
+        enrollUserSelectedId = '';
+        clearTimeout(debounce);
+        const q = searchEl.value.trim();
+        if (q.length < 2) { suggestEl.style.display = 'none'; return; }
+        debounce = setTimeout(async () => {
+          try {
+            const res = await api(`/admin/users/search?q=${encodeURIComponent(q)}`);
+            const users: any[] = res.users || [];
+            if (!users.length) { suggestEl.style.display = 'none'; return; }
+            suggestEl.innerHTML = users.map(u => `
+              <div class="user-suggest-row" data-uid="${u.id}" data-name="${escHtml(u.username)}" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:6px;margin:2px">
+                <span style="font-weight:500;font-size:.875rem">${escHtml(u.username)}</span>
+                <span class="text-soft text-sm">${escHtml(u.email || '')}</span>
+              </div>`).join('');
+            suggestEl.style.display = 'block';
+            suggestEl.querySelectorAll('.user-suggest-row').forEach(row => {
+              (row as HTMLElement).addEventListener('mouseenter', () => (row as HTMLElement).style.background = 'var(--fill)');
+              (row as HTMLElement).addEventListener('mouseleave', () => (row as HTMLElement).style.background = '');
+              row.addEventListener('click', () => {
+                enrollUserSelectedId = (row as HTMLElement).dataset.uid || '';
+                searchEl.value = (row as HTMLElement).dataset.name || '';
+                suggestEl.style.display = 'none';
+              });
+            });
+          } catch { suggestEl.style.display = 'none'; }
+        }, 250);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!suggestEl.contains(e.target as Node) && e.target !== searchEl) suggestEl.style.display = 'none';
+      });
+    }
+
     async function enrollUser(courseId: string) {
-      const input = document.getElementById('enroll-user-input') as HTMLInputElement;
-      const uid = input?.value.trim();
-      if (!uid) return;
+      if (!enrollUserSelectedId) {
+        (window as any).showToast?.('Sélectionne un utilisateur dans la liste', 'error');
+        return;
+      }
       try {
-        await api(`/admin/courses/${courseId}/enrollments`, { method: 'POST', body: { userId: uid } });
+        await api(`/admin/courses/${courseId}/enrollments`, { method: 'POST', body: { userId: enrollUserSelectedId } });
         (window as any).showToast?.('Utilisateur inscrit', 'success');
+        enrollUserSelectedId = '';
+        const searchEl = document.getElementById('enroll-user-search') as HTMLInputElement;
+        if (searchEl) searchEl.value = '';
         await reloadEnrollments(courseId);
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
     }
@@ -774,12 +824,13 @@ import Admin from '../../../layouts/Admin.astro';
       try {
         const [uRes, gRes] = await Promise.all([
           api(`/admin/courses/${courseId}/enrollments`),
-          api(`/admin/courses/${courseId}/enrollments/groups`).catch(() => ({ enrollments: [] })),
+          api(`/admin/courses/${courseId}/enrollments/groups`).catch(() => ({ groups: [] })),
         ]);
         panelEnrollments = uRes.enrollments || [];
-        panelGroupEnrollments = gRes.enrollments || [];
+        panelGroupEnrollments = gRes.groups || [];
       } catch { panelEnrollments = []; panelGroupEnrollments = []; }
       render();
+      initUserSearch();
     }
 
     // ── Cache ──

@@ -166,18 +166,17 @@ import App from '../../layouts/App.astro';
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input class="input js-cat-search" type="search" placeholder="Rechercher un cours…" />
       </div>
-      <select class="input js-cat-sort" style="width:auto;padding:8px 14px;font-size:.85rem;flex-shrink:0">
-        <option value="alpha">A → Z</option>
-        <option value="difficulty">Difficulté</option>
+      <select class="input js-diff-filter" style="width:auto;padding:8px 14px;font-size:.85rem;flex-shrink:0">
+        <option value="">Toutes difficultés</option>
+        <option value="beginner">Débutant</option>
+        <option value="intermediate">Intermédiaire</option>
+        <option value="advanced">Avancé</option>
       </select>
       <span class="cat-count-label" id="count-label"></span>
     </div>
 
     <!-- Category chips -->
     <div class="cat-chips" id="cat-chips" style="display:none"></div>
-
-    <!-- Skill chips -->
-    <div class="cat-chips" id="skill-chips" style="display:none;margin-top:6px"></div>
 
     <!-- Loading -->
     <div id="loading" class="loading-state">
@@ -222,8 +221,7 @@ import App from '../../layouts/App.astro';
     let enrolledIds = new Set<string>();
     let searchTimer: ReturnType<typeof setTimeout>;
     let selectedCategories = new Set<string>();
-    let activeSkill: string | null = null;
-    let activeSort: 'alpha' | 'difficulty' = 'alpha';
+    let activeDiff: string | null = null;
 
     // ── Difficulty labels ──────────────────────────────────────────────
     const diffLabels: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
@@ -354,41 +352,7 @@ import App from '../../layouts/App.astro';
       chipsEl.innerHTML = resetBtn + chips;
     }
 
-    // ── Render skill chips ─────────────────────────────────────────────
-    function renderSkillChips(courses: any[]) {
-      const el = document.getElementById('skill-chips')!;
-      const slugs = Array.from(new Set(courses.flatMap((c: any) => c.skills ?? []))).sort() as string[];
-      if (!slugs.length) { el.style.display = 'none'; return; }
-      el.style.display = 'flex';
-
-      const resetClass = 'chip-reset' + (activeSkill ? ' has-filter' : '');
-      const resetBtn = `<button class="${resetClass}" onclick="clearSkill()">🎯 Toutes les compétences</button>`;
-
-      const chips = slugs.map(s => {
-        const isActive = activeSkill === s;
-        const count = courses.filter((c: any) => (c.skills ?? []).includes(s)).length;
-        const style = isActive ? 'background:#7c3aed;border-color:#7c3aed;color:#fff' : '';
-        return `<button class="cat-chip${isActive ? ' active' : ''}" style="${style}" onclick="toggleSkill('${s}')">
-          <span class="chip-dot" style="background:${isActive ? '#fff8' : '#7c3aed'}"></span>
-          ${s} <span class="chip-count">${count}</span>
-        </button>`;
-      }).join('');
-
-      el.innerHTML = resetBtn + chips;
-    }
-
     // ── Render groups ──────────────────────────────────────────────────
-    const DIFF_ORDER: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3 };
-
-    function sortCourses(courses: any[]): any[] {
-      return [...courses].sort((a, b) => {
-        if (activeSort === 'difficulty') {
-          return (DIFF_ORDER[a.difficulty] ?? 4) - (DIFF_ORDER[b.difficulty] ?? 4);
-        }
-        return a.title.localeCompare(b.title, 'fr', { sensitivity: 'base' });
-      });
-    }
-
     function renderGroups(courses: any[], search: string) {
       const q = search.toLowerCase().trim();
       let filtered = q
@@ -399,16 +363,15 @@ import App from '../../layouts/App.astro';
           )
         : courses;
 
-      if (activeSkill) {
-        filtered = filtered.filter(c => (c.skills ?? []).includes(activeSkill));
-      }
-
       const activeCats = Array.from(selectedCategories);
-      const visible = activeCats.length > 0
+      let visible = activeCats.length > 0
         ? filtered.filter(c => activeCats.includes(c.category || ''))
         : filtered;
 
-      const sorted = sortCourses(visible);
+      if (activeDiff) visible = visible.filter(c => c.difficulty === activeDiff);
+
+      const sorted = [...visible].sort((a, b) =>
+        a.title.localeCompare(b.title, 'fr', { sensitivity: 'base' }));
 
       const countLabel = document.getElementById('count-label')!;
       countLabel.textContent = sorted.length > 0 ? `${sorted.length} cours` : '';
@@ -420,16 +383,15 @@ import App from '../../layouts/App.astro';
       }
       document.getElementById('empty')!.style.display = 'none';
 
-      const cards = sorted.map(c => renderCourseCard(c, getCatColor(c.category || '')));
+      const cards = sorted.map(c => renderCourseCard(c, getCatColor(c.category || ''))).join('');
       document.getElementById('groups-container')!.innerHTML =
-        `<div class="courses-grid">${cards.join('')}</div>`;
+        `<div class="courses-grid">${cards}</div>`;
     }
 
     function rerender() {
       const q = (document.querySelector<HTMLInputElement>('.js-cat-search')?.value) || '';
       const allSlugs = Array.from(new Set(allCourses.map(c => c.category || '').filter(Boolean)));
       renderChips(allSlugs);
-      renderSkillChips(allCourses);
       renderGroups(allCourses, q);
     }
 
@@ -443,16 +405,6 @@ import App from '../../layouts/App.astro';
 
     (window as any).clearCats = () => {
       selectedCategories.clear();
-      rerender();
-    };
-
-    (window as any).toggleSkill = (skill: string) => {
-      activeSkill = activeSkill === skill ? null : skill;
-      rerender();
-    };
-
-    (window as any).clearSkill = () => {
-      activeSkill = null;
       rerender();
     };
 
@@ -486,7 +438,6 @@ import App from '../../layouts/App.astro';
         allSlugs.forEach(s => getCatColor(s));
 
         renderChips(allSlugs);
-        renderSkillChips(allCourses);
         renderGroups(allCourses, '');
         document.getElementById('cat-content')!.style.display = 'block';
       } catch { /* leave empty */ } finally {
@@ -500,9 +451,9 @@ import App from '../../layouts/App.astro';
       searchTimer = setTimeout(() => renderGroups(allCourses, searchEl.value), 280);
     });
 
-    const sortEl = document.querySelector<HTMLSelectElement>('.js-cat-sort')!;
-    sortEl?.addEventListener('change', () => {
-      activeSort = sortEl.value as 'alpha' | 'difficulty';
+    const diffEl = document.querySelector<HTMLSelectElement>('.js-diff-filter')!;
+    diffEl?.addEventListener('change', () => {
+      activeDiff = diffEl.value || null;
       rerender();
     });
 

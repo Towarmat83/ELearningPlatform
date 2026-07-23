@@ -122,38 +122,7 @@ type breakingMigration struct {
 //	}
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{
-	{
-		// GORM v1.31+ expects unique constraints named uni_<table>_<column> but
-		// PostgreSQL auto-named them <table>_<column>_key when the old image ran
-		// AutoMigrate. Rename them so AutoMigrate can drop them without errors.
-		Name: "20260721_rename_pg_constraints_to_gorm_names",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				DO $$ BEGIN
-					IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uni_users_username') AND
-					   EXISTS    (SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key')
-					THEN ALTER TABLE users RENAME CONSTRAINT users_username_key TO uni_users_username; END IF;
-
-					IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uni_users_email') AND
-					   EXISTS    (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_key')
-					THEN ALTER TABLE users RENAME CONSTRAINT users_email_key TO uni_users_email; END IF;
-
-				END $$`).Error
-		},
-	},
-	{
-		Name: "20260721_rename_groups_constraint_to_gorm_name",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				DO $$ BEGIN
-					IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uni_groups_name') AND
-					   EXISTS    (SELECT 1 FROM pg_constraint WHERE conname = 'groups_name_key')
-					THEN ALTER TABLE groups RENAME CONSTRAINT groups_name_key TO uni_groups_name; END IF;
-				END $$`).Error
-		},
-	},
-}
+var breakingMigrations = []breakingMigration{}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own

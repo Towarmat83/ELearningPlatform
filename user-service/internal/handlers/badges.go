@@ -157,8 +157,6 @@ func (s *State) UserBadges(writer http.ResponseWriter, request *http.Request) {
 }
 
 const (
-	// leaderboardMaxEntries caps rows returned by the public badge leaderboard.
-	leaderboardMaxEntries = 20
 	// leaderboardResponseKey is the JSON key used in leaderboard responses.
 	leaderboardResponseKey = "leaderboard"
 )
@@ -201,7 +199,7 @@ func (s *State) buildIconCache(req *http.Request, slugs []string) map[string]str
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/leaderboard [get].
 func (s *State) BadgeLeaderboard(writer http.ResponseWriter, request *http.Request) {
-	rows, err := s.Repos.Badges.Leaderboard(request.Context(), leaderboardMaxEntries)
+	rows, err := s.Repos.Badges.Leaderboard(request.Context(), s.Config.LeaderboardMaxEntries)
 	if err != nil {
 		zap.L().Error("failed to query badge leaderboard", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Database error")
@@ -209,10 +207,18 @@ func (s *State) BadgeLeaderboard(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	// Collect all slugs for deduped icon fetching.
-	var allSlugs []string
+	// Collect unique slugs for icon fetching.
+	seenSlugs := make(map[string]struct{})
+
 	for _, row := range rows {
-		allSlugs = append(allSlugs, row.Slugs...)
+		for _, slug := range row.Slugs {
+			seenSlugs[slug] = struct{}{}
+		}
+	}
+
+	allSlugs := make([]string, 0, len(seenSlugs))
+	for slug := range seenSlugs {
+		allSlugs = append(allSlugs, slug)
 	}
 
 	iconCache := s.buildIconCache(request, allSlugs)

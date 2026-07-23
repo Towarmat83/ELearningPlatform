@@ -114,17 +114,14 @@ func (r *gormBadgeRepository) Leaderboard(ctx context.Context, limit int) ([]Bad
 
 	var raw []rawRow
 
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT ub.userid             AS user_id,
-		       u.username            AS username,
-		       u.avatarurl           AS avatar_url,
-		       COUNT(*)              AS count,
-		       STRING_AGG(ub.courseslug, ',' ORDER BY ub.earnedat DESC) AS slugs
-		FROM   user_badges ub
-		JOIN   users u ON u.id = ub.userid
-		GROUP  BY ub.userid, u.username, u.avatarurl
-		ORDER  BY count DESC, u.username ASC
-		LIMIT  ?`, limit).Scan(&raw).Error
+	err := r.db.WithContext(ctx).
+		Model(&models.UserBadge{}).
+		Joins("JOIN users u ON u.id = user_badges.userid").
+		Select("user_badges.userid AS user_id, u.username, u.avatarurl AS avatar_url, COUNT(*) AS count, STRING_AGG(user_badges.courseslug, ',' ORDER BY user_badges.earnedat DESC) AS slugs").
+		Group("user_badges.userid, u.username, u.avatarurl").
+		Order("count DESC, u.username ASC").
+		Limit(limit).
+		Scan(&raw).Error
 	if err != nil {
 		return nil, fmt.Errorf("leaderboard query: %w", err)
 	}

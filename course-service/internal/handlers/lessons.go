@@ -324,6 +324,12 @@ func lessonModuleIndex(course *content.Course, lessonSlug string) (int, bool) {
 // isLastMeaningfulModule reports whether moduleIndex is the last module in
 // modules, ignoring trailing inline quiz modules.
 func isLastMeaningfulModule(modules []content.Module, moduleIndex int) bool {
+	if len(modules) == 0 {
+		zap.L().Error("isLastMeaningfulModule: modules slice is empty")
+
+		return false
+	}
+
 	lastMeaningful := len(modules) - 1
 	for lastMeaningful > 0 && modules[lastMeaningful].Inline && modules[lastMeaningful].Type == moduleTypeQuiz {
 		lastMeaningful--

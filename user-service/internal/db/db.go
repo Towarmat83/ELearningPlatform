@@ -153,24 +153,6 @@ var breakingMigrations = []breakingMigration{
 				END $$`).Error
 		},
 	},
-	{
-		// quiz-last-module courses never triggered notifyCourseComplete before the
-		// SubmitModule fix. Backfill badges for every user whose lesson_progress
-		// contains the __complete__ sentinel but who has no user_badges row yet.
-		Name: "20260721_backfill_badges_from_course_completions",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				INSERT INTO user_badges (userid, courseslug, earnedat)
-				SELECT lp.userid, lp.courseslug, lp.viewed_at
-				FROM   lesson_progress lp
-				WHERE  lp.lessonslug = '__complete__'
-				AND    NOT EXISTS (
-					SELECT 1 FROM user_badges ub
-					WHERE ub.userid = lp.userid AND ub.courseslug = lp.courseslug
-				)
-				ON CONFLICT DO NOTHING`).Error
-		},
-	},
 }
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet

@@ -11,30 +11,32 @@ import (
 
 // SkillLevelRow is a single row returned by skill level listing queries.
 type SkillLevelRow struct {
-	Skill string `json:"skill"`
-	Level string `json:"level"`
+	Skill            string `gorm:"column:skill"             json:"skill"`
+	Level            string `gorm:"column:level"             json:"level"`
+	CompletedCourses int    `gorm:"column:completed_courses" json:"completedCourses"`
+	TotalCourses     int    `gorm:"column:total_courses"     json:"totalCourses"`
+	LevelOrder       int    `gorm:"column:levelorder"        json:"-"`
 }
 
-// SkillLevelRepository is the persistence boundary for the user_skill_levels
-// table.
+// SkillLevelRepository is the persistence boundary for user_skill_levels.
 type SkillLevelRepository interface {
-	// Upsert sets the skill level for userID/skill to the higher of the stored
-	// level and the provided level. Unknown difficulty strings are ignored.
-	Upsert(ctx context.Context, userID, skill, level string) error
+	// Upsert increments the completed-course count for userID/skill, refreshes
+	// totalCourses, and promotes the level (maître when all courses are done).
+	Upsert(ctx context.Context, userID, skill, level string, totalCourses int) error
 	// ListByUser returns all skill levels for userID, ordered by skill name.
 	ListByUser(ctx context.Context, userID string) ([]SkillLevelRow, error)
 }
 
-// Numeric ordinals for the three difficulty levels — used to compare and
-// store the "highest reached" level for a skill.
+// Numeric ordinals for the difficulty levels used in the levelorder column.
 const (
 	difficultyOrderBeginner     = 1
 	difficultyOrderIntermediate = 2
 	difficultyOrderAdvanced     = 3
+	difficultyOrderMaitre       = 4
 )
 
-// difficultyOrder maps a difficulty string to a comparable integer so that
-// the "max" semantics of Upsert can be expressed as a numeric comparison.
+// difficultyOrder maps a course difficulty string to a comparable integer.
+// "maître" is excluded — it is a derived state, not a course difficulty.
 func difficultyOrder(d string) int {
 	switch d {
 	case "beginner":
@@ -60,23 +62,57 @@ func NewGormSkillLevelRepository(db *gorm.DB) SkillLevelRepository {
 	return &gormSkillLevelRepository{db: db}
 }
 
-// Upsert inserts or updates the user's level for skill. The stored level is
-// only updated when the incoming level is strictly higher than the current one.
-func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, level string) error {
+// Upsert atomically records a course completion for userID/skill.
+//
+// Level progression rules (applied inside a single SQL statement):
+//   - completed_courses is incremented on every call.
+//   - If totalCourses > 0 and completed_courses reaches totalCourses, the
+//     learner is promoted to "maître" (levelorder 4).
+//   - Otherwise the highest difficulty seen so far is kept (max semantics).
+//
+// On the first completion (INSERT path) the maître check uses completed=1,
+// so a skill with a single course awards maître immediately.
+func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, level string, totalCourses int) error {
 	order := difficultyOrder(level)
 	if order == 0 {
 		return nil
 	}
 
+	// First-completion path: if this is the only course for the skill, the
+	// INSERT value should already reflect maître (completed=1 == total).
+	insertLevel := level
+	insertOrder := order
+
+	if totalCourses > 0 && totalCourses == 1 {
+		insertLevel = "maître"
+		insertOrder = difficultyOrderMaitre
+	}
+
 	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO user_skill_levels (userid, skill, level, levelorder, updatedat)
-		VALUES (?::uuid, ?, ?, ?, NOW())
+		INSERT INTO user_skill_levels (userid, skill, level, levelorder, completed_courses, total_courses, updatedat)
+		VALUES (?::uuid, ?, ?, ?, 1, ?, NOW())
 		ON CONFLICT (userid, skill) DO UPDATE
-		SET level      = EXCLUDED.level,
-		    levelorder = EXCLUDED.levelorder,
-		    updatedat  = NOW()
-		WHERE EXCLUDED.levelorder > user_skill_levels.levelorder
-	`, userID, skill, level, order).Error
+		SET
+		  completed_courses = user_skill_levels.completed_courses + 1,
+		  total_courses     = EXCLUDED.total_courses,
+		  level = CASE
+		    WHEN EXCLUDED.total_courses > 0
+		         AND user_skill_levels.completed_courses + 1 >= EXCLUDED.total_courses
+		         THEN 'maître'
+		    WHEN EXCLUDED.levelorder > user_skill_levels.levelorder
+		         THEN EXCLUDED.level
+		    ELSE user_skill_levels.level
+		  END,
+		  levelorder = CASE
+		    WHEN EXCLUDED.total_courses > 0
+		         AND user_skill_levels.completed_courses + 1 >= EXCLUDED.total_courses
+		         THEN 4
+		    WHEN EXCLUDED.levelorder > user_skill_levels.levelorder
+		         THEN EXCLUDED.levelorder
+		    ELSE user_skill_levels.levelorder
+		  END,
+		  updatedat = NOW()
+	`, userID, skill, insertLevel, insertOrder, totalCourses).Error
 	if err != nil {
 		return fmt.Errorf("upsert skill level: %w", err)
 	}
@@ -85,13 +121,13 @@ func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, le
 }
 
 // ListByUser returns all skill levels for userID ordered alphabetically by
-// skill name.
+// skill name, including progress counters.
 func (r *gormSkillLevelRepository) ListByUser(ctx context.Context, userID string) ([]SkillLevelRow, error) {
 	var rows []SkillLevelRow
 
 	err := r.db.WithContext(ctx).
 		Model(&models.UserSkillLevel{}).
-		Select("skill, level").
+		Select("skill, level, levelorder, completed_courses, total_courses").
 		Where("userid = ?::uuid", userID).
 		Order("skill ASC").
 		Scan(&rows).Error

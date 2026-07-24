@@ -20,11 +20,12 @@ func NewSkillLevelRepository() *SkillLevelRepository {
 	return &SkillLevelRepository{levels: make(map[string]repository.SkillLevelRow)}
 }
 
-// Numeric ordinals for the three difficulty levels (mirrors repository).
+// Numeric ordinals for the four difficulty levels (mirrors repository).
 const (
 	fakeDifficultyOrderBeginner     = 1
 	fakeDifficultyOrderIntermediate = 2
 	fakeDifficultyOrderAdvanced     = 3
+	fakeDifficultyOrderMaitre       = 4
 )
 
 // fakeDifficultyOrder maps a difficulty string to a comparable integer.
@@ -41,8 +42,9 @@ func fakeDifficultyOrder(d string) int {
 	}
 }
 
-// Upsert sets the level for userID/skill to the max of current and new level.
-func (f *SkillLevelRepository) Upsert(_ context.Context, userID, skill, level string) error {
+// Upsert increments the completed-course counter and promotes to maître when
+// all courses for the skill are done.
+func (f *SkillLevelRepository) Upsert(_ context.Context, userID, skill, level string, totalCourses int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -50,11 +52,43 @@ func (f *SkillLevelRepository) Upsert(_ context.Context, userID, skill, level st
 		return f.Err
 	}
 
+	incomingOrder := fakeDifficultyOrder(level)
+	if incomingOrder == 0 {
+		return nil
+	}
+
 	key := userID + "/" + skill
 	current, exists := f.levels[key]
 
-	if !exists || fakeDifficultyOrder(level) > fakeDifficultyOrder(current.Level) {
-		f.levels[key] = repository.SkillLevelRow{Skill: skill, Level: level}
+	newCompleted := 1
+	if exists {
+		newCompleted = current.CompletedCourses + 1
+	}
+
+	isMaitre := totalCourses > 0 && newCompleted >= totalCourses
+
+	var newLevel string
+
+	var newOrder int
+
+	switch {
+	case isMaitre:
+		newLevel = "maître"
+		newOrder = fakeDifficultyOrderMaitre
+	case exists && current.LevelOrder > incomingOrder:
+		newLevel = current.Level
+		newOrder = current.LevelOrder
+	default:
+		newLevel = level
+		newOrder = incomingOrder
+	}
+
+	f.levels[key] = repository.SkillLevelRow{
+		Skill:            skill,
+		Level:            newLevel,
+		CompletedCourses: newCompleted,
+		TotalCourses:     totalCourses,
+		LevelOrder:       newOrder,
 	}
 
 	return nil

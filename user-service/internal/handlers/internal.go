@@ -22,10 +22,11 @@ type courseBody struct {
 // It extends courseBody with skill and difficulty metadata so user-service
 // can update the learner's per-skill expertise level in one call.
 type courseCompleteBody struct {
-	UserID     string   `json:"userId"`
-	CourseSlug string   `json:"courseSlug"`
-	Skills     []string `json:"skills,omitempty"`
-	Difficulty string   `json:"difficulty,omitempty"`
+	UserID            string         `json:"userId"`
+	CourseSlug        string         `json:"courseSlug"`
+	Skills            []string       `json:"skills,omitempty"`
+	Difficulty        string         `json:"difficulty,omitempty"`
+	SkillTotalCourses map[string]int `json:"skillTotalCourses,omitempty"`
 }
 
 // lessonCompleteBody is the request body for marking a single lesson complete.
@@ -208,7 +209,9 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 
 	if body.Difficulty != "" {
 		for _, skill := range body.Skills {
-			upsertErr := s.Repos.SkillLevels.Upsert(req.Context(), body.UserID, skill, body.Difficulty)
+			total := body.SkillTotalCourses[skill]
+
+			upsertErr := s.Repos.SkillLevels.Upsert(req.Context(), body.UserID, skill, body.Difficulty, total)
 			if upsertErr != nil {
 				zap.L().Warn("failed to upsert skill level",
 					zap.String("userID", body.UserID), zap.String("skill", skill), zap.Error(upsertErr))

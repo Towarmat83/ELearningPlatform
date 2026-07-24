@@ -953,25 +953,35 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	passed := s.finalizeSubmission(writer, req, mod, questions, passingScore, cooldownSpec, userID, courseSlug, idx) //nolint:contextcheck // fire-and-forget async POST intentionally detached from the request context (see recordModuleProgress)
-	if passed && isLastMeaningfulModule(modules, idx) {
-		s.notifyCourseComplete(req, userID, courseSlug)
+	// Find the module's position in the full course.Modules slice (visible modules
+	// may be a subset; isLastMeaningfulModule operates on the full list).
+	fullIdx := -1
+
+	for i, m := range course.Modules {
+		if m.Slug() == mod.Slug() {
+			fullIdx = i
+
+			break
+		}
 	}
+
+	s.finalizeSubmission(writer, req, course, mod, fullIdx, questions, passingScore, cooldownSpec, userID, courseSlug, idx) //nolint:contextcheck // fire-and-forget async POST intentionally detached from the request context (see recordModuleProgress)
 }
 
 // finalizeSubmission decodes a quiz submission body, rejects it if any of
 // the resolved questions is still under a cooldown, then scores it, records
 // per-question cooldowns and overall module progress, and writes the
-// resulting submitResponse to the client. It returns true when the quiz was
-// passed so the caller can trigger course-complete notifications.
-func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, mod content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) bool {
+// resulting submitResponse to the client. When the passed quiz is the last
+// meaningful module of the course, it also notifies user-service that the
+// course is complete.
+func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, course *content.Course, mod content.Module, fullIdx int, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
 	var submission content.SubmitRequest
 
 	err := json.NewDecoder(req.Body).Decode(&submission)
 	if err != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid request body")
 
-		return false
+		return
 	}
 
 	// Check cooldowns for each question before scoring.
@@ -981,7 +991,7 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 			"cooldowns": cooldowns,
 		})
 
-		return false
+		return
 	}
 
 	effectiveQuiz := &content.Quiz{
@@ -995,6 +1005,10 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 	respCooldowns := s.recordQuestionCooldowns(userID, courseSlug, idx, result.QuestionResults, cooldownSpec, mod.MaxAttemptsPerQuestion, mod.LockOnMaxAttempts)
 
 	s.recordModuleProgress(courseSlug, userID, mod.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
+
+	if result.Passed && isLastMeaningfulModule(course, fullIdx) {
+		s.notifyCourseComplete(req, userID, courseSlug)
+	}
 
 	apiResults := make([]questionResultAPI, len(result.QuestionResults))
 	for i, questionResult := range result.QuestionResults {
@@ -1017,8 +1031,6 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 		QuestionResults: apiResults,
 		Cooldowns:       respCooldowns,
 	})
-
-	return result.Passed
 }
 
 // resolveSubmitQuiz resolves the questions, passing score, and cooldown spec

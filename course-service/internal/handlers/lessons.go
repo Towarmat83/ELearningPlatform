@@ -14,13 +14,14 @@ import (
 )
 
 // courseCompleteBody is the request body sent to the user-service when a
-// course is completed. Skills and Difficulty are forwarded so user-service
-// can update the learner's per-skill expertise level in one call.
+// course is completed. Skills, Difficulty and SkillTotalCourses are forwarded
+// so user-service can update the learner's per-skill expertise level.
 type courseCompleteBody struct {
-	UserID     string   `json:"userId"`
-	CourseSlug string   `json:"courseSlug"`
-	Skills     []string `json:"skills,omitempty"`
-	Difficulty string   `json:"difficulty,omitempty"`
+	UserID            string         `json:"userId"`
+	CourseSlug        string         `json:"courseSlug"`
+	Skills            []string       `json:"skills,omitempty"`
+	Difficulty        string         `json:"difficulty,omitempty"`
+	SkillTotalCourses map[string]int `json:"skillTotalCourses,omitempty"`
 }
 
 // lessonSummary is the public API representation of a lesson within a
@@ -391,6 +392,27 @@ func (s *State) postLessonComplete(
 	return true
 }
 
+// buildSkillTotals counts how many courses in the catalog teach each of the
+// given skills.
+func (s *State) buildSkillTotals(skills []string) map[string]int {
+	skillSet := make(map[string]bool, len(skills))
+	for _, sk := range skills {
+		skillSet[sk] = true
+	}
+
+	totals := make(map[string]int, len(skills))
+
+	for _, crs := range s.Content.All() {
+		for _, sk := range crs.Skills {
+			if skillSet[sk] {
+				totals[sk]++
+			}
+		}
+	}
+
+	return totals
+}
+
 // notifyCourseComplete notifies the user-service that userID completed
 // courseSlug. Failures are only logged: the lesson itself was already
 // recorded as complete, so they must not affect the HTTP response.
@@ -400,6 +422,10 @@ func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug strin
 	if course := s.Content.Get(courseSlug); course != nil {
 		payload.Skills = course.Skills
 		payload.Difficulty = course.Difficulty
+	}
+
+	if len(payload.Skills) > 0 {
+		payload.SkillTotalCourses = s.buildSkillTotals(payload.Skills)
 	}
 
 	var buf bytes.Buffer

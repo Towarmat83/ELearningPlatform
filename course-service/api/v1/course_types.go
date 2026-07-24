@@ -242,6 +242,17 @@ type Module struct {
 	Skills []string `json:"skills,omitempty"`
 }
 
+// BadgeSpec defines the badge awarded when a learner completes a course.
+type BadgeSpec struct {
+	// Name is the flavor title of the badge (e.g. "Certified Operator").
+	// The full badge name is displayed as "<Name> — <CourseTitle>".
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Icon is an emoji or short string used as the badge's visual identifier.
+	// +kubebuilder:validation:Optional
+	Icon string `json:"icon,omitempty"`
+}
+
 // CourseSpec defines the desired state of a Course.
 type CourseSpec struct {
 	// Title is the course's display name; defaults to the resource name if omitted.
@@ -270,6 +281,9 @@ type CourseSpec struct {
 	// Prerequisites lists the conditions that must be met before a user can enroll.
 	// +kubebuilder:validation:Optional
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
+	// Badge defines the badge awarded on course completion. Omitting it means no badge is granted.
+	// +kubebuilder:validation:Optional
+	Badge *BadgeSpec `json:"badge,omitempty"`
 }
 
 // Course is the Schema for the courses API.

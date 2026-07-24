@@ -31,6 +31,7 @@ type courseResponse struct {
 	Source          string                 `json:"source,omitempty"`
 	Prerequisites   []prerequisiteResponse `json:"prerequisites,omitempty"`
 	Skills          []string               `json:"skills,omitempty"`
+	Badge           *content.Badge         `json:"badge,omitempty"`
 }
 
 // toCourseResponse converts an internal content.Course into the public
@@ -60,6 +61,7 @@ func toCourseResponse(course *content.Course) courseResponse {
 		Source:          course.Source,
 		Prerequisites:   prereqs,
 		Skills:          course.Skills,
+		Badge:           course.Badge,
 	}
 }
 

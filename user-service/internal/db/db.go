@@ -61,6 +61,7 @@ var allModels = []any{
 	&models.GroupEnrollment{},
 	&models.MarkdownPattern{},
 	&models.PathEnrollment{},
+	&models.UserBadge{},
 }
 
 // RunMigrations brings the database schema up to date. Schema management is
@@ -238,6 +239,10 @@ var foreignKeys = []foreignKey{
 	{
 		Name: "path_enrollments_userid_fkey",
 		DDL:  "ALTER TABLE path_enrollments ADD CONSTRAINT path_enrollments_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
+	},
+	{
+		Name: "user_badges_userid_fkey",
+		DDL:  "ALTER TABLE user_badges ADD CONSTRAINT user_badges_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
 	},
 }
 

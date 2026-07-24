@@ -19,7 +19,7 @@ func (s *State) fetchCourseServiceJSON(req *http.Request, urlPath string, dest a
 		return fmt.Errorf("build request to %s: %w", urlPath, err)
 	}
 
-	resp, err := http.DefaultClient.Do(r) //nolint:gosec // see above
+	resp, err := http.DefaultClient.Do(r) //nolint:gosec // rawURL built from trusted CourseServiceURL and pre-validated slug
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", urlPath, err)
 	}

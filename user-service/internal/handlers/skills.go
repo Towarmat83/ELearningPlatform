@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 const (
@@ -186,4 +188,29 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{pathKindSkill: skill, "modules": result})
+}
+
+// MySkills godoc
+// @Summary  List the learner's per-skill expertise levels
+// @Tags     Skills
+// @Security BearerAuth
+// @Produce  json
+// @Success  200  {object}  map[string]interface{}
+// @Router   /api/my/skills [get].
+func (s *State) MySkills(writer http.ResponseWriter, req *http.Request) {
+	claims := s.claims(req)
+
+	levels, err := s.Repos.SkillLevels.ListByUser(req.Context(), claims.Subject)
+	if err != nil {
+		zap.L().Error("failed to list skill levels", zap.String("userID", claims.Subject), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Failed to fetch skill levels")
+
+		return
+	}
+
+	if levels == nil {
+		levels = []repository.SkillLevelRow{}
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{"skills": levels})
 }

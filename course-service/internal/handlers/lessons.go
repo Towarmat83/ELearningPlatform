@@ -14,10 +14,13 @@ import (
 )
 
 // courseCompleteBody is the request body sent to the user-service when a
-// course is completed.
+// course is completed. Skills and Difficulty are forwarded so user-service
+// can update the learner's per-skill expertise level in one call.
 type courseCompleteBody struct {
-	UserID     string `json:"userId"`
-	CourseSlug string `json:"courseSlug"`
+	UserID     string   `json:"userId"`
+	CourseSlug string   `json:"courseSlug"`
+	Skills     []string `json:"skills,omitempty"`
+	Difficulty string   `json:"difficulty,omitempty"`
 }
 
 // lessonSummary is the public API representation of a lesson within a
@@ -393,6 +396,11 @@ func (s *State) postLessonComplete(
 // recorded as complete, so they must not affect the HTTP response.
 func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug string) {
 	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
+
+	if course := s.Content.Get(courseSlug); course != nil {
+		payload.Skills = course.Skills
+		payload.Difficulty = course.Difficulty
+	}
 
 	var buf bytes.Buffer
 

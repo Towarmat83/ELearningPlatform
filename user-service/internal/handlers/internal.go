@@ -18,6 +18,16 @@ type courseBody struct {
 	CourseSlug string `json:"courseSlug"`
 }
 
+// courseCompleteBody is the request body for the course-complete endpoint.
+// It extends courseBody with skill and difficulty metadata so user-service
+// can update the learner's per-skill expertise level in one call.
+type courseCompleteBody struct {
+	UserID     string   `json:"userId"`
+	CourseSlug string   `json:"courseSlug"`
+	Skills     []string `json:"skills,omitempty"`
+	Difficulty string   `json:"difficulty,omitempty"`
+}
+
 // lessonCompleteBody is the request body for marking a single lesson complete.
 type lessonCompleteBody struct {
 	UserID string `json:"userId"`
@@ -174,11 +184,11 @@ func (s *State) InternalMarkComplete(writer http.ResponseWriter, req *http.Reque
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "userId, courseSlug"
+// @Param    body  object  true  "userId, courseSlug, skills, difficulty"
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/progress/course-complete [post].
 func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http.Request) {
-	var body courseBody
+	var body courseCompleteBody
 	if !internalDecodeOrBadRequest(s, writer, req, &body) {
 		return
 	}
@@ -196,7 +206,17 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 		zap.L().Warn("failed to award badge on course completion", zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.Error(awardErr))
 	}
 
-	internalRespondExecResult(s, writer, nil, "failed to mark course complete",
+	if body.Difficulty != "" {
+		for _, skill := range body.Skills {
+			upsertErr := s.Repos.SkillLevels.Upsert(req.Context(), body.UserID, skill, body.Difficulty)
+			if upsertErr != nil {
+				zap.L().Warn("failed to upsert skill level",
+					zap.String("userID", body.UserID), zap.String("skill", skill), zap.Error(upsertErr))
+			}
+		}
+	}
+
+	internalRespondExecResult(s, writer, nil, "",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
 }
 

@@ -1,0 +1,159 @@
+---
+import App from '../layouts/App.astro';
+---
+<App title="Mes compétences" activePage="skills">
+  <style is:global>
+    .ms-page { padding: 28px 36px 80px; max-width: 900px; margin: 0 auto; }
+
+    .ms-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .ms-title { font-size: 1.5rem; font-weight: 700; }
+
+    .ms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .ms-card {
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .ms-card:hover { box-shadow: 0 4px 16px -4px rgba(30,60,120,.15); border-color: var(--blue); }
+
+    .ms-card-skill {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ms-card-skill::before { content: '🎯'; font-size: 1.1rem; }
+
+    .ms-level {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      width: fit-content;
+    }
+    .level-beginner     { background: #dcfce7; color: #15803d; }
+    .level-intermediate { background: #fef9c3; color: #a16207; }
+    .level-advanced     { background: #fee2e2; color: #b91c1c; }
+
+    .ms-cta {
+      font-size: .78rem;
+      color: var(--blue);
+      font-weight: 600;
+    }
+
+    .ms-empty {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--ink-soft);
+    }
+    .ms-empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+    @media (max-width: 600px) {
+      .ms-page { padding: 20px 14px 80px; }
+      .ms-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="ms-page">
+    <div class="ms-header">
+      <h1 class="ms-title">Mes compétences</h1>
+    </div>
+
+    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+
+    <div id="ms-content" style="display:none">
+      <div id="ms-grid" class="ms-grid"></div>
+      <div id="ms-empty" class="ms-empty" style="display:none">
+        <div class="ms-empty-icon">🎯</div>
+        <h2>Aucune compétence pour l'instant</h2>
+        <p>Complète des cours pour voir ton niveau par compétence.</p>
+        <a href="/courses" class="btn btn-primary">Découvrir le catalogue</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+
+    async function apiFetch(path: string) {
+      const res = await fetch(`/api${path}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (!res.ok) { const err: any = new Error('fetch error'); err.status = res.status; throw err; }
+      return res.json();
+    }
+
+    function levelLabel(level: string): string {
+      const map: Record<string, string> = {
+        beginner: 'Débutant',
+        intermediate: 'Intermédiaire',
+        advanced: 'Avancé',
+      };
+      return map[level] ?? level;
+    }
+
+    function levelClass(level: string): string {
+      const map: Record<string, string> = {
+        beginner: 'level-beginner',
+        intermediate: 'level-intermediate',
+        advanced: 'level-advanced',
+      };
+      return map[level] ?? '';
+    }
+
+    async function init() {
+      if (!token) { window.location.href = '/login?redirect=/my-skills'; return; }
+
+      try {
+        const data = await apiFetch('/my/skills') as any;
+        const skills: any[] = data.skills || [];
+
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('ms-content')!.style.display = '';
+
+        if (skills.length === 0) {
+          document.getElementById('ms-empty')!.style.display = '';
+          return;
+        }
+
+        document.getElementById('ms-grid')!.innerHTML = skills.map((s: any) => `
+          <a href="/skills/${s.skill}" class="ms-card">
+            <div class="ms-card-skill">${s.skill}</div>
+            <div class="ms-level ${levelClass(s.level)}">${levelLabel(s.level)}</div>
+            <div class="ms-cta">Voir les modules →</div>
+          </a>
+        `).join('');
+      } catch {
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('ms-content')!.style.display = '';
+        document.getElementById('ms-empty')!.style.display = '';
+      }
+    }
+
+    init();
+  </script>
+</App>

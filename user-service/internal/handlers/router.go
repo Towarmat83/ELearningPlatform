@@ -113,6 +113,7 @@ func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(ht
 		group.Get("/api/my/courses", state.MyCourses)
 		group.Get("/api/my/paths", state.MyPaths)
 		group.Get("/api/my/badges", state.MyBadges)
+		group.Get("/api/my/skills", state.MySkills)
 		group.Get("/api/my/skills/{slug}", state.MySkillModules)
 	})
 }

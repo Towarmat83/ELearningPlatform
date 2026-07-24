@@ -1006,7 +1006,7 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 
 	s.recordModuleProgress(courseSlug, userID, mod.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
 
-	if result.Passed && isLastMeaningfulModule(course, fullIdx) {
+	if result.Passed && isLastMeaningfulModule(course.Modules, fullIdx) {
 		s.notifyCourseComplete(req, userID, courseSlug)
 	}
 

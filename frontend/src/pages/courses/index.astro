@@ -61,6 +61,32 @@ import App from '../../layouts/App.astro';
     .cat-toolbar .input { padding-left: 38px; width: 100%; height: 38px; font-size: .875rem; }
     .cat-count-label { font-size: .8rem; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
 
+    /* ── Active skill filter banner ───────────────────────────────────── */
+    .skill-filter-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 7px 12px;
+      background: #ede9fe;
+      border: 1.5px solid #7c3aed;
+      border-radius: 10px;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #5b21b6;
+    }
+    .skill-filter-banner button {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: .85rem;
+      color: #7c3aed;
+      font-weight: 700;
+      padding: 0 4px;
+    }
+    .skill-filter-banner button:hover { color: #5b21b6; }
+
     /* ── Category chips ───────────────────────────────────────────────── */
     .cat-chips {
       display: flex;
@@ -169,6 +195,12 @@ import App from '../../layouts/App.astro';
       <span class="cat-count-label" id="count-label"></span>
     </div>
 
+    <!-- Active skill filter banner (only when ?skill= param is set) -->
+    <div class="skill-filter-banner" id="skill-filter-banner" style="display:none">
+      <span>🎯 Cours adaptés à ton niveau — <span id="skill-filter-label"></span></span>
+      <button onclick="clearSkillFilter()">✕ Retirer le filtre</button>
+    </div>
+
     <!-- Category chips -->
     <div class="cat-chips" id="cat-chips" style="display:none"></div>
 
@@ -215,6 +247,35 @@ import App from '../../layouts/App.astro';
     let enrolledIds = new Set<string>();
     let searchTimer: ReturnType<typeof setTimeout>;
     let selectedCategories = new Set<string>();
+
+    // ── Skill level filter (via ?skill= URL param) ────────────────────
+    let mySkillLevels: { skill: string; level: string }[] = [];
+    const urlParams = new URLSearchParams(window.location.search);
+    let activeSkillFilter: string | null = urlParams.get('skill');
+
+    const LEVEL_ORDER: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3 };
+    const LEVEL_LABEL: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
+
+    function matchesSkillFilter(course: any): boolean {
+      if (!activeSkillFilter) return true;
+      const skills: string[] = course.skills ?? [];
+      if (!skills.includes(activeSkillFilter)) return false;
+      const entry = mySkillLevels.find(s => s.skill === activeSkillFilter);
+      if (!entry) return true;
+      const userOrder = LEVEL_ORDER[entry.level] ?? 1;
+      const courseOrder = LEVEL_ORDER[course.difficulty] ?? 0;
+      return courseOrder >= userOrder;
+    }
+
+    function updateSkillBanner() {
+      const banner = document.getElementById('skill-filter-banner')!;
+      const label = document.getElementById('skill-filter-label')!;
+      if (!activeSkillFilter) { banner.style.display = 'none'; return; }
+      const entry = mySkillLevels.find(s => s.skill === activeSkillFilter);
+      const levelText = entry ? ` (${LEVEL_LABEL[entry.level] ?? entry.level} et +)` : '';
+      label.textContent = `${activeSkillFilter}${levelText}`;
+      banner.style.display = 'flex';
+    }
 
     // ── Difficulty labels ──────────────────────────────────────────────
     const diffLabels: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
@@ -357,9 +418,9 @@ import App from '../../layouts/App.astro';
         : courses;
 
       const activeCats = Array.from(selectedCategories);
-      const visible = activeCats.length > 0
+      const visible = (activeCats.length > 0
         ? filtered.filter(c => activeCats.includes(c.category || ''))
-        : filtered;
+        : filtered).filter(matchesSkillFilter);
 
       const countLabel = document.getElementById('count-label')!;
       countLabel.textContent = visible.length > 0 ? `${visible.length} cours` : '';
@@ -406,12 +467,22 @@ import App from '../../layouts/App.astro';
       rerender();
     };
 
+    (window as any).clearSkillFilter = () => {
+      activeSkillFilter = null;
+      const url = new URL(window.location.href);
+      url.searchParams.delete('skill');
+      window.history.replaceState({}, '', url.toString());
+      updateSkillBanner();
+      rerender();
+    };
+
     async function loadAll() {
       document.getElementById('loading')!.style.display = 'flex';
       try {
-        const [coursesRes, enrolledRes] = await Promise.allSettled([
+        const [coursesRes, enrolledRes, skillsRes] = await Promise.allSettled([
           apiFetch('/courses'),
           token ? apiFetch('/my/courses', { token: token! }) : Promise.resolve({ courses: [] }),
+          token ? apiFetch('/my/skills', { token: token! }) : Promise.resolve({ skills: [] }),
         ]);
 
         if (coursesRes.status === 'fulfilled') {
@@ -420,6 +491,10 @@ import App from '../../layouts/App.astro';
         if (enrolledRes.status === 'fulfilled') {
           enrolledCourses = (enrolledRes.value as any).courses || [];
           enrolledIds = new Set(enrolledCourses.map((c: any) => c.id));
+        }
+        if (skillsRes.status === 'fulfilled') {
+          mySkillLevels = (skillsRes.value as any).skills || [];
+          updateSkillBanner();
         }
 
         // Continue hero: in-progress first, then most recent enrolled

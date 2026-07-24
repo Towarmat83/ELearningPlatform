@@ -24,7 +24,7 @@ func (s *State) fetchCourseServiceJSON(req *http.Request, urlPath string, dest a
 		return fmt.Errorf("GET %s: %w", urlPath, err)
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck // closing a response body never needs to be acted upon
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

@@ -54,6 +54,23 @@ spec:
           spec:
             description: Spec defines the desired state of the Course.
             properties:
+              badge:
+                description: Badge defines the badge awarded on course completion.
+                  Omitting it means no badge is granted.
+                properties:
+                  icon:
+                    description: Icon is an emoji or short string used as the badge's
+                      visual identifier.
+                    type: string
+                  name:
+                    description: |-
+                      Name is the flavor title of the badge (e.g. "Certified Operator").
+                      The full badge name is displayed as "<Name> — <CourseTitle>".
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
               category:
                 description: Category groups the course for browsing/filtering purposes.
                 type: string

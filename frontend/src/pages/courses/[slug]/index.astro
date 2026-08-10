@@ -165,6 +165,7 @@ import App from '../../../layouts/App.astro';
       <h1 id="course-title" style="font-size:1.1rem;font-weight:700;line-height:1.35"></h1>
       <div id="course-tags" class="course-tags"></div>
       <p id="course-desc" class="text-soft text-sm" style="line-height:1.6;font-size:.85rem"></p>
+      <div id="course-badge-area"></div>
       <div id="enroll-area"></div>
       <div id="course-meta" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px;margin-top:4px"></div>
     </aside>
@@ -316,16 +317,23 @@ import App from '../../../layouts/App.astro';
 
         document.getElementById('course-meta')!.style.display = 'none';
 
-        // Enrollment check
+        // Enrollment check + badges (parallel when logged in)
         let enrolled = false;
         let modules: any[] = [];
         let prereqBlocked = false;
+        let earnedSlugs = new Set<string>();
 
         if (token) {
-          try {
-            const myRes = await apiFetch('/my/courses', { token: token! }) as any;
-            enrolled = (myRes.courses || []).some((c: any) => c.slug === slug || c.id === slug);
-          } catch { /* ignore */ }
+          const [myCoursesRes, myBadgesRes] = await Promise.allSettled([
+            apiFetch('/my/courses', { token: token! }),
+            apiFetch('/my/badges', { token: token! }),
+          ]);
+          if (myCoursesRes.status === 'fulfilled') {
+            enrolled = ((myCoursesRes.value as any).courses || []).some((c: any) => c.slug === slug || c.id === slug);
+          }
+          if (myBadgesRes.status === 'fulfilled') {
+            ((myBadgesRes.value as any).badges || []).forEach((b: any) => earnedSlugs.add(b.courseSlug));
+          }
 
           if (enrolled) {
             try {
@@ -335,6 +343,30 @@ import App from '../../../layouts/App.astro';
               if (e.status === 403) prereqBlocked = true;
             }
           }
+        }
+
+        // Badge card
+        if (course.badge) {
+          const badgeArea = document.getElementById('course-badge-area')!;
+          const earned = earnedSlugs.has(slug);
+          const iconEl = document.createElement('a');
+          iconEl.href = earned ? '/my-badges' : '#';
+          iconEl.style.cssText = `display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);margin-top:8px;border:1.5px solid ${earned ? 'var(--green,#22c55e)' : 'var(--line)'};background:${earned ? 'var(--green-soft,#f0fdf4)' : 'var(--fill)'};text-decoration:none;color:inherit;${earned ? 'cursor:pointer' : 'cursor:default'}`;
+          const iconSpan = document.createElement('span');
+          iconSpan.style.fontSize = '1.6rem';
+          iconSpan.textContent = course.badge.icon || '🏅';
+          const textDiv = document.createElement('div');
+          const labelDiv = document.createElement('div');
+          labelDiv.style.cssText = `font-size:.72rem;font-weight:600;${earned ? 'color:var(--green,#16a34a)' : 'color:var(--ink-soft)'}`;
+          labelDiv.textContent = earned ? '✓ Badge obtenu' : 'Badge à obtenir';
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = 'font-weight:600;font-size:.8rem';
+          nameDiv.textContent = course.badge.name || 'Badge';
+          textDiv.appendChild(labelDiv);
+          textDiv.appendChild(nameDiv);
+          iconEl.appendChild(iconSpan);
+          iconEl.appendChild(textDiv);
+          badgeArea.appendChild(iconEl);
         }
 
         // Inline quizzes are embedded in previous modules — exclude from standalone list and counts

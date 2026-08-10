@@ -61,6 +61,7 @@ var allModels = []any{
 	&models.GroupEnrollment{},
 	&models.MarkdownPattern{},
 	&models.PathEnrollment{},
+	&models.UserBadge{},
 }
 
 // RunMigrations brings the database schema up to date. Schema management is
@@ -115,27 +116,7 @@ type breakingMigration struct {
 // runs at most once, tracked by Name in _schema_migrations.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{
-	{
-		Name: "20260722_drop_role_check_constraints",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role;
-				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS chk_group_role_mappings_platform_role;
-			`).Error
-		},
-	},
-	{
-		Name: "20260722_drop_role_check_constraints_v2",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS chk_group_role_mappings_platformrole;
-				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS group_role_mappings_platformrole_check;
-			`).Error
-		},
-	},
-}
+var breakingMigrations = []breakingMigration{}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own
@@ -252,6 +233,10 @@ var foreignKeys = []foreignKey{
 	{
 		Name: "path_enrollments_userid_fkey",
 		DDL:  "ALTER TABLE path_enrollments ADD CONSTRAINT path_enrollments_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
+	},
+	{
+		Name: "user_badges_userid_fkey",
+		DDL:  "ALTER TABLE user_badges ADD CONSTRAINT user_badges_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
 	},
 }
 

@@ -544,13 +544,15 @@ func (r *gormUserRepository) CreateAdminIfAbsent(ctx context.Context, username, 
 }
 
 // UpsertAdminPassword creates the admin account with hash, or updates the
-// password hash of the existing one matching email.
+// password hash (and email) of the existing one matching username.
+// Conflicts on username are used as the arbiter because the admin username
+// is the stable identifier across email domain changes.
 func (r *gormUserRepository) UpsertAdminPassword(ctx context.Context, username, email, hash string) error {
 	user := models.User{Username: username, Email: email, PasswordHash: &hash, Role: roleAdmin}
 
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: colEmail}},
-		DoUpdates: clause.AssignmentColumns([]string{"password_hash", colUpdatedAt}),
+		Columns:   []clause.Column{{Name: colUsername}},
+		DoUpdates: clause.AssignmentColumns([]string{"email", "password_hash", colUpdatedAt}),
 	}).Create(&user).Error
 	if err != nil {
 		return fmt.Errorf("upsert admin password: %w", err)

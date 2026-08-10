@@ -321,11 +321,17 @@ func lessonModuleIndex(course *content.Course, lessonSlug string) (int, bool) {
 	return -1, false
 }
 
-// isLastMeaningfulModule reports whether moduleIndex is the last module of
-// course, ignoring trailing inline quiz modules.
-func isLastMeaningfulModule(course *content.Course, moduleIndex int) bool {
-	lastMeaningful := len(course.Modules) - 1
-	for lastMeaningful > 0 && course.Modules[lastMeaningful].Inline && course.Modules[lastMeaningful].Type == moduleTypeQuiz {
+// isLastMeaningfulModule reports whether moduleIndex is the last module in
+// modules, ignoring trailing inline quiz modules.
+func isLastMeaningfulModule(modules []content.Module, moduleIndex int) bool {
+	if len(modules) == 0 {
+		zap.L().Error("isLastMeaningfulModule: modules slice is empty")
+
+		return false
+	}
+
+	lastMeaningful := len(modules) - 1
+	for lastMeaningful > 0 && modules[lastMeaningful].Inline && modules[lastMeaningful].Type == moduleTypeQuiz {
 		lastMeaningful--
 	}
 
@@ -464,7 +470,7 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if isLastMeaningfulModule(course, moduleIndex) {
+	if isLastMeaningfulModule(course.Modules, moduleIndex) {
 		s.notifyCourseComplete(req, claims.Subject, courseSlug)
 	}
 

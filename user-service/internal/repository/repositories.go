@@ -13,6 +13,7 @@ type Repositories struct {
 	Groups         GroupRepository
 	Patterns       PatternRepository
 	Paths          PathEnrollmentRepository
+	Badges         BadgeRepository
 }
 
 // NewGormRepositories builds a Repositories backed by gdb.
@@ -26,5 +27,6 @@ func NewGormRepositories(gdb *gorm.DB) *Repositories {
 		Groups:         NewGormGroupRepository(gdb),
 		Patterns:       NewGormPatternRepository(gdb),
 		Paths:          NewGormPathEnrollmentRepository(gdb),
+		Badges:         NewGormBadgeRepository(gdb),
 	}
 }

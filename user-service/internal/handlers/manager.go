@@ -10,6 +10,13 @@ import (
 // it must not count as a manager scope group.
 const defaultGroupName = "everyone"
 
+// groupInfo holds the id, name and member list of a manager's scope group.
+type groupInfo struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	MemberIDs []string `json:"memberIds"`
+}
+
 // managerScopeIDs returns the IDs of a manager's groups, excluding the
 // platform-wide default group which should not define scope.
 func managerScopeIDs(groups []repository.GroupRow) []string {
@@ -49,12 +56,6 @@ func (s *State) ManagerListUsers(writer http.ResponseWriter, request *http.Reque
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
-	}
-
-	type groupInfo struct {
-		ID        string   `json:"id"`
-		Name      string   `json:"name"`
-		MemberIDs []string `json:"memberIds"`
 	}
 
 	scopeGroups := make([]groupInfo, 0, len(groups))

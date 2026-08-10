@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -214,8 +215,10 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	if body.Role != nil && *body.Role != groupsRoleAdmin && *body.Role != groupsRoleManager && *body.Role != groupsRoleStudent {
-		s.Error(writer, http.StatusBadRequest, "Role must be 'admin', 'manager' or 'student'")
+	allowedRoles := []string{groupsRoleAdmin, groupsRoleManager, groupsRoleStudent}
+
+	if body.Role != nil && !slices.Contains(allowedRoles, *body.Role) {
+		s.Error(writer, http.StatusBadRequest, "Role must be one of: "+strings.Join(allowedRoles, ", "))
 
 		return
 	}
@@ -565,7 +568,7 @@ func (s *State) AdminLeaderboard(writer http.ResponseWriter, request *http.Reque
 		})
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]any{"leaderboard": leaderboard})
+	s.JSON(writer, http.StatusOK, map[string]any{leaderboardResponseKey: leaderboard})
 }
 
 // ListGroupMembers godoc

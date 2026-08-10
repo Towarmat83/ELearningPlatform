@@ -267,11 +267,7 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 
 		// Only remove memberships in groups from the same SSO source so that
 		// manually managed local group memberships are preserved across logins.
-		delErr := groupTx.Exec(`
-			DELETE FROM user_groups ug
-			USING groups g
-			WHERE ug.userid = ?::uuid AND ug.groupid = g.id AND g.source = ?
-		`, userID, source).Error
+		delErr := groupTx.Delete(&models.UserGroup{}, "userid = ?::uuid AND groupid IN (SELECT id FROM groups WHERE source = ?)", userID, source).Error
 		if delErr != nil {
 			return fmt.Errorf("clear group memberships: %w", delErr)
 		}

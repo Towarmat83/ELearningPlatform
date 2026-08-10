@@ -6,6 +6,15 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// groupRow is the response shape for a single group in the my-groups endpoint.
+type groupRow struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Source      string   `json:"source"`
+	MappedRole  string   `json:"mappedRole,omitempty"`
+	CourseSlugs []string `json:"courseSlugs"`
+}
+
 // MyGroups godoc
 // @Summary   List the authenticated user's group memberships with their courses
 // @Tags      My
@@ -22,14 +31,6 @@ func (s *State) MyGroups(writer http.ResponseWriter, request *http.Request) {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
-	}
-
-	type groupRow struct {
-		ID          string   `json:"id"`
-		Name        string   `json:"name"`
-		Source      string   `json:"source"`
-		MappedRole  string   `json:"mappedRole,omitempty"`
-		CourseSlugs []string `json:"courseSlugs"`
 	}
 
 	groups := make([]groupRow, 0, len(rows))

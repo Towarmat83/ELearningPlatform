@@ -76,6 +76,10 @@ func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 	router.Get("/metrics", metrics.Handler())
 
 	router.Get("/api/settings/public", state.PublicSettings)
+	router.Get("/api/users/{id}", state.PublicUser)
+	router.Get("/api/users/{id}/badges", state.UserBadges)
+	router.Get("/api/badges/{slug}", state.BadgeStats)
+	router.Get("/api/leaderboard", state.BadgeLeaderboard)
 	router.Get("/api/auth/oauth/providers", state.ListProviders)
 	router.Get("/api/auth/oauth/{provider}/authorize", state.OAuthAuthorize)
 	router.Get("/api/auth/oidc/authorize", state.OIDCAuthorize)
@@ -110,6 +114,7 @@ func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(ht
 
 		group.Get("/api/my/courses", state.MyCourses)
 		group.Get("/api/my/paths", state.MyPaths)
+		group.Get("/api/my/badges", state.MyBadges)
 		group.Get("/api/my/skills/{slug}", state.MySkillModules)
 		group.Get("/api/my/groups", state.MyGroups)
 		group.Get("/api/my/groups/{groupId}/members", state.MyGroupMembers)

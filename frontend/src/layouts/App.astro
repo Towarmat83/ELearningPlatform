@@ -18,6 +18,7 @@ const { title, description, activePage } = Astro.props;
     <a href="/courses" class={`navlink${activePage === 'catalogue' ? ' active' : ''}`} id="nav-catalogue">Catalogue</a>
     <a href="/my-courses" class={`navlink${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
     <a href="/my-paths" class={`navlink${activePage === 'paths' ? ' active' : ''}`} id="nav-my-paths">Mes parcours</a>
+    <a href="/my-groups" class={`navlink${activePage === 'groups' ? ' active' : ''}`} id="nav-my-groups">Mes groupes</a>
     <a href="/my-badges" class={`navlink${activePage === 'badges' ? ' active' : ''}`} id="nav-my-badges">Mes badges</a>
     <a href="/leaderboard" class={`navlink${activePage === 'leaderboard' ? ' active' : ''}`} id="nav-leaderboard">Classement</a>
     <div class="nav-spacer"></div>
@@ -63,6 +64,7 @@ const { title, description, activePage } = Astro.props;
             <span style="font-size:.875rem;font-weight:500;color:var(--ink-soft);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${user.username}</span>
           </a>
           ${user.role === 'admin' ? '<a href="/admin" class="btn btn-secondary btn-sm">Admin</a>' : ''}
+          ${user.role === 'manager' ? '<a href="/manager/users" class="btn btn-secondary btn-sm">Mes membres</a>' : ''}
           <button id="nav-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
         `;
 

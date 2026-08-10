@@ -564,6 +564,32 @@ func (f *UserRepository) Leaderboard(_ context.Context) ([]repository.Leaderboar
 	return list, nil
 }
 
+// ListByGroupIDs returns the admin projection for every user whose ID appears
+// in any of the given group IDs. In the fake, groups are tracked through the
+// GroupRepository; here we simply return all seeded users as a stub.
+func (f *UserRepository) ListByGroupIDs(_ context.Context, _ []string) ([]repository.AdminUserRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	list := make([]repository.AdminUserRow, 0, len(f.users))
+
+	for _, usr := range f.users {
+		list = append(list, repository.AdminUserRow{
+			ID:       usr.ID.String(),
+			Username: usr.Username,
+			Email:    usr.Email,
+			Role:     usr.Role,
+			IsActive: usr.IsActive,
+		})
+	}
+
+	return list, nil
+}
+
 // CreateAdminIfAbsent seeds an admin user unless email already exists.
 func (f *UserRepository) CreateAdminIfAbsent(_ context.Context, username, email, hash string) error {
 	f.mu.Lock()

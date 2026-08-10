@@ -126,6 +126,7 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		Prerequisites: prerequisites,
 		Modules:       modules,
 		Skills:        aggregateSkills(modules),
+		Scope:         spec.Scope,
 		Badge:         badge,
 		Source:        sourceK8s(slug),
 	}

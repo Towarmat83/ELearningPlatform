@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -14,6 +16,7 @@ import (
 // membership synced from an IdP.
 const (
 	groupsRoleAdmin   = "admin"
+	groupsRoleManager = "manager"
 	groupsRoleStudent = "student"
 )
 
@@ -205,8 +208,10 @@ func (s *State) UpsertGroupMapping(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if body.PlatformRole != groupsRoleAdmin && body.PlatformRole != groupsRoleStudent {
-		s.Error(writer, http.StatusBadRequest, "platformRole must be 'admin' or 'student'")
+	allowedRoles := []string{groupsRoleAdmin, groupsRoleManager, groupsRoleStudent}
+
+	if !slices.Contains(allowedRoles, body.PlatformRole) {
+		s.Error(writer, http.StatusBadRequest, "platformRole must be one of: "+strings.Join(allowedRoles, ", "))
 
 		return
 	}

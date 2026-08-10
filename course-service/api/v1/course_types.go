@@ -281,6 +281,9 @@ type CourseSpec struct {
 	// Prerequisites lists the conditions that must be met before a user can enroll.
 	// +kubebuilder:validation:Optional
 	Prerequisites []CoursePrerequisite `json:"prerequisites,omitempty"`
+	// Scope restricts enrollment management to users within the named group.
+	// +kubebuilder:validation:Optional
+	Scope string `json:"scope,omitempty"`
 	// Badge defines the badge awarded on course completion. Omitting it means no badge is granted.
 	// +kubebuilder:validation:Optional
 	Badge *BadgeSpec `json:"badge,omitempty"`

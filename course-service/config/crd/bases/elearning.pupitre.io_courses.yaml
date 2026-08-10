@@ -434,6 +434,10 @@ spec:
                 description: 'Public: when true, the course is publicly visible and
                   users are auto-enrolled on first access.'
                 type: boolean
+              scope:
+                description: Scope restricts enrollment management to users within
+                  the named group.
+                type: string
               title:
                 description: Title is the course's display name; defaults to the resource
                   name if omitted.

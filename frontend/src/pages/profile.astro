@@ -9,7 +9,15 @@ import App from '../layouts/App.astro';
         <!-- Left sidebar nav -->
         <aside class="sidebar">
           <div class="card-sm" style="margin-bottom:16px;text-align:center;padding:20px">
-            <div id="avatar-area" style="margin:0 auto 12px;width:80px;height:80px"></div>
+            <div id="avatar-wrapper" style="position:relative;width:80px;height:80px;margin:0 auto 12px;cursor:pointer" title="Changer la photo de profil">
+              <div id="avatar-area" style="width:80px;height:80px"></div>
+              <div id="avatar-edit-overlay" style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;color:#fff;font-size:.7rem;font-weight:600;text-align:center;line-height:1.2">✏️<br>Modifier</div>
+            </div>
+            <!-- Emoji picker for profile photo -->
+            <div id="avatar-picker" style="display:none;margin-bottom:12px">
+              <div style="font-size:.72rem;color:var(--ink-soft);margin-bottom:6px">Photo de profil</div>
+              <div id="avatar-picker-grid" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
+            </div>
             <div id="profile-name" style="font-weight:700;margin-bottom:2px"></div>
             <div id="profile-email" style="font-size:.8rem;color:var(--ink-soft)"></div>
             <div id="profile-role" style="margin-top:8px"></div>
@@ -76,6 +84,7 @@ import App from '../layouts/App.astro';
             <div id="security-content"></div>
           </div>
 
+
         </div>
       </div>
     </div>
@@ -105,8 +114,12 @@ import App from '../layouts/App.astro';
     async function init() {
       if (!token) return;
       try {
-        user = await apiFetch('/auth/me', { token: token! }) as any;
+        [user] = await Promise.all([
+          apiFetch('/auth/me', { token: token! }),
+          loadEarnedIcons(),
+        ]);
         render();
+        buildPicker();
       } catch {
         (window as any).showToast?.('Erreur lors du chargement du profil', 'error');
       }
@@ -121,8 +134,16 @@ import App from '../layouts/App.astro';
 
       // Sidebar mini-profile
       const avatarArea = document.getElementById('avatar-area')!;
-      if (user.avatarUrl) {
+      const avatarIsUrl = user.avatarUrl && (user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://'));
+      if (avatarIsUrl) {
         avatarArea.innerHTML = `<img src="${user.avatarUrl}" alt="${user.username}" class="avatar-circle" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="avatar-initial" style="display:none">${initial}</div>`;
+      } else if (user.avatarUrl) {
+        const emojiDiv = document.createElement('div');
+        emojiDiv.className = 'avatar-initial';
+        emojiDiv.style.fontSize = '2rem';
+        emojiDiv.textContent = user.avatarUrl;
+        avatarArea.innerHTML = '';
+        avatarArea.appendChild(emojiDiv);
       } else {
         avatarArea.innerHTML = `<div class="avatar-initial">${initial}</div>`;
       }
@@ -148,7 +169,8 @@ import App from '../layouts/App.astro';
       // Edit mode setup
       if (!isSso) {
         document.getElementById('avatar-field')!.style.display = 'block';
-        (document.getElementById('edit-avatar') as HTMLInputElement).value = user.avatarUrl || '';
+        const currentAvatarForInput = (user.avatarUrl && (user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://'))) ? user.avatarUrl : '';
+        (document.getElementById('edit-avatar') as HTMLInputElement).value = currentAvatarForInput;
       } else {
         const notice = document.getElementById('sso-avatar-notice')!;
         notice.style.display = 'block';
@@ -224,6 +246,61 @@ import App from '../layouts/App.astro';
       }
 
     }
+
+    // Avatar emoji picker
+    let earnedIcons: string[] = [];
+
+    async function loadEarnedIcons() {
+      try {
+        const data = await apiFetch('/my/badges', { token: token! }) as any;
+        earnedIcons = (data.badges || []).map((b: any) => b.icon || '🏅').filter(Boolean);
+      } catch { /* ignore */ }
+    }
+
+    function buildPicker() {
+      const grid = document.getElementById('avatar-picker-grid')!;
+      if (earnedIcons.length === 0) {
+        document.getElementById('avatar-picker')!.style.display = 'none';
+        return;
+      }
+      grid.innerHTML = earnedIcons.map(icon => `
+        <button class="avatar-pick-btn" data-icon="${icon}" title="${icon}"
+          style="width:36px;height:36px;border-radius:50%;border:2px solid var(--line);background:var(--fill);font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:border-color .15s">
+          ${icon}
+        </button>
+      `).join('');
+      grid.querySelectorAll<HTMLElement>('.avatar-pick-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', () => btn.style.borderColor = 'var(--blue)');
+        btn.addEventListener('mouseleave', () => btn.style.borderColor = 'var(--line)');
+        btn.addEventListener('click', async () => {
+          const icon = btn.dataset.icon!;
+          try {
+            const updated = await apiFetch('/auth/profile', { method: 'PUT', body: { avatarUrl: icon }, token: token! }) as any;
+            user = updated;
+            localStorage.setItem('user', JSON.stringify(updated));
+            document.getElementById('avatar-picker')!.style.display = 'none';
+            render();
+            (window as any).showToast?.('Photo de profil mise à jour', 'success');
+          } catch {
+            (window as any).showToast?.('Erreur lors de la mise à jour', 'error');
+          }
+        });
+      });
+    }
+
+    const avatarWrapper = document.getElementById('avatar-wrapper')!;
+    avatarWrapper.addEventListener('mouseenter', () => {
+      document.getElementById('avatar-edit-overlay')!.style.display = 'flex';
+    });
+    avatarWrapper.addEventListener('mouseleave', () => {
+      document.getElementById('avatar-edit-overlay')!.style.display = 'none';
+    });
+    avatarWrapper.addEventListener('click', () => {
+      const picker = document.getElementById('avatar-picker')!;
+      if (earnedIcons.length === 0) return;
+      const isOpen = picker.style.display !== 'none';
+      picker.style.display = isOpen ? 'none' : 'block';
+    });
 
     // Edit profile events
     document.getElementById('edit-btn')!.addEventListener('click', () => {

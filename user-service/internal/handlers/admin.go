@@ -560,5 +560,5 @@ func (s *State) AdminLeaderboard(writer http.ResponseWriter, request *http.Reque
 		})
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]any{"leaderboard": leaderboard})
+	s.JSON(writer, http.StatusOK, map[string]any{leaderboardResponseKey: leaderboard})
 }

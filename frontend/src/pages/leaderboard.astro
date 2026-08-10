@@ -1,0 +1,181 @@
+---
+import App from '../layouts/App.astro';
+---
+<App title="Classement" activePage="leaderboard">
+  <style is:global>
+    .lb-page { padding: 28px 36px 80px; max-width: 800px; margin: 0 auto; }
+
+    .lb-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .lb-title { font-size: 1.5rem; font-weight: 700; }
+    .lb-subtitle { font-size: .85rem; color: var(--ink-soft); }
+
+    .lb-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      background: var(--paper);
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .lb-row:hover { border-color: var(--blue); box-shadow: 0 4px 18px rgba(67,97,238,.08); }
+
+    .lb-row.rank-1 { border-color: #f59e0b44; background: #fffbeb; }
+    .lb-row.rank-1:hover { border-color: #f59e0b; }
+    .lb-row.rank-2 { border-color: #94a3b844; background: #f8fafc; }
+    .lb-row.rank-2:hover { border-color: #64748b; }
+    .lb-row.rank-3 { border-color: #d9770644; background: #fff7ed; }
+    .lb-row.rank-3:hover { border-color: #d97706; }
+
+    .lb-rank {
+      font-size: 1rem;
+      font-weight: 700;
+      width: 28px;
+      text-align: right;
+      flex-shrink: 0;
+      color: var(--ink-soft);
+    }
+    .lb-row.rank-1 .lb-rank { color: #f59e0b; font-size: 1.2rem; }
+    .lb-row.rank-2 .lb-rank { color: #64748b; }
+    .lb-row.rank-3 .lb-rank { color: #d97706; }
+
+    .lb-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue-soft), #d6ecfd);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--blue);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .lb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .lb-info { flex: 1; min-width: 0; }
+    .lb-username {
+      font-weight: 600;
+      font-size: .95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lb-count { font-size: .78rem; color: var(--ink-soft); margin-top: 2px; }
+
+    .lb-icons {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 220px;
+      font-size: 1.15rem;
+      line-height: 1;
+    }
+
+    .lb-empty {
+      text-align: center;
+      padding: 80px 24px;
+      color: var(--ink-soft);
+    }
+    .lb-empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+    @media (max-width: 600px) {
+      .lb-page { padding: 20px 14px 80px; }
+      .lb-icons { display: none; }
+    }
+  </style>
+
+  <div class="lb-page">
+    <div class="lb-header">
+      <h1 class="lb-title">Classement</h1>
+      <span class="lb-subtitle">badges obtenus</span>
+    </div>
+
+    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+
+    <div id="lb-list" class="lb-list" style="display:none"></div>
+
+    <div id="lb-empty" class="lb-empty" style="display:none">
+      <div class="lb-empty-icon">🏅</div>
+      <p>Aucun badge décerné pour l'instant.</p>
+    </div>
+  </div>
+
+  <script>
+    function rankClass(rank: number) {
+      if (rank === 1) return 'rank-1';
+      if (rank === 2) return 'rank-2';
+      if (rank === 3) return 'rank-3';
+      return '';
+    }
+
+    function rankLabel(rank: number) {
+      if (rank === 1) return '🥇';
+      if (rank === 2) return '🥈';
+      if (rank === 3) return '🥉';
+      return `#${rank}`;
+    }
+
+    function avatarHtml(entry: any) {
+      const initial = (entry.username || '?')[0].toUpperCase();
+      if (!entry.avatarUrl) return `<div class="lb-avatar">${initial}</div>`;
+      const isUrl = entry.avatarUrl.startsWith('http://') || entry.avatarUrl.startsWith('https://');
+      if (isUrl) {
+        return `<div class="lb-avatar"><img src="${entry.avatarUrl}" alt="${entry.username}" /></div>`;
+      }
+      return `<div class="lb-avatar" style="font-size:1.4rem">${entry.avatarUrl}</div>`;
+    }
+
+    async function init() {
+      const res = await fetch('/api/leaderboard');
+      document.getElementById('loading')!.style.display = 'none';
+
+      if (!res.ok) {
+        document.getElementById('lb-empty')!.style.display = '';
+        return;
+      }
+
+      const data = await res.json() as any;
+      const entries: any[] = data.leaderboard || [];
+
+      if (entries.length === 0) {
+        document.getElementById('lb-empty')!.style.display = '';
+        return;
+      }
+
+      const list = document.getElementById('lb-list')!;
+      list.style.display = 'flex';
+      list.innerHTML = entries.map((e: any) => {
+        const icons: string[] = e.icons || [];
+        const displayIcons = icons.slice(0, 10).join(' ');
+        const extra = icons.length > 10 ? `<span style="font-size:.75rem;color:var(--ink-soft)">+${icons.length - 10}</span>` : '';
+        return `
+          <a href="/users/${e.userId}" class="lb-row ${rankClass(e.rank)}">
+            <div class="lb-rank">${rankLabel(e.rank)}</div>
+            ${avatarHtml(e)}
+            <div class="lb-info">
+              <div class="lb-username">${e.username}</div>
+              <div class="lb-count">${e.count} badge${e.count > 1 ? 's' : ''}</div>
+            </div>
+            <div class="lb-icons">${displayIcons}${extra}</div>
+          </a>
+        `;
+      }).join('');
+    }
+
+    init();
+  </script>
+</App>

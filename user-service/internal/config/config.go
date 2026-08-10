@@ -33,6 +33,9 @@ const (
 	defaultAuthRateLimitRequests = 10
 	// defaultAuthRateLimitWindowSeconds is the auth rate-limit window length.
 	defaultAuthRateLimitWindowSeconds = 60
+	// defaultLeaderboardMaxEntries is the default number of rows returned by
+	// the badge leaderboard endpoint.
+	defaultLeaderboardMaxEntries = 20
 	// defaultDBMaxOpenConns is the default maximum number of open database
 	// connections held in the pool.
 	defaultDBMaxOpenConns = 20
@@ -141,6 +144,10 @@ type Config struct {
 	// per AuthRateLimitWindowSeconds. Set AUTH_RATE_LIMIT_REQUESTS=0 to disable.
 	AuthRateLimitRequests      int `yaml:"authRateLimitRequests"`
 	AuthRateLimitWindowSeconds int `yaml:"authRateLimitWindowSeconds"`
+
+	// LeaderboardMaxEntries caps the number of rows returned by the badge
+	// leaderboard endpoint. Override with LEADERBOARD_MAX_ENTRIES env var.
+	LeaderboardMaxEntries int `yaml:"leaderboardMaxEntries"`
 }
 
 // FindProvider returns the ProviderConfig with the given id, or nil if no
@@ -180,6 +187,7 @@ func Load() *Config {
 	cfg.Kubeconfig = stringFromEnv("KUBECONFIG", cfg.Kubeconfig)
 	cfg.AuthRateLimitRequests = intFromEnv("AUTH_RATE_LIMIT_REQUESTS", cfg.AuthRateLimitRequests)
 	cfg.AuthRateLimitWindowSeconds = intFromEnv("AUTH_RATE_LIMIT_WINDOW_SECONDS", cfg.AuthRateLimitWindowSeconds)
+	cfg.LeaderboardMaxEntries = positiveIntFromEnv("LEADERBOARD_MAX_ENTRIES", cfg.LeaderboardMaxEntries)
 
 	loadAdminPassword(cfg)
 
@@ -206,6 +214,7 @@ func defaultConfig() *Config {
 		CourseServiceURL:           "http://course-service:8082",
 		AuthRateLimitRequests:      defaultAuthRateLimitRequests,
 		AuthRateLimitWindowSeconds: defaultAuthRateLimitWindowSeconds,
+		LeaderboardMaxEntries:      defaultLeaderboardMaxEntries,
 	}
 }
 

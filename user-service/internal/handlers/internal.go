@@ -184,7 +184,19 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 	}
 
 	err := s.Repos.LessonProgress.MarkComplete(req.Context(), body.UserID, body.CourseSlug, courseCompleteLessonSlug)
-	internalRespondExecResult(s, writer, err, "failed to mark course complete",
+	if err != nil {
+		internalRespondExecResult(s, writer, err, "failed to mark course complete",
+			zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
+
+		return
+	}
+
+	awardErr := s.Repos.Badges.Award(req.Context(), body.UserID, body.CourseSlug)
+	if awardErr != nil {
+		zap.L().Warn("failed to award badge on course completion", zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.Error(awardErr))
+	}
+
+	internalRespondExecResult(s, writer, nil, "failed to mark course complete",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
 }
 

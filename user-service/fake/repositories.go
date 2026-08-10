@@ -14,5 +14,6 @@ func NewRepositories() *repository.Repositories {
 		Groups:         NewGroupRepository(),
 		Patterns:       NewPatternRepository(),
 		Paths:          NewPathEnrollmentRepository(),
+		Badges:         NewBadgeRepository(),
 	}
 }

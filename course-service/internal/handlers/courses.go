@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
@@ -118,22 +119,13 @@ func (f courseFilters) matches(course *content.Course) bool {
 		}
 	}
 
-	if f.skill != "" && !courseHasSkill(course.Skills, f.skill) {
+	if f.skill != "" && !slices.ContainsFunc(course.Skills, func(s string) bool {
+		return strings.EqualFold(s, f.skill)
+	}) {
 		return false
 	}
 
 	return true
-}
-
-// courseHasSkill reports whether skill appears in the course's skill list.
-func courseHasSkill(skills []string, skill string) bool {
-	for _, s := range skills {
-		if strings.EqualFold(s, skill) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // ListAdminCourses godoc

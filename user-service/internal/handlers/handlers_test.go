@@ -4805,3 +4805,169 @@ func TestListProviders_WithProvider(t *testing.T) {
 		t.Errorf("want 1 provider, got %d", len(providers))
 	}
 }
+
+// ── UpdateUser manager role ───────────────────────────────────────────────────
+
+// TestUpdateUser_ManagerRole verifies that setting role to "manager" is
+// accepted by UpdateUser.
+func TestUpdateUser_ManagerRole(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Users = fake.NewUserRepository(models.User{
+		ID: uuid.MustParse(htUserID), Username: "testuser", Email: "t@test.com", Role: "student",
+		IsActive: true, AuthProvider: "local",
+	})
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "PUT", "/api/admin/users/"+htUserID, `{"role":"manager"}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ── UpsertGroupMapping manager role ──────────────────────────────────────────
+
+// TestUpsertGroupMapping_ManagerRole verifies that platformRole "manager" is
+// accepted by UpsertGroupMapping.
+func TestUpsertGroupMapping_ManagerRole(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "POST", "/api/admin/groups/mappings", `{"groupName":"devs","platformRole":"manager"}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ── Admin group members ───────────────────────────────────────────────────────
+
+// TestListGroupMembers_Empty verifies 200 with empty member list.
+func TestListGroupMembers_Empty(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "GET", "/api/admin/groups/group-uuid-1/members", "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+}
+
+// TestListGroupMembers_WithData verifies 200 with member data.
+func TestListGroupMembers_WithData(t *testing.T) {
+	t.Parallel()
+
+	groupUUID := uuid.MustParse(htGroupID)
+	repos := fake.NewRepositories()
+	groups := fake.NewGroupRepository(models.Group{ID: groupUUID, Name: "team-rh", Source: "local"})
+	groups.UserGroup = []models.UserGroup{
+		{UserID: htUserID, GroupID: groupUUID},
+	}
+	repos.Groups = groups
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "GET", "/api/admin/groups/"+htGroupID+"/members", "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	members := htSliceField(t, resp, "members")
+	if len(members) != 1 {
+		t.Errorf("expected 1 member, got %d", len(members))
+	}
+}
+
+// TestListGroupMembers_DBError verifies 500 when member lookup fails.
+func TestListGroupMembers_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db error")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "GET", "/api/admin/groups/group-uuid-1/members", "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}
+
+// TestAddGroupMember_MissingUserID verifies 400 when userId is absent.
+func TestAddGroupMember_MissingUserID(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "POST", "/api/admin/groups/group-uuid-1/members", `{"userId":""}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d", rec.Code)
+	}
+}
+
+// TestAddGroupMember_InvalidJSON verifies 400 for malformed body.
+func TestAddGroupMember_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "POST", "/api/admin/groups/"+htGroupID+"/members", "not-json", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d", rec.Code)
+	}
+}
+
+// TestAddGroupMember_Success verifies 200 when member is added.
+func TestAddGroupMember_Success(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "POST", "/api/admin/groups/"+htGroupID+"/members", `{"userId":"`+htUserID+`"}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAddGroupMember_DBError verifies 500 when the repository fails.
+func TestAddGroupMember_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db error")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/admin/groups/group-uuid-1/members", `{"userId":"`+htUserID+`"}`, htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}
+
+// TestRemoveGroupMember_Success verifies 200 when member is removed.
+func TestRemoveGroupMember_Success(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "DELETE", "/api/admin/groups/"+htGroupID+"/members/"+htUserID, "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestRemoveGroupMember_DBError verifies 500 when the repository fails.
+func TestRemoveGroupMember_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db error")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "DELETE", "/api/admin/groups/group-uuid-1/members/"+htUserID, "", htAuthHeader(t, "admin"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}

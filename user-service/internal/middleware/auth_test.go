@@ -383,3 +383,107 @@ func TestAdmin_MissingSubject(t *testing.T) {
 		t.Errorf("Admin missing subject: want 401, got %d", rec.Code)
 	}
 }
+
+// ── Manager middleware ────────────────────────────────────────────────────────
+
+// TestManager_ValidManagerToken verifies Manager lets a manager token through.
+func TestManager_ValidManagerToken(t *testing.T) {
+	t.Parallel()
+
+	token, _ := CreateToken("mgr-1", "mgr@example.com", "manager", "mgr-1", testSecret, 24)
+	mw := Manager(testSecret)
+
+	var captured *Claims
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = GetClaims(r)
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rec := httptest.NewRecorder()
+	mw(next).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Manager valid: want 200, got %d", rec.Code)
+	}
+
+	if captured == nil || captured.Role != "manager" {
+		t.Errorf("manager claims not propagated: %+v", captured)
+	}
+}
+
+// TestManager_StudentForbidden verifies Manager rejects a student token.
+func TestManager_StudentForbidden(t *testing.T) {
+	t.Parallel()
+
+	token, _ := CreateToken("user-1", "user@example.com", "student", "user-1", testSecret, 24)
+	mw := Manager(testSecret)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rec := httptest.NewRecorder()
+	mw(next).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Manager student: want 403, got %d", rec.Code)
+	}
+}
+
+// TestManager_AdminForbidden verifies Manager rejects an admin token.
+func TestManager_AdminForbidden(t *testing.T) {
+	t.Parallel()
+
+	token, _ := CreateToken("admin-1", "admin@example.com", "admin", "admin-1", testSecret, 24)
+	mw := Manager(testSecret)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rec := httptest.NewRecorder()
+	mw(next).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Manager admin: want 403, got %d", rec.Code)
+	}
+}
+
+// TestManager_MissingHeader verifies Manager rejects requests without auth.
+func TestManager_MissingHeader(t *testing.T) {
+	t.Parallel()
+
+	mw := Manager(testSecret)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+	rec := httptest.NewRecorder()
+	mw(next).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("Manager missing header: want 401, got %d", rec.Code)
+	}
+}
+
+// TestManager_InvalidToken verifies Manager rejects an unparsable token.
+func TestManager_InvalidToken(t *testing.T) {
+	t.Parallel()
+
+	mw := Manager(testSecret)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+
+	rec := httptest.NewRecorder()
+	mw(next).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("Manager invalid token: want 401, got %d", rec.Code)
+	}
+}

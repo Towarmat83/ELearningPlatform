@@ -17,11 +17,11 @@ import (
 // course is completed. Skills, Difficulty and SkillTotalCourses are forwarded
 // so user-service can update the learner's per-skill expertise level.
 type courseCompleteBody struct {
-	UserID            string         `json:"userId"`
-	CourseSlug        string         `json:"courseSlug"`
-	Skills            []string       `json:"skills,omitempty"`
-	Difficulty        string         `json:"difficulty,omitempty"`
-	SkillTotalCourses map[string]int `json:"skillTotalCourses,omitempty"`
+	UserID            string              `json:"userId"`
+	CourseSlug        string              `json:"courseSlug"`
+	Skills            map[string]struct{} `json:"skills,omitempty"`
+	Difficulty        string              `json:"difficulty,omitempty"`
+	SkillTotalCourses map[string]int      `json:"skillTotalCourses,omitempty"`
 }
 
 // lessonSummary is the public API representation of a lesson within a
@@ -394,17 +394,12 @@ func (s *State) postLessonComplete(
 
 // buildSkillTotals counts how many courses in the catalog teach each of the
 // given skills.
-func (s *State) buildSkillTotals(skills []string) map[string]int {
-	skillSet := make(map[string]bool, len(skills))
-	for _, sk := range skills {
-		skillSet[sk] = true
-	}
-
+func (s *State) buildSkillTotals(skills map[string]struct{}) map[string]int {
 	totals := make(map[string]int, len(skills))
 
 	for _, crs := range s.Content.All() {
 		for _, sk := range crs.Skills {
-			if skillSet[sk] {
+			if _, ok := skills[sk]; ok {
 				totals[sk]++
 			}
 		}
@@ -420,7 +415,12 @@ func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug strin
 	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
 
 	if course := s.Content.Get(courseSlug); course != nil {
-		payload.Skills = course.Skills
+		skillMap := make(map[string]struct{}, len(course.Skills))
+		for _, sk := range course.Skills {
+			skillMap[sk] = struct{}{}
+		}
+
+		payload.Skills = skillMap
 		payload.Difficulty = course.Difficulty
 	}
 

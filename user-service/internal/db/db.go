@@ -115,18 +115,7 @@ type breakingMigration struct {
 // breakingMigrations — see the RunMigrations doc comment.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{
-	{
-		Name: "20260724_add_skill_progress_columns",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				ALTER TABLE user_skill_levels
-				ADD COLUMN IF NOT EXISTS completed_courses INTEGER NOT NULL DEFAULT 1,
-				ADD COLUMN IF NOT EXISTS total_courses     INTEGER NOT NULL DEFAULT 0
-			`).Error
-		},
-	},
-}
+var breakingMigrations = []breakingMigration{}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own

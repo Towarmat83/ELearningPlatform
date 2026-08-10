@@ -98,13 +98,15 @@ type enrolledUser struct {
 //   - "available" for the first non-completed course in an unbroken chain.
 //   - "locked" otherwise. A cross-path completion mid-path does not
 //     unlock the next course if preceding courses are not yet done.
-func buildCourseStatuses(courses []string, completed map[string]bool) []courseStatus {
+func buildCourseStatuses(courses []string, completed map[string]struct{}) []courseStatus {
 	out := make([]courseStatus, len(courses))
 	sequential := true // true while no non-completed course has been seen yet
 
 	for idx, slug := range courses {
+		_, done := completed[slug]
+
 		switch {
-		case completed[slug]:
+		case done:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusCompleted}
 		case sequential:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusAvailable}
@@ -247,12 +249,12 @@ func (s *State) buildSkillStatuses(req *http.Request, userID string, skills []st
 // userID has completed. Completion is not path-scoped: a course finished
 // in any path counts. Two sources are checked — passed quiz modules
 // (module_progress) and the __complete__ sentinel in lesson_progress.
-func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs []string) map[string]bool {
+func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs []string) map[string]struct{} {
 	if len(slugs) == 0 {
 		return nil
 	}
 
-	result := make(map[string]bool)
+	result := make(map[string]struct{})
 
 	moduleCompleted, err := s.Repos.ModuleProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
 	if err != nil {
@@ -262,7 +264,7 @@ func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs 
 	}
 
 	for _, slug := range moduleCompleted {
-		result[slug] = true
+		result[slug] = struct{}{}
 	}
 
 	lessonCompleted, err := s.Repos.LessonProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
@@ -273,7 +275,7 @@ func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs 
 	}
 
 	for _, slug := range lessonCompleted {
-		result[slug] = true
+		result[slug] = struct{}{}
 	}
 
 	return result

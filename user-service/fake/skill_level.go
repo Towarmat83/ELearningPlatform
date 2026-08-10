@@ -22,21 +22,21 @@ func NewSkillLevelRepository() *SkillLevelRepository {
 
 // Numeric ordinals for the four difficulty levels (mirrors repository).
 const (
-	fakeDifficultyOrderBeginner     = 1
-	fakeDifficultyOrderIntermediate = 2
-	fakeDifficultyOrderAdvanced     = 3
-	fakeDifficultyOrderMaitre       = 4
+	difficultyOrderBeginner     = 1
+	difficultyOrderIntermediate = 2
+	difficultyOrderAdvanced     = 3
+	difficultyOrderMaitre       = 4
 )
 
-// fakeDifficultyOrder maps a difficulty string to a comparable integer.
-func fakeDifficultyOrder(d string) int {
+// difficultyOrder maps a difficulty string to a comparable integer.
+func difficultyOrder(d string) int {
 	switch d {
 	case "beginner":
-		return fakeDifficultyOrderBeginner
+		return difficultyOrderBeginner
 	case "intermediate":
-		return fakeDifficultyOrderIntermediate
+		return difficultyOrderIntermediate
 	case "advanced":
-		return fakeDifficultyOrderAdvanced
+		return difficultyOrderAdvanced
 	default:
 		return 0
 	}
@@ -52,7 +52,7 @@ func (f *SkillLevelRepository) Upsert(_ context.Context, userID, skill, level st
 		return f.Err
 	}
 
-	incomingOrder := fakeDifficultyOrder(level)
+	incomingOrder := difficultyOrder(level)
 	if incomingOrder == 0 {
 		return nil
 	}
@@ -74,7 +74,7 @@ func (f *SkillLevelRepository) Upsert(_ context.Context, userID, skill, level st
 	switch {
 	case isMaitre:
 		newLevel = "maître"
-		newOrder = fakeDifficultyOrderMaitre
+		newOrder = difficultyOrderMaitre
 	case exists && current.LevelOrder > incomingOrder:
 		newLevel = current.Level
 		newOrder = current.LevelOrder

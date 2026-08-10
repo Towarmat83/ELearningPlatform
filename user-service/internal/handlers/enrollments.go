@@ -172,10 +172,12 @@ func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]reposi
 
 // buildMyCourses enriches each enrollment with course-service metadata, falling
 // back to the bare slug when course-service is unreachable.
-func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.EnrollmentRow, completed map[string]bool) []myCourse {
+func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.EnrollmentRow, completed map[string]struct{}) []myCourse {
 	courses := make([]myCourse, 0, len(enrolled))
 
 	for _, row := range enrolled {
+		_, isDone := completed[row.Slug]
+
 		details, err := s.fetchCourseDetails(ctx, row.Slug)
 		if err != nil {
 			zap.L().Warn("failed to fetch course details", zap.String("slug", row.Slug), zap.Error(err))
@@ -186,7 +188,7 @@ func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.Enroll
 				CompletedLabs: row.CompletedLabs,
 				TotalScore:    row.TotalScore,
 				LastActivity:  row.LastActivity,
-				Completed:     completed[row.Slug],
+				Completed:     isDone,
 			})
 
 			continue
@@ -205,7 +207,7 @@ func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.Enroll
 			CompletedLabs:   row.CompletedLabs,
 			TotalScore:      row.TotalScore,
 			LastActivity:    row.LastActivity,
-			Completed:       completed[row.Slug],
+			Completed:       isDone,
 		})
 	}
 

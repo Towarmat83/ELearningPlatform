@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -88,31 +89,37 @@ func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, le
 		insertOrder = difficultyOrderMaitre
 	}
 
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO user_skill_levels (userid, skill, level, levelorder, completed_courses, total_courses, updatedat)
-		VALUES (?::uuid, ?, ?, ?, 1, ?, NOW())
-		ON CONFLICT (userid, skill) DO UPDATE
-		SET
-		  completed_courses = user_skill_levels.completed_courses + 1,
-		  total_courses     = EXCLUDED.total_courses,
-		  level = CASE
-		    WHEN EXCLUDED.total_courses > 0
-		         AND user_skill_levels.completed_courses + 1 >= EXCLUDED.total_courses
-		         THEN 'maître'
-		    WHEN EXCLUDED.levelorder > user_skill_levels.levelorder
-		         THEN EXCLUDED.level
-		    ELSE user_skill_levels.level
-		  END,
-		  levelorder = CASE
-		    WHEN EXCLUDED.total_courses > 0
-		         AND user_skill_levels.completed_courses + 1 >= EXCLUDED.total_courses
-		         THEN 4
-		    WHEN EXCLUDED.levelorder > user_skill_levels.levelorder
-		         THEN EXCLUDED.levelorder
-		    ELSE user_skill_levels.levelorder
-		  END,
-		  updatedat = NOW()
-	`, userID, skill, insertLevel, insertOrder, totalCourses).Error
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "userid"}, {Name: "skill"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"completed_courses": gorm.Expr("user_skill_levels.completed_courses + 1"),
+			"total_courses":     gorm.Expr("EXCLUDED.total_courses"),
+			"level": gorm.Expr(`CASE
+				WHEN EXCLUDED.total_courses > 0
+				     AND user_skill_levels.completed_courses + 1 >= EXCLUDED.total_courses
+				     THEN 'maître'
+				WHEN EXCLUDED.levelorder > user_skill_levels.levelorder
+				     THEN EXCLUDED.level
+				ELSE user_skill_levels.level
+			END`),
+			"levelorder": gorm.Expr(`CASE
+				WHEN EXCLUDED.total_courses > 0
+				     AND user_skill_levels.completed_courses + 1 >= EXCLUDED.total_courses
+				     THEN 4
+				WHEN EXCLUDED.levelorder > user_skill_levels.levelorder
+				     THEN EXCLUDED.levelorder
+				ELSE user_skill_levels.levelorder
+			END`),
+			"updatedat": gorm.Expr("NOW()"),
+		}),
+	}).Create(&models.UserSkillLevel{
+		UserID:           userID,
+		Skill:            skill,
+		Level:            insertLevel,
+		LevelOrder:       insertOrder,
+		CompletedCourses: 1,
+		TotalCourses:     totalCourses,
+	}).Error
 	if err != nil {
 		return fmt.Errorf("upsert skill level: %w", err)
 	}

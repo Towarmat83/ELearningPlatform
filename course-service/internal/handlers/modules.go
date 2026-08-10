@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
@@ -955,15 +956,9 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 
 	// Find the module's position in the full course.Modules slice (visible modules
 	// may be a subset; isLastMeaningfulModule operates on the full list).
-	fullIdx := -1
-
-	for i, m := range course.Modules {
-		if m.Slug() == mod.Slug() {
-			fullIdx = i
-
-			break
-		}
-	}
+	fullIdx := slices.IndexFunc(course.Modules, func(m content.Module) bool {
+		return m.Slug() == mod.Slug()
+	})
 
 	s.finalizeSubmission(writer, req, course, mod, fullIdx, questions, passingScore, cooldownSpec, userID, courseSlug, idx) //nolint:contextcheck // fire-and-forget async POST intentionally detached from the request context (see recordModuleProgress)
 }

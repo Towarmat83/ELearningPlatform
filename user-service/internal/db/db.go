@@ -63,6 +63,7 @@ var allModels = []any{
 	&models.PathEnrollment{},
 	&models.UserBadge{},
 	&models.UserSkillLevel{},
+	&models.SessionBooking{},
 }
 
 // RunMigrations brings the database schema up to date. Schema management is
@@ -117,7 +118,17 @@ type breakingMigration struct {
 // runs at most once, tracked by Name in _schema_migrations.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{}
+var breakingMigrations = []breakingMigration{
+	{
+		Name: "20260722_drop_role_check_constraints",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			return gdb.WithContext(ctx).Exec(`
+				ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role;
+				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS chk_group_role_mappings_platform_role;
+			`).Error
+		},
+	},
+}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own
@@ -242,6 +253,10 @@ var foreignKeys = []foreignKey{
 	{
 		Name: "user_skill_levels_userid_fkey",
 		DDL:  "ALTER TABLE user_skill_levels ADD CONSTRAINT user_skill_levels_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
+	},
+	{
+		Name: "session_bookings_userid_fkey",
+		DDL:  "ALTER TABLE session_bookings ADD CONSTRAINT session_bookings_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
 	},
 }
 

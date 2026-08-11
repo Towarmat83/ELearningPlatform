@@ -22,7 +22,7 @@ func TestBuildCourseStatuses_Sequential(t *testing.T) {
 	t.Parallel()
 
 	courses := []string{"a", "b", "c", "d"}
-	completed := map[string]bool{"a": true, "b": true}
+	completed := map[string]struct{}{"a": {}, "b": {}}
 
 	out := buildCourseStatuses(courses, completed)
 
@@ -43,7 +43,7 @@ func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
 	// Simulates security path where "secrets-management" (index 6)
 	// completed via DevOps path, but "git-advanced" (index 5) not done.
 	courses := []string{"linux-intro", "networking", "cyber", "net-ess", "python", "git-advanced", "secrets-management", "container-security"}
-	completed := map[string]bool{"secrets-management": true}
+	completed := map[string]struct{}{"secrets-management": {}}
 
 	out := buildCourseStatuses(courses, completed)
 
@@ -71,7 +71,7 @@ func TestBuildCourseStatuses_AllCompleted(t *testing.T) {
 	t.Parallel()
 
 	courses := []string{"a", "b", "c"}
-	completed := map[string]bool{"a": true, "b": true, "c": true}
+	completed := map[string]struct{}{"a": {}, "b": {}, "c": {}}
 
 	out := buildCourseStatuses(courses, completed)
 	for i, cs := range out {
@@ -86,7 +86,7 @@ func TestBuildCourseStatuses_NoneCompleted(t *testing.T) {
 	t.Parallel()
 
 	courses := []string{"a", "b", "c", "shared"}
-	completed := map[string]bool{}
+	completed := map[string]struct{}{}
 
 	out := buildCourseStatuses(courses, completed)
 
@@ -105,7 +105,7 @@ func TestBuildCourseStatuses_SharedCourseUnlocks(t *testing.T) {
 	t.Parallel()
 
 	courses := []string{"a", "b", "shared", "c"}
-	completed := map[string]bool{"a": true, "b": true, "shared": true}
+	completed := map[string]struct{}{"a": {}, "b": {}, "shared": {}}
 
 	out := buildCourseStatuses(courses, completed)
 

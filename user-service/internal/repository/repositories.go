@@ -14,6 +14,7 @@ type Repositories struct {
 	Patterns       PatternRepository
 	Paths          PathEnrollmentRepository
 	Badges         BadgeRepository
+	SkillLevels    SkillLevelRepository
 }
 
 // NewGormRepositories builds a Repositories backed by gdb.
@@ -28,5 +29,6 @@ func NewGormRepositories(gdb *gorm.DB) *Repositories {
 		Patterns:       NewGormPatternRepository(gdb),
 		Paths:          NewGormPathEnrollmentRepository(gdb),
 		Badges:         NewGormBadgeRepository(gdb),
+		SkillLevels:    NewGormSkillLevelRepository(gdb),
 	}
 }

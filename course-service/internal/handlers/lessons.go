@@ -14,10 +14,14 @@ import (
 )
 
 // courseCompleteBody is the request body sent to the user-service when a
-// course is completed.
+// course is completed. Skills, Difficulty and SkillTotalCourses are forwarded
+// so user-service can update the learner's per-skill expertise level.
 type courseCompleteBody struct {
-	UserID     string `json:"userId"`
-	CourseSlug string `json:"courseSlug"`
+	UserID            string              `json:"userId"`
+	CourseSlug        string              `json:"courseSlug"`
+	Skills            map[string]struct{} `json:"skills,omitempty"`
+	Difficulty        string              `json:"difficulty,omitempty"`
+	SkillTotalCourses map[string]int      `json:"skillTotalCourses,omitempty"`
 }
 
 // lessonSummary is the public API representation of a lesson within a
@@ -388,11 +392,41 @@ func (s *State) postLessonComplete(
 	return true
 }
 
+// buildSkillTotals counts how many courses in the catalog teach each of the
+// given skills.
+func (s *State) buildSkillTotals(skills map[string]struct{}) map[string]int {
+	totals := make(map[string]int, len(skills))
+
+	for _, crs := range s.Content.All() {
+		for _, sk := range crs.Skills {
+			if _, ok := skills[sk]; ok {
+				totals[sk]++
+			}
+		}
+	}
+
+	return totals
+}
+
 // notifyCourseComplete notifies the user-service that userID completed
 // courseSlug. Failures are only logged: the lesson itself was already
 // recorded as complete, so they must not affect the HTTP response.
 func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug string) {
 	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
+
+	if course := s.Content.Get(courseSlug); course != nil {
+		skillMap := make(map[string]struct{}, len(course.Skills))
+		for _, sk := range course.Skills {
+			skillMap[sk] = struct{}{}
+		}
+
+		payload.Skills = skillMap
+		payload.Difficulty = course.Difficulty
+	}
+
+	if len(payload.Skills) > 0 {
+		payload.SkillTotalCourses = s.buildSkillTotals(payload.Skills)
+	}
 
 	var buf bytes.Buffer
 

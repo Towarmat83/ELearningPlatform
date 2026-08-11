@@ -1,0 +1,329 @@
+---
+import App from '../layouts/App.astro';
+---
+<App title="Mes compétences" activePage="skills">
+  <style is:global>
+    .ms-page { padding: 28px 40px 80px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+    .ms-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .ms-title { font-size: 1.5rem; font-weight: 700; }
+
+    .ms-section-title {
+      font-size: .85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--ink-soft);
+      margin: 28px 0 12px;
+    }
+
+    .ms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .ms-card {
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-decoration: none;
+      color: inherit;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .ms-card:hover { box-shadow: 0 4px 16px -4px rgba(30,60,120,.15); border-color: var(--blue); }
+    .ms-card.card-maitre { border-color: #d97706; }
+    .ms-card.card-maitre:hover { box-shadow: 0 4px 16px -4px rgba(217,119,6,.25); border-color: #b45309; }
+
+    .ms-card-skill {
+      font-size: .95rem;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ms-card-skill::before { content: '🎯'; font-size: 1rem; }
+
+    .ms-level {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      width: fit-content;
+    }
+    .level-beginner     { background: #dcfce7; color: #15803d; }
+    .level-intermediate { background: #fef9c3; color: #a16207; }
+    .level-advanced     { background: #fee2e2; color: #b91c1c; }
+    .level-maitre       { background: #fef3c7; color: #92400e; }
+    .level-inprogress   { background: #f1f5f9; color: #64748b; }
+
+    .ms-progress-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .ms-progress-bar {
+      flex: 1;
+      height: 5px;
+      background: var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .ms-progress-fill {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 4px;
+      transition: width .4s ease;
+    }
+    .ms-progress-fill.fill-maitre   { background: #d97706; }
+    .ms-progress-fill.fill-inprogress { background: #94a3b8; }
+    .ms-progress-label {
+      font-size: .7rem;
+      color: var(--ink-soft);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .ms-cta {
+      font-size: .78rem;
+      color: var(--blue);
+      font-weight: 600;
+    }
+
+    .ms-empty {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--ink-soft);
+    }
+    .ms-empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+    @media (max-width: 700px) {
+      .ms-page { padding: 20px 14px 80px; }
+      .ms-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 420px) {
+      .ms-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="ms-page">
+    <div class="ms-header">
+      <h1 class="ms-title">Mes compétences</h1>
+    </div>
+
+    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+
+    <div id="ms-content" style="display:none">
+      <div id="ms-acquired-section" style="display:none">
+        <div class="ms-section-title">Acquises</div>
+        <div id="ms-grid" class="ms-grid"></div>
+      </div>
+
+      <div id="ms-inprogress-section" style="display:none">
+        <div class="ms-section-title">En apprentissage</div>
+        <div id="ms-inprogress-grid" class="ms-grid"></div>
+      </div>
+
+      <div id="ms-empty" class="ms-empty" style="display:none">
+        <div class="ms-empty-icon">🎯</div>
+        <h2>Aucune compétence pour l'instant</h2>
+        <p>Commence un cours pour voir tes compétences évoluer.</p>
+        <a href="/courses" class="btn btn-primary">Découvrir le catalogue</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+
+    async function apiFetch(path: string) {
+      const res = await fetch(`/api${path}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (!res.ok) { const err: any = new Error('fetch error'); err.status = res.status; throw err; }
+      return res.json();
+    }
+
+    function levelLabel(level: string): string {
+      const map: Record<string, string> = {
+        beginner:     'Débutant',
+        intermediate: 'Intermédiaire',
+        advanced:     'Avancé',
+        'maître':     '★ Maître',
+      };
+      return map[level] ?? level;
+    }
+
+    function levelClass(level: string): string {
+      const map: Record<string, string> = {
+        beginner:     'level-beginner',
+        intermediate: 'level-intermediate',
+        advanced:     'level-advanced',
+        'maître':     'level-maitre',
+      };
+      return map[level] ?? '';
+    }
+
+    function progressHTML(s: any, fillClass = ''): string {
+      if (!s.totalCourses) return '';
+      const pct = Math.min(100, Math.round((s.completedCourses / s.totalCourses) * 100));
+      return `
+        <div class="ms-progress-wrap">
+          <div class="ms-progress-bar">
+            <div class="ms-progress-fill${fillClass ? ' ' + fillClass : ''}" style="width:${pct}%"></div>
+          </div>
+          <span class="ms-progress-label">${s.completedCourses}/${s.totalCourses} cours</span>
+        </div>
+      `;
+    }
+
+    // Compute level purely from completion ratio.
+    // 0% → inprogress | 1–29% → beginner | 30–59% → intermediate | 60–99% → advanced | 100% → maître
+    function computeLevel(completed: number, total: number): string {
+      if (completed === 0 || total === 0) return 'inprogress';
+      const pct = completed / total;
+      if (pct >= 1.0) return 'maître';
+      if (pct >= 0.60) return 'advanced';
+      if (pct >= 0.30) return 'intermediate';
+      return 'beginner';
+    }
+
+    function skillCard(skill: string, completedCourses: number, totalCourses: number): string {
+      const level = computeLevel(completedCourses, totalCourses);
+      const isMaitre = level === 'maître';
+      const fillClass = isMaitre ? 'fill-maitre' : '';
+      return `
+        <div class="ms-card${isMaitre ? ' card-maitre' : ''}" onclick="window.location.href='/skills/${skill}'" style="cursor:pointer">
+          <div class="ms-card-skill">${skill}</div>
+          <div class="ms-level ${levelClass(level)}">${levelLabel(level)}</div>
+          ${progressHTML({ completedCourses, totalCourses }, fillClass)}
+          <span class="ms-cta">Voir les modules →</span>
+        </div>
+      `;
+    }
+
+    function inProgressCard(skill: string, completedCourses: number, totalCourses: number): string {
+      return `
+        <div class="ms-card" onclick="window.location.href='/skills/${skill}'" style="cursor:pointer">
+          <div class="ms-card-skill">${skill}</div>
+          <div class="ms-level level-inprogress">En cours</div>
+          ${progressHTML({ completedCourses, totalCourses }, 'fill-inprogress')}
+          <span class="ms-cta">Voir les modules →</span>
+        </div>
+      `;
+    }
+
+    async function init() {
+      if (!token) { window.location.href = '/login?redirect=/my-skills'; return; }
+
+      try {
+        const [skillsData, myCoursesData, allCoursesData] = await Promise.all([
+          apiFetch('/my/skills'),
+          apiFetch('/my/courses'),
+          apiFetch('/courses'),
+        ]) as any[];
+
+        const dbSkills: any[]   = skillsData.skills    || [];
+        const myCourses: any[]  = myCoursesData.courses || [];
+        const allCourses: any[] = allCoursesData.courses || [];
+
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('ms-content')!.style.display = '';
+
+        // slug → course with skills
+        const courseBySlug = new Map(allCourses.map((c: any) => [c.slug, c]));
+
+        // Total courses per skill from catalog
+        const totalBySkill = new Map<string, number>();
+        for (const c of allCourses) {
+          for (const sk of (c.skills || [])) {
+            totalBySkill.set(sk, (totalBySkill.get(sk) ?? 0) + 1);
+          }
+        }
+
+        // Completed courses per skill from my enrolled courses (uses completed flag)
+        const completedBySkill = new Map<string, number>();
+        const enrolledSkills = new Set<string>();
+        for (const enrolled of myCourses) {
+          const course = courseBySlug.get(enrolled.slug);
+          if (!course) continue;
+          for (const sk of (course.skills || [])) {
+            enrolledSkills.add(sk);
+            if (enrolled.completed) {
+              completedBySkill.set(sk, (completedBySkill.get(sk) ?? 0) + 1);
+            }
+          }
+        }
+
+        // Fallback: skills from user_skill_levels not covered by enrolled courses
+        // (e.g. completions before the `completed` flag existed)
+        for (const s of dbSkills) {
+          if (!completedBySkill.has(s.skill) && s.completedCourses > 0) {
+            completedBySkill.set(s.skill, s.completedCourses);
+          }
+          enrolledSkills.add(s.skill);
+        }
+
+        // Partition skills: acquired (≥1 course done) vs in-progress (0 done but enrolled)
+        const acquired: Array<{ skill: string; completed: number; total: number }> = [];
+        const inProgress: Array<{ skill: string; completed: number; total: number }> = [];
+        const seen = new Set<string>();
+
+        for (const sk of enrolledSkills) {
+          if (seen.has(sk)) continue;
+          seen.add(sk);
+          const completed = completedBySkill.get(sk) ?? 0;
+          const total = totalBySkill.get(sk) ?? 0;
+          if (completed > 0) {
+            acquired.push({ skill: sk, completed, total });
+          } else {
+            inProgress.push({ skill: sk, completed: 0, total });
+          }
+        }
+
+        acquired.sort((a, b) => a.skill.localeCompare(b.skill));
+        inProgress.sort((a, b) => a.skill.localeCompare(b.skill));
+
+        if (acquired.length === 0 && inProgress.length === 0) {
+          document.getElementById('ms-empty')!.style.display = '';
+          return;
+        }
+
+        if (acquired.length > 0) {
+          document.getElementById('ms-acquired-section')!.style.display = '';
+          document.getElementById('ms-grid')!.innerHTML =
+            acquired.map(({ skill, completed, total }) => skillCard(skill, completed, total)).join('');
+        }
+
+        if (inProgress.length > 0) {
+          document.getElementById('ms-inprogress-section')!.style.display = '';
+          document.getElementById('ms-inprogress-grid')!.innerHTML =
+            inProgress.map(({ skill, completed, total }) => inProgressCard(skill, completed, total)).join('');
+        }
+
+      } catch {
+        document.getElementById('loading')!.style.display = 'none';
+        document.getElementById('ms-content')!.style.display = '';
+        document.getElementById('ms-empty')!.style.display = '';
+      }
+    }
+
+    init();
+  </script>
+</App>

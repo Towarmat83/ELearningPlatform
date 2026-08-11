@@ -128,6 +128,7 @@ type myCourse struct {
 	CompletedLabs   int64   `json:"completedLabs"`
 	TotalScore      int64   `json:"totalScore"`
 	LastActivity    *string `json:"lastActivity"`
+	Completed       bool    `json:"completed"`
 }
 
 // MyCourses godoc
@@ -147,7 +148,14 @@ func (s *State) MyCourses(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	courses := s.buildMyCourses(req.Context(), enrolled)
+	slugs := make([]string, len(enrolled))
+	for i, row := range enrolled {
+		slugs[i] = row.Slug
+	}
+
+	completed := s.completedCoursesCtx(req, claims.Subject, slugs)
+
+	courses := s.buildMyCourses(req.Context(), enrolled, completed)
 
 	s.JSON(writer, http.StatusOK, map[string]any{myCoursesRespKeyCourses: courses})
 }
@@ -164,10 +172,12 @@ func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]reposi
 
 // buildMyCourses enriches each enrollment with course-service metadata, falling
 // back to the bare slug when course-service is unreachable.
-func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.EnrollmentRow) []myCourse {
+func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.EnrollmentRow, completed map[string]struct{}) []myCourse {
 	courses := make([]myCourse, 0, len(enrolled))
 
 	for _, row := range enrolled {
+		_, isDone := completed[row.Slug]
+
 		details, err := s.fetchCourseDetails(ctx, row.Slug)
 		if err != nil {
 			zap.L().Warn("failed to fetch course details", zap.String("slug", row.Slug), zap.Error(err))
@@ -178,6 +188,7 @@ func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.Enroll
 				CompletedLabs: row.CompletedLabs,
 				TotalScore:    row.TotalScore,
 				LastActivity:  row.LastActivity,
+				Completed:     isDone,
 			})
 
 			continue
@@ -196,6 +207,7 @@ func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.Enroll
 			CompletedLabs:   row.CompletedLabs,
 			TotalScore:      row.TotalScore,
 			LastActivity:    row.LastActivity,
+			Completed:       isDone,
 		})
 	}
 

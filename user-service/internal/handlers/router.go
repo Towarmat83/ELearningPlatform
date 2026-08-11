@@ -175,6 +175,13 @@ func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.
 		group.Get("/api/manager/users/{userId}/path-enrollments", state.ManagerGetUserPathEnrollments)
 		group.Post("/api/manager/courses/{slug}/enrollments", state.ManagerEnrollUser)
 		group.Delete("/api/manager/courses/{slug}/enrollments/{userId}", state.ManagerUnenrollUser)
+
+		group.Get("/api/manager/groups", state.ManagerListGroups)
+		group.Post("/api/manager/groups", state.ManagerCreateGroup)
+		group.Delete("/api/manager/groups/{groupId}", state.ManagerDeleteGroup)
+		group.Get("/api/manager/groups/{groupId}/members", state.ManagerListGroupMembers)
+		group.Post("/api/manager/groups/{groupId}/members", state.ManagerAddGroupMember)
+		group.Delete("/api/manager/groups/{groupId}/members/{userId}", state.ManagerRemoveGroupMember)
 		group.Post("/api/manager/paths/{slug}/enrollments", state.ManagerEnrollUserPath)
 		group.Delete("/api/manager/paths/{slug}/enrollments/{userId}", state.ManagerUnenrollUserPath)
 	})

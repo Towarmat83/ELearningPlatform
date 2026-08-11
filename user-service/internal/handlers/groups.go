@@ -20,10 +20,15 @@ const (
 	groupsRoleStudent = "student"
 )
 
-// JSON response field/message literals reused across this file's handlers.
+// JSON response field/message literals reused across group-related handlers.
 const (
 	groupsRespKeyMessage = "message"
 	groupsRespKeyGroups  = "groups"
+
+	groupsMsgCreated       = "Group created"
+	groupsMsgDeleted       = "Group deleted"
+	groupsMsgMemberAdded   = "Member added"
+	groupsMsgMemberRemoved = "Member removed"
 )
 
 // syncGroupEnrollments ensures the user is enrolled in every course
@@ -85,7 +90,7 @@ func (s *State) CreateGroup(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.JSON(writer, http.StatusCreated, map[string]string{"id": groupID, groupsRespKeyMessage: "Group created"})
+	s.JSON(writer, http.StatusCreated, map[string]string{"id": groupID, groupsRespKeyMessage: groupsMsgCreated})
 }
 
 // DeleteGroup godoc
@@ -113,7 +118,7 @@ func (s *State) DeleteGroup(writer http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Group deleted"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgDeleted})
 }
 
 // ListGroups godoc

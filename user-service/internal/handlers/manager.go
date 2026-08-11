@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
@@ -184,6 +187,275 @@ func (s *State) ManagerGetUserEnrollments(writer http.ResponseWriter, request *h
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyEnrollments: enrollments})
+}
+
+// managerOwnsGroup reports whether the manager identified by managerID is a
+// member of groupID (and thus allowed to manage it). The manager must not
+// rely solely on the "everyone" default group.
+func (s *State) managerOwnsGroup(request *http.Request, managerID, groupID string) (bool, error) {
+	groups, err := s.Repos.Groups.GetGroupsByUserID(request.Context(), managerID)
+	if err != nil {
+		return false, fmt.Errorf("get manager groups: %w", err)
+	}
+
+	for _, grp := range groups {
+		if grp.ID == groupID && grp.Name != defaultGroupName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// ManagerListGroups godoc
+// @Summary   List the manager's own groups
+// @Tags      Manager
+// @Security  BearerAuth
+// @Produce   json
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/manager/groups [get].
+func (s *State) ManagerListGroups(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+
+	groups, err := s.Repos.Groups.GetGroupsByUserID(ctx, claims.Subject)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	type groupRow struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		MemberCount int64  `json:"memberCount"`
+	}
+
+	result := make([]groupRow, 0, len(groups))
+
+	for _, grp := range groups {
+		if grp.Name == defaultGroupName {
+			continue
+		}
+
+		result = append(result, groupRow{ID: grp.ID, Name: grp.Name, MemberCount: grp.MemberCount})
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{groupsRespKeyGroups: result})
+}
+
+// ManagerCreateGroup godoc
+// @Summary   Create a local group and auto-add the manager as member
+// @Tags      Manager
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     body  object  true  "name"
+// @Success   201  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
+// @Router    /api/manager/groups [post].
+func (s *State) ManagerCreateGroup(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+
+	var body struct {
+		Name string `json:"name"`
+	}
+
+	err := decode(request, &body)
+	if err != nil || body.Name == "" {
+		s.Error(writer, http.StatusBadRequest, "name required")
+
+		return
+	}
+
+	groupID, err := s.Repos.Groups.Create(ctx, body.Name)
+	if err != nil || groupID == "" {
+		s.Error(writer, http.StatusConflict, "A group with this name already exists")
+
+		return
+	}
+
+	err = s.Repos.Groups.AddMember(ctx, groupID, claims.Subject)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusCreated, map[string]string{"id": groupID, groupsRespKeyMessage: groupsMsgCreated})
+}
+
+// ManagerDeleteGroup godoc
+// @Summary   Delete a group the manager owns (is member of)
+// @Tags      Manager
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]string
+// @Failure   403  {object}  map[string]string
+// @Failure   404  {object}  map[string]string
+// @Router    /api/manager/groups/{groupId} [delete].
+func (s *State) ManagerDeleteGroup(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+	groupID := param(request, "groupId")
+
+	owns, err := s.managerOwnsGroup(request, claims.Subject, groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if !owns {
+		s.Error(writer, http.StatusForbidden, "Group not in manager scope")
+
+		return
+	}
+
+	deleted, err := s.Repos.Groups.Delete(ctx, groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if !deleted {
+		s.Error(writer, http.StatusNotFound, "Group not found or not a local group")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgDeleted})
+}
+
+// ManagerListGroupMembers godoc
+// @Summary   List members of a group the manager owns
+// @Tags      Manager
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]interface{}
+// @Failure   403  {object}  map[string]string
+// @Router    /api/manager/groups/{groupId}/members [get].
+func (s *State) ManagerListGroupMembers(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+	groupID := chi.URLParam(request, "groupId")
+
+	owns, err := s.managerOwnsGroup(request, claims.Subject, groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if !owns {
+		s.Error(writer, http.StatusForbidden, "Group not in manager scope")
+
+		return
+	}
+
+	members, err := s.Repos.Groups.ListMembers(ctx, groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{"members": members})
+}
+
+// ManagerAddGroupMember godoc
+// @Summary   Add a member to a group the manager owns
+// @Tags      Manager
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Group UUID"
+// @Param     body     object  true    "userId"
+// @Success   200  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   403  {object}  map[string]string
+// @Router    /api/manager/groups/{groupId}/members [post].
+func (s *State) ManagerAddGroupMember(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+	groupID := chi.URLParam(request, "groupId")
+
+	owns, err := s.managerOwnsGroup(request, claims.Subject, groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if !owns {
+		s.Error(writer, http.StatusForbidden, "Group not in manager scope")
+
+		return
+	}
+
+	var body struct {
+		UserID string `json:"userId"`
+	}
+
+	err = decode(request, &body)
+	if err != nil || body.UserID == "" {
+		s.Error(writer, http.StatusBadRequest, "userId required")
+
+		return
+	}
+
+	err = s.Repos.Groups.AddMember(ctx, groupID, body.UserID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgMemberAdded})
+}
+
+// ManagerRemoveGroupMember godoc
+// @Summary   Remove a member from a group the manager owns
+// @Tags      Manager
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Param     userId   path  string  true  "User UUID"
+// @Success   200  {object}  map[string]string
+// @Failure   403  {object}  map[string]string
+// @Router    /api/manager/groups/{groupId}/members/{userId} [delete].
+func (s *State) ManagerRemoveGroupMember(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+	groupID := chi.URLParam(request, "groupId")
+	userID := chi.URLParam(request, "userId")
+
+	owns, err := s.managerOwnsGroup(request, claims.Subject, groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if !owns {
+		s.Error(writer, http.StatusForbidden, "Group not in manager scope")
+
+		return
+	}
+
+	err = s.Repos.Groups.RemoveMember(ctx, groupID, userID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgMemberRemoved})
 }
 
 // ManagerUnenrollUser godoc

@@ -207,15 +207,11 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 		zap.L().Warn("failed to award badge on course completion", zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.Error(awardErr))
 	}
 
-	if body.Difficulty != "" {
-		for skill := range body.Skills {
-			total := body.SkillTotalCourses[skill]
-
-			upsertErr := s.Repos.SkillLevels.Upsert(req.Context(), body.UserID, skill, body.Difficulty, total)
-			if upsertErr != nil {
-				zap.L().Error("failed to upsert skill level",
-					zap.String("userID", body.UserID), zap.String("skill", skill), zap.Error(upsertErr))
-			}
+	if body.Difficulty != "" && len(body.Skills) > 0 {
+		err := s.Repos.SkillLevels.UpsertAll(req.Context(), body.UserID, body.Skills, body.Difficulty, body.SkillTotalCourses)
+		if err != nil {
+			zap.L().Error("failed to upsert skill levels",
+				zap.String("userID", body.UserID), zap.Error(err))
 		}
 	}
 

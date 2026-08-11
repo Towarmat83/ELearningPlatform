@@ -24,16 +24,19 @@ type SkillLevelRepository interface {
 	// Upsert increments the completed-course count for userID/skill, refreshes
 	// totalCourses, and promotes the level (maître when all courses are done).
 	Upsert(ctx context.Context, userID, skill, level string, totalCourses int) error
+	// UpsertAll atomically upserts skill levels for all skills in a single
+	// transaction; if any upsert fails the whole batch is rolled back.
+	UpsertAll(ctx context.Context, userID string, skills map[string]struct{}, difficulty string, totals map[string]int) error
 	// ListByUser returns all skill levels for userID, ordered by skill name.
 	ListByUser(ctx context.Context, userID string) ([]SkillLevelRow, error)
 }
 
 // Numeric ordinals for the difficulty levels used in the levelorder column.
 const (
-	difficultyOrderBeginner     = 1
-	difficultyOrderIntermediate = 2
-	difficultyOrderAdvanced     = 3
-	difficultyOrderMaitre       = 4
+	difficultyOrderBeginner = iota + 1
+	difficultyOrderIntermediate
+	difficultyOrderAdvanced
+	difficultyOrderMaitre
 )
 
 // difficultyOrder maps a course difficulty string to a comparable integer.
@@ -63,24 +66,10 @@ func NewGormSkillLevelRepository(db *gorm.DB) SkillLevelRepository {
 	return &gormSkillLevelRepository{db: db}
 }
 
-// Upsert atomically records a course completion for userID/skill.
-//
-// Level progression rules (applied inside a single SQL statement):
-//   - completed_courses is incremented on every call.
-//   - If totalCourses > 0 and completed_courses reaches totalCourses, the
-//     learner is promoted to "maître" (levelorder 4).
-//   - Otherwise the highest difficulty seen so far is kept (max semantics).
-//
-// On the first completion (INSERT path) the maître check uses completed=1,
-// so a skill with a single course awards maître immediately.
-func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, level string, totalCourses int) error {
-	order := difficultyOrder(level)
-	if order == 0 {
-		return nil
-	}
-
-	// First-completion path: if this is the only course for the skill, the
-	// INSERT value should already reflect maître (completed=1 == total).
+// upsertSkillLevelTx executes the ON CONFLICT upsert on gormDB (plain DB or a
+// transaction handle). order must be pre-validated (non-zero).
+func upsertSkillLevelTx(gormDB *gorm.DB, userID, skill, level string, order, totalCourses int) error {
+	// First-completion path: single-course skill awards maître immediately.
 	insertLevel := level
 	insertOrder := order
 
@@ -89,7 +78,7 @@ func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, le
 		insertOrder = difficultyOrderMaitre
 	}
 
-	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	err := gormDB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "userid"}, {Name: "skill"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"completed_courses": gorm.Expr("user_skill_levels.completed_courses + 1"),
@@ -122,6 +111,51 @@ func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, le
 	}).Error
 	if err != nil {
 		return fmt.Errorf("upsert skill level: %w", err)
+	}
+
+	return nil
+}
+
+// Upsert atomically records a course completion for userID/skill.
+//
+// Level progression rules (applied inside a single SQL statement):
+//   - completed_courses is incremented on every call.
+//   - If totalCourses > 0 and completed_courses reaches totalCourses, the
+//     learner is promoted to "maître" (levelorder 4).
+//   - Otherwise the highest difficulty seen so far is kept (max semantics).
+//
+// On the first completion (INSERT path) the maître check uses completed=1,
+// so a skill with a single course awards maître immediately.
+func (r *gormSkillLevelRepository) Upsert(ctx context.Context, userID, skill, level string, totalCourses int) error {
+	order := difficultyOrder(level)
+	if order == 0 {
+		return nil
+	}
+
+	return upsertSkillLevelTx(r.db.WithContext(ctx), userID, skill, level, order, totalCourses)
+}
+
+// UpsertAll atomically upserts skill levels for all skills in skills inside a
+// single database transaction. If any individual upsert fails the whole batch
+// is rolled back, preventing partial updates.
+func (r *gormSkillLevelRepository) UpsertAll(ctx context.Context, userID string, skills map[string]struct{}, difficulty string, totals map[string]int) error {
+	order := difficultyOrder(difficulty)
+	if order == 0 || len(skills) == 0 {
+		return nil
+	}
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for skill := range skills {
+			upsertErr := upsertSkillLevelTx(tx, userID, skill, difficulty, order, totals[skill])
+			if upsertErr != nil {
+				return upsertErr
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("upsert skill levels batch: %w", err)
 	}
 
 	return nil

@@ -22,10 +22,10 @@ func NewSkillLevelRepository() *SkillLevelRepository {
 
 // Numeric ordinals for the four difficulty levels (mirrors repository).
 const (
-	difficultyOrderBeginner     = 1
-	difficultyOrderIntermediate = 2
-	difficultyOrderAdvanced     = 3
-	difficultyOrderMaitre       = 4
+	difficultyOrderBeginner = iota + 1
+	difficultyOrderIntermediate
+	difficultyOrderAdvanced
+	difficultyOrderMaitre
 )
 
 // difficultyOrder maps a difficulty string to a comparable integer.
@@ -89,6 +89,18 @@ func (f *SkillLevelRepository) Upsert(_ context.Context, userID, skill, level st
 		CompletedCourses: newCompleted,
 		TotalCourses:     totalCourses,
 		LevelOrder:       newOrder,
+	}
+
+	return nil
+}
+
+// UpsertAll runs Upsert for each skill in skills; returns on first error.
+func (f *SkillLevelRepository) UpsertAll(ctx context.Context, userID string, skills map[string]struct{}, difficulty string, totals map[string]int) error {
+	for skill := range skills {
+		err := f.Upsert(ctx, userID, skill, difficulty, totals[skill])
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

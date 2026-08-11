@@ -116,6 +116,17 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		badge = &Badge{Name: spec.Badge.Name, Icon: spec.Badge.Icon}
 	}
 
+	sessions := make([]Session, 0, len(spec.Sessions))
+	for _, sess := range spec.Sessions {
+		sessions = append(sessions, Session{
+			ID:       sess.ID,
+			Title:    sess.Title,
+			Date:     sess.Date,
+			Location: sess.Location,
+			Capacity: sess.Capacity,
+		})
+	}
+
 	return &Course{
 		Slug:          slug,
 		Title:         title,
@@ -128,6 +139,8 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		Skills:        aggregateSkills(modules),
 		Scope:         spec.Scope,
 		Badge:         badge,
+		InPerson:      spec.InPerson,
+		Sessions:      sessions,
 		Source:        sourceK8s(slug),
 	}
 }

@@ -6,8 +6,12 @@ const COURSE_API = process.env.COURSE_API ?? 'http://localhost:8082';
 function resolveTarget(path: string): string {
   // Enrollment endpoints live in user-service (must check before generic courses/ rule)
   if (/^courses\/[^/]+\/(enroll|unenroll)$/.test(path)) return USER_API;
+  // Session booking endpoints live in user-service
+  if (/^courses\/[^/]+\/sessions\//.test(path)) return USER_API;
   // Admin enrollment management also lives in user-service
   if (/^admin\/courses\/[^/]+\/enrollments/.test(path)) return USER_API;
+  // Admin/manager session participant lists also live in user-service
+  if (/^(admin|manager)\/courses\/[^/]+\/sessions\//.test(path)) return USER_API;
 
   // Course-service paths
   if (

@@ -206,6 +206,15 @@ import App from '../../../layouts/App.astro';
         <p class="text-soft text-sm">Terminez les cours prérequis pour accéder à ce contenu.</p>
       </div>
 
+      <!-- Sessions présentiel -->
+      <div id="sessions-section" style="display:none;margin-top:32px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="font-size:1.2rem">📍</span>
+          <h2 style="font-size:1rem;font-weight:700">Sessions en présentiel</h2>
+        </div>
+        <div id="sessions-list"></div>
+      </div>
+
     </div>
   </div>
 
@@ -440,6 +449,66 @@ import App from '../../../layouts/App.astro';
           document.getElementById('modules-empty')!.style.display = 'block';
         } else {
           document.getElementById('modules-empty')!.style.display = 'block';
+        }
+
+        // Sessions présentiel
+        if (course.inPerson && course.sessions?.length > 0) {
+          const sessionsSection = document.getElementById('sessions-section')!;
+          sessionsSection.style.display = 'block';
+
+          let bookedIds = new Set<string>();
+          if (token) {
+            try {
+              const bookRes = await apiFetch('/my/session-bookings', { token: token! }) as any;
+              (bookRes.bookings || []).forEach((b: any) => {
+                if (b.courseSlug === slug) bookedIds.add(b.sessionId);
+              });
+            } catch { /* non connecté */ }
+          }
+
+          const now = new Date();
+          const sessionsList = document.getElementById('sessions-list')!;
+          sessionsList.innerHTML = course.sessions.map((s: any) => {
+            const date = new Date(s.date);
+            const isPast = date < now;
+            const isBooked = bookedIds.has(s.id);
+            const dateStr = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            const btnId = `btn-session-${s.id}`;
+            return `
+              <div style="border:1.5px solid ${isBooked ? 'var(--green,#22c55e)' : 'var(--line)'};border-radius:12px;padding:16px 20px;margin-bottom:10px;background:${isBooked ? 'var(--green-soft,#f0fdf4)' : 'var(--paper)'};opacity:${isPast ? '.5' : '1'}">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                  <div>
+                    <div style="font-weight:600;margin-bottom:4px">${s.title}</div>
+                    <div style="font-size:.85rem;color:var(--ink-soft)">📅 ${dateStr} à ${timeStr}</div>
+                    ${s.location ? `<div style="font-size:.85rem;color:var(--ink-soft);margin-top:2px">📍 ${s.location}</div>` : ''}
+                    ${s.capacity > 0 ? `<div style="font-size:.8rem;color:var(--ink-soft);margin-top:2px">🪑 ${s.capacity} places</div>` : ''}
+                  </div>
+                  ${!isPast && token ? `
+                    <button id="${btnId}" data-sid="${s.id}" data-booked="${isBooked}"
+                      class="btn ${isBooked ? 'btn-secondary' : 'btn-primary'}" style="white-space:nowrap;flex-shrink:0">
+                      ${isBooked ? '✓ Réservé — Annuler' : 'Réserver'}
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          sessionsList.querySelectorAll('button[data-sid]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const sid = (btn as HTMLElement).dataset.sid!;
+              const booked = (btn as HTMLElement).dataset.booked === 'true';
+              try {
+                if (booked) {
+                  await apiFetch(`/courses/${slug}/sessions/${sid}/book`, { method: 'DELETE', token: token! });
+                } else {
+                  await apiFetch(`/courses/${slug}/sessions/${sid}/book`, { method: 'POST', token: token! });
+                }
+                window.location.reload();
+              } catch { alert('Une erreur est survenue, veuillez réessayer.'); }
+            });
+          });
         }
 
         document.getElementById('loading')!.style.display = 'none';

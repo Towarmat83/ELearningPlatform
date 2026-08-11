@@ -34,6 +34,7 @@ const corsMaxAgeSeconds = 300
 func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(cfg.JWTSecret)
+	managerMW := apimiddleware.Manager(cfg.JWTSecret)
 	internalMW := apimiddleware.InternalAuth(cfg.InternalSecret)
 
 	router := chi.NewRouter()
@@ -51,6 +52,7 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	registerPublicRoutes(router, state, cfg)
 	registerAuthenticatedRoutes(router, state, authMW)
 	registerAdminRoutes(router, state, adminMW)
+	registerManagerRoutes(router, state, managerMW)
 	registerPatternRoutes(router, state, authMW, adminMW)
 	registerInternalRoutes(router, state, internalMW)
 
@@ -115,6 +117,8 @@ func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(ht
 		group.Get("/api/my/badges", state.MyBadges)
 		group.Get("/api/my/skills", state.MySkills)
 		group.Get("/api/my/skills/{slug}", state.MySkillModules)
+		group.Get("/api/my/groups", state.MyGroups)
+		group.Get("/api/my/groups/{groupId}/members", state.MyGroupMembers)
 	})
 }
 
@@ -152,9 +156,24 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 		group.Get("/api/admin/groups", state.ListGroups)
 		group.Post("/api/admin/groups", state.CreateGroup)
 		group.Delete("/api/admin/groups/{groupId}", state.DeleteGroup)
+		group.Get("/api/admin/groups/{groupId}/members", state.ListGroupMembers)
+		group.Post("/api/admin/groups/{groupId}/members", state.AddGroupMember)
+		group.Delete("/api/admin/groups/{groupId}/members/{userId}", state.RemoveGroupMember)
 		group.Get("/api/admin/groups/mappings", state.ListGroupMappings)
 		group.Post("/api/admin/groups/mappings", state.UpsertGroupMapping)
 		group.Delete("/api/admin/groups/mappings/{groupName}", state.DeleteGroupMapping)
+	})
+}
+
+// registerManagerRoutes wires routes restricted to manager users.
+func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.Handler) http.Handler) {
+	router.Group(func(group chi.Router) {
+		group.Use(managerMW)
+
+		group.Get("/api/manager/users", state.ManagerListUsers)
+		group.Get("/api/manager/users/{userId}/enrollments", state.ManagerGetUserEnrollments)
+		group.Post("/api/manager/courses/{slug}/enrollments", state.ManagerEnrollUser)
+		group.Delete("/api/manager/courses/{slug}/enrollments/{userId}", state.ManagerUnenrollUser)
 	})
 }
 

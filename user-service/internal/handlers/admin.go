@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -15,9 +16,14 @@ import (
 // (groupsRoleAdmin, groupsRoleStudent, groupsRespKeyMessage,
 // groupsRespKeyGroups) to avoid duplicate constants in the package.
 const (
-	adminJSONKeyUsers     = "users"
-	adminJSONKeyProviders = "providers"
-	adminJSONKeyEnrolled  = "enrolled"
+	adminJSONKeyUsers       = "users"
+	adminJSONKeyProviders   = "providers"
+	adminJSONKeyEnrolled    = "enrolled"
+	adminJSONKeyTotal       = "total"
+	adminJSONKeyEnrollments = "enrollments"
+	adminJSONKeyMembers     = "members"
+	adminMsgUserEnrolled    = "User enrolled"
+	adminMsgUserUnenrolled  = "User unenrolled"
 )
 
 // AdminStats godoc
@@ -123,7 +129,7 @@ func (s *State) ListUsers(writer http.ResponseWriter, request *http.Request) {
 		users = append(users, userAdminRowFromRepo(r))
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyUsers: users, "total": len(users)})
+	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyUsers: users, adminJSONKeyTotal: len(users)})
 }
 
 // GetUser godoc
@@ -209,8 +215,10 @@ func (s *State) UpdateUser(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	if body.Role != nil && *body.Role != groupsRoleAdmin && *body.Role != groupsRoleStudent {
-		s.Error(writer, http.StatusBadRequest, "Role must be 'admin' or 'student'")
+	allowedRoles := []string{groupsRoleAdmin, groupsRoleManager, groupsRoleStudent}
+
+	if body.Role != nil && !slices.Contains(allowedRoles, *body.Role) {
+		s.Error(writer, http.StatusBadRequest, "Role must be one of: "+strings.Join(allowedRoles, ", "))
 
 		return
 	}
@@ -324,7 +332,7 @@ func (s *State) ListCourseEnrollments(writer http.ResponseWriter, request *http.
 		list = append(list, enrollment{UserID: r.UserID, Username: r.Username, Email: r.Email, EnrolledAt: r.EnrolledAt})
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]any{"enrollments": list})
+	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyEnrollments: list})
 }
 
 // AdminEnrollUser godoc
@@ -358,7 +366,7 @@ func (s *State) AdminEnrollUser(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "User enrolled"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: adminMsgUserEnrolled})
 }
 
 // AdminUnenrollUser godoc
@@ -381,7 +389,7 @@ func (s *State) AdminUnenrollUser(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "User unenrolled"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: adminMsgUserUnenrolled})
 }
 
 // AdminEnrollGroup godoc
@@ -561,4 +569,85 @@ func (s *State) AdminLeaderboard(writer http.ResponseWriter, request *http.Reque
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{leaderboardResponseKey: leaderboard})
+}
+
+// ListGroupMembers godoc
+// @Summary   List members of a group (admin)
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Success   200      {object}  map[string]interface{}
+// @Failure   400      {object}  map[string]string
+// @Router    /api/admin/groups/{groupId}/members [get].
+func (s *State) ListGroupMembers(writer http.ResponseWriter, request *http.Request) {
+	groupID := param(request, "groupId")
+
+	members, err := s.Repos.Groups.ListMembers(request.Context(), groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyMembers: members, adminJSONKeyTotal: len(members)})
+}
+
+// AddGroupMember godoc
+// @Summary   Add a user to a group (admin)
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Group UUID"
+// @Param     body     object  true    "userId (UUID)"
+// @Success   200      {object}  map[string]string
+// @Failure   400      {object}  map[string]string
+// @Router    /api/admin/groups/{groupId}/members [post].
+func (s *State) AddGroupMember(writer http.ResponseWriter, request *http.Request) {
+	groupID := param(request, "groupId")
+
+	var body struct {
+		UserID string `json:"userId"`
+	}
+
+	err := decode(request, &body)
+	if err != nil || body.UserID == "" {
+		s.Error(writer, http.StatusBadRequest, "userId is required")
+
+		return
+	}
+
+	err = s.Repos.Groups.AddMember(request.Context(), groupID, body.UserID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Member added"})
+}
+
+// RemoveGroupMember godoc
+// @Summary   Remove a user from a group (admin)
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Param     userId   path  string  true  "User UUID"
+// @Success   200      {object}  map[string]string
+// @Failure   500      {object}  map[string]string
+// @Router    /api/admin/groups/{groupId}/members/{userId} [delete].
+func (s *State) RemoveGroupMember(writer http.ResponseWriter, request *http.Request) {
+	groupID := param(request, "groupId")
+	userID := param(request, "userId")
+
+	err := s.Repos.Groups.RemoveMember(request.Context(), groupID, userID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Member removed"})
 }

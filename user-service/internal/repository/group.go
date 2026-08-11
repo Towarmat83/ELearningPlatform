@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -66,6 +67,19 @@ type GroupRepository interface {
 	EnrollCourse(ctx context.Context, groupID, courseSlug string) (int64, error)
 	ListCourseEnrollments(ctx context.Context, courseSlug string) ([]GroupEnrollmentRow, error)
 	UnenrollCourse(ctx context.Context, groupID, courseSlug string) error
+
+	// Admin member management (admin.go)
+	ListMembers(ctx context.Context, groupID string) ([]AdminUserRow, error)
+	AddMember(ctx context.Context, groupID, userID string) error
+	RemoveMember(ctx context.Context, groupID, userID string) error
+
+	// Manager scope queries (manager.go)
+	GetGroupsByUserID(ctx context.Context, userID string) ([]GroupRow, error)
+	UserInAnyGroup(ctx context.Context, userID string, groupIDs []string) (bool, error)
+	ListMemberIDs(ctx context.Context, groupID string) ([]string, error)
+
+	// User-facing group queries (my_groups.go)
+	GetGroupCourses(ctx context.Context, groupID string) ([]string, error)
 }
 
 // gormGroupRepository is the GORM-backed GroupRepository implementation.
@@ -251,7 +265,9 @@ func (r *gormGroupRepository) SyncGroupsAndDeriveRole(
 			role = dbRole
 		}
 
-		delErr := groupTx.Where("userid = ?::uuid", userID).Delete(&models.UserGroup{}).Error
+		// Only remove memberships in groups from the same SSO source so that
+		// manually managed local group memberships are preserved across logins.
+		delErr := groupTx.Delete(&models.UserGroup{}, "userid = ?::uuid AND groupid IN (SELECT id FROM groups WHERE source = ?)", userID, source).Error
 		if delErr != nil {
 			return fmt.Errorf("clear group memberships: %w", delErr)
 		}
@@ -378,6 +394,128 @@ func (r *gormGroupRepository) UnenrollCourse(ctx context.Context, groupID, cours
 	}
 
 	return nil
+}
+
+// ListMembers returns every user belonging to the group identified by groupID.
+func (r *gormGroupRepository) ListMembers(ctx context.Context, groupID string) ([]AdminUserRow, error) {
+	var rows []AdminUserRow
+
+	err := r.db.WithContext(ctx).Table("users AS u").
+		Select(`u.id::text AS id, u.username, u.email, u.role, u.isactive AS is_active,
+			u.avatarurl AS avatar_url, u.bio, u.authprovider AS auth_provider,
+			u.createdat::text AS created_at,
+			COUNT(e.courseslug) AS enrolled_courses`).
+		Joins("JOIN user_groups ug ON ug.userid = u.id").
+		Joins("LEFT JOIN enrollments e ON e.userid = u.id").
+		Where("ug.groupid = ?::uuid", groupID).
+		Group("u.id, u.username, u.email, u.role, u.isactive, u.avatarurl, u.bio, u.authprovider, u.createdat").
+		Order("u.username").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list group members: %w", err)
+	}
+
+	return rows, nil
+}
+
+// AddMember links userID to the group identified by groupID, doing nothing
+// if the membership already exists.
+func (r *gormGroupRepository) AddMember(ctx context.Context, groupID, userID string) error {
+	groupUUID, err := uuid.Parse(groupID)
+	if err != nil {
+		return fmt.Errorf("parse group id: %w", err)
+	}
+
+	link := models.UserGroup{UserID: userID, GroupID: groupUUID}
+
+	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error
+	if err != nil {
+		return fmt.Errorf("add group member: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveMember unlinks userID from the group identified by groupID.
+func (r *gormGroupRepository) RemoveMember(ctx context.Context, groupID, userID string) error {
+	err := r.db.WithContext(ctx).
+		Where("groupid = ?::uuid AND userid = ?::uuid", groupID, userID).
+		Delete(&models.UserGroup{}).Error
+	if err != nil {
+		return fmt.Errorf("remove group member: %w", err)
+	}
+
+	return nil
+}
+
+// GetGroupsByUserID returns all groups the given user belongs to.
+func (r *gormGroupRepository) GetGroupsByUserID(ctx context.Context, userID string) ([]GroupRow, error) {
+	var rows []GroupRow
+
+	err := r.db.WithContext(ctx).Table("groups AS g").
+		Select(`g.id::text AS id, g.name, g.source, g.createdat::text AS created_at,
+			COUNT(ug2.userid) AS member_count,
+			COALESCE(grm.platformrole, '') AS mapped_role`).
+		Joins("JOIN user_groups ug ON ug.groupid = g.id").
+		Joins("LEFT JOIN user_groups ug2 ON ug2.groupid = g.id").
+		Joins("LEFT JOIN group_role_mappings grm ON grm.groupname = g.name").
+		Where("ug.userid = ?::uuid", userID).
+		Group("g.id, g.name, g.source, g.createdat, grm.platformrole").
+		Order("g.name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("get groups by user id: %w", err)
+	}
+
+	return rows, nil
+}
+
+// GetGroupCourses returns the course slugs that groupID is enrolled in.
+func (r *gormGroupRepository) GetGroupCourses(ctx context.Context, groupID string) ([]string, error) {
+	var slugs []string
+
+	err := r.db.WithContext(ctx).Table("group_enrollments").
+		Where("groupid = ?::uuid", groupID).
+		Pluck("courseslug", &slugs).Error
+	if err != nil {
+		return nil, fmt.Errorf("get group courses: %w", err)
+	}
+
+	return slugs, nil
+}
+
+// ListMemberIDs returns the user IDs (as strings) of every member of groupID.
+func (r *gormGroupRepository) ListMemberIDs(ctx context.Context, groupID string) ([]string, error) {
+	var ids []string
+
+	err := r.db.WithContext(ctx).Table("user_groups").
+		Select("userid::text").
+		Where("groupid = ?::uuid", groupID).
+		Pluck("userid::text", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("list member ids: %w", err)
+	}
+
+	return ids, nil
+}
+
+// UserInAnyGroup reports whether userID belongs to at least one of the
+// groups listed in groupIDs.
+func (r *gormGroupRepository) UserInAnyGroup(ctx context.Context, userID string, groupIDs []string) (bool, error) {
+	if len(groupIDs) == 0 {
+		return false, nil
+	}
+
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.UserGroup{}).
+		Where("userid = ?::uuid AND groupid::text = ANY(?)", userID, pq.Array(groupIDs)).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check group membership: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // syncGroupMembership upserts a single group, links userID to it, and

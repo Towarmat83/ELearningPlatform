@@ -15,7 +15,7 @@ type User struct {
 	Username       string    `gorm:"column:username;size:64;not null;uniqueIndex"`
 	Email          string    `gorm:"column:email;size:255;not null;uniqueIndex"`
 	PasswordHash   *string   `gorm:"column:password_hash"` // nil for SSO-only accounts
-	Role           string    `gorm:"column:role;size:16;not null;default:student;check:role IN ('admin','student')"`
+	Role           string    `gorm:"column:role;size:16;not null;default:student"`
 	AvatarURL      *string   `gorm:"column:avatarurl"`
 	Bio            *string   `gorm:"column:bio"`
 	IsActive       bool      `gorm:"column:isactive;not null;default:true"`

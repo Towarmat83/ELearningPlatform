@@ -13,10 +13,10 @@ import (
 // EnrollmentRow is a single row of a user's enrolled-courses listing, joined
 // with aggregate lesson/module progress.
 type EnrollmentRow struct {
-	Slug          string
-	CompletedLabs int64
-	TotalScore    int64
-	LastActivity  *string
+	Slug          string  `json:"courseSlug"`
+	CompletedLabs int64   `json:"completedLabs"`
+	TotalScore    int64   `json:"totalScore"`
+	LastActivity  *string `json:"lastActivity,omitempty"`
 }
 
 // CourseEnrollmentRow is a single row of the admin per-course enrollment

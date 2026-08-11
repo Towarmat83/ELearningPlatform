@@ -112,7 +112,9 @@ type breakingMigration struct {
 	Apply func(ctx context.Context, gdb *gorm.DB) error
 }
 
-// breakingMigrations — see the RunMigrations doc comment.
+// breakingMigrations lists one-off schema changes that AutoMigrate cannot
+// express safely (constraint drops, renames, data transforms). Each entry
+// runs at most once, tracked by Name in _schema_migrations.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
 var breakingMigrations = []breakingMigration{}

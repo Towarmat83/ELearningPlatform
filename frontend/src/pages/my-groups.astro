@@ -1,0 +1,96 @@
+---
+import App from '../layouts/App.astro';
+---
+<App title="Mes groupes" activePage="groups">
+  <div style="padding:28px 36px 80px;max-width:900px;margin:0 auto">
+    <div style="margin-bottom:28px">
+      <h1 style="font-size:1.5rem;font-weight:700">Mes groupes</h1>
+      <p class="text-soft text-sm" id="group-count" style="margin-top:4px">Chargement…</p>
+    </div>
+
+    <div id="groups-container">
+      <div class="loading-state" style="padding:40px"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <script>
+    async function api(path: string) {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api' + path, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as any).error || `HTTP ${res.status}`); }
+      return res.json();
+    }
+
+    async function load() {
+      try {
+        const [groupsRes, coursesRes] = await Promise.all([
+          api('/my/groups'),
+          api('/courses').catch(() => ({ courses: [] })),
+        ]);
+
+        const groups: any[] = groupsRes.groups || [];
+        const allCourses: any[] = coursesRes.courses || [];
+        const courseBySlug: Record<string, any> = {};
+        for (const c of allCourses) courseBySlug[c.slug] = c;
+
+        document.getElementById('group-count')!.textContent =
+          groups.length ? `${groups.length} groupe${groups.length > 1 ? 's' : ''}` : "Vous n'appartenez à aucun groupe.";
+
+        const container = document.getElementById('groups-container')!;
+
+        if (!groups.length) {
+          container.innerHTML = `
+            <div class="card" style="padding:40px;text-align:center;color:var(--ink-soft)">
+              <div style="font-size:2.5rem;margin-bottom:12px">👥</div>
+              <p>Vous n'appartenez à aucun groupe pour le moment.</p>
+              <p class="text-sm" style="margin-top:6px">Un administrateur peut vous ajouter à un groupe.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = groups.map((g: any) => {
+          const slugs: string[] = g.courseSlugs || [];
+          const courses = slugs.map((s: string) => courseBySlug[s]).filter(Boolean);
+
+          const coursesHtml = courses.length
+            ? `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+                <p style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Cours du groupe</p>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  ${courses.map((c: any) => `
+                    <a href="/courses/${c.slug}" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;padding:8px 10px;border-radius:8px;background:var(--fill);transition:background .15s" onmouseover="this.style.background='var(--blue-soft)'" onmouseout="this.style.background='var(--fill)'">
+                      <span style="font-size:1.1rem">${c.icon || '📘'}</span>
+                      <span style="font-size:.875rem;font-weight:500">${c.title || c.slug}</span>
+                    </a>
+                  `).join('')}
+                </div>
+              </div>`
+            : `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+                <p style="font-size:.8rem;color:var(--ink-soft);font-style:italic">Aucun cours associé à ce groupe.</p>
+              </div>`;
+
+          return `
+            <div class="card" style="padding:20px 24px;margin-bottom:16px">
+              <div style="display:flex;align-items:center;gap:14px">
+                <div style="width:44px;height:44px;border-radius:12px;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">
+                  ${g.source === 'local' ? '🏠' : '🔗'}
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:600;font-size:1rem">${g.name}</div>
+                  <div style="font-size:.8rem;color:var(--ink-soft);margin-top:2px">
+                    ${g.source === 'local' ? 'Groupe local' : `Synchronisé depuis ${g.source}`}
+                  </div>
+                </div>
+                ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : g.mappedRole === 'manager' ? 'badge-orange' : 'badge-blue'}">${g.mappedRole === 'admin' ? 'Admin' : g.mappedRole === 'manager' ? 'Manager' : 'Étudiant'}</span>` : ''}
+              </div>
+              ${coursesHtml}
+            </div>`;
+        }).join('');
+      } catch (e: any) {
+        document.getElementById('groups-container')!.innerHTML =
+          `<div class="card" style="padding:24px;color:var(--bad)">Erreur : ${e.message}</div>`;
+      }
+    }
+
+    load();
+  </script>
+</App>

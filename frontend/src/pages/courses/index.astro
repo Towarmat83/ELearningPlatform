@@ -192,6 +192,12 @@ import App from '../../layouts/App.astro';
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input class="input js-cat-search" type="search" placeholder="Rechercher un cours…" />
       </div>
+      <select class="input js-diff-filter" style="width:auto;padding:8px 14px;font-size:.85rem;flex-shrink:0">
+        <option value="">Toutes difficultés</option>
+        <option value="beginner">Débutant</option>
+        <option value="intermediate">Intermédiaire</option>
+        <option value="advanced">Avancé</option>
+      </select>
       <span class="cat-count-label" id="count-label"></span>
     </div>
 
@@ -247,6 +253,7 @@ import App from '../../layouts/App.astro';
     let enrolledIds = new Set<string>();
     let searchTimer: ReturnType<typeof setTimeout>;
     let selectedCategories = new Set<string>();
+    let activeDiff: string | null = null;
 
     // ── Skill level filter (via ?skill= URL param) ────────────────────
     let mySkillLevels: { skill: string; level: string }[] = [];
@@ -409,7 +416,7 @@ import App from '../../layouts/App.astro';
     // ── Render groups ──────────────────────────────────────────────────
     function renderGroups(courses: any[], search: string) {
       const q = search.toLowerCase().trim();
-      const filtered = q
+      let filtered = q
         ? courses.filter(c =>
             c.title.toLowerCase().includes(q) ||
             (c.description || '').toLowerCase().includes(q) ||
@@ -418,33 +425,28 @@ import App from '../../layouts/App.astro';
         : courses;
 
       const activeCats = Array.from(selectedCategories);
-      const visible = (activeCats.length > 0
+      let visible = (activeCats.length > 0
         ? filtered.filter(c => activeCats.includes(c.category || ''))
         : filtered).filter(matchesSkillFilter);
 
-      const countLabel = document.getElementById('count-label')!;
-      countLabel.textContent = visible.length > 0 ? `${visible.length} cours` : '';
+      if (activeDiff) visible = visible.filter(c => c.difficulty === activeDiff);
 
-      if (visible.length === 0) {
+      const sorted = [...visible].sort((a, b) =>
+        a.title.localeCompare(b.title, 'fr', { sensitivity: 'base' }));
+
+      const countLabel = document.getElementById('count-label')!;
+      countLabel.textContent = sorted.length > 0 ? `${sorted.length} cours` : '';
+
+      if (sorted.length === 0) {
         document.getElementById('empty')!.style.display = 'block';
         document.getElementById('groups-container')!.innerHTML = '';
         return;
       }
       document.getElementById('empty')!.style.display = 'none';
 
-      // Group by category (stable order), flatten into a single grid
-      const categories = new Map<string, any[]>();
-      for (const c of visible) {
-        const cat = c.category || '';
-        if (!categories.has(cat)) categories.set(cat, []);
-        categories.get(cat)!.push(c);
-      }
-
-      const cards = Array.from(categories.values())
-        .flatMap(list => list.map(c => renderCourseCard(c, getCatColor(c.category || ''))));
-
+      const cards = sorted.map(c => renderCourseCard(c, getCatColor(c.category || ''))).join('');
       document.getElementById('groups-container')!.innerHTML =
-        `<div class="courses-grid">${cards.join('')}</div>`;
+        `<div class="courses-grid">${cards}</div>`;
     }
 
     function rerender() {
@@ -522,6 +524,12 @@ import App from '../../layouts/App.astro';
     searchEl?.addEventListener('input', () => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => renderGroups(allCourses, searchEl.value), 280);
+    });
+
+    const diffEl = document.querySelector<HTMLSelectElement>('.js-diff-filter')!;
+    diffEl?.addEventListener('change', () => {
+      activeDiff = diffEl.value || null;
+      rerender();
     });
 
     loadAll();

@@ -36,7 +36,7 @@ import Manager from '../../../layouts/Manager.astro';
         <button id="modal-close" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--ink-soft)">✕</button>
       </div>
 
-      <!-- Current enrollments -->
+      <!-- Current course enrollments -->
       <div style="margin-bottom:20px">
         <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Cours actuels</h4>
         <div id="current-enrollments">
@@ -44,14 +44,33 @@ import Manager from '../../../layouts/Manager.astro';
         </div>
       </div>
 
+      <!-- Current path enrollments -->
+      <div style="margin-bottom:20px;border-top:1px solid var(--line);padding-top:20px">
+        <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Parcours actuels</h4>
+        <div id="current-path-enrollments">
+          <div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>
+        </div>
+      </div>
+
       <!-- Enroll in a new course -->
-      <div style="border-top:1px solid var(--line);padding-top:20px">
+      <div style="border-top:1px solid var(--line);padding-top:20px;margin-bottom:16px">
         <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Inscrire à un cours</h4>
         <div style="display:flex;gap:8px">
           <select id="course-select" class="input" style="flex:1;height:auto;padding:9px 14px">
             <option value="">Choisir un cours…</option>
           </select>
           <button class="btn btn-primary" id="enroll-btn">Inscrire</button>
+        </div>
+      </div>
+
+      <!-- Enroll in a new path -->
+      <div style="border-top:1px solid var(--line);padding-top:20px">
+        <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Inscrire à un parcours</h4>
+        <div style="display:flex;gap:8px">
+          <select id="path-select" class="input" style="flex:1;height:auto;padding:9px 14px">
+            <option value="">Choisir un parcours…</option>
+          </select>
+          <button class="btn btn-primary" id="enroll-path-btn">Inscrire</button>
         </div>
       </div>
     </div>
@@ -68,29 +87,49 @@ import Manager from '../../../layouts/Manager.astro';
 
     let allMembers: any[] = [];
     let allCourses: any[] = [];
+    let allPaths: any[] = [];
     let scopeGroupsData: any[] = [];
     let activeGroupFilter: string | null = null;
     let selectedUserId = '';
+    let enrolledCourseSlugs = new Set<string>();
+    let enrolledPathSlugs = new Set<string>();
+
+    function populateCourseSelect() {
+      const sel = document.getElementById('course-select') as HTMLSelectElement;
+      if (!sel) return;
+      sel.innerHTML = '<option value="">Choisir un cours…</option>' + allCourses
+        .filter((c: any) => !enrolledCourseSlugs.has(c.slug))
+        .map((c: any) => `<option value="${c.slug}">${c.title}${c.scope ? ` [${c.scope}]` : ''}</option>`)
+        .join('');
+    }
+
+    function populatePathSelect() {
+      const sel = document.getElementById('path-select') as HTMLSelectElement;
+      if (!sel) return;
+      sel.innerHTML = '<option value="">Choisir un parcours…</option>' + allPaths
+        .filter((p: any) => !enrolledPathSlugs.has(p.slug))
+        .map((p: any) => `<option value="${p.slug}">${p.title}</option>`)
+        .join('');
+    }
 
     async function load() {
       try {
-        const [membersRes, coursesRes] = await Promise.all([
+        const [membersRes, coursesRes, pathsRes] = await Promise.all([
           api('/manager/users'),
           api('/courses'),
+          api('/paths'),
         ]);
         allMembers = membersRes.users || [];
         allCourses = coursesRes.courses || [];
+        allPaths = pathsRes.paths || [];
         scopeGroupsData = membersRes.groups || [];
 
         updateCountLabel();
         renderGroupBadges();
         renderMembers();
 
-        // Populate course select
-        const sel = document.getElementById('course-select') as HTMLSelectElement;
-        sel.innerHTML = '<option value="">Choisir un cours…</option>' + allCourses.map((c: any) =>
-          `<option value="${c.slug}">${c.title}${c.scope ? ` [${c.scope}]` : ''}</option>`
-        ).join('');
+        populateCourseSelect();
+        populatePathSelect();
       } catch (e: any) {
         document.getElementById('members-body')!.innerHTML =
           `<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--bad)">Erreur : ${e.message}</td></tr>`;
@@ -168,7 +207,7 @@ import Manager from '../../../layouts/Manager.astro';
       selectedUserId = userId;
       document.getElementById('modal-title')!.textContent = `${name} — Inscriptions`;
       document.getElementById('enroll-modal')!.style.display = 'flex';
-      await refreshEnrollments();
+      await Promise.all([refreshEnrollments(), refreshPathEnrollments()]);
     }
 
     async function refreshEnrollments() {
@@ -177,6 +216,8 @@ import Manager from '../../../layouts/Manager.astro';
       try {
         const { enrollments } = await api(`/manager/users/${selectedUserId}/enrollments`);
         const list: any[] = enrollments || [];
+        enrolledCourseSlugs = new Set(list.map((e: any) => e.courseSlug));
+        populateCourseSelect();
         if (!list.length) {
           el.innerHTML = '<p class="text-soft text-sm">Aucun cours inscrit.</p>';
           return;
@@ -208,6 +249,46 @@ import Manager from '../../../layouts/Manager.astro';
       }
     }
 
+    async function refreshPathEnrollments() {
+      const el = document.getElementById('current-path-enrollments')!;
+      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      try {
+        const { pathEnrollments } = await api(`/manager/users/${selectedUserId}/path-enrollments`);
+        const list: any[] = pathEnrollments || [];
+        enrolledPathSlugs = new Set(list.map((e: any) => e.Slug));
+        populatePathSelect();
+        if (!list.length) {
+          el.innerHTML = '<p class="text-soft text-sm">Aucun parcours inscrit.</p>';
+          return;
+        }
+        el.innerHTML = list.map((e: any) => {
+          const path = allPaths.find((p: any) => p.slug === e.Slug);
+          return `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+            <div style="flex:1;font-size:.875rem">
+              <span style="font-weight:500">${path?.title || e.Slug}</span>
+            </div>
+            <button class="btn btn-sm unenroll-path-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-slug="${e.Slug}">Retirer</button>
+          </div>`;
+        }).join('');
+        el.querySelectorAll<HTMLButtonElement>('.unenroll-path-btn').forEach(btn => {
+          btn.addEventListener('click', () => unenrollPath(btn.dataset.slug!));
+        });
+      } catch (e: any) {
+        el.innerHTML = `<p style="color:var(--bad);font-size:.875rem">${e.message}</p>`;
+      }
+    }
+
+    async function unenrollPath(slug: string) {
+      try {
+        await api(`/manager/paths/${slug}/enrollments/${selectedUserId}`, { method: 'DELETE' });
+        (window as any).showToast?.('Parcours retiré', 'success');
+        await refreshPathEnrollments();
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      }
+    }
+
     document.getElementById('enroll-btn')!.addEventListener('click', async () => {
       const slug = (document.getElementById('course-select') as HTMLSelectElement).value;
       if (!slug) { (window as any).showToast?.('Choisissez un cours', 'error'); return; }
@@ -219,6 +300,23 @@ import Manager from '../../../layouts/Manager.astro';
         (window as any).showToast?.('Inscrit avec succès', 'success');
         await refreshEnrollments();
         await load();
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Inscrire';
+      }
+    });
+
+    document.getElementById('enroll-path-btn')!.addEventListener('click', async () => {
+      const slug = (document.getElementById('path-select') as HTMLSelectElement).value;
+      if (!slug) { (window as any).showToast?.('Choisissez un parcours', 'error'); return; }
+      const btn = document.getElementById('enroll-path-btn') as HTMLButtonElement;
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        await api(`/manager/paths/${slug}/enrollments`, { method: 'POST', body: { userId: selectedUserId } });
+        (document.getElementById('path-select') as HTMLSelectElement).value = '';
+        (window as any).showToast?.('Inscrit au parcours', 'success');
+        await refreshPathEnrollments();
       } catch (e: any) {
         (window as any).showToast?.(e.message || 'Erreur', 'error');
       } finally {

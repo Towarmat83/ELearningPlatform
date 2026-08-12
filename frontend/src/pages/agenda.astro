@@ -192,7 +192,7 @@ import App from '../layouts/App.astro';
       if (opts.token) h['Authorization'] = `Bearer ${opts.token}`;
       const r = await fetch('/api' + path, { method: opts.method || 'GET', headers: h });
       if (r.status === 401) { localStorage.clear(); location.href = '/login'; throw new Error('401'); }
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (!r.ok) { const e = new Error(`HTTP ${r.status}`); (e as any).status = r.status; throw e; }
       return r.json();
     }
 
@@ -350,7 +350,10 @@ import App from '../layouts/App.astro';
             else booked.add(`${slug}|${sid}`);
             renderCal();
             renderPanel(k, sessions);
-          } catch { alert('Erreur — réessayez.'); }
+          } catch (e: any) {
+            if (e?.status === 409) alert('Cette session est complète.');
+            else alert('Erreur — réessayez.');
+          }
         });
       });
     }

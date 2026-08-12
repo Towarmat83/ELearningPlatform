@@ -8,6 +8,41 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
+// courseSessionCapacity is the subset of course-service data needed by
+// BookSession to enforce per-session seat limits.
+type courseSessionCapacity struct {
+	Sessions []struct {
+		ID       string `json:"id"`
+		Capacity int    `json:"capacity,omitempty"`
+	} `json:"sessions,omitempty"`
+}
+
+// sessionCapacity returns the capacity of sessionID within slug by calling
+// course-service. Returns 0 if the session has no capacity limit or is not
+// found (unlimited booking allowed).
+func (s *State) sessionCapacity(req *http.Request, slug, sessionID string) int {
+	if !slugRE.MatchString(slug) {
+		return 0
+	}
+
+	var info courseSessionCapacity
+
+	err := s.fetchCourseServiceJSON(req, "/api/courses/"+slug, &info)
+	if err != nil {
+		zap.L().Warn("could not fetch course for capacity check", zap.String("slug", slug), zap.Error(err))
+
+		return 0
+	}
+
+	for _, sess := range info.Sessions {
+		if sess.ID == sessionID {
+			return sess.Capacity
+		}
+	}
+
+	return 0
+}
+
 // BookSession godoc
 // @Summary  Reserve a seat for an in-person session
 // @Tags     Sessions
@@ -15,11 +50,31 @@ import (
 // @Param    slug       path  string  true  "Course slug"
 // @Param    sessionId  path  string  true  "Session ID"
 // @Success  200  {object}  map[string]bool
+// @Failure  409  {object}  map[string]string
 // @Router   /api/courses/{slug}/sessions/{sessionId}/book [post].
-func (s *State) BookSession(writer http.ResponseWriter, req *http.Request) { //nolint:dupl // similar structure to UnbookSession; different repository call
+func (s *State) BookSession(writer http.ResponseWriter, req *http.Request) {
 	claims := s.claims(req)
 	slug := param(req, "slug")
 	sessionID := param(req, "sessionId")
+
+	if capacity := s.sessionCapacity(req, slug, sessionID); capacity > 0 {
+		count, err := s.Repos.SessionBookings.CountBySession(req.Context(), slug, sessionID)
+		if err != nil {
+			zap.L().Error("failed to count session bookings",
+				zap.String("courseSlug", slug),
+				zap.String("sessionID", sessionID),
+				zap.Error(err))
+			s.Error(writer, http.StatusInternalServerError, "Failed to check session capacity")
+
+			return
+		}
+
+		if count >= int64(capacity) {
+			s.Error(writer, http.StatusConflict, "Session is full")
+
+			return
+		}
+	}
 
 	err := s.Repos.SessionBookings.Book(req.Context(), claims.Subject, slug, sessionID)
 	if err != nil {
@@ -44,7 +99,7 @@ func (s *State) BookSession(writer http.ResponseWriter, req *http.Request) { //n
 // @Param    sessionId  path  string  true  "Session ID"
 // @Success  200  {object}  map[string]bool
 // @Router   /api/courses/{slug}/sessions/{sessionId}/book [delete].
-func (s *State) UnbookSession(writer http.ResponseWriter, req *http.Request) { //nolint:dupl // similar structure to BookSession; different repository call
+func (s *State) UnbookSession(writer http.ResponseWriter, req *http.Request) {
 	claims := s.claims(req)
 	slug := param(req, "slug")
 	sessionID := param(req, "sessionId")

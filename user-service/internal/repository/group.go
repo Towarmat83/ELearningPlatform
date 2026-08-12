@@ -125,7 +125,7 @@ func (r *gormGroupRepository) CreateAndJoin(ctx context.Context, name, ownerID s
 	err := r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
 		group := models.Group{Name: name, Source: groupSourceLocal}
 
-		createErr := txDB.Clauses(clause.OnConflict{DoNothing: true}).Create(&group).Error
+		createErr := txDB.Create(&group).Error
 		if createErr != nil {
 			return fmt.Errorf("create group: %w", createErr)
 		}
@@ -136,7 +136,7 @@ func (r *gormGroupRepository) CreateAndJoin(ctx context.Context, name, ownerID s
 
 		link := models.UserGroup{UserID: ownerID, GroupID: group.ID}
 
-		addErr := txDB.Create(&link).Error
+		addErr := txDB.Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error
 		if addErr != nil {
 			return fmt.Errorf("add owner to group: %w", addErr)
 		}

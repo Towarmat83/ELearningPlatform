@@ -2,6 +2,7 @@ package fake
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -66,6 +67,29 @@ func (f *GroupRepository) Create(_ context.Context, name string) (string, error)
 
 	id := uuid.New()
 	f.Groups = append(f.Groups, models.Group{ID: id, Name: name, Source: authProviderLocal})
+
+	return id.String(), nil
+}
+
+// CreateAndJoin adds a new local group named name and links ownerID to it
+// atomically. Returns the new group's ID, or empty string if the name is taken.
+func (f *GroupRepository) CreateAndJoin(_ context.Context, name, ownerID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return "", f.Err
+	}
+
+	for _, grp := range f.Groups {
+		if grp.Name == name {
+			return "", errors.New("create group and join: group name already taken")
+		}
+	}
+
+	id := uuid.New()
+	f.Groups = append(f.Groups, models.Group{ID: id, Name: name, Source: authProviderLocal})
+	f.UserGroup = append(f.UserGroup, models.UserGroup{UserID: ownerID, GroupID: id})
 
 	return id.String(), nil
 }

@@ -20,6 +20,23 @@ type groupInfo struct {
 	MemberIDs []string `json:"memberIds"`
 }
 
+// managerGroupRow is the per-group response shape for ManagerListGroups.
+type managerGroupRow struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	MemberCount int64  `json:"memberCount"`
+}
+
+// managerCreateGroupBody is the request body for ManagerCreateGroup.
+type managerCreateGroupBody struct {
+	Name string `json:"name"`
+}
+
+// managerAddMemberBody is the request body for ManagerAddGroupMember.
+type managerAddMemberBody struct {
+	UserID string `json:"userId"`
+}
+
 // managerScopeIDs returns the IDs of a manager's groups, excluding the
 // platform-wide default group which should not define scope.
 func managerScopeIDs(groups []repository.GroupRow) []string {
@@ -225,20 +242,14 @@ func (s *State) ManagerListGroups(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	type groupRow struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		MemberCount int64  `json:"memberCount"`
-	}
-
-	result := make([]groupRow, 0, len(groups))
+	result := make([]managerGroupRow, 0, len(groups))
 
 	for _, grp := range groups {
 		if grp.Name == defaultGroupName {
 			continue
 		}
 
-		result = append(result, groupRow{ID: grp.ID, Name: grp.Name, MemberCount: grp.MemberCount})
+		result = append(result, managerGroupRow{ID: grp.ID, Name: grp.Name, MemberCount: grp.MemberCount})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{groupsRespKeyGroups: result})
@@ -259,9 +270,7 @@ func (s *State) ManagerCreateGroup(writer http.ResponseWriter, request *http.Req
 	ctx := request.Context()
 	claims := s.claims(request)
 
-	var body struct {
-		Name string `json:"name"`
-	}
+	var body managerCreateGroupBody
 
 	err := decode(request, &body)
 	if err != nil || body.Name == "" {
@@ -270,16 +279,9 @@ func (s *State) ManagerCreateGroup(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	groupID, err := s.Repos.Groups.Create(ctx, body.Name)
+	groupID, err := s.Repos.Groups.CreateAndJoin(ctx, body.Name, claims.Subject)
 	if err != nil || groupID == "" {
 		s.Error(writer, http.StatusConflict, "A group with this name already exists")
-
-		return
-	}
-
-	err = s.Repos.Groups.AddMember(ctx, groupID, claims.Subject)
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
@@ -398,9 +400,7 @@ func (s *State) ManagerAddGroupMember(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	var body struct {
-		UserID string `json:"userId"`
-	}
+	var body managerAddMemberBody
 
 	err = decode(request, &body)
 	if err != nil || body.UserID == "" {

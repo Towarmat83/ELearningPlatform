@@ -99,7 +99,7 @@ func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 }
 
 // registerAuthenticatedRoutes wires routes that require a valid session.
-func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(http.Handler) http.Handler) {
+func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(http.Handler) http.Handler) { //nolint:dupl // same router.Group shape as registerManagerRoutes; different middleware and routes
 	router.Group(func(group chi.Router) {
 		group.Use(authMW)
 
@@ -166,7 +166,7 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 }
 
 // registerManagerRoutes wires routes restricted to manager users.
-func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.Handler) http.Handler) {
+func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.Handler) http.Handler) { //nolint:dupl // same router.Group shape as registerAuthenticatedRoutes; different middleware and routes
 	router.Group(func(group chi.Router) {
 		group.Use(managerMW)
 

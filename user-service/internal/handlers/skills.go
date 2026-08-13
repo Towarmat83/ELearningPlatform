@@ -197,7 +197,7 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 // @Produce  json
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/my/skills [get].
-func (s *State) MySkills(writer http.ResponseWriter, req *http.Request) {
+func (s *State) MySkills(writer http.ResponseWriter, req *http.Request) { //nolint:dupl // same shape as MySessionBookings; different repository and response key
 	claims := s.claims(req)
 
 	levels, err := s.Repos.SkillLevels.ListByUser(req.Context(), claims.Subject)

@@ -89,6 +89,10 @@ spec:
               hidden:
                 description: 'Hidden: when true, the course is hidden from the catalog.'
                 type: boolean
+              inPerson:
+                description: InPerson marks this course as available on-site, unlocking
+                  the sessions schedule.
+                type: boolean
               modules:
                 description: Modules lists the course's content in display order.
                 items:
@@ -438,6 +442,42 @@ spec:
                 description: Scope restricts enrollment management to users within
                   the named group.
                 type: string
+              sessions:
+                description: Sessions lists the scheduled in-person sessions for this
+                  course.
+                items:
+                  description: CourseSession describes one scheduled in-person session
+                    of a course.
+                  properties:
+                    capacity:
+                      description: Capacity is the maximum number of seats. 0 means
+                        unlimited.
+                      minimum: 0
+                      type: integer
+                    date:
+                      description: Date is the start date and time of the session
+                        in RFC3339 format.
+                      minLength: 1
+                      type: string
+                    id:
+                      description: ID uniquely identifies this session within the
+                        course.
+                      minLength: 1
+                      type: string
+                    location:
+                      description: Location is the physical or virtual location of
+                        the session.
+                      type: string
+                    title:
+                      description: Title is the display name of this session.
+                      minLength: 1
+                      type: string
+                  required:
+                  - date
+                  - id
+                  - title
+                  type: object
+                type: array
               title:
                 description: Title is the course's display name; defaults to the resource
                   name if omitted.

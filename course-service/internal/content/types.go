@@ -47,6 +47,15 @@ type Badge struct {
 	Icon string `json:"icon,omitempty"`
 }
 
+// Session describes one scheduled in-person session of a course.
+type Session struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Date     string `json:"date"`
+	Location string `json:"location,omitempty"`
+	Capacity int    `json:"capacity,omitempty"`
+}
+
 // Course is the in-memory representation of a course loaded from disk.
 type Course struct {
 	Slug        string `json:"slug"`
@@ -62,6 +71,8 @@ type Course struct {
 	Skills        []string             `json:"skills,omitempty"` // aggregated from all modules
 	Scope         string               `json:"scope,omitempty"`
 	Badge         *Badge               `json:"badge,omitempty"`
+	InPerson      bool                 `json:"inPerson,omitempty"`
+	Sessions      []Session            `json:"sessions,omitempty"`
 	Source        string               `json:"source,omitempty"`
 }
 

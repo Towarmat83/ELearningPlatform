@@ -99,7 +99,7 @@ func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 }
 
 // registerAuthenticatedRoutes wires routes that require a valid session.
-func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(http.Handler) http.Handler) { //nolint:dupl // same router.Group shape as registerManagerRoutes; different middleware and routes
+func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(http.Handler) http.Handler) {
 	router.Group(func(group chi.Router) {
 		group.Use(authMW)
 
@@ -119,6 +119,11 @@ func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(ht
 		group.Get("/api/my/skills/{slug}", state.MySkillModules)
 		group.Get("/api/my/groups", state.MyGroups)
 		group.Get("/api/my/groups/{groupId}/members", state.MyGroupMembers)
+
+		group.Get("/api/my/session-bookings", state.MySessionBookings)
+		group.Post("/api/courses/{slug}/sessions/{sessionId}/book", state.BookSession)
+		group.Delete("/api/courses/{slug}/sessions/{sessionId}/book", state.UnbookSession)
+		group.Get("/api/courses/{slug}/sessions/{sessionId}/booking-count", state.SessionBookingCount)
 	})
 }
 
@@ -139,6 +144,9 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 		group.Get("/api/admin/users/{userId}", state.GetUser)
 		group.Put("/api/admin/users/{userId}", state.UpdateUser)
 		group.Delete("/api/admin/users/{userId}", state.DeleteUser)
+
+		group.Get("/api/admin/courses/{slug}/sessions/{sessionId}/bookings", state.ListSessionBookings)
+		group.Patch("/api/admin/courses/{slug}/sessions/{sessionId}/bookings/{userId}/presence", state.MarkSessionPresence)
 
 		group.Get("/api/admin/courses/{slug}/enrollments", state.ListCourseEnrollments)
 		group.Post("/api/admin/courses/{slug}/enrollments", state.AdminEnrollUser)
@@ -166,7 +174,7 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 }
 
 // registerManagerRoutes wires routes restricted to manager users.
-func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.Handler) http.Handler) { //nolint:dupl // same router.Group shape as registerAuthenticatedRoutes; different middleware and routes
+func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.Handler) http.Handler) {
 	router.Group(func(group chi.Router) {
 		group.Use(managerMW)
 
@@ -184,6 +192,8 @@ func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.
 		group.Delete("/api/manager/groups/{groupId}/members/{userId}", state.ManagerRemoveGroupMember)
 		group.Post("/api/manager/paths/{slug}/enrollments", state.ManagerEnrollUserPath)
 		group.Delete("/api/manager/paths/{slug}/enrollments/{userId}", state.ManagerUnenrollUserPath)
+		group.Get("/api/manager/courses/{slug}/sessions/{sessionId}/bookings", state.ListSessionBookings)
+		group.Patch("/api/manager/courses/{slug}/sessions/{sessionId}/bookings/{userId}/presence", state.MarkSessionPresence)
 	})
 }
 

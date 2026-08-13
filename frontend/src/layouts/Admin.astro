@@ -3,9 +3,10 @@ import App from './App.astro';
 
 export interface Props {
   title: string;
+  allowedRoles?: string[];
 }
 
-const { title } = Astro.props;
+const { title, allowedRoles } = Astro.props;
 const path = Astro.url.pathname.replace(/\/$/, '') || '/admin';
 
 const navItems = [
@@ -27,6 +28,7 @@ function isActive(href: string) {
 }
 ---
 <App title={`${title} — Admin`}>
+  <div id="admin-guard-data" data-roles={JSON.stringify(allowedRoles ?? ['admin'])} style="display:none"></div>
   <div id="admin-forbidden" style="display:none;min-height:calc(100vh - 56px);align-items:center;justify-content:center">
     <div style="text-align:center;padding:48px">
       <div style="font-size:3rem;margin-bottom:16px">🔒</div>
@@ -68,7 +70,7 @@ function isActive(href: string) {
 
     if (!token) {
       window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-    } else if (user?.role !== 'admin') {
+    } else if (!JSON.parse(document.getElementById('admin-guard-data')!.dataset.roles ?? '["admin"]').includes(user?.role)) {
       document.getElementById('admin-forbidden')!.style.display = 'flex';
     } else {
       document.getElementById('admin-shell')!.style.display = 'block';

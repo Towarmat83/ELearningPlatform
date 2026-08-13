@@ -6,15 +6,16 @@ import "github.com/genesary/pupitre/user-service/internal/repository"
 // empty fakes, letting tests override only the aggregates they need.
 func NewRepositories() *repository.Repositories {
 	return &repository.Repositories{
-		Users:          NewUserRepository(),
-		Settings:       NewSettingRepository(),
-		Enrollments:    NewEnrollmentRepository(),
-		LessonProgress: NewLessonProgressRepository(),
-		ModuleProgress: NewModuleProgressRepository(),
-		Groups:         NewGroupRepository(),
-		Patterns:       NewPatternRepository(),
-		Paths:          NewPathEnrollmentRepository(),
-		Badges:         NewBadgeRepository(),
-		SkillLevels:    NewSkillLevelRepository(),
+		Users:           NewUserRepository(),
+		Settings:        NewSettingRepository(),
+		Enrollments:     NewEnrollmentRepository(),
+		LessonProgress:  NewLessonProgressRepository(),
+		ModuleProgress:  NewModuleProgressRepository(),
+		Groups:          NewGroupRepository(),
+		Patterns:        NewPatternRepository(),
+		Paths:           NewPathEnrollmentRepository(),
+		Badges:          NewBadgeRepository(),
+		SkillLevels:     NewSkillLevelRepository(),
+		SessionBookings: NewSessionBookingRepository(),
 	}
 }

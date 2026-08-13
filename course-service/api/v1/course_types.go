@@ -242,6 +242,26 @@ type Module struct {
 	Skills []string `json:"skills,omitempty"`
 }
 
+// CourseSession describes one scheduled in-person session of a course.
+type CourseSession struct {
+	// ID uniquely identifies this session within the course.
+	// +kubebuilder:validation:MinLength=1
+	ID string `json:"id"`
+	// Title is the display name of this session.
+	// +kubebuilder:validation:MinLength=1
+	Title string `json:"title"`
+	// Date is the start date and time of the session in RFC3339 format.
+	// +kubebuilder:validation:MinLength=1
+	Date string `json:"date"`
+	// Location is the physical or virtual location of the session.
+	// +kubebuilder:validation:Optional
+	Location string `json:"location,omitempty"`
+	// Capacity is the maximum number of seats. 0 means unlimited.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Optional
+	Capacity int `json:"capacity,omitempty"`
+}
+
 // BadgeSpec defines the badge awarded when a learner completes a course.
 type BadgeSpec struct {
 	// Name is the flavor title of the badge (e.g. "Certified Operator").
@@ -287,6 +307,12 @@ type CourseSpec struct {
 	// Badge defines the badge awarded on course completion. Omitting it means no badge is granted.
 	// +kubebuilder:validation:Optional
 	Badge *BadgeSpec `json:"badge,omitempty"`
+	// InPerson marks this course as available on-site, unlocking the sessions schedule.
+	// +kubebuilder:validation:Optional
+	InPerson bool `json:"inPerson,omitempty"`
+	// Sessions lists the scheduled in-person sessions for this course.
+	// +kubebuilder:validation:Optional
+	Sessions []CourseSession `json:"sessions,omitempty"`
 }
 
 // Course is the Schema for the courses API.

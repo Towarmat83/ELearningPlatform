@@ -133,7 +133,7 @@ func (s *State) UnbookSession(writer http.ResponseWriter, req *http.Request) {
 // @Produce  json
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/my/session-bookings [get].
-func (s *State) MySessionBookings(writer http.ResponseWriter, req *http.Request) {
+func (s *State) MySessionBookings(writer http.ResponseWriter, req *http.Request) { //nolint:dupl // same shape as MySkills; different repository and response key
 	claims := s.claims(req)
 
 	bookings, err := s.Repos.SessionBookings.ListByUser(req.Context(), claims.Subject)

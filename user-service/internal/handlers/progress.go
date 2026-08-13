@@ -43,7 +43,7 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	s.awardXP(req, claims.Subject, repository.XPSourceLesson, courseSlug+"/"+lessonSlug, repository.XPAmountLesson)
+	_ = s.awardXP(req, claims.Subject, repository.XPSourceLesson, courseSlug+"/"+lessonSlug, repository.XPAmountLesson)
 
 	s.JSON(writer, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})
 }

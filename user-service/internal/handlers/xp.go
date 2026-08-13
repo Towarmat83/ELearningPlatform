@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -67,17 +68,8 @@ type xpResponse struct {
 // @Router   /api/my/xp [get].
 func (s *State) MyXP(writer http.ResponseWriter, req *http.Request) {
 	claims := s.claims(req)
-	ctx := req.Context()
 
-	total, err := s.Repos.XP.Total(ctx, claims.Subject)
-	if err != nil {
-		zap.L().Error("failed to get xp total", zap.String("userID", claims.Subject), zap.Error(err))
-		s.Error(writer, http.StatusInternalServerError, "Failed to fetch XP")
-
-		return
-	}
-
-	history, err := s.Repos.XP.History(ctx, claims.Subject)
+	history, err := s.Repos.XP.History(req.Context(), claims.Subject)
 	if err != nil {
 		zap.L().Error("failed to get xp history", zap.String("userID", claims.Subject), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Failed to fetch XP history")
@@ -89,6 +81,11 @@ func (s *State) MyXP(writer http.ResponseWriter, req *http.Request) {
 		history = []repository.XPEventRow{}
 	}
 
+	total := 0
+	for _, e := range history {
+		total += e.Amount
+	}
+
 	lvl := xpLevel(total)
 	s.JSON(writer, http.StatusOK, xpResponse{
 		Total:     total,
@@ -98,9 +95,9 @@ func (s *State) MyXP(writer http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// awardXP records an XP gain for userID, logging any error without failing the
-// caller — XP errors must never block progress tracking or enrollment.
-func (s *State) awardXP(req *http.Request, userID, source, sourceSlug string, amount int) {
+// awardXP records an XP gain for userID, logging and returning any error.
+// Callers that treat XP as non-critical may discard the return value.
+func (s *State) awardXP(req *http.Request, userID, source, sourceSlug string, amount int) error {
 	err := s.Repos.XP.Award(req.Context(), userID, source, sourceSlug, amount)
 	if err != nil {
 		zap.L().Warn("failed to award xp",
@@ -108,5 +105,9 @@ func (s *State) awardXP(req *http.Request, userID, source, sourceSlug string, am
 			zap.String("source", source),
 			zap.String("sourceSlug", sourceSlug),
 			zap.Error(err))
+
+		return fmt.Errorf("award xp: %w", err)
 	}
+
+	return nil
 }

@@ -117,7 +117,7 @@ func (s *State) fetchCourseDetails(ctx context.Context, slug string) (*courseSer
 		return nil, fmt.Errorf("building course-service request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // see comment above
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // courseURL is built from trusted server config (CourseServiceURL) and a validated slug
 	if err != nil {
 		return nil, fmt.Errorf("calling course-service: %w", err)
 	}

@@ -209,7 +209,7 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 		zap.L().Warn("failed to award badge on course completion", zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.Error(awardErr))
 	}
 
-	s.awardXP(req, body.UserID, repository.XPSourceCourse, body.CourseSlug, repository.XPAmountCourse)
+	_ = s.awardXP(req, body.UserID, repository.XPSourceCourse, body.CourseSlug, repository.XPAmountCourse)
 
 	if body.Difficulty != "" && len(body.Skills) > 0 {
 		err := s.Repos.SkillLevels.UpsertAll(req.Context(), body.UserID, body.Skills, body.Difficulty, body.SkillTotalCourses)
@@ -241,7 +241,7 @@ func (s *State) InternalRecordModuleProgress(writer http.ResponseWriter, req *ht
 		body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
 
 	if err == nil && body.Passed {
-		s.awardXP(req, body.UserID, repository.XPSourceModule, body.CourseSlug+"/"+body.ModuleSlug, repository.XPAmountModule)
+		_ = s.awardXP(req, body.UserID, repository.XPSourceModule, body.CourseSlug+"/"+body.ModuleSlug, repository.XPAmountModule)
 	}
 
 	internalRespondExecResult(s, writer, err, "failed to record module progress",

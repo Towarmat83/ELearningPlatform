@@ -317,7 +317,7 @@ type CourseSpec struct {
 	// Zero (the default) means no XP gate.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Optional
-	XPRequired int `json:"xpRequired,omitempty"`
+	XPRequired int `json:"xpRequired"`
 }
 
 // Course is the Schema for the courses API.

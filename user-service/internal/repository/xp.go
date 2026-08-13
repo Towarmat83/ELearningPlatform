@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
@@ -57,12 +58,16 @@ func NewGormXPRepository(db *gorm.DB) XPRepository {
 // Award inserts an XP event, doing nothing if one already exists for the same
 // (userid, source, source_slug) tuple, so replaying completions is safe.
 func (r *gormXPRepository) Award(ctx context.Context, userID, source, sourceSlug string, amount int) error {
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO user_xp_events (userid, source, source_slug, amount)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT DO NOTHING`,
-		userID, source, sourceSlug, amount,
-	).Error
+	event := models.UserXPEvent{
+		UserID:     userID,
+		Source:     source,
+		SourceSlug: sourceSlug,
+		Amount:     amount,
+	}
+
+	err := r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&event).Error
 	if err != nil {
 		return fmt.Errorf("award xp: %w", err)
 	}

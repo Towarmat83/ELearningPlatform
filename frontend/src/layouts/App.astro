@@ -22,7 +22,8 @@ const { title, description, activePage } = Astro.props;
     <a href="/my-badges" class={`navlink${activePage === 'badges' ? ' active' : ''}`} id="nav-my-badges">Mes badges</a>
     <a href="/leaderboard" class={`navlink${activePage === 'leaderboard' ? ' active' : ''}`} id="nav-leaderboard">Classement</a>
     <a href="/my-skills" class={`navlink${activePage === 'skills' ? ' active' : ''}`} id="nav-my-skills">Mes compétences</a>
-    <a href="/agenda" class={`navlink${activePage === 'agenda' ? ' active' : ''}`} id="nav-agenda">Agenda</a>
+    <a href="/agenda" class={`navlink${activePage === 'agenda' ? ' active' : ''}`} id="nav-agenda" style="display:none">Agenda</a>
+    <a href="/manager/users" class="navlink" id="nav-manager" style="display:none">Mon espace</a>
     <div class="nav-spacer"></div>
     <slot name="nav-extra" />
     <div id="nav-user">
@@ -66,7 +67,6 @@ const { title, description, activePage } = Astro.props;
             <span style="font-size:.875rem;font-weight:500;color:var(--ink-soft);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${user.username}</span>
           </a>
           ${user.role === 'admin' ? '<a href="/admin" class="btn btn-secondary btn-sm">Admin</a>' : ''}
-          ${user.role === 'manager' ? '<a href="/manager/users" class="btn btn-secondary btn-sm">Mes membres</a>' : ''}
           <button id="nav-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
         `;
 
@@ -75,6 +75,11 @@ const { title, description, activePage } = Astro.props;
           if (pathsLink) pathsLink.style.display = 'none';
           const coursesLink = document.getElementById('nav-my-courses');
           if (coursesLink) coursesLink.style.display = 'none';
+        }
+
+        if (user.role === 'manager') {
+          const managerLink = document.getElementById('nav-manager');
+          if (managerLink) managerLink.style.display = '';
         }
 
         document.getElementById('nav-logout')?.addEventListener('click', () => {

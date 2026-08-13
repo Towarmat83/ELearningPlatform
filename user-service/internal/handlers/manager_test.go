@@ -323,3 +323,381 @@ func TestManagerGetUserEnrollments_DBError(t *testing.T) {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
 }
+
+// ── ManagerListGroups ─────────────────────────────────────────────────────────
+
+// TestManagerListGroups_Unauthorized verifies 401 without token.
+func TestManagerListGroups_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "GET", "/api/manager/groups", "", "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("want 401, got %d", rec.Code)
+	}
+}
+
+// TestManagerListGroups_ForbiddenStudent verifies 403 for students.
+func TestManagerListGroups_ForbiddenStudent(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "GET", "/api/manager/groups", "", htAuthHeader(t, "student"))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+// TestManagerListGroups_Empty verifies 200 with an empty list.
+func TestManagerListGroups_Empty(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "GET", "/api/manager/groups", "", htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	if _, ok := resp["groups"]; !ok {
+		t.Error("expected groups key in response")
+	}
+}
+
+// TestManagerListGroups_WithGroups verifies 200 with the manager's groups.
+func TestManagerListGroups_WithGroups(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "GET", "/api/manager/groups", "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	groups := htSliceField(t, resp, "groups")
+	if len(groups) != 1 {
+		t.Errorf("expected 1 group, got %d", len(groups))
+	}
+}
+
+// TestManagerListGroups_DBError verifies 500 when the group repo fails.
+func TestManagerListGroups_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "GET", "/api/manager/groups", "", htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}
+
+// ── ManagerCreateGroup ────────────────────────────────────────────────────────
+
+// TestManagerCreateGroup_MissingName verifies 400 when name is absent.
+func TestManagerCreateGroup_MissingName(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "POST", "/api/manager/groups", `{"name":""}`, htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d", rec.Code)
+	}
+}
+
+// TestManagerCreateGroup_InvalidJSON verifies 400 for malformed body.
+func TestManagerCreateGroup_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRouter()
+
+	rec := htDo(t, r, "POST", "/api/manager/groups", "not-json", htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d", rec.Code)
+	}
+}
+
+// TestManagerCreateGroup_Conflict verifies 409 when the group name is taken.
+func TestManagerCreateGroup_Conflict(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = fake.NewGroupRepository(models.Group{Name: "existing-group", Source: "local"})
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/manager/groups", `{"name":"existing-group"}`, htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusConflict {
+		t.Errorf("want 409, got %d", rec.Code)
+	}
+}
+
+// TestManagerCreateGroup_Success verifies 201 and manager auto-join.
+func TestManagerCreateGroup_Success(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/manager/groups", `{"name":"new-team"}`, htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusCreated {
+		t.Errorf("want 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp["id"] == nil || resp["id"] == "" {
+		t.Error("expected group id in response")
+	}
+}
+
+// TestManagerCreateGroup_DBError verifies 409 when the repo fails.
+func TestManagerCreateGroup_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/manager/groups", `{"name":"new-team"}`, htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusConflict {
+		t.Errorf("want 409, got %d", rec.Code)
+	}
+}
+
+// ── ManagerDeleteGroup ────────────────────────────────────────────────────────
+
+// TestManagerDeleteGroup_NotOwner verifies 403 when manager is not a member.
+func TestManagerDeleteGroup_NotOwner(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	// htGroupID exists but manager (htManagerID) is a member; use a random UUID
+	// that does not exist in any of the manager's groups.
+	outsideGroupID := "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+outsideGroupID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+// TestManagerDeleteGroup_NotFound verifies 404 for a non-local group.
+func TestManagerDeleteGroup_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+
+	groups, ok := repos.Groups.(*fake.GroupRepository)
+	if !ok {
+		t.Fatal("repos.Groups is not *fake.GroupRepository")
+	}
+
+	// Make the group a non-local source so Delete returns false.
+	for i := range groups.Groups {
+		if groups.Groups[i].ID.String() == htGroupID {
+			groups.Groups[i].Source = "ldap"
+		}
+	}
+
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+htGroupID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("want 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestManagerDeleteGroup_Success verifies 200 on successful deletion.
+func TestManagerDeleteGroup_Success(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+htGroupID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestManagerDeleteGroup_DBError verifies 500 when group lookup fails.
+func TestManagerDeleteGroup_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+htGroupID, "", htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}
+
+// ── ManagerListGroupMembers ───────────────────────────────────────────────────
+
+// TestManagerListGroupMembers_NotOwner verifies 403 for an unowned group.
+func TestManagerListGroupMembers_NotOwner(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	outsideGroupID := "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+	rec := htDo(t, r, "GET", "/api/manager/groups/"+outsideGroupID+"/members", "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+// TestManagerListGroupMembers_Success verifies 200 with the group's members.
+func TestManagerListGroupMembers_Success(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "GET", "/api/manager/groups/"+htGroupID+"/members", "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	if _, ok := resp["members"]; !ok {
+		t.Error("expected members key in response")
+	}
+}
+
+// TestManagerListGroupMembers_DBError verifies 500 when group lookup fails.
+func TestManagerListGroupMembers_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "GET", "/api/manager/groups/"+htGroupID+"/members", "", htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}
+
+// ── ManagerAddGroupMember ─────────────────────────────────────────────────────
+
+// TestManagerAddGroupMember_NotOwner verifies 403 for an unowned group.
+func TestManagerAddGroupMember_NotOwner(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	outsideGroupID := "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+	rec := htDo(t, r, "POST", "/api/manager/groups/"+outsideGroupID+"/members", `{"userId":"`+htStudentID+`"}`, htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+// TestManagerAddGroupMember_MissingUserID verifies 400 when userId is absent.
+func TestManagerAddGroupMember_MissingUserID(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/manager/groups/"+htGroupID+"/members", `{"userId":""}`, htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d", rec.Code)
+	}
+}
+
+// TestManagerAddGroupMember_Success verifies 200 on member addition.
+func TestManagerAddGroupMember_Success(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/manager/groups/"+htGroupID+"/members", `{"userId":"`+htOutsideID+`"}`, htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestManagerAddGroupMember_DBError verifies 500 when group lookup fails.
+func TestManagerAddGroupMember_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "POST", "/api/manager/groups/"+htGroupID+"/members", `{"userId":"`+htStudentID+`"}`, htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}
+
+// ── ManagerRemoveGroupMember ──────────────────────────────────────────────────
+
+// TestManagerRemoveGroupMember_NotOwner verifies 403 for an unowned group.
+func TestManagerRemoveGroupMember_NotOwner(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	outsideGroupID := "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+outsideGroupID+"/members/"+htStudentID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+// TestManagerRemoveGroupMember_Success verifies 200 on member removal.
+func TestManagerRemoveGroupMember_Success(t *testing.T) {
+	t.Parallel()
+
+	repos := seedManagerRepos(t)
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+htGroupID+"/members/"+htStudentID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestManagerRemoveGroupMember_DBError verifies 500 when group lookup fails.
+func TestManagerRemoveGroupMember_DBError(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
+	r := newTestRouterWithRepos(repos)
+
+	rec := htDo(t, r, "DELETE", "/api/manager/groups/"+htGroupID+"/members/"+htStudentID, "", htAuthHeader(t, "manager"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("want 500, got %d", rec.Code)
+	}
+}

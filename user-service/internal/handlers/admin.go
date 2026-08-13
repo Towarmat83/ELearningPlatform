@@ -625,7 +625,7 @@ func (s *State) AddGroupMember(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Member added"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgMemberAdded})
 }
 
 // RemoveGroupMember godoc
@@ -649,5 +649,5 @@ func (s *State) RemoveGroupMember(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Member removed"})
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgMemberRemoved})
 }

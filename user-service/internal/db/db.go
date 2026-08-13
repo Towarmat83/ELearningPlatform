@@ -118,17 +118,7 @@ type breakingMigration struct {
 // runs at most once, tracked by Name in _schema_migrations.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{
-	{
-		Name: "20260722_drop_role_check_constraints",
-		Apply: func(ctx context.Context, gdb *gorm.DB) error {
-			return gdb.WithContext(ctx).Exec(`
-				ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role;
-				ALTER TABLE group_role_mappings DROP CONSTRAINT IF EXISTS chk_group_role_mappings_platform_role;
-			`).Error
-		},
-	},
-}
+var breakingMigrations = []breakingMigration{}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own

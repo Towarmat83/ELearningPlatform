@@ -8,13 +8,21 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
+// sessionEntry is a single session descriptor returned by course-service.
+type sessionEntry struct {
+	ID       string `json:"id"`
+	Capacity int    `json:"capacity,omitempty"`
+}
+
 // courseSessionCapacity is the subset of course-service data needed by
 // BookSession to enforce per-session seat limits.
 type courseSessionCapacity struct {
-	Sessions []struct {
-		ID       string `json:"id"`
-		Capacity int    `json:"capacity,omitempty"`
-	} `json:"sessions,omitempty"`
+	Sessions []sessionEntry `json:"sessions,omitempty"`
+}
+
+// markPresenceBody is the request body for MarkSessionPresence.
+type markPresenceBody struct {
+	Present bool `json:"present"`
 }
 
 // sessionCapacity returns the capacity of sessionID within slug by calling
@@ -49,7 +57,7 @@ func (s *State) sessionCapacity(req *http.Request, slug, sessionID string) int {
 // @Produce  json
 // @Param    slug       path  string  true  "Course slug"
 // @Param    sessionId  path  string  true  "Session ID"
-// @Success  200  {object}  map[string]bool
+// @Success  204  "No Content"
 // @Failure  409  {object}  map[string]string
 // @Router   /api/courses/{slug}/sessions/{sessionId}/book [post].
 func (s *State) BookSession(writer http.ResponseWriter, req *http.Request) {
@@ -88,7 +96,7 @@ func (s *State) BookSession(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]bool{"ok": true})
+	writer.WriteHeader(http.StatusNoContent)
 }
 
 // UnbookSession godoc
@@ -97,7 +105,7 @@ func (s *State) BookSession(writer http.ResponseWriter, req *http.Request) {
 // @Produce  json
 // @Param    slug       path  string  true  "Course slug"
 // @Param    sessionId  path  string  true  "Session ID"
-// @Success  200  {object}  map[string]bool
+// @Success  204  "No Content"
 // @Router   /api/courses/{slug}/sessions/{sessionId}/book [delete].
 func (s *State) UnbookSession(writer http.ResponseWriter, req *http.Request) {
 	claims := s.claims(req)
@@ -116,7 +124,7 @@ func (s *State) UnbookSession(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]bool{"ok": true})
+	writer.WriteHeader(http.StatusNoContent)
 }
 
 // MySessionBookings godoc
@@ -187,9 +195,7 @@ func (s *State) MarkSessionPresence(writer http.ResponseWriter, req *http.Reques
 	sessionID := param(req, "sessionId")
 	userID := param(req, "userId")
 
-	var body struct {
-		Present bool `json:"present"`
-	}
+	var body markPresenceBody
 
 	err := decode(req, &body)
 	if err != nil {

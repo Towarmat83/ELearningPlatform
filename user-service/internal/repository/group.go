@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -52,6 +53,10 @@ type GroupEnrollmentRow struct {
 type GroupRepository interface {
 	// Admin CRUD (groups.go handlers)
 	Create(ctx context.Context, name string) (string, error)
+	// CreateAndJoin creates a local group named name and adds ownerID as a
+	// member in a single transaction, preventing a group from existing
+	// without an owner if the membership step fails.
+	CreateAndJoin(ctx context.Context, name, ownerID string) (string, error)
 	Delete(ctx context.Context, id string) (bool, error)
 	List(ctx context.Context) ([]GroupRow, error)
 	ListMappings(ctx context.Context) ([]GroupMapping, error)
@@ -109,6 +114,42 @@ func (r *gormGroupRepository) Create(ctx context.Context, name string) (string, 
 	}
 
 	return group.ID.String(), nil
+}
+
+// CreateAndJoin creates name as a local group and links ownerID to it in a
+// single transaction. If the membership insert fails the group creation is
+// rolled back, preventing a group from existing without an owner.
+func (r *gormGroupRepository) CreateAndJoin(ctx context.Context, name, ownerID string) (string, error) {
+	var groupID string
+
+	err := r.db.WithContext(ctx).Transaction(func(txDB *gorm.DB) error {
+		group := models.Group{Name: name, Source: groupSourceLocal}
+
+		createErr := txDB.Create(&group).Error
+		if createErr != nil {
+			return fmt.Errorf("create group: %w", createErr)
+		}
+
+		if group.ID == uuid.Nil {
+			return errors.New("group name already taken")
+		}
+
+		link := models.UserGroup{UserID: ownerID, GroupID: group.ID}
+
+		addErr := txDB.Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error
+		if addErr != nil {
+			return fmt.Errorf("add owner to group: %w", addErr)
+		}
+
+		groupID = group.ID.String()
+
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("create group and join: %w", err)
+	}
+
+	return groupID, nil
 }
 
 // Delete removes the local group identified by id, reporting whether a row

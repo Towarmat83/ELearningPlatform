@@ -26,11 +26,32 @@ const myCoursesRespKeyCourses = "courses"
 // @Failure   403   {object}  map[string]string
 // @Failure   401   {object}  map[string]string
 // @Router    /api/courses/{slug}/enroll [post].
-func (s *State) Enroll(writer http.ResponseWriter, r *http.Request) {
-	slug := param(r, "slug")
-	claims := s.claims(r)
+func (s *State) Enroll(writer http.ResponseWriter, req *http.Request) {
+	slug := param(req, "slug")
+	claims := s.claims(req)
 
-	err := s.Repos.Enrollments.Create(r.Context(), claims.Subject, slug)
+	course, err := s.fetchCourseDetails(req.Context(), slug)
+	if err != nil {
+		zap.L().Warn("could not fetch course details for xp gate", zap.String("courseSlug", slug), zap.Error(err))
+	}
+
+	if err == nil && course.XPRequired > 0 {
+		total, xpErr := s.Repos.XP.Total(req.Context(), claims.Subject)
+		if xpErr != nil {
+			zap.L().Error("xp gate check failed", zap.String("userID", claims.Subject), zap.Error(xpErr))
+			s.Error(writer, http.StatusInternalServerError, "Database error")
+
+			return
+		}
+
+		if total < course.XPRequired {
+			s.Error(writer, http.StatusForbidden, "Not enough XP to enroll in this course")
+
+			return
+		}
+	}
+
+	err = s.Repos.Enrollments.Create(req.Context(), claims.Subject, slug)
 	if err != nil {
 		zap.L().Error("enroll failed", zap.String("userId", claims.Subject), zap.String("courseSlug", slug), zap.Error(err))
 
@@ -83,18 +104,20 @@ type courseServiceCourse struct {
 	LabCount        int    `json:"labCount"`
 	EnrollmentCount int    `json:"enrollmentCount"`
 	Source          string `json:"source,omitempty"`
+	XPRequired      int    `json:"xpRequired,omitempty"`
 }
 
 // fetchCourseDetails fetches a single course's metadata from course-service.
 func (s *State) fetchCourseDetails(ctx context.Context, slug string) (*courseServiceCourse, error) {
 	courseURL := fmt.Sprintf("%s/api/courses/%s", s.Config.CourseServiceURL, slug)
 
+	//nolint:gosec // courseURL is built from trusted server config (CourseServiceURL) and a validated slug
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, courseURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("building course-service request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // see comment above
 	if err != nil {
 		return nil, fmt.Errorf("calling course-service: %w", err)
 	}

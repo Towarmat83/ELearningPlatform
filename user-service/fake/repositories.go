@@ -17,5 +17,6 @@ func NewRepositories() *repository.Repositories {
 		Badges:          NewBadgeRepository(),
 		SkillLevels:     NewSkillLevelRepository(),
 		SessionBookings: NewSessionBookingRepository(),
+		XP:              NewXPRepository(),
 	}
 }

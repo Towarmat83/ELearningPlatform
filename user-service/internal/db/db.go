@@ -64,6 +64,7 @@ var allModels = []any{
 	&models.UserBadge{},
 	&models.UserSkillLevel{},
 	&models.SessionBooking{},
+	&models.UserXPEvent{},
 }
 
 // RunMigrations brings the database schema up to date. Schema management is
@@ -247,6 +248,10 @@ var foreignKeys = []foreignKey{
 	{
 		Name: "session_bookings_userid_fkey",
 		DDL:  "ALTER TABLE session_bookings ADD CONSTRAINT session_bookings_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
+	},
+	{
+		Name: "user_xp_events_userid_fkey",
+		DDL:  "ALTER TABLE user_xp_events ADD CONSTRAINT user_xp_events_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
 	},
 }
 

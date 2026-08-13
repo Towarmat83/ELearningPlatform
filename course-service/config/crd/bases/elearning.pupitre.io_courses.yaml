@@ -482,6 +482,12 @@ spec:
                 description: Title is the course's display name; defaults to the resource
                   name if omitted.
                 type: string
+              xpRequired:
+                description: |-
+                  XPRequired is the minimum XP a learner must have earned to enroll in this course.
+                  Zero (the default) means no XP gate.
+                minimum: 0
+                type: integer
             type: object
         type: object
     served: true

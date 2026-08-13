@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // viewedLessons returns the set of lesson slugs the user has completed in a
@@ -29,17 +31,19 @@ func viewedLessons(s *State, r *http.Request, courseSlug, userID string) map[str
 // @Param     lessonSlug  path  string  true  "Lesson slug"
 // @Success   200   {object}  map[string]string
 // @Router    /api/courses/{slug}/lessons/{lessonSlug}/complete [post].
-func (s *State) MarkLessonComplete(writer http.ResponseWriter, r *http.Request) {
-	courseSlug := param(r, "slug")
-	lessonSlug := param(r, "lessonSlug")
-	claims := s.claims(r)
+func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request) {
+	courseSlug := param(req, "slug")
+	lessonSlug := param(req, "lessonSlug")
+	claims := s.claims(req)
 
-	err := s.Repos.LessonProgress.MarkComplete(r.Context(), claims.Subject, courseSlug, lessonSlug)
+	err := s.Repos.LessonProgress.MarkComplete(req.Context(), claims.Subject, courseSlug, lessonSlug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
+
+	_ = s.awardXP(req, claims.Subject, repository.XPSourceLesson, courseSlug+"/"+lessonSlug, repository.XPAmountLesson)
 
 	s.JSON(writer, http.StatusOK, map[string]string{"message": "Lesson marked as complete"})
 }

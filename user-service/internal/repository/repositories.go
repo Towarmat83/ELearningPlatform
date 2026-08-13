@@ -16,6 +16,7 @@ type Repositories struct {
 	Badges          BadgeRepository
 	SkillLevels     SkillLevelRepository
 	SessionBookings SessionBookingRepository
+	XP              XPRepository
 }
 
 // NewGormRepositories builds a Repositories backed by gdb.
@@ -32,5 +33,6 @@ func NewGormRepositories(gdb *gorm.DB) *Repositories {
 		Badges:          NewGormBadgeRepository(gdb),
 		SkillLevels:     NewGormSkillLevelRepository(gdb),
 		SessionBookings: NewGormSessionBookingRepository(gdb),
+		XP:              NewGormXPRepository(gdb),
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // courseCompleteLessonSlug is the sentinel lesson slug used to mark an
@@ -207,6 +209,8 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 		zap.L().Warn("failed to award badge on course completion", zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.Error(awardErr))
 	}
 
+	_ = s.awardXP(req, body.UserID, repository.XPSourceCourse, body.CourseSlug, repository.XPAmountCourse)
+
 	if body.Difficulty != "" && len(body.Skills) > 0 {
 		err := s.Repos.SkillLevels.UpsertAll(req.Context(), body.UserID, body.Skills, body.Difficulty, body.SkillTotalCourses)
 		if err != nil {
@@ -235,6 +239,11 @@ func (s *State) InternalRecordModuleProgress(writer http.ResponseWriter, req *ht
 
 	err := s.Repos.ModuleProgress.RecordProgress(req.Context(), body.UserID, body.CourseSlug,
 		body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
+
+	if err == nil && body.Passed {
+		_ = s.awardXP(req, body.UserID, repository.XPSourceModule, body.CourseSlug+"/"+body.ModuleSlug, repository.XPAmountModule)
+	}
+
 	internalRespondExecResult(s, writer, err, "failed to record module progress",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug))
 }

@@ -73,6 +73,7 @@ type Course struct {
 	Badge         *Badge               `json:"badge,omitempty"`
 	InPerson      bool                 `json:"inPerson,omitempty"`
 	Sessions      []Session            `json:"sessions,omitempty"`
+	XPRequired    int                  `json:"xpRequired,omitempty"`
 	Source        string               `json:"source,omitempty"`
 }
 

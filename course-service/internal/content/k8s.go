@@ -141,6 +141,7 @@ func courseFromCR(cr *coursev1.Course) *Course {
 		Badge:         badge,
 		InPerson:      spec.InPerson,
 		Sessions:      sessions,
+		XPRequired:    spec.XPRequired,
 		Source:        sourceK8s(slug),
 	}
 }

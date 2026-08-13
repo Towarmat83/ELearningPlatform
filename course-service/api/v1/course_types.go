@@ -313,6 +313,11 @@ type CourseSpec struct {
 	// Sessions lists the scheduled in-person sessions for this course.
 	// +kubebuilder:validation:Optional
 	Sessions []CourseSession `json:"sessions,omitempty"`
+	// XPRequired is the minimum XP a learner must have earned to enroll in this course.
+	// Zero (the default) means no XP gate.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Optional
+	XPRequired int `json:"xpRequired"`
 }
 
 // Course is the Schema for the courses API.

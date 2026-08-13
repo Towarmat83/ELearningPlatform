@@ -36,6 +36,7 @@ type courseResponse struct {
 	Badge           *content.Badge         `json:"badge,omitempty"`
 	InPerson        bool                   `json:"inPerson,omitempty"`
 	Sessions        []content.Session      `json:"sessions,omitempty"`
+	XPRequired      int                    `json:"xpRequired,omitempty"`
 }
 
 // toCourseResponse converts an internal content.Course into the public
@@ -69,6 +70,7 @@ func toCourseResponse(course *content.Course) courseResponse {
 		Badge:           course.Badge,
 		InPerson:        course.InPerson,
 		Sessions:        course.Sessions,
+		XPRequired:      course.XPRequired,
 	}
 }
 

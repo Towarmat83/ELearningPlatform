@@ -91,12 +91,32 @@ spec:
 
     - name: "Lab 1 : GitLab Branching & CI/CD with Conventional Commits"
       type: "lab"
-      src: "http://10.89.0.1:8880/e-learning/devops-course.git"
+      src: "http://gitlab.gitlab.svc.cluster.local/e-learning/devops-course.git"
       ref: "main"
       path: "modules/lab1/content.md"
-      labUrl: "http://localhost:8880/e-learning/devops-course/-/blob/main/modules/lab1/content.md"
+      labUrl: "http://gitlab.local:8880/e-learning/devops-course/-/blob/main/modules/lab1/content.md"
+      checkProvider: "gitlab"
       prerequisites:
         - "introduction-au-ci-cd-avec-gitlab"
+      steps:
+        - title: "Commit conventionnel effectué"
+          checkType: gitlab_conventional_commit_on_branch
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+            pattern: "feature/"
+        - title: "Modifications poussées"
+          checkType: gitlab_commit_on_branch
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+            pattern: "feature/"
+        - title: "Merge Request ouverte"
+          checkType: gitlab_mr_open
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+        - title: "Pipeline CI/CD passée"
+          checkType: gitlab_pipeline_passed
+          checkParams:
+            project: "e-learning/{{ .Username }}"
 
     - name: "Quiz de validation"
       type: "quiz"

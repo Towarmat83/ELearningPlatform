@@ -423,7 +423,11 @@ import App from '../../../../layouts/App.astro';
 
     function addCopyButtons(container: HTMLElement) {
       container.querySelectorAll('pre').forEach(pre => {
-        if (pre.querySelector('.copy-btn')) return;
+        if (pre.parentElement?.classList.contains('code-wrapper')) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-wrapper';
+        pre.parentNode!.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
         btn.textContent = 'Copier';
@@ -435,7 +439,7 @@ import App from '../../../../layouts/App.astro';
             setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 2000);
           });
         });
-        pre.appendChild(btn);
+        wrapper.appendChild(btn);
       });
     }
 

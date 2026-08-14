@@ -348,6 +348,7 @@ import App from '../layouts/App.astro';
       });
       if (r.status === 401) { localStorage.clear(); location.href = '/login'; throw new Error('401'); }
       if (!r.ok) { const e = new Error(`HTTP ${r.status}`); (e as any).status = r.status; throw e; }
+      if (r.status === 204 || r.headers.get('content-length') === '0') return {};
       return r.json();
     }
 

@@ -10,16 +10,13 @@ const { title, allowedRoles } = Astro.props;
 const path = Astro.url.pathname.replace(/\/$/, '') || '/admin';
 
 const navItems = [
-  { href: '/admin',              label: '📊 Tableau de bord' },
-  { href: '/admin/users',        label: '👥 Utilisateurs'    },
-  { href: '/admin/courses',      label: '📚 Cours'            },
-  { href: '/admin/paths',        label: '🗺️ Parcours'         },
-  { href: '/admin/groups',       label: '🏷️ Groupes'          },
-  { href: '/admin/patterns',     label: '🔶 Patterns'         },
-  { href: '/admin/leaderboard',  label: '🏆 Classement'       },
-  { href: '/admin/labs',         label: '🧪 Labs'             },
-  { href: '/admin/settings',     label: '⚙️ Paramètres'       },
-  { href: '/admin/monitoring',   label: '📈 Monitoring'       },
+  { href: '/admin',             label: '📊 Tableau de bord' },
+  { href: '/admin/users',       label: '👥 Utilisateurs'    },
+  { href: '/admin/courses',     label: '📚 Cours'            },
+  { href: '/admin/paths',       label: '🗺️ Parcours'         },
+  { href: '/admin/groups',      label: '🏷️ Groupes'          },
+  { href: '/admin/leaderboard', label: '🏆 Classement'       },
+  { href: '/admin/labs',        label: '🧪 Labs'             },
 ];
 
 function isActive(href: string) {
@@ -58,7 +55,7 @@ function isActive(href: string) {
       </aside>
 
       <!-- Main content -->
-      <main style="padding:32px 36px;min-width:0">
+      <main style="padding:32px 36px;min-width:0;background:linear-gradient(160deg,#f0f4ff 0%,#faf5ff 50%,#f0fdf4 100%);min-height:calc(100vh - 56px)">
         <slot />
       </main>
     </div>

@@ -563,11 +563,11 @@ import App from '../layouts/App.astro';
                 data-edit-slug="${s.course.slug}" data-edit-sid="${s.session.id}"
                 data-edit-title="${s.session.title}" data-edit-date="${s.session.date}"
                 data-edit-location="${s.session.location ?? ''}" data-edit-capacity="${s.session.capacity ?? 0}">
-                ✏️ Modifier
+                Modifier
               </button>
               <button class="btn btn-secondary btn-sm" style="flex:1;color:#dc2626"
                 data-del-slug="${s.course.slug}" data-del-sid="${s.session.id}">
-                🗑️ Supprimer
+                Supprimer
               </button>
             </div>` : ''}
         </div>`;
@@ -594,7 +594,7 @@ import App from '../layouts/App.astro';
 
         if (isTrainer) {
           const btnNew = document.getElementById('btn-new-session')!;
-          btnNew.style.display = '';
+          btnNew.style.display = 'block';
           btnNew.addEventListener('click', () => openModal());
         }
 

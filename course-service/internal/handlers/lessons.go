@@ -504,7 +504,8 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if isLastMeaningfulModule(course.Modules, moduleIndex) {
+	if isLastMeaningfulModule(course.Modules, moduleIndex) &&
+		s.allQuizModulesPassed(req.Context(), course, claims.Subject, courseSlug, "") {
 		s.notifyCourseComplete(req, claims.Subject, courseSlug)
 	}
 

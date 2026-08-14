@@ -3,29 +3,40 @@ import App from '../layouts/App.astro';
 ---
 <App title="Mes cours" activePage="courses">
   <style is:global>
-    .mc-page { padding: 28px 36px 80px; max-width: 1100px; margin: 0 auto; }
+    .mc-outer {
+      min-height: calc(100vh - 56px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+    }
+    .mc-page { padding: 40px 36px 80px; max-width: 1100px; margin: 0 auto; }
 
     .mc-header {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       flex-wrap: wrap;
     }
-    .mc-title { font-size: 1.5rem; font-weight: 700; }
+    .mc-title {
+      font-size: 2rem; font-weight: 800;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
     .mc-stats {
       display: flex;
-      gap: 20px;
+      gap: 16px;
       flex-wrap: wrap;
       margin-bottom: 28px;
     }
     .mc-stat {
+      background: #ffffffcc; backdrop-filter: blur(8px);
+      border: 1.5px solid #e2e8f0; border-radius: 14px;
+      padding: 14px 20px;
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
-    .mc-stat-val { font-size: 1.6rem; font-weight: 700; color: var(--blue); line-height: 1; }
+    .mc-stat-val { font-size: 1.8rem; font-weight: 800; color: var(--blue); line-height: 1; }
     .mc-stat-label { font-size: .78rem; color: var(--ink-soft); }
 
     .mc-grid {
@@ -34,25 +45,25 @@ import App from '../layouts/App.astro';
       gap: 18px;
     }
     .mc-card {
-      border: 1.5px solid var(--line);
-      border-radius: 14px;
-      background: var(--paper);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 16px;
+      background: #ffffffcc; backdrop-filter: blur(8px);
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transition: border-color .15s, box-shadow .15s;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
     }
-    .mc-card:hover { border-color: var(--blue); box-shadow: 0 4px 18px rgba(27,134,242,.12); }
+    .mc-card:hover { border-color: #a5b4fc; box-shadow: 0 6px 24px rgba(67,97,238,.12); transform: translateY(-3px); }
     .mc-card-thumb {
       width: 100%;
       height: 130px;
-      background: linear-gradient(135deg, var(--blue-soft), #d6ecfd);
+      background: linear-gradient(135deg, #e0e7ff, #ede9fe);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 2.5rem;
       overflow: hidden;
-      border-bottom: 1.5px solid var(--line);
+      border-bottom: 1.5px solid #e2e8f0;
       flex-shrink: 0;
     }
     .mc-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -120,10 +131,11 @@ import App from '../layouts/App.astro';
     }
   </style>
 
+  <div class="mc-outer">
   <div class="mc-page">
     <div class="mc-header">
       <h1 class="mc-title">Mes cours</h1>
-      <a href="/courses" class="btn btn-secondary btn-sm">Parcourir le catalogue</a>
+      <a href="/courses" class="btn btn-secondary btn-sm" style="background:#ffffffcc;backdrop-filter:blur(8px)">Parcourir le catalogue</a>
     </div>
 
     <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
@@ -164,6 +176,7 @@ import App from '../layouts/App.astro';
         <a href="/courses" class="btn btn-primary">Découvrir le catalogue</a>
       </div>
     </div>
+  </div>
   </div>
 
   <script>

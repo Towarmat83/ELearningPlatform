@@ -3,24 +3,36 @@ import App from '../../layouts/App.astro';
 ---
 <App title="Catalogue" activePage="catalogue">
   <style is:global>
-    .cat-page { padding: 22px 26px 80px; }
+    .cat-page {
+      min-height: calc(100vh - 56px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 28px 26px 80px;
+    }
+    .cat-page-title {
+      font-size: 2rem; font-weight: 800; margin-bottom: 20px;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
 
     /* ── Continue hero ────────────────────────────────────────────────── */
     .continue-hero {
       display: flex;
       align-items: center;
       gap: 20px;
-      background: var(--blue-soft);
-      border: 1.5px solid var(--blue);
-      border-radius: 12px;
+      background: #ffffffcc;
+      backdrop-filter: blur(8px);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 16px;
       padding: 20px;
       cursor: pointer;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
+      transition: border-color .15s, box-shadow .15s;
     }
-    .continue-hero:hover { filter: brightness(.97); }
+    .continue-hero:hover { border-color: #a5b4fc; box-shadow: 0 4px 20px rgba(67,97,238,.1); }
     .continue-thumb {
-      width: 200px; height: 118px; border-radius: 10px;
-      background: var(--fill); border: 1.5px solid var(--line);
+      width: 200px; height: 118px; border-radius: 12px;
+      background: linear-gradient(135deg, #e0e7ff, #ede9fe);
+      border: 1.5px solid #c7d2fe;
       flex: 0 0 auto; overflow: hidden;
       display: flex; align-items: center; justify-content: center;
       font-size: 2.5rem;
@@ -34,20 +46,20 @@ import App from '../../layouts/App.astro';
       display: inline-flex; align-items: center;
       height: 26px; padding: 0 11px; border-radius: 999px;
       font-size: 12px; font-weight: 600;
-      background: var(--orange-soft); color: #9a5a00; border: 1px solid var(--orange);
+      background: #fef3c7; color: #a16207; border: 1px solid #fcd34d;
       width: max-content;
     }
     .continue-title { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .continue-prog { height: 8px; background: rgba(27,134,242,.18); border-radius: 5px; max-width: 340px; overflow: hidden; }
-    .continue-prog-fill { height: 100%; background: var(--blue); border-radius: 5px; }
+    .continue-prog { height: 6px; background: #e0e7ff; border-radius: 5px; max-width: 340px; overflow: hidden; }
+    .continue-prog-fill { height: 100%; background: linear-gradient(90deg, #4361ee, #7c3aed); border-radius: 5px; }
     .continue-sub { font-size: .8rem; color: var(--ink-soft); }
     .continue-btn {
       align-self: center; flex: 0 0 auto;
-      height: 40px; padding: 0 18px; border-radius: 9px;
-      background: var(--blue); color: #fff; font-size: 14px; font-weight: 600;
-      border: none; cursor: pointer; white-space: nowrap; transition: background .12s;
+      height: 40px; padding: 0 20px; border-radius: 10px;
+      background: linear-gradient(135deg, #4361ee, #7c3aed); color: #fff; font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer; white-space: nowrap; transition: opacity .12s;
     }
-    .continue-btn:hover { background: #1470d6; }
+    .continue-btn:hover { opacity: .88; }
 
     /* ── Toolbar ──────────────────────────────────────────────────────── */
     .cat-toolbar {
@@ -58,7 +70,8 @@ import App from '../../layouts/App.astro';
     }
     .cat-toolbar .search-wrap { position: relative; flex: 1; max-width: 420px; }
     .cat-toolbar .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); pointer-events: none; }
-    .cat-toolbar .input { padding-left: 38px; width: 100%; height: 38px; font-size: .875rem; }
+    .cat-toolbar .input { padding-left: 38px; width: 100%; height: 38px; font-size: .875rem; background: #ffffffcc; backdrop-filter: blur(8px); }
+    .cat-toolbar select.input { background: #ffffffcc; backdrop-filter: blur(8px); }
     .cat-count-label { font-size: .8rem; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
 
     /* ── Active skill filter banner ───────────────────────────────────── */
@@ -92,17 +105,17 @@ import App from '../../layouts/App.astro';
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
-      margin-bottom: 26px;
+      margin-bottom: 22px;
       align-items: center;
     }
     .cat-chip {
       display: inline-flex; align-items: center; gap: 5px;
       height: 30px; padding: 0 12px; border-radius: 999px;
       font-size: .78rem; font-weight: 600;
-      border: 1.5px solid var(--line); background: var(--paper); color: var(--ink-soft);
+      border: 1.5px solid #e2e8f0; background: #ffffffcc; backdrop-filter: blur(4px); color: var(--ink-soft);
       cursor: pointer; transition: all .15s; user-select: none; white-space: nowrap;
     }
-    .cat-chip:hover { border-color: var(--ink-soft); color: var(--ink); }
+    .cat-chip:hover { border-color: #a5b4fc; color: var(--ink); }
     .cat-chip .chip-dot {
       width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
     }
@@ -114,13 +127,13 @@ import App from '../../layouts/App.astro';
       display: inline-flex; align-items: center;
       height: 30px; padding: 0 12px; border-radius: 999px;
       font-size: .78rem; font-weight: 600;
-      border: 1.5px solid var(--line); background: var(--fill); color: var(--ink-soft);
+      border: 1.5px solid #e2e8f0; background: #ffffffcc; backdrop-filter: blur(4px); color: var(--ink-soft);
       cursor: pointer; transition: all .15s; user-select: none;
     }
     .chip-reset.has-filter {
-      border-color: var(--ink); color: var(--ink); background: var(--paper);
+      border-color: #4361ee; color: #4361ee; background: #eff6ff;
     }
-    .chip-reset.has-filter:hover { background: var(--ink); color: #fff; }
+    .chip-reset.has-filter:hover { background: #4361ee; color: #fff; }
 
     /* ── Flat course grid ─────────────────────────────────────────────── */
     .courses-grid {
@@ -130,16 +143,18 @@ import App from '../../layouts/App.astro';
     }
 
     .rail-card {
-      border: 1.5px solid var(--line);
-      border-top: 3px solid var(--cat-color, var(--line));
-      border-radius: 10px;
-      background: var(--paper); overflow: hidden;
-      cursor: pointer; transition: box-shadow .15s, transform .12s;
+      border: 1.5px solid #e2e8f0;
+      border-top: 3px solid var(--cat-color, #e2e8f0);
+      border-radius: 14px;
+      background: #ffffffcc; backdrop-filter: blur(8px);
+      overflow: hidden;
+      cursor: pointer; transition: box-shadow .15s, transform .12s, border-color .15s;
       display: flex; flex-direction: column;
     }
     .rail-card:hover {
-      box-shadow: 0 4px 18px rgba(0,0,0,.11);
-      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(67,97,238,.12);
+      transform: translateY(-3px);
+      border-color: #a5b4fc;
     }
     .rail-card-thumb-wrap {
       position: relative; flex-shrink: 0;
@@ -185,6 +200,8 @@ import App from '../../layouts/App.astro';
   </style>
 
   <div class="cat-page">
+
+    <h1 class="cat-page-title">Catalogue</h1>
 
     <!-- Toolbar -->
     <div class="cat-toolbar">
@@ -342,8 +359,9 @@ import App from '../../layouts/App.astro';
         ? `<span class="badge" style="background:#e0f7fa;color:#0891b2;font-size:.65rem">🏢 Présentiel</span>`
         : '';
       const xpGate = c.xpRequired > 0
-        ? `<span class="badge badge-orange" title="${c.xpRequired} XP requis">⚡ ${c.xpRequired} XP</span>`
+        ? `<span class="badge badge-orange" title="${c.xpRequired} XP requis">⚡ ${c.xpRequired} XP requis</span>`
         : '';
+      const xpReward = `<span class="badge" style="background:#fefce8;color:#a16207;border:1px solid #fcd34d;font-size:.65rem">+200 XP</span>`;
       const prog = enrolled
         ? `<div class="rail-card-prog"><div class="rail-card-prog-fill" style="width:100%"></div></div>`
         : '';
@@ -361,7 +379,7 @@ import App from '../../layouts/App.astro';
           </div>
           <div class="rail-card-body">
             <div class="rail-card-title">${c.title}</div>
-            <div class="rail-card-footer">${diff}${inPersonBadge}${xpGate}${skillChips}</div>
+            <div class="rail-card-footer">${diff}${inPersonBadge}${xpGate}${xpReward}${skillChips}</div>
             ${prog}
           </div>
         </div>

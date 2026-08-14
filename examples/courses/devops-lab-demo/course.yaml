@@ -8,6 +8,7 @@ spec:
   category: devops
   difficulty: intermediate
   public: true
+  inPerson: true
   modules:
     - name: "Introduction au CI/CD avec GitLab"
       type: "text"

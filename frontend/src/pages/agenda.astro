@@ -229,7 +229,7 @@ import App from '../layouts/App.astro';
         <input class="form-input" id="modal-date" type="datetime-local" />
       </div>
       <div class="form-group">
-        <label class="form-label" for="modal-location">Lieu (optionnel)</label>
+        <label class="form-label" for="modal-location">Lieu</label>
         <input class="form-input" id="modal-location" type="text" placeholder="ex: Salle 3B, Paris" />
       </div>
       <div class="form-group">
@@ -291,9 +291,9 @@ import App from '../layouts/App.astro';
       const titleInput = (document.getElementById('modal-title-input') as HTMLInputElement).value.trim();
       const dateRaw = (document.getElementById('modal-date') as HTMLInputElement).value;
       const location = (document.getElementById('modal-location') as HTMLInputElement).value.trim();
-      const capacity = parseInt((document.getElementById('modal-capacity') as HTMLInputElement).value, 10) || 0;
+      const capacity = parseInt((document.getElementById('modal-capacity') as HTMLInputElement).value, 10) || 1;
 
-      if (!titleInput || !dateRaw) { alert('Titre et date sont requis.'); return; }
+      if (!titleInput || !dateRaw || !location) { alert('Titre, date et lieu sont requis.'); return; }
 
       const date = new Date(dateRaw).toISOString();
       const body = { title: titleInput, date, location, capacity };

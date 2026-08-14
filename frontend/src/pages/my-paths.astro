@@ -3,13 +3,23 @@ import App from '../layouts/App.astro';
 ---
 <App title="Mes parcours" activePage="paths">
   <style is:global>
-    .mp-page { padding: 28px 24px 80px; max-width: 100%; }
-    .mp-page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 24px; }
+    .mp-page {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 40px 32px 80px;
+    }
+    .mp-inner { max-width: 1200px; margin: 0 auto; }
+    .mp-page-title {
+      font-size: 2rem; font-weight: 800; margin-bottom: 6px;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .mp-page-sub { font-size: .9rem; color: var(--ink-soft); margin-bottom: 28px; }
 
     .path-list { display: flex; flex-direction: column; gap: 16px; }
     .path-list-card {
       padding: 0; border-radius: 16px;
-      border: 1.5px solid var(--line); background: var(--paper);
+      border: 1.5px solid var(--line); background: #ffffffcc; backdrop-filter: blur(8px);
       cursor: pointer; overflow: hidden;
       transition: box-shadow .13s, transform .13s, border-color .13s;
     }
@@ -47,7 +57,9 @@ import App from '../layouts/App.astro';
   </style>
 
   <div class="mp-page">
+    <div class="mp-inner">
     <h1 class="mp-page-title">Mes parcours</h1>
+    <p class="mp-page-sub" id="mp-sub"></p>
     <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
     <div id="mp-content" style="display:none">
       <div id="view-list">
@@ -63,6 +75,7 @@ import App from '../layouts/App.astro';
         <button class="detail-back" id="btn-back">◂ Mes parcours</button>
         <div id="detail-content"></div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -92,12 +105,14 @@ import App from '../layouts/App.astro';
       return SHORT[s] ?? s.split('-').map((w:string)=>w[0].toUpperCase()+w.slice(1)).join(' ');
     }
 
-    const PATH_ICONS: Record<string,string> = { 'devops-path':'⚙️','security-path':'🔐' };
-    const PATH_COLORS: Record<string,{bg:string;iconBg:string;accent:string}> = {
-      'security-path': { bg:'#fff7ed', iconBg:'#fed7aa', accent:'#ea8c0a' },
-      'devops-path':   { bg:'#f0fdf4', iconBg:'#bbf7d0', accent:'#16a34a' },
-    };
-    const DEFAULT_COLOR = { bg:'#eff6ff', iconBg:'#bfdbfe', accent:'#1b86f2' };
+    const PATH_ICONS: Record<string,string> = { 'devops-path':'⚙️','security-path':'🔐','devops':'⚙️','security':'🔐' };
+    const PALETTE = [
+      { bg:'#ffffff', iconBg:'#d1fae5', accent:'#059669' }, // vert sauge
+      { bg:'#ffffff', iconBg:'#ede9fe', accent:'#7c3aed' }, // violet
+      { bg:'#ffffff', iconBg:'#dbeafe', accent:'#2563eb' }, // bleu saphir
+      { bg:'#ffffff', iconBg:'#fce7f3', accent:'#db2777' }, // rose framboise
+      { bg:'#ffffff', iconBg:'#fef3c7', accent:'#d97706' }, // ambre
+    ];
 
     // Status theme — pastel palette
     const TH: Record<string,{fill:string;text:string;roadFill:string;badge:string;badgeTxt:string;label:string}> = {
@@ -109,7 +124,7 @@ import App from '../layouts/App.astro';
     let allPaths: any[] = [];
 
     function renderList(): string {
-      return allPaths.map((p:any) => {
+      return allPaths.map((p:any, idx:number) => {
         const isSkillPath = p.kind === 'skill';
         const total = (p.courses?.length ?? 0);
         const done  = (p.courses??[]).filter((c:any)=>c.status==='completed').length;
@@ -119,7 +134,7 @@ import App from '../layouts/App.astro';
         const sub = isSkillPath
           ? `${total} compétence${total>1?'s':''} · ${allDone?'✓ Acquises':done>0?`${done}/${total} acquises`:'À commencer'}`
           : `${done}/${total} cours · ${allDone?'✓ Terminé':pct>0?'En cours':'À commencer'}`;
-        const colors = PATH_COLORS[p.slug] ?? DEFAULT_COLOR;
+        const colors = PALETTE[idx % PALETTE.length];
         return `<div class="path-list-card" data-slug="${p.slug}" style="border-color:${colors.accent}40">
           <div class="path-list-banner" style="background:${colors.bg}">
             <div class="path-list-icon" style="background:${colors.iconBg}">${PATH_ICONS[p.slug]??'🗺️'}</div>
@@ -334,6 +349,8 @@ import App from '../layouts/App.astro';
         allPaths = paths ?? [];
         document.getElementById('loading')!.style.display = 'none';
         document.getElementById('mp-content')!.style.display = 'block';
+        const sub = document.getElementById('mp-sub');
+        if (sub) sub.textContent = `${allPaths.length} parcours en cours`;
         if (!allPaths.length) {
           document.getElementById('mp-empty')!.style.display = 'block';
           return;

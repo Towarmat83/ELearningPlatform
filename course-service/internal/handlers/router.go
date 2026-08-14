@@ -20,6 +20,7 @@ const routerCORSMaxAgeSeconds = 300
 func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(cfg.JWTSecret)
+	trainerMW := apimiddleware.AdminOrManager(cfg.JWTSecret)
 
 	corsOptions := cors.New(cors.Options{
 		AllowedOrigins:   cfg.CORSOrigins,
@@ -51,6 +52,11 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	router.Group(func(group chi.Router) {
 		group.Use(adminMW)
 		registerAdminRoutes(group, state)
+	})
+
+	router.Group(func(group chi.Router) {
+		group.Use(trainerMW)
+		registerTrainerRoutes(group, state)
 	})
 
 	return router
@@ -89,6 +95,13 @@ func registerAuthRoutes(router chi.Router, state *State) {
 	router.Get("/api/courses/{slug}/lessons", state.ListLessons)
 	router.Get("/api/courses/{slug}/lessons/{lessonSlug}", state.GetLesson)
 	router.Post("/api/courses/{slug}/lessons/{lessonSlug}/complete", state.MarkLessonComplete)
+}
+
+// registerTrainerRoutes wires endpoints for admin and manager roles.
+func registerTrainerRoutes(router chi.Router, state *State) {
+	router.Post("/api/admin/courses/{slug}/sessions", state.CreateSession)
+	router.Put("/api/admin/courses/{slug}/sessions/{sessionId}", state.UpdateSession)
+	router.Delete("/api/admin/courses/{slug}/sessions/{sessionId}", state.DeleteSession)
 }
 
 // registerAdminRoutes wires the admin-only endpoints behind the Admin

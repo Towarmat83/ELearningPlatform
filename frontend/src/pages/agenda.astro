@@ -133,6 +133,35 @@ import App from '../layouts/App.astro';
     .ev-meta { font-size: .78rem; color: var(--ink-soft); line-height: 1.8; margin-bottom: 10px; }
     .ev-booked-badge { font-size: .78rem; font-weight: 600; color: #16a34a; margin-bottom: 8px; }
     .no-sel { text-align: center; padding: 40px 16px; color: var(--ink-soft); font-size: .875rem; }
+
+    /* Session modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 200; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--paper); border-radius: 16px; padding: 28px 28px 24px;
+      width: 420px; max-width: calc(100vw - 32px);
+      box-shadow: 0 16px 48px rgba(0,0,0,.18);
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 18px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label { font-size: .78rem; font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+    .form-input {
+      width: 100%; border: 1.5px solid var(--line); border-radius: 8px;
+      padding: 8px 10px; font-size: .875rem; background: var(--paper); color: var(--ink);
+      box-sizing: border-box;
+    }
+    .form-input:focus { outline: none; border-color: var(--blue); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+    .btn-new-session {
+      margin-left: auto; background: var(--blue); color: #fff; border: none;
+      border-radius: 8px; padding: 6px 14px; font-size: .82rem; font-weight: 600;
+      cursor: pointer; display: none;
+    }
+    .btn-new-session:hover { background: #1466c4; }
+    .ev-trainer-actions { display: flex; gap: 6px; margin-top: 6px; }
   </style>
 
   <div class="agenda-wrap">
@@ -158,6 +187,7 @@ import App from '../layouts/App.astro';
           <button class="cal-nav-btn" id="btn-next">›</button>
         </div>
         <div id="loading-inline" style="font-size:.8rem;color:var(--ink-soft)">Chargement…</div>
+        <button class="btn-new-session" id="btn-new-session">+ Nouvelle session</button>
       </div>
 
       <div class="cal-dow-row">
@@ -182,15 +212,140 @@ import App from '../layouts/App.astro';
     </div>
   </div>
 
+  <!-- Session create/edit modal -->
+  <div class="modal-overlay" id="session-modal">
+    <div class="modal-box">
+      <div class="modal-title" id="modal-title">Nouvelle session</div>
+      <div class="form-group" id="course-group">
+        <label class="form-label" for="modal-course">Cours</label>
+        <select class="form-input" id="modal-course"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="modal-title-input">Titre</label>
+        <input class="form-input" id="modal-title-input" type="text" placeholder="ex: Session septembre — Groupe A" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="modal-date">Date et heure</label>
+        <input class="form-input" id="modal-date" type="datetime-local" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="modal-location">Lieu (optionnel)</label>
+        <input class="form-input" id="modal-location" type="text" placeholder="ex: Salle 3B, Paris" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="modal-capacity">Capacité (0 = illimitée)</label>
+        <input class="form-input" id="modal-capacity" type="number" min="0" value="0" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" id="modal-cancel">Annuler</button>
+        <button class="btn btn-primary btn-sm" id="modal-submit">Créer</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const token = localStorage.getItem('token');
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
     const isTrainer = currentUser.role === 'admin' || currentUser.role === 'manager';
 
-    async function apiFetch(path: string, opts: { method?: string; token?: string } = {}) {
+    // --- Session modal state ---
+    let editingSession: { courseSlug: string; sessionId: string } | null = null;
+    let inPersonCourses: any[] = [];
+
+    function openModal(courseSlug?: string, session?: any) {
+      editingSession = session ? { courseSlug: courseSlug!, sessionId: session.id } : null;
+      const isEdit = !!session;
+
+      (document.getElementById('modal-title') as HTMLElement).textContent = isEdit ? 'Modifier la session' : 'Nouvelle session';
+      (document.getElementById('modal-submit') as HTMLButtonElement).textContent = isEdit ? 'Enregistrer' : 'Créer';
+
+      const courseGroup = document.getElementById('course-group')!;
+      const courseSelect = document.getElementById('modal-course') as HTMLSelectElement;
+
+      if (isEdit) {
+        courseGroup.style.display = 'none';
+      } else {
+        courseGroup.style.display = '';
+        courseSelect.innerHTML = inPersonCourses.map(c =>
+          `<option value="${c.slug}">${c.title}</option>`
+        ).join('');
+        if (courseSlug) courseSelect.value = courseSlug;
+      }
+
+      const toDatetimeLocal = (iso: string) => iso ? iso.slice(0, 16) : '';
+
+      (document.getElementById('modal-title-input') as HTMLInputElement).value = session?.title ?? '';
+      (document.getElementById('modal-date') as HTMLInputElement).value = toDatetimeLocal(session?.date ?? '');
+      (document.getElementById('modal-location') as HTMLInputElement).value = session?.location ?? '';
+      (document.getElementById('modal-capacity') as HTMLInputElement).value = String(session?.capacity ?? 0);
+
+      document.getElementById('session-modal')!.classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('session-modal')!.classList.remove('open');
+      editingSession = null;
+    }
+
+    async function submitModal() {
+      const titleInput = (document.getElementById('modal-title-input') as HTMLInputElement).value.trim();
+      const dateRaw = (document.getElementById('modal-date') as HTMLInputElement).value;
+      const location = (document.getElementById('modal-location') as HTMLInputElement).value.trim();
+      const capacity = parseInt((document.getElementById('modal-capacity') as HTMLInputElement).value, 10) || 0;
+
+      if (!titleInput || !dateRaw) { alert('Titre et date sont requis.'); return; }
+
+      const date = new Date(dateRaw).toISOString();
+      const body = { title: titleInput, date, location, capacity };
+
+      try {
+        if (editingSession) {
+          await apiFetch(`/admin/courses/${editingSession.courseSlug}/sessions/${editingSession.sessionId}`, {
+            method: 'PUT', token: token!, body,
+          });
+        } else {
+          const slug = (document.getElementById('modal-course') as HTMLSelectElement).value;
+          await apiFetch(`/admin/courses/${slug}/sessions`, { method: 'POST', token: token!, body });
+        }
+        closeModal();
+        await reloadSessions();
+      } catch {
+        alert('Erreur lors de la sauvegarde.');
+      }
+    }
+
+    async function deleteSession(courseSlug: string, sessionId: string) {
+      if (!confirm('Supprimer cette session ?')) return;
+      try {
+        await apiFetch(`/admin/courses/${courseSlug}/sessions/${sessionId}`, { method: 'DELETE', token: token! });
+        await reloadSessions();
+      } catch {
+        alert('Erreur lors de la suppression.');
+      }
+    }
+
+    async function reloadSessions() {
+      const data = await apiFetch('/courses');
+      const courses = (data as any).courses || [];
+      inPersonCourses = courses.filter((c: any) => c.inPerson);
+      all = [];
+      for (const c of courses) {
+        if (!c.inPerson || !c.sessions?.length) continue;
+        for (const s of c.sessions) all.push({ course: c, session: s, date: new Date(s.date) });
+      }
+      all.sort((a, b) => a.date.getTime() - b.date.getTime());
+      renderCal();
+      renderPanel(selDay, selDay ? all.filter(s => dk(s.date) === selDay) : []);
+    }
+
+    async function apiFetch(path: string, opts: { method?: string; token?: string; body?: any } = {}) {
       const h: Record<string, string> = { 'Content-Type': 'application/json' };
       if (opts.token) h['Authorization'] = `Bearer ${opts.token}`;
-      const r = await fetch('/api' + path, { method: opts.method || 'GET', headers: h });
+      const r = await fetch('/api' + path, {
+        method: opts.method || 'GET',
+        headers: h,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
       if (r.status === 401) { localStorage.clear(); location.href = '/login'; throw new Error('401'); }
       if (!r.ok) { const e = new Error(`HTTP ${r.status}`); (e as any).status = r.status; throw e; }
       return r.json();
@@ -356,6 +511,26 @@ import App from '../layouts/App.astro';
           }
         });
       });
+
+      body.querySelectorAll('button[data-edit-slug]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const el = btn as HTMLElement;
+          openModal(el.dataset.editSlug, {
+            id: el.dataset.editSid,
+            title: el.dataset.editTitle,
+            date: el.dataset.editDate,
+            location: el.dataset.editLocation,
+            capacity: parseInt(el.dataset.editCapacity ?? '0', 10),
+          });
+        });
+      });
+
+      body.querySelectorAll('button[data-del-slug]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const el = btn as HTMLElement;
+          deleteSession(el.dataset.delSlug!, el.dataset.delSid!);
+        });
+      });
     }
 
     function evCard(s: SI): string {
@@ -382,7 +557,19 @@ import App from '../layouts/App.astro';
             <a href="/admin/courses/sessions/${s.course.slug}/${s.session.id}"
               class="btn btn-secondary btn-sm" style="width:100%;text-align:center;text-decoration:none;display:block;margin-top:6px">
               👥 Voir les inscrits &amp; présences
-            </a>` : ''}
+            </a>
+            <div class="ev-trainer-actions">
+              <button class="btn btn-secondary btn-sm" style="flex:1"
+                data-edit-slug="${s.course.slug}" data-edit-sid="${s.session.id}"
+                data-edit-title="${s.session.title}" data-edit-date="${s.session.date}"
+                data-edit-location="${s.session.location ?? ''}" data-edit-capacity="${s.session.capacity ?? 0}">
+                ✏️ Modifier
+              </button>
+              <button class="btn btn-secondary btn-sm" style="flex:1;color:#dc2626"
+                data-del-slug="${s.course.slug}" data-del-sid="${s.session.id}">
+                🗑️ Supprimer
+              </button>
+            </div>` : ''}
         </div>`;
     }
 
@@ -397,12 +584,19 @@ import App from '../layouts/App.astro';
         const bookings = br.status === 'fulfilled' ? (br.value as any).bookings || [] : [];
 
         booked = new Set(bookings.map((b: any) => `${b.courseSlug}|${b.sessionId}`));
+        inPersonCourses = courses.filter((c: any) => c.inPerson);
 
         for (const c of courses) {
           if (!c.inPerson || !c.sessions?.length) continue;
           for (const s of c.sessions) all.push({ course: c, session: s, date: new Date(s.date) });
         }
         all.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        if (isTrainer) {
+          const btnNew = document.getElementById('btn-new-session')!;
+          btnNew.style.display = '';
+          btnNew.addEventListener('click', () => openModal());
+        }
 
         // Jump to first upcoming session's month
         const first = all.find(s => s.date >= new Date());
@@ -445,6 +639,12 @@ import App from '../layouts/App.astro';
         document.addEventListener('click', (e) => {
           const popup = document.getElementById('mp-popup')!;
           if (!popup.contains(e.target as Node)) closePicker();
+        });
+
+        document.getElementById('modal-cancel')!.addEventListener('click', closeModal);
+        document.getElementById('modal-submit')!.addEventListener('click', submitModal);
+        document.getElementById('session-modal')!.addEventListener('click', (e) => {
+          if (e.target === document.getElementById('session-modal')) closeModal();
         });
       } catch {
         document.getElementById('loading-inline')!.textContent = 'Erreur de chargement.';

@@ -3,48 +3,57 @@ import App from '../layouts/App.astro';
 ---
 <App title="Mes compétences" activePage="skills">
   <style is:global>
-    .ms-page { padding: 28px 40px 80px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+    .ms-page {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 40px 32px 80px;
+    }
+    .ms-inner { max-width: 1200px; margin: 0 auto; }
 
     .ms-header {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       flex-wrap: wrap;
     }
-    .ms-title { font-size: 1.5rem; font-weight: 700; }
+    .ms-title {
+      font-size: 2rem; font-weight: 800;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
 
     .ms-section-title {
-      font-size: .85rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--ink-soft);
-      margin: 28px 0 12px;
+      font-size: .8rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--ink-soft); margin: 28px 0 14px;
+      display: flex; align-items: center; gap: 10px;
     }
+    .ms-section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
 
     .ms-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
     }
 
     .ms-card {
-      border: 1.5px solid var(--line);
-      border-radius: 12px;
-      background: var(--paper);
-      padding: 14px 16px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 16px;
+      background: #ffffffcc;
+      backdrop-filter: blur(8px);
+      padding: 18px 18px 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       text-decoration: none;
       color: inherit;
-      transition: box-shadow .15s, border-color .15s;
+      transition: box-shadow .15s, border-color .15s, transform .15s;
     }
-    .ms-card:hover { box-shadow: 0 4px 16px -4px rgba(30,60,120,.15); border-color: var(--blue); }
-    .ms-card.card-maitre { border-color: #d97706; }
-    .ms-card.card-maitre:hover { box-shadow: 0 4px 16px -4px rgba(217,119,6,.25); border-color: #b45309; }
+    .ms-card:hover { box-shadow: 0 6px 24px rgba(67,97,238,.12); border-color: #a5b4fc; transform: translateY(-2px); }
+    .ms-card.card-maitre { border-color: #fcd34d; background: #fffbebcc; }
+    .ms-card.card-maitre:hover { box-shadow: 0 6px 24px rgba(217,119,6,.18); border-color: #f59e0b; }
 
     .ms-card-skill {
       font-size: .95rem;
@@ -123,28 +132,30 @@ import App from '../layouts/App.astro';
   </style>
 
   <div class="ms-page">
-    <div class="ms-header">
-      <h1 class="ms-title">Mes compétences</h1>
-    </div>
-
-    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
-
-    <div id="ms-content" style="display:none">
-      <div id="ms-acquired-section" style="display:none">
-        <div class="ms-section-title">Acquises</div>
-        <div id="ms-grid" class="ms-grid"></div>
+    <div class="ms-inner">
+      <div class="ms-header">
+        <h1 class="ms-title">Mes compétences</h1>
       </div>
 
-      <div id="ms-inprogress-section" style="display:none">
-        <div class="ms-section-title">En apprentissage</div>
-        <div id="ms-inprogress-grid" class="ms-grid"></div>
-      </div>
+      <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
-      <div id="ms-empty" class="ms-empty" style="display:none">
-        <div class="ms-empty-icon">🎯</div>
-        <h2>Aucune compétence pour l'instant</h2>
-        <p>Commence un cours pour voir tes compétences évoluer.</p>
-        <a href="/courses" class="btn btn-primary">Découvrir le catalogue</a>
+      <div id="ms-content" style="display:none">
+        <div id="ms-acquired-section" style="display:none">
+          <div class="ms-section-title">Acquises</div>
+          <div id="ms-grid" class="ms-grid"></div>
+        </div>
+
+        <div id="ms-inprogress-section" style="display:none">
+          <div class="ms-section-title">En apprentissage</div>
+          <div id="ms-inprogress-grid" class="ms-grid"></div>
+        </div>
+
+        <div id="ms-empty" class="ms-empty" style="display:none">
+          <div class="ms-empty-icon">🎯</div>
+          <h2>Aucune compétence pour l'instant</h2>
+          <p>Commence un cours pour voir tes compétences évoluer.</p>
+          <a href="/courses" class="btn btn-primary">Découvrir le catalogue</a>
+        </div>
       </div>
     </div>
   </div>

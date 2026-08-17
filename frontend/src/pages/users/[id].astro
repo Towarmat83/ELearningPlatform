@@ -4,6 +4,8 @@ import App from '../../layouts/App.astro';
 <App title="Profil">
   <style is:global>
     .up-page { padding: 28px 36px 80px; max-width: 900px; margin: 0 auto; }
+    .up-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; font-size: .85rem; font-weight: 600; color: var(--blue); text-decoration: none; }
+    .up-back:hover { text-decoration: underline; }
 
     .up-header {
       display: flex;
@@ -106,6 +108,7 @@ import App from '../../layouts/App.astro';
   </style>
 
   <div class="up-page">
+    <a href="/leaderboard" class="up-back">← Retour au classement</a>
     <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
     <div id="up-content" style="display:none">
       <div class="up-header">

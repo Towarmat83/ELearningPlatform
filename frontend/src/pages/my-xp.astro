@@ -3,109 +3,149 @@ import App from '../layouts/App.astro';
 ---
 <App title="Mon XP" activePage="xp">
   <style is:global>
-    .xp-page { padding: 28px 36px 80px; max-width: 760px; margin: 0 auto; }
+    .xp-page {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 40px 32px 80px;
+    }
+    .xp-inner { max-width: 800px; margin: 0 auto; }
 
+    .xp-page-title {
+      font-size: 2rem; font-weight: 800; margin-bottom: 4px;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .xp-page-sub { font-size: .9rem; color: var(--ink-soft); margin-bottom: 28px; }
+
+    /* Hero */
     .xp-hero {
-      display: flex;
-      align-items: center;
-      gap: 28px;
-      background: var(--paper);
-      border: 1.5px solid var(--line);
-      border-radius: 16px;
-      padding: 28px 32px;
-      margin-bottom: 28px;
+      display: flex; align-items: center; gap: 28px;
+      background: #ffffffcc; backdrop-filter: blur(8px);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 20px; padding: 28px 32px;
+      margin-bottom: 20px;
     }
-
     .xp-orb {
-      width: 88px; height: 88px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #fef3c7, #fde68a);
-      border: 3px solid #f59e0b44;
+      width: 88px; height: 88px; border-radius: 50%;
+      background: linear-gradient(135deg, #fefce8, #fef08a);
+      border: 3px solid #fcd34d;
       display: flex; align-items: center; justify-content: center;
-      font-size: 2.4rem;
-      flex-shrink: 0;
+      font-size: 2.4rem; flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(251,191,36,.25);
     }
-
-    .xp-total { font-size: 2.6rem; font-weight: 800; color: var(--blue); line-height: 1; }
-    .xp-total-label { font-size: .8rem; color: var(--ink-soft); margin-top: 2px; }
-
+    .xp-total {
+      font-size: 2.8rem; font-weight: 800; line-height: 1;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .xp-total-label { font-size: .82rem; color: var(--ink-soft); margin-top: 2px; }
     .xp-level-chip {
       display: inline-flex; align-items: center; gap: 6px;
-      background: #fef3c7; color: #92400e;
-      border: 1.5px solid #f59e0b55;
-      border-radius: 20px; padding: 4px 14px;
-      font-size: .85rem; font-weight: 600; margin-top: 8px;
+      background: #fef9c3; color: #a16207;
+      border: 1.5px solid #fcd34d; border-radius: 20px;
+      padding: 4px 14px; font-size: .84rem; font-weight: 600; margin-top: 10px;
     }
-
     .xp-progress-bar {
-      height: 8px; background: var(--fill);
-      border-radius: 4px; overflow: hidden; margin-top: 16px;
+      height: 8px; background: #fef3c7;
+      border-radius: 4px; overflow: hidden; margin-top: 14px;
     }
     .xp-progress-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+      background: linear-gradient(90deg, #fbbf24, #f59e0b);
       transition: width .4s ease;
     }
     .xp-next-label { font-size: .75rem; color: var(--ink-soft); margin-top: 6px; }
 
+    /* Level cards */
     .xp-levels {
       display: grid; grid-template-columns: repeat(5, 1fr);
-      gap: 10px; margin-bottom: 28px;
+      gap: 10px; margin-bottom: 24px;
     }
     .xp-level-card {
-      background: var(--paper); border: 1.5px solid var(--line);
-      border-radius: 12px; padding: 14px 10px;
-      text-align: center; transition: border-color .15s;
+      background: #ffffffcc; backdrop-filter: blur(8px);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 14px; padding: 16px 10px;
+      text-align: center; transition: border-color .15s, transform .15s;
     }
     .xp-level-card.current {
-      border-color: #f59e0b; background: #fffbeb;
+      border-color: #fcd34d;
+      background: #fffbeb;
+      box-shadow: 0 4px 16px rgba(251,191,36,.2);
+      transform: translateY(-2px);
     }
-    .xp-level-icon { font-size: 1.6rem; margin-bottom: 4px; }
-    .xp-level-name { font-size: .8rem; font-weight: 600; }
+    .xp-level-icon { font-size: 1.7rem; margin-bottom: 6px; }
+    .xp-level-name { font-size: .8rem; font-weight: 700; }
     .xp-level-thresh { font-size: .72rem; color: var(--ink-soft); margin-top: 2px; }
 
-    .xp-history { }
-    .xp-hist-title { font-size: 1rem; font-weight: 700; margin-bottom: 14px; }
-    .xp-hist-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 0; border-bottom: 1px solid var(--line);
+    /* History */
+    .xp-hist-title {
+      font-size: .8rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--ink-soft); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 10px;
     }
-    .xp-hist-item:last-child { border-bottom: none; }
+    .xp-hist-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+
+    .xp-hist-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 18px;
+      background: #ffffffcc; backdrop-filter: blur(8px);
+      border: 1.5px solid #e2e8f0; border-radius: 14px;
+      margin-bottom: 8px;
+      text-decoration: none; color: inherit;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .xp-hist-item:hover { border-color: #fcd34d; box-shadow: 0 4px 16px rgba(251,191,36,.12); transform: translateX(3px); }
+
     .xp-hist-icon {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: var(--fill); display: flex; align-items: center;
-      justify-content: center; font-size: 1.1rem; flex-shrink: 0;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, #fefce8, #fef08a);
+      border: 1.5px solid #fcd34d44;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; flex-shrink: 0;
     }
     .xp-hist-meta { flex: 1; min-width: 0; }
-    .xp-hist-slug { font-size: .85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .xp-hist-source { font-size: .75rem; color: var(--ink-soft); }
-    .xp-hist-amount { font-size: .95rem; font-weight: 700; color: #f59e0b; white-space: nowrap; }
+    .xp-hist-slug { font-size: .88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .xp-hist-source { font-size: .75rem; color: var(--ink-soft); margin-top: 1px; }
+    .xp-hist-amount {
+      font-size: .95rem; font-weight: 800; white-space: nowrap;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
     .xp-empty { text-align: center; color: var(--ink-soft); padding: 48px 0; font-size: .95rem; }
+
+    @media (max-width: 600px) {
+      .xp-page { padding: 20px 14px 80px; }
+      .xp-levels { grid-template-columns: repeat(3, 1fr); }
+      .xp-hero { flex-direction: column; text-align: center; gap: 16px; }
+    }
   </style>
 
   <div class="xp-page">
-    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+    <div class="xp-inner">
+      <h1 class="xp-page-title">Mon XP</h1>
+      <p class="xp-page-sub" id="xp-sub">Chargement…</p>
 
-    <div id="xp-content" style="display:none">
-      <!-- Hero XP total + level -->
-      <div class="xp-hero">
-        <div class="xp-orb">⚡</div>
-        <div style="flex:1;min-width:0">
-          <div class="xp-total" id="xp-total">0</div>
-          <div class="xp-total-label">points d'expérience</div>
-          <div class="xp-level-chip" id="xp-level-chip">Niveau 1 — Novice</div>
-          <div class="xp-progress-bar">
-            <div class="xp-progress-fill" id="xp-bar" style="width:0%"></div>
+      <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+
+      <div id="xp-content" style="display:none">
+        <div class="xp-hero">
+          <div class="xp-orb">⚡</div>
+          <div style="flex:1;min-width:0">
+            <div class="xp-total" id="xp-total">0</div>
+            <div class="xp-total-label">points d'expérience</div>
+            <div class="xp-level-chip" id="xp-level-chip">Niveau 1 — Novice</div>
+            <div class="xp-progress-bar">
+              <div class="xp-progress-fill" id="xp-bar" style="width:0%"></div>
+            </div>
+            <div class="xp-next-label" id="xp-next-label"></div>
           </div>
-          <div class="xp-next-label" id="xp-next-label"></div>
         </div>
-      </div>
 
-      <!-- Level tiers -->
-      <div class="xp-levels" id="xp-levels"></div>
+        <div class="xp-levels" id="xp-levels"></div>
 
-      <!-- History -->
-      <div class="xp-history">
+        <div id="xp-inprogress"></div>
+
         <div class="xp-hist-title">Historique des gains</div>
         <div id="xp-hist-list"></div>
       </div>
@@ -127,8 +167,10 @@ import App from '../layouts/App.astro';
     const SOURCE_ICONS: Record<string, string> = { lesson: '📖', module: '🎯', course: '🎓' };
     const SOURCE_LABELS: Record<string, string> = { lesson: 'Leçon', module: 'Module', course: 'Cours' };
 
-    async function apiFetch(path: string) {
-      const res = await fetch('/api' + path, { headers: { Authorization: `Bearer ${token}` } });
+    async function apiFetch(path: string, auth = true) {
+      const headers: Record<string,string> = {};
+      if (auth && token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api' + path, { headers });
       if (res.status === 401) { localStorage.clear(); window.location.href = '/login'; throw new Error('Session expirée'); }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -136,7 +178,11 @@ import App from '../layouts/App.astro';
 
     async function init() {
       try {
-        const data = await apiFetch('/my/xp') as any;
+        const [data, coursesData, myCoursesData] = await Promise.all([
+          apiFetch('/my/xp'),
+          apiFetch('/courses', false),
+          apiFetch('/my/courses'),
+        ]) as any[];
 
         document.getElementById('loading')!.style.display = 'none';
         document.getElementById('xp-content')!.style.display = 'block';
@@ -145,13 +191,17 @@ import App from '../layouts/App.astro';
         const level: number = data.level ?? 1;
         const levelName: string = data.levelName ?? 'Novice';
 
-        // Hero
+        // Build course slug → title map
+        const allCourses: any[] = coursesData?.courses ?? [];
+        const courseTitle: Record<string,string> = {};
+        for (const c of allCourses) courseTitle[c.slug] = c.title || c.slug;
+
+        document.getElementById('xp-sub')!.textContent = `${total.toLocaleString('fr-FR')} points accumulés`;
         document.getElementById('xp-total')!.textContent = total.toLocaleString('fr-FR');
         document.getElementById('xp-level-chip')!.textContent = `Niveau ${level} — ${levelName}`;
 
-        // Progress bar toward next level
         const cur = LEVELS[level - 1];
-        const next = LEVELS[level]; // undefined at max level
+        const next = LEVELS[level];
         if (next) {
           const progress = Math.min(100, Math.round(((total - cur.threshold) / (next.threshold - cur.threshold)) * 100));
           (document.getElementById('xp-bar') as HTMLElement).style.width = `${progress}%`;
@@ -162,9 +212,7 @@ import App from '../layouts/App.astro';
           document.getElementById('xp-next-label')!.textContent = 'Niveau maximum atteint 🏆';
         }
 
-        // Level cards
-        const levelsEl = document.getElementById('xp-levels')!;
-        levelsEl.innerHTML = LEVELS.map(l => `
+        document.getElementById('xp-levels')!.innerHTML = LEVELS.map(l => `
           <div class="xp-level-card${l.level === level ? ' current' : ''}">
             <div class="xp-level-icon">${l.icon}</div>
             <div class="xp-level-name">${l.name}</div>
@@ -172,26 +220,53 @@ import App from '../layouts/App.astro';
           </div>
         `).join('');
 
-        // History
-        const histEl = document.getElementById('xp-hist-list')!;
+        // Courses in progress
+        const myCourses: any[] = myCoursesData?.courses ?? [];
+        const completedSlugs = new Set(
+          (data.history ?? []).filter((e: any) => e.amount === 200).map((e: any) => e.sourceSlug?.split('/')[0] ?? '')
+        );
+        const inProgress = myCourses.filter((c: any) => !c.completed && !completedSlugs.has(c.slug));
+
+        if (inProgress.length > 0) {
+          document.getElementById('xp-inprogress')!.innerHTML = `
+            <div class="xp-hist-title" style="margin-bottom:12px">En cours <span style="font-size:.75rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">(${inProgress.length} cours)</span></div>
+            ${inProgress.map((c: any) => {
+              const title = courseTitle[c.slug] || c.title || c.slug.replace(/-/g, ' ');
+              return `
+                <a href="/courses/${c.slug}" class="xp-hist-item" style="border-color:#e2e8f0;margin-bottom:8px">
+                  <div class="xp-hist-icon" style="background:linear-gradient(135deg,#f0f4ff,#e0e7ff);border-color:#c7d2fe44">📖</div>
+                  <div class="xp-hist-meta">
+                    <div class="xp-hist-slug">${title}</div>
+                    <div class="xp-hist-source">En cours · Compléter pour +200 XP</div>
+                  </div>
+                  <div style="font-size:.82rem;font-weight:600;color:#94a3b8;white-space:nowrap">→</div>
+                </a>`;
+            }).join('')}
+          `;
+        }
+
         const history: any[] = data.history ?? [];
         if (history.length === 0) {
-          histEl.innerHTML = '<div class="xp-empty">Aucun XP gagné pour l\'instant.<br>Complète des leçons, modules et cours pour en gagner !</div>';
+          document.getElementById('xp-hist-list')!.innerHTML =
+            '<div class="xp-empty">Aucun XP gagné pour l\'instant.<br>Complète des leçons, modules et cours pour en gagner !</div>';
         } else {
-          histEl.innerHTML = history.map((e: any) => {
+          document.getElementById('xp-hist-list')!.innerHTML = history.map((e: any) => {
             const icon = SOURCE_ICONS[e.source] ?? '⚡';
             const label = SOURCE_LABELS[e.source] ?? e.source;
             const date = new Date(e.earnedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            // Extract course slug (first segment before /)
+            const courseSlug = e.sourceSlug?.split('/')[0] ?? '';
+            const displayTitle = courseTitle[courseSlug] || courseSlug.replace(/-/g, ' ');
+            const href = `/courses/${courseSlug}`;
             return `
-              <div class="xp-hist-item">
+              <a href="${href}" class="xp-hist-item">
                 <div class="xp-hist-icon">${icon}</div>
                 <div class="xp-hist-meta">
-                  <div class="xp-hist-slug">${e.sourceSlug}</div>
+                  <div class="xp-hist-slug">${displayTitle}</div>
                   <div class="xp-hist-source">${label} · ${date}</div>
                 </div>
                 <div class="xp-hist-amount">+${e.amount} XP</div>
-              </div>
-            `;
+              </a>`;
           }).join('');
         }
       } catch {

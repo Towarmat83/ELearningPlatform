@@ -960,7 +960,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return m.Slug() == mod.Slug()
 	})
 
-	s.finalizeSubmission(writer, req, course, mod, fullIdx, questions, passingScore, cooldownSpec, userID, courseSlug, idx) //nolint:contextcheck // fire-and-forget async POST intentionally detached from the request context (see recordModuleProgress)
+	s.finalizeSubmission(writer, req, course, mod, fullIdx, questions, passingScore, cooldownSpec, userID, courseSlug, idx)
 }
 
 // finalizeSubmission decodes a quiz submission body, rejects it if any of
@@ -999,9 +999,10 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 	// Record cooldowns for wrong answers.
 	respCooldowns := s.recordQuestionCooldowns(userID, courseSlug, idx, result.QuestionResults, cooldownSpec, mod.MaxAttemptsPerQuestion, mod.LockOnMaxAttempts)
 
-	s.recordModuleProgress(courseSlug, userID, mod.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed)
+	s.recordModuleProgress(courseSlug, userID, mod.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed) //nolint:contextcheck // fire-and-forget async POST detached from the request context by design
 
-	if result.Passed && isLastMeaningfulModule(course.Modules, fullIdx) {
+	if result.Passed && isLastMeaningfulModule(course.Modules, fullIdx) &&
+		s.allQuizModulesPassed(req.Context(), course, userID, courseSlug, mod.Slug()) {
 		s.notifyCourseComplete(req, userID, courseSlug)
 	}
 
@@ -1093,4 +1094,38 @@ func (s *State) recordQuestionCooldowns(userID, courseSlug string, idx int, resu
 	}
 
 	return respCooldowns
+}
+
+// allQuizModulesPassed returns true when every quiz-bearing module in the
+// course has been passed by userID. currentSlug names the quiz module that
+// just passed in the current request; because recordModuleProgress is
+// fire-and-forget, it may not yet be persisted in the user-service DB, so it
+// is credited without a round-trip. Pass an empty string when calling from a
+// lesson-completion context (no module just passed in the current request).
+func (s *State) allQuizModulesPassed(ctx context.Context, course *content.Course, userID, courseSlug, currentSlug string) bool {
+	var quizSlugs []string
+
+	for _, m := range course.Modules {
+		if m.HasQuestions() {
+			quizSlugs = append(quizSlugs, m.Slug())
+		}
+	}
+
+	if len(quizSlugs) == 0 {
+		return true
+	}
+
+	summary := s.fetchCoursePrereqSummary(ctx, userID, courseSlug)
+
+	for _, slug := range quizSlugs {
+		if slug == currentSlug {
+			continue // just passed in this request, not yet in user-service DB
+		}
+
+		if !summary.PassedModules[slug] {
+			return false
+		}
+	}
+
+	return true
 }

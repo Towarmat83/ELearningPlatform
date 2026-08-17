@@ -3,63 +3,162 @@ import App from '../layouts/App.astro';
 ---
 <App title="Classement" activePage="leaderboard">
   <style is:global>
-    .lb-page { padding: 28px 36px 80px; max-width: 800px; margin: 0 auto; }
-
-    .lb-header {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 28px;
+    /* ── Page shell ───────────────────────────────────────────────────── */
+    .lb-page {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 40px 32px 80px;
     }
-    .lb-title { font-size: 1.5rem; font-weight: 700; }
-    .lb-subtitle { font-size: .85rem; color: var(--ink-soft); }
 
-    .lb-list { display: flex; flex-direction: column; gap: 10px; }
+    .lb-inner { max-width: 1100px; margin: 0 auto; }
+
+    /* ── Header ───────────────────────────────────────────────────────── */
+    .lb-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .lb-title {
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 6px;
+    }
+    .lb-subtitle { font-size: .9rem; color: var(--ink-soft); }
+
+    /* ── Podium top 3 ─────────────────────────────────────────────────── */
+    .lb-podium {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .lb-podium-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: inherit;
+      transition: transform .2s;
+    }
+    .lb-podium-card:hover { transform: translateY(-4px); }
+
+    .lb-podium-card.p-1 { order: 2; }
+    .lb-podium-card.p-2 { order: 1; }
+    .lb-podium-card.p-3 { order: 3; }
+
+    .lb-podium-avatar {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      flex-shrink: 0;
+      overflow: hidden;
+      border: 4px solid transparent;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    }
+    .lb-podium-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .p-1 .lb-podium-avatar {
+      width: 88px; height: 88px; font-size: 1.8rem;
+      border-color: #fcd34d;
+      background: linear-gradient(135deg, #fefce8, #fef08a);
+      color: #a16207;
+    }
+    .p-2 .lb-podium-avatar {
+      width: 72px; height: 72px; font-size: 1.4rem;
+      border-color: #c7d2fe;
+      background: linear-gradient(135deg, #f0f4ff, #e0e7ff);
+      color: #4361ee;
+    }
+    .p-3 .lb-podium-avatar {
+      width: 68px; height: 68px; font-size: 1.3rem;
+      border-color: #fdba74;
+      background: linear-gradient(135deg, #fff7ed, #ffedd5);
+      color: #c2410c;
+    }
+
+    .lb-podium-medal { font-size: 1.8rem; margin: 8px 0 4px; }
+    .p-1 .lb-podium-medal { font-size: 2.2rem; }
+
+    .lb-podium-name {
+      font-weight: 700;
+      font-size: .9rem;
+      text-align: center;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .p-1 .lb-podium-name { font-size: 1rem; }
+
+    .lb-podium-count { font-size: .75rem; color: var(--ink-soft); margin-top: 2px; }
+
+    .lb-podium-block {
+      margin-top: 10px;
+      border-radius: 14px 14px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #fff;
+      width: 90px;
+    }
+    .p-1 .lb-podium-block { height: 80px; background: linear-gradient(180deg, #fde68a, #fcd34d); color: #a16207; }
+    .p-2 .lb-podium-block { height: 56px; background: linear-gradient(180deg, #c7d2fe, #a5b4fc); color: #3730a3; }
+    .p-3 .lb-podium-block { height: 40px; background: linear-gradient(180deg, #fdba74, #fb923c); color: #7c2d12; }
+
+    /* ── Rest of the list ─────────────────────────────────────────────── */
+    .lb-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
 
     .lb-row {
       display: flex;
       align-items: center;
       gap: 16px;
-      padding: 14px 18px;
-      border: 1.5px solid var(--line);
-      border-radius: 14px;
-      background: var(--paper);
+      padding: 14px 20px;
+      border-radius: 16px;
+      background: #ffffffcc;
+      backdrop-filter: blur(8px);
+      border: 1.5px solid #e2e8f0;
       text-decoration: none;
       color: inherit;
-      transition: border-color .15s, box-shadow .15s;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
     }
-    .lb-row:hover { border-color: var(--blue); box-shadow: 0 4px 18px rgba(67,97,238,.08); }
-
-    .lb-row.rank-1 { border-color: #f59e0b44; background: #fffbeb; }
-    .lb-row.rank-1:hover { border-color: #f59e0b; }
-    .lb-row.rank-2 { border-color: #94a3b844; background: #f8fafc; }
-    .lb-row.rank-2:hover { border-color: #64748b; }
-    .lb-row.rank-3 { border-color: #d9770644; background: #fff7ed; }
-    .lb-row.rank-3:hover { border-color: #d97706; }
+    .lb-row:hover {
+      border-color: #4361ee55;
+      box-shadow: 0 4px 20px rgba(67,97,238,.1);
+      transform: translateX(4px);
+    }
 
     .lb-rank {
-      font-size: 1rem;
+      font-size: .9rem;
       font-weight: 700;
-      width: 28px;
-      text-align: right;
+      width: 32px;
+      text-align: center;
       flex-shrink: 0;
       color: var(--ink-soft);
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 4px 0;
     }
-    .lb-row.rank-1 .lb-rank { color: #f59e0b; font-size: 1.2rem; }
-    .lb-row.rank-2 .lb-rank { color: #64748b; }
-    .lb-row.rank-3 .lb-rank { color: #d97706; }
 
     .lb-avatar {
-      width: 44px;
-      height: 44px;
+      width: 44px; height: 44px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--blue-soft), #d6ecfd);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--blue);
+      background: linear-gradient(135deg, #e0e7ff, #ddd6fe);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; font-weight: 700;
+      color: #4361ee;
       flex-shrink: 0;
       overflow: hidden;
     }
@@ -67,113 +166,140 @@ import App from '../layouts/App.astro';
 
     .lb-info { flex: 1; min-width: 0; }
     .lb-username {
-      font-weight: 600;
-      font-size: .95rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-weight: 600; font-size: .95rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .lb-count { font-size: .78rem; color: var(--ink-soft); margin-top: 2px; }
 
     .lb-icons {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      max-width: 220px;
-      font-size: 1.15rem;
-      line-height: 1;
+      display: flex; gap: 4px; flex-wrap: wrap;
+      justify-content: flex-end; max-width: 240px;
+      font-size: 1.15rem; line-height: 1;
     }
 
+    /* ── Divider ──────────────────────────────────────────────────────── */
+    .lb-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px; color: var(--ink-soft); font-size: .8rem;
+    }
+    .lb-divider::before, .lb-divider::after {
+      content: ''; flex: 1; height: 1px; background: #e2e8f0;
+    }
+
+    /* ── Empty ────────────────────────────────────────────────────────── */
     .lb-empty {
-      text-align: center;
-      padding: 80px 24px;
-      color: var(--ink-soft);
+      text-align: center; padding: 80px 24px; color: var(--ink-soft);
     }
     .lb-empty-icon { font-size: 3rem; margin-bottom: 12px; }
 
     @media (max-width: 600px) {
       .lb-page { padding: 20px 14px 80px; }
       .lb-icons { display: none; }
+      .lb-podium { gap: 8px; }
+      .lb-podium-block { width: 70px; }
     }
   </style>
 
   <div class="lb-page">
-    <div class="lb-header">
-      <h1 class="lb-title">Classement</h1>
-      <span class="lb-subtitle">badges obtenus</span>
-    </div>
+    <div class="lb-inner">
+      <div class="lb-header">
+        <h1 class="lb-title">Classement</h1>
+        <p class="lb-subtitle">badges obtenus</p>
+      </div>
 
-    <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+      <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
-    <div id="lb-list" class="lb-list" style="display:none"></div>
+      <div id="lb-podium" class="lb-podium" style="display:none"></div>
 
-    <div id="lb-empty" class="lb-empty" style="display:none">
-      <div class="lb-empty-icon">🏅</div>
-      <p>Aucun badge décerné pour l'instant.</p>
+      <div id="lb-divider" class="lb-divider" style="display:none">Autres participants</div>
+
+      <div id="lb-list" class="lb-list" style="display:none"></div>
+
+      <div id="lb-empty" class="lb-empty" style="display:none">
+        <div class="lb-empty-icon">🏅</div>
+        <p>Aucun badge décerné pour l'instant.</p>
+      </div>
     </div>
   </div>
 
   <script>
-    function rankClass(rank: number) {
-      if (rank === 1) return 'rank-1';
-      if (rank === 2) return 'rank-2';
-      if (rank === 3) return 'rank-3';
-      return '';
-    }
-
-    function rankLabel(rank: number) {
+    function medal(rank: number) {
       if (rank === 1) return '🥇';
       if (rank === 2) return '🥈';
       if (rank === 3) return '🥉';
       return `#${rank}`;
     }
 
-    function avatarHtml(entry: any) {
+    function avatarContent(entry: any, size: 'small' | 'large') {
       const initial = (entry.username || '?')[0].toUpperCase();
-      if (!entry.avatarUrl) return `<div class="lb-avatar">${initial}</div>`;
+      if (!entry.avatarUrl) return initial;
       const isUrl = entry.avatarUrl.startsWith('http://') || entry.avatarUrl.startsWith('https://');
-      if (isUrl) {
-        return `<div class="lb-avatar"><img src="${entry.avatarUrl}" alt="${entry.username}" /></div>`;
-      }
-      return `<div class="lb-avatar" style="font-size:1.4rem">${entry.avatarUrl}</div>`;
+      if (isUrl) return `<img src="${entry.avatarUrl}" alt="${entry.username}" />`;
+      return entry.avatarUrl;
+    }
+
+    function podiumCard(e: any) {
+      const icons: string[] = (e.icons || []).slice(0, 5).join(' ');
+      return `
+        <a href="/users/${e.userId}" class="lb-podium-card p-${e.rank}">
+          <div class="lb-podium-avatar">${avatarContent(e, 'large')}</div>
+          <div class="lb-podium-medal">${medal(e.rank)}</div>
+          <div class="lb-podium-name">${e.username}</div>
+          <div class="lb-podium-count">${e.count} badge${e.count > 1 ? 's' : ''}</div>
+          <div class="lb-podium-block">${e.rank}</div>
+        </a>
+      `;
+    }
+
+    function listRow(e: any) {
+      const icons: string[] = e.icons || [];
+      const displayIcons = icons.slice(0, 10).join(' ');
+      const extra = icons.length > 10
+        ? `<span style="font-size:.75rem;color:var(--ink-soft)">+${icons.length - 10}</span>`
+        : '';
+      const initial = (e.username || '?')[0].toUpperCase();
+      const avatarHtml = e.avatarUrl
+        ? (e.avatarUrl.startsWith('http') ? `<img src="${e.avatarUrl}" alt="${e.username}" />` : e.avatarUrl)
+        : initial;
+      return `
+        <a href="/users/${e.userId}" class="lb-row">
+          <div class="lb-rank">#${e.rank}</div>
+          <div class="lb-avatar">${avatarHtml}</div>
+          <div class="lb-info">
+            <div class="lb-username">${e.username}</div>
+            <div class="lb-count">${e.count} badge${e.count > 1 ? 's' : ''}</div>
+          </div>
+          <div class="lb-icons">${displayIcons}${extra}</div>
+        </a>
+      `;
     }
 
     async function init() {
       const res = await fetch('/api/leaderboard');
       document.getElementById('loading')!.style.display = 'none';
 
-      if (!res.ok) {
-        document.getElementById('lb-empty')!.style.display = '';
-        return;
-      }
+      if (!res.ok) { document.getElementById('lb-empty')!.style.display = ''; return; }
 
       const data = await res.json() as any;
       const entries: any[] = data.leaderboard || [];
 
-      if (entries.length === 0) {
-        document.getElementById('lb-empty')!.style.display = '';
-        return;
+      if (entries.length === 0) { document.getElementById('lb-empty')!.style.display = ''; return; }
+
+      const top3 = entries.filter((e: any) => e.rank <= 3);
+      const rest = entries.filter((e: any) => e.rank > 3);
+
+      if (top3.length > 0) {
+        const podium = document.getElementById('lb-podium')!;
+        podium.style.display = 'flex';
+        podium.innerHTML = top3.map(podiumCard).join('');
       }
 
-      const list = document.getElementById('lb-list')!;
-      list.style.display = 'flex';
-      list.innerHTML = entries.map((e: any) => {
-        const icons: string[] = e.icons || [];
-        const displayIcons = icons.slice(0, 10).join(' ');
-        const extra = icons.length > 10 ? `<span style="font-size:.75rem;color:var(--ink-soft)">+${icons.length - 10}</span>` : '';
-        return `
-          <a href="/users/${e.userId}" class="lb-row ${rankClass(e.rank)}">
-            <div class="lb-rank">${rankLabel(e.rank)}</div>
-            ${avatarHtml(e)}
-            <div class="lb-info">
-              <div class="lb-username">${e.username}</div>
-              <div class="lb-count">${e.count} badge${e.count > 1 ? 's' : ''}</div>
-            </div>
-            <div class="lb-icons">${displayIcons}${extra}</div>
-          </a>
-        `;
-      }).join('');
+      if (rest.length > 0) {
+        document.getElementById('lb-divider')!.style.display = 'flex';
+        const list = document.getElementById('lb-list')!;
+        list.style.display = 'flex';
+        list.innerHTML = rest.map(listRow).join('');
+      }
     }
 
     init();

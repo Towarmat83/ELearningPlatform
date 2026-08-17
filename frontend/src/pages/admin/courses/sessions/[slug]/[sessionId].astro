@@ -1,9 +1,14 @@
 ---
-import Admin from '../../../../../layouts/Admin.astro';
+import App from '../../../../../layouts/App.astro';
 ---
-<Admin title="Participants — Session" activePage="courses" allowedRoles={['admin', 'manager']}>
+<App title="Participants — Session">
   <style is:global>
-    .presence-wrap { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+    .presence-outer {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 40px 32px 80px;
+    }
+    .presence-wrap { max-width: 1400px; margin: 0 auto; }
     .presence-back { font-size:.85rem; color:var(--ink-soft); text-decoration:none; display:inline-flex; align-items:center; gap:6px; margin-bottom:20px; }
     .presence-back:hover { color:var(--ink); }
     .presence-title { font-size:1.4rem; font-weight:700; margin-bottom:4px; }
@@ -25,11 +30,10 @@ import Admin from '../../../../../layouts/Admin.astro';
     .presence-table tr:last-child td { border-bottom:none; }
     .presence-table tr:hover td { background:var(--fill); }
     .presence-cb { width:20px; height:20px; accent-color:var(--blue); cursor:pointer; }
-    .badge-present { background:#f0fdf4; color:#16a34a; border:1px solid #86efac; border-radius:6px; padding:2px 10px; font-size:.75rem; font-weight:700; }
-    .badge-absent { background:#fef2f2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; padding:2px 10px; font-size:.75rem; font-weight:700; }
     .no-participants { text-align:center; padding:60px 20px; color:var(--ink-soft); }
   </style>
 
+  <div class="presence-outer">
   <div class="presence-wrap">
     <a href="/agenda" class="presence-back">← Retour à l'agenda</a>
     <div class="presence-title" id="page-title">Chargement…</div>
@@ -53,17 +57,24 @@ import Admin from '../../../../../layouts/Admin.astro';
       Aucun participant inscrit pour cette session.
     </div>
   </div>
+  </div>
 
   <script>
     const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    if (!token) {
+      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+    } else if (user.role !== 'admin' && user.role !== 'manager') {
+      window.location.href = '/agenda';
+    }
+
     const pathParts = window.location.pathname.split('/');
     // /admin/courses/sessions/{slug}/{sessionId}
     const sessionId = pathParts[pathParts.length - 1];
     const slug = pathParts[pathParts.length - 2];
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const isManager = user.role === 'manager';
-    const apiBase = isManager ? '/api/manager' : '/api/admin';
+    const apiBase = user.role === 'manager' ? '/api/manager' : '/api/admin';
 
     async function apiFetch(path: string, opts: { method?: string; body?: any } = {}) {
       const h: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -130,18 +141,18 @@ import Admin from '../../../../../layouts/Admin.astro';
 
     async function init() {
       try {
-        // Fetch course info for title
         const [courseResp, partResp] = await Promise.all([
           fetch(`/api/courses/${slug}`).then(r => r.json()).catch(() => null),
           apiFetch(`${apiBase}/courses/${slug}/sessions/${sessionId}/bookings`),
         ]);
 
-        const course = courseResp?.course;
-        const session = course?.sessions?.find((s: any) => s.id === sessionId);
+        // /api/courses/{slug} returns the course directly (no .course wrapper)
+        const session = courseResp?.sessions?.find((s: any) => s.id === sessionId);
 
-        document.getElementById('page-title')!.textContent = session?.title ?? `Session ${sessionId}`;
-        document.getElementById('page-sub')!.textContent = course?.title
-          ? `${course.title}${session?.date ? ' · ' + new Date(session.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`
+        document.getElementById('page-title')!.textContent =
+          session?.title ? `Session — ${session.title}` : `Session ${sessionId}`;
+        document.getElementById('page-sub')!.textContent = courseResp?.title
+          ? `${courseResp.title}${session?.date ? ' · ' + new Date(session.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`
           : slug;
 
         participants = partResp.participants ?? [];
@@ -153,11 +164,11 @@ import Admin from '../../../../../layouts/Admin.astro';
           renderTable();
         }
         renderStats();
-      } catch (e) {
+      } catch {
         document.getElementById('page-title')!.textContent = 'Erreur de chargement';
       }
     }
 
     init();
   </script>
-</Admin>
+</App>

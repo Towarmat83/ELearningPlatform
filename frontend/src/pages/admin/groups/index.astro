@@ -126,7 +126,7 @@ import Admin from '../../../layouts/Admin.astro';
               <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
               <div style="font-size:.75rem;color:var(--ink-soft)">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">${g.source}</span></div>
             </div>
-            ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : g.mappedRole === 'manager' ? 'badge-orange' : 'badge-blue'}">${g.mappedRole}</span>` : '<span class="badge badge-gray">Non mappé</span>'}
+            ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : g.mappedRole === 'manager' ? 'badge-orange' : 'badge-blue'}">${g.mappedRole}</span>` : g.source !== 'local' ? '<span class="badge badge-gray">Non mappé</span>' : ''}
             <button class="btn btn-secondary btn-sm members-btn" data-id="${g.id}" data-name="${g.name}">Membres</button>
             ${g.source === 'local' && g.name !== 'everyone' ? `<button class="btn btn-sm del-group-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${g.id}" data-name="${g.name}">✕</button>` : ''}
           </div>

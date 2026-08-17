@@ -59,10 +59,8 @@ const { slug } = Astro.params;
     <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
     <div id="skill-content" style="display:none">
-      <div style="margin-bottom:20px">
-        <div class="skill-chip">🎯 <span id="skill-name"></span></div>
-        <div class="skill-prog" id="skill-prog" style="display:none"></div>
-      </div>
+      <div id="skill-name" style="display:none"></div>
+      <div class="skill-prog" id="skill-prog" style="display:none;margin-bottom:20px"></div>
 
       <div class="section-title" id="courses-section-title"></div>
       <div class="section-sub" id="courses-section-sub"></div>

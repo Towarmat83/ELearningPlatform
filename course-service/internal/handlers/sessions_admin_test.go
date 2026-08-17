@@ -44,9 +44,9 @@ func TestGenerateSessionID(t *testing.T) {
 		t.Errorf("expected id to start with sess-, got %q", id)
 	}
 
-	// "sess-" (5) + 8 hex chars = 13 total
-	if len(id) != 13 {
-		t.Errorf("expected length 13, got %d (%q)", len(id), id)
+	// "sess-" (5) + 16 hex chars (8 bytes) = 21 total
+	if len(id) != 21 {
+		t.Errorf("expected length 21, got %d (%q)", len(id), id)
 	}
 
 	hex := id[5:]
@@ -75,6 +75,28 @@ func TestGenerateSessionID_Unique(t *testing.T) {
 
 	if first == second {
 		t.Errorf("expected unique IDs, got %q twice", first)
+	}
+}
+
+// TestGenerateUniqueSessionID_NoCollision verifies that the returned ID does
+// not collide with any session already in the list.
+func TestGenerateUniqueSessionID_NoCollision(t *testing.T) {
+	t.Parallel()
+
+	existing := []coursev1.CourseSession{
+		{ID: "sess-aaaa"},
+		{ID: "sess-bbbb"},
+	}
+
+	id, err := generateUniqueSessionID(existing)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, s := range existing {
+		if id == s.ID {
+			t.Errorf("generated ID %q collides with existing session", id)
+		}
 	}
 }
 

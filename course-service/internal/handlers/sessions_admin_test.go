@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
 	"github.com/genesary/pupitre/course-service/internal/config"
 	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
 )
@@ -75,103 +74,6 @@ func TestGenerateSessionID_Unique(t *testing.T) {
 
 	if first == second {
 		t.Errorf("expected unique IDs, got %q twice", first)
-	}
-}
-
-// TestGenerateUniqueSessionID_NoCollision verifies that the returned ID does
-// not collide with any session already in the list.
-func TestGenerateUniqueSessionID_NoCollision(t *testing.T) {
-	t.Parallel()
-
-	existing := []coursev1.CourseSession{
-		{ID: "sess-aaaa"},
-		{ID: "sess-bbbb"},
-	}
-
-	id, err := generateUniqueSessionID(existing)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	for _, s := range existing {
-		if id == s.ID {
-			t.Errorf("generated ID %q collides with existing session", id)
-		}
-	}
-}
-
-// ── applySessionUpdate ────────────────────────────────────────────────────────
-
-// TestApplySessionUpdate_Found verifies that the matching session is updated.
-func TestApplySessionUpdate_Found(t *testing.T) {
-	t.Parallel()
-
-	sessions := []coursev1.CourseSession{
-		{ID: "sess-aaa", Title: "Old Title", Date: "2026-09-01T10:00:00Z", Location: "Room A", Capacity: 10},
-		{ID: "sess-bbb", Title: "Other", Date: "2026-10-01T10:00:00Z", Location: "Room B", Capacity: 5},
-	}
-
-	body := sessionBody{Title: "New Title", Date: "2026-09-15T09:00:00Z", Location: "Room C", Capacity: 20}
-
-	updated, found := applySessionUpdate(sessions, "sess-aaa", body)
-
-	if !found {
-		t.Fatal("expected found=true")
-	}
-
-	if updated[0].Title != "New Title" {
-		t.Errorf("expected title=New Title, got %q", updated[0].Title)
-	}
-
-	if updated[0].Location != "Room C" {
-		t.Errorf("expected location=Room C, got %q", updated[0].Location)
-	}
-
-	if updated[0].Capacity != 20 {
-		t.Errorf("expected capacity=20, got %d", updated[0].Capacity)
-	}
-}
-
-// TestApplySessionUpdate_NotFound verifies that a missing ID returns
-// found=false.
-func TestApplySessionUpdate_NotFound(t *testing.T) {
-	t.Parallel()
-
-	sessions := []coursev1.CourseSession{
-		{ID: "sess-aaa", Title: "Existing"},
-	}
-
-	_, found := applySessionUpdate(sessions, "sess-zzz", sessionBody{Title: "X", Date: "2026-01-01T00:00:00Z"})
-
-	if found {
-		t.Error("expected found=false for unknown session ID")
-	}
-}
-
-// TestApplySessionUpdate_PreservesOthers verifies that non-matching sessions
-// are not modified.
-func TestApplySessionUpdate_PreservesOthers(t *testing.T) {
-	t.Parallel()
-
-	sessions := []coursev1.CourseSession{
-		{ID: "sess-aaa", Title: "Keep Me"},
-		{ID: "sess-bbb", Title: "Update Me"},
-	}
-
-	body := sessionBody{Title: "Updated", Date: "2026-09-01T10:00:00Z", Location: "X", Capacity: 1}
-
-	updated, found := applySessionUpdate(sessions, "sess-bbb", body)
-
-	if !found {
-		t.Fatal("expected found=true")
-	}
-
-	if updated[0].Title != "Keep Me" {
-		t.Errorf("expected first session unchanged, got %q", updated[0].Title)
-	}
-
-	if updated[1].Title != "Updated" {
-		t.Errorf("expected second session updated, got %q", updated[1].Title)
 	}
 }
 

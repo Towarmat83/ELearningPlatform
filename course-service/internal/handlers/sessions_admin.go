@@ -19,8 +19,7 @@ const (
 	// 8 bytes = 16 hex chars; collision probability is negligible even at scale.
 	sessionIDBytes = 8
 
-	// sessionMaxRetry caps both unique-ID regeneration attempts and k8s
-	// optimistic-lock retries (conflict on concurrent writes).
+	// sessionMaxRetry caps K8s optimistic-lock conflict retries.
 	sessionMaxRetry = 5
 )
 
@@ -44,33 +43,6 @@ func generateSessionID() (string, error) {
 	return "sess-" + hex.EncodeToString(buf), nil
 }
 
-// generateUniqueSessionID returns a session ID that does not collide with any
-// ID already present in sessions. It retries up to sessionMaxRetry times.
-func generateUniqueSessionID(sessions []coursev1.CourseSession) (string, error) {
-	for range sessionMaxRetry {
-		sessionID, err := generateSessionID()
-		if err != nil {
-			return "", err
-		}
-
-		collision := false
-
-		for _, s := range sessions {
-			if s.ID == sessionID {
-				collision = true
-
-				break
-			}
-		}
-
-		if !collision {
-			return sessionID, nil
-		}
-	}
-
-	return "", fmt.Errorf("generate session id: no unique id found in %d attempts", sessionMaxRetry)
-}
-
 // CreateSession godoc
 // @Summary  Add a session to a course (admin or manager)
 // @Tags     Admin - Sessions
@@ -81,8 +53,8 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 
 	var body sessionBody
 
-	err := decode(req, &body)
-	if err != nil {
+	decodeErr := decode(req, &body)
+	if decodeErr != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
 
 		return
@@ -102,13 +74,21 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 		return
 	}
 
+	// Generate the ID once before the retry loop so that a conflict retry
+	// sets the same map key — idempotent even if the first update reached K8s
+	// but the response was lost in transit.
+	sessionID, err := generateSessionID()
+	if err != nil {
+		zap.L().Error("generate session id failed", zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Failed to generate session ID")
+
+		return
+	}
+
 	ctx := req.Context()
 	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
 
-	var (
-		newSessionID string
-		updateErr    error
-	)
+	var updateErr error
 
 	for range sessionMaxRetry {
 		var course coursev1.Course
@@ -120,25 +100,19 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 			return
 		}
 
-		generatedID, genErr := generateUniqueSessionID(course.Spec.Sessions)
-		if genErr != nil {
-			s.Error(writer, http.StatusInternalServerError, "Failed to generate session ID")
-
-			return
+		if course.Spec.Sessions == nil {
+			course.Spec.Sessions = make(map[string]coursev1.CourseSession)
 		}
 
-		course.Spec.Sessions = append(course.Spec.Sessions, coursev1.CourseSession{
-			ID:       generatedID,
+		course.Spec.Sessions[sessionID] = coursev1.CourseSession{
 			Title:    body.Title,
 			Date:     body.Date,
 			Location: body.Location,
 			Capacity: body.Capacity,
-		})
+		}
 
 		updateErr = kubeClient.Update(ctx, &course)
 		if updateErr == nil {
-			newSessionID = generatedID
-
 			break
 		}
 
@@ -157,26 +131,7 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 		return
 	}
 
-	s.JSON(writer, http.StatusCreated, map[string]string{"id": newSessionID})
-}
-
-// applySessionUpdate replaces the session matching sessionID with body fields.
-// Returns the updated slice and false if no matching session was found.
-func applySessionUpdate(sessions []coursev1.CourseSession, sessionID string, body sessionBody) ([]coursev1.CourseSession, bool) {
-	for idx := range sessions {
-		if sessions[idx].ID != sessionID {
-			continue
-		}
-
-		sessions[idx].Title = body.Title
-		sessions[idx].Date = body.Date
-		sessions[idx].Location = body.Location
-		sessions[idx].Capacity = body.Capacity
-
-		return sessions, true
-	}
-
-	return sessions, false
+	s.JSON(writer, http.StatusCreated, map[string]string{"id": sessionID})
 }
 
 // UpdateSession godoc
@@ -190,8 +145,8 @@ func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) { /
 
 	var body sessionBody
 
-	err := decode(req, &body)
-	if err != nil {
+	decodeErr := decode(req, &body)
+	if decodeErr != nil {
 		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
 
 		return
@@ -220,14 +175,18 @@ func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) { /
 			return
 		}
 
-		updated, found := applySessionUpdate(course.Spec.Sessions, sessionID, body)
-		if !found {
+		if _, ok := course.Spec.Sessions[sessionID]; !ok {
 			s.Error(writer, http.StatusNotFound, "Session not found")
 
 			return
 		}
 
-		course.Spec.Sessions = updated
+		course.Spec.Sessions[sessionID] = coursev1.CourseSession{
+			Title:    body.Title,
+			Date:     body.Date,
+			Location: body.Location,
+			Capacity: body.Capacity,
+		}
 
 		updateErr = kubeClient.Update(ctx, &course)
 		if updateErr == nil {
@@ -257,7 +216,7 @@ func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) { /
 // @Tags     Admin - Sessions
 // @Security BearerAuth
 // @Router   /api/admin/courses/{slug}/sessions/{sessionId} [delete].
-func (s *State) DeleteSession(writer http.ResponseWriter, req *http.Request) { //nolint:funlen // retry loop requires multiple guard clauses
+func (s *State) DeleteSession(writer http.ResponseWriter, req *http.Request) {
 	slug := chi.URLParam(req, "slug")
 	sessionID := chi.URLParam(req, "sessionId")
 
@@ -284,21 +243,13 @@ func (s *State) DeleteSession(writer http.ResponseWriter, req *http.Request) { /
 			return
 		}
 
-		filtered := make([]coursev1.CourseSession, 0, len(course.Spec.Sessions))
-
-		for _, sess := range course.Spec.Sessions {
-			if sess.ID != sessionID {
-				filtered = append(filtered, sess)
-			}
-		}
-
-		if len(filtered) == len(course.Spec.Sessions) {
+		if _, ok := course.Spec.Sessions[sessionID]; !ok {
 			s.Error(writer, http.StatusNotFound, "Session not found")
 
 			return
 		}
 
-		course.Spec.Sessions = filtered
+		delete(course.Spec.Sessions, sessionID)
 
 		updateErr = kubeClient.Update(ctx, &course)
 		if updateErr == nil {

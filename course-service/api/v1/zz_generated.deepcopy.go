@@ -190,8 +190,10 @@ func (in *CourseSpec) DeepCopyInto(out *CourseSpec) {
 	}
 	if in.Sessions != nil {
 		in, out := &in.Sessions, &out.Sessions
-		*out = make([]CourseSession, len(*in))
-		copy(*out, *in)
+		*out = make(map[string]CourseSession, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 }
 

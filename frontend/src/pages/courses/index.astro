@@ -3,11 +3,12 @@ import App from '../../layouts/App.astro';
 ---
 <App title="Catalogue" activePage="catalogue">
   <style is:global>
-    .cat-page {
-      min-height: calc(100vh - 56px);
+    .cat-outer {
+      min-height: calc(100vh - 64px);
       background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 28px 26px 80px;
+      padding: 40px 32px 80px;
     }
+    .cat-page { max-width: 1400px; margin: 0 auto; }
     .cat-page-title {
       font-size: 2rem; font-weight: 800; margin-bottom: 20px;
       background: linear-gradient(135deg, #4361ee, #7c3aed);
@@ -199,6 +200,7 @@ import App from '../../layouts/App.astro';
     }
   </style>
 
+  <div class="cat-outer">
   <div class="cat-page">
 
     <h1 class="cat-page-title">Catalogue</h1>
@@ -248,6 +250,7 @@ import App from '../../layouts/App.astro';
       <!-- Courses grid -->
       <div id="groups-container"></div>
     </div>
+  </div>
   </div>
 
   <script>
@@ -310,9 +313,9 @@ import App from '../../layouts/App.astro';
       linux:            { label: 'Linux',           icon: '🐧' },
       devops:           { label: 'DevOps',           icon: '⚙️'  },
       kubernetes:       { label: 'Kubernetes',       icon: '☸️'  },
-      docker:           { label: 'Docker',           icon: '🐳' },
+      docker:           { label: 'Docker',           icon: '🐋' },
       networking:       { label: 'Réseaux',          icon: '🌐' },
-      security:         { label: 'Sécurité',         icon: '🔒' },
+      security:         { label: 'Sécurité',         icon: '🛡️' },
       programming:      { label: 'Programmation',    icon: '💻' },
       python:           { label: 'Python',           icon: '🐍' },
       git:              { label: 'Git',              icon: '🔀' },
@@ -325,7 +328,26 @@ import App from '../../layouts/App.astro';
       return CAT_META[slug]?.label ?? slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, ' ');
     }
     function getCatIcon(slug: string): string {
-      return CAT_META[slug]?.icon ?? '📚';
+      return CAT_META[slug]?.icon ?? '📖';
+    }
+
+    function courseThumbIcon(c: any): string {
+      if (c.thumbnail) return '';
+      const tags = [c.category || '', ...(c.skills || [])].join(' ').toLowerCase();
+      if (/pentest|hack|exploit|cyber|vuln|ctf/.test(tags))      return '🔐';
+      if (/security|sécurité|secure/.test(tags))                  return '🛡️';
+      if (/linux|unix|bash|shell/.test(tags))                     return '🐧';
+      if (/git|gitlab|github|ci.?cd|devops|pipeline/.test(tags)) return '⚙️';
+      if (/docker|container|podman/.test(tags))                   return '🐋';
+      if (/kubernetes|k8s|helm/.test(tags))                       return '☸️';
+      if (/python/.test(tags))                                    return '🐍';
+      if (/network|réseau|tcp|ip|wifi/.test(tags))               return '🌐';
+      if (/cloud|aws|azure|gcp/.test(tags))                       return '☁️';
+      if (/database|sql|postgres|mysql/.test(tags))               return '🗄️';
+      if (/web|http|html|css|frontend/.test(tags))                return '🌍';
+      if (/javascript|typescript|node/.test(tags))                return '📦';
+      if (/go|golang/.test(tags))                                  return '🦫';
+      return getCatIcon(c.category || '');
     }
 
     // ── Color palette per category group ──────────────────────────────
@@ -367,7 +389,7 @@ import App from '../../layouts/App.astro';
         : '';
       const thumbContent = c.thumbnail
         ? `<img src="${c.thumbnail}" alt="${c.title}" />`
-        : `<span style="font-size:2rem">${getCatIcon(c.category || '')}</span>`;
+        : `<span style="font-size:2rem">${courseThumbIcon(c)}</span>`;
       const catLabel = getCatLabel(c.category || '');
       const catIcon  = getCatIcon(c.category || '');
 
@@ -388,7 +410,7 @@ import App from '../../layouts/App.astro';
 
     // ── Render continue hero ───────────────────────────────────────────
     function renderContinueHero(course: any): string {
-      const thumb = course.thumbnail ? `<img src="${course.thumbnail}" alt="${course.title}" />` : '📖';
+      const thumb = course.thumbnail ? `<img src="${course.thumbnail}" alt="${course.title}" />` : courseThumbIcon(course);
       const labsDone = course.completedLabs ?? 0;
       const labsTotal = course.labCount ?? 0;
       const pct = labsTotal > 0 ? Math.round(labsDone / labsTotal * 100) : 0;

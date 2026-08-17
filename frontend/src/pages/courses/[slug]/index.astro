@@ -3,23 +3,28 @@ import App from '../../../layouts/App.astro';
 ---
 <App title="Cours" activePage="catalogue">
   <style is:global>
+    .course-outer {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+    }
     .course-page {
       display: grid;
       grid-template-columns: 330px 1fr;
       gap: 0;
-      min-height: calc(100vh - 56px);
       align-items: flex-start;
     }
     .course-sidebar {
       position: sticky;
-      top: 56px;
-      height: calc(100vh - 56px);
+      top: 64px;
+      height: calc(100vh - 64px);
       overflow-y: auto;
-      border-right: 1px solid var(--line);
+      border-right: 1px solid #e2e8f0;
       padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 16px;
+      background: rgba(255,255,255,0.75);
+      backdrop-filter: blur(12px);
     }
     .course-thumb {
       width: 100%;
@@ -49,15 +54,16 @@ import App from '../../../layouts/App.astro';
       align-items: center;
       gap: 14px;
       padding: 14px 18px;
-      border: 1.5px solid var(--line);
+      border: 1.5px solid #e2e8f0;
       border-radius: 12px;
-      background: var(--paper);
+      background: #ffffffcc;
+      backdrop-filter: blur(8px);
       text-decoration: none;
       color: inherit;
-      transition: border-color .15s, background .15s;
+      transition: border-color .15s, background .15s, box-shadow .15s;
       margin-bottom: 8px;
     }
-    .mod-row:hover { border-color: var(--blue); background: var(--blue-soft); }
+    .mod-row:hover { border-color: #a5b4fc; background: #ffffffee; box-shadow: 0 4px 16px rgba(67,97,238,.1); }
     .mod-row.current { border-color: var(--blue); background: var(--blue-soft); }
     .mod-row.locked { opacity: .5; pointer-events: none; }
     .mod-icon {
@@ -73,6 +79,8 @@ import App from '../../../layouts/App.astro';
     .mod-name { flex: 1; font-weight: 500; font-size: .9rem; }
     .mod-badges { display: flex; gap: 5px; flex-wrap: wrap; }
 
+    .course-main { padding: 28px; }
+
     /* ── Responsive ── */
     @media (max-width: 900px) {
       .course-page { grid-template-columns: 280px 1fr; }
@@ -83,7 +91,7 @@ import App from '../../../layouts/App.astro';
         position: static;
         height: auto;
         border-right: none;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid #e2e8f0;
         overflow-y: visible;
         padding: 20px 16px;
         gap: 12px;
@@ -93,6 +101,7 @@ import App from '../../../layouts/App.astro';
     }
   </style>
 
+  <div class="course-outer">
   <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
   <div id="not-found" style="display:none;text-align:center;padding:80px 24px">
@@ -104,7 +113,7 @@ import App from '../../../layouts/App.astro';
   <div id="course-content" class="course-page" style="display:none">
     <!-- Left sticky sidebar -->
     <aside class="course-sidebar">
-      <div class="course-thumb" id="thumb-area">📚</div>
+      <div class="course-thumb" id="thumb-area"></div>
       <h1 id="course-title" style="font-size:1.1rem;font-weight:700;line-height:1.35"></h1>
       <div id="course-tags" class="course-tags"></div>
       <p id="course-desc" class="text-soft text-sm" style="line-height:1.6;font-size:.85rem"></p>
@@ -115,7 +124,6 @@ import App from '../../../layouts/App.astro';
 
     <!-- Right: module list -->
     <div class="course-main">
-
       <div class="course-main-header">
         <h2 style="font-size:1rem;font-weight:700">Contenu du cours</h2>
         <span id="module-count" class="text-soft text-sm"></span>
@@ -142,10 +150,29 @@ import App from '../../../layouts/App.astro';
 
     </div>
   </div>
+  </div>
 
   <script>
     const slug = window.location.pathname.split('/').filter(Boolean)[1];
     const token = localStorage.getItem('token');
+
+    function defaultThumbIcon(course: any): string {
+      const tags = [course.category || '', ...(course.skills || [])].join(' ').toLowerCase();
+      if (/pentest|hack|exploit|cyber|vuln|ctf/.test(tags))      return '🔐';
+      if (/security|sécurité|secure/.test(tags))                  return '🛡️';
+      if (/linux|unix|bash|shell/.test(tags))                     return '🐧';
+      if (/git|gitlab|github|ci.?cd|devops|pipeline/.test(tags)) return '⚙️';
+      if (/docker|container|podman/.test(tags))                   return '🐋';
+      if (/kubernetes|k8s|helm/.test(tags))                       return '☸️';
+      if (/python/.test(tags))                                    return '🐍';
+      if (/network|réseau|tcp|ip|wifi/.test(tags))               return '🌐';
+      if (/cloud|aws|azure|gcp/.test(tags))                       return '☁️';
+      if (/database|sql|postgres|mysql/.test(tags))               return '🗄️';
+      if (/web|http|html|css|frontend/.test(tags))                return '🌍';
+      if (/javascript|typescript|node/.test(tags))                return '📦';
+      if (/go|golang/.test(tags))                                  return '🦫';
+      return '📖';
+    }
 
     async function apiFetch(path: string, opts: { method?: string; body?: unknown; token?: string } = {}) {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -235,6 +262,8 @@ import App from '../../../layouts/App.astro';
         const thumbArea = document.getElementById('thumb-area')!;
         if (course.thumbnail) {
           thumbArea.innerHTML = `<img src="${course.thumbnail}" alt="${course.title}" />`;
+        } else {
+          thumbArea.textContent = defaultThumbIcon(course);
         }
 
         // Tags
@@ -409,7 +438,7 @@ import App from '../../../layouts/App.astro';
             const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             const btnId = `btn-session-${s.id}`;
             return `
-              <div style="border:1.5px solid ${isBooked ? 'var(--green,#22c55e)' : 'var(--line)'};border-radius:12px;padding:16px 20px;margin-bottom:10px;background:${isBooked ? 'var(--green-soft,#f0fdf4)' : 'var(--paper)'};opacity:${isPast ? '.5' : '1'}">
+              <div style="border:1.5px solid ${isBooked ? '#22c55e' : '#e2e8f0'};border-radius:12px;padding:16px 20px;margin-bottom:10px;background:${isBooked ? '#f0fdf4cc' : '#ffffffcc'};backdrop-filter:blur(8px);opacity:${isPast ? '.5' : '1'}">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
                   <div>
                     <div style="font-weight:600;margin-bottom:4px">${s.title}</div>
@@ -445,7 +474,7 @@ import App from '../../../layouts/App.astro';
         }
 
         document.getElementById('loading')!.style.display = 'none';
-        document.getElementById('course-content')!.style.display = 'grid';
+        document.getElementById('course-content')!.style.display = 'grid'; // grid inside course-outer
       } catch {
         document.getElementById('loading')!.style.display = 'none';
         document.getElementById('not-found')!.style.display = 'block';

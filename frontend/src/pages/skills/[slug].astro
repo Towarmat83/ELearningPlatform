@@ -4,44 +4,57 @@ const { slug } = Astro.params;
 ---
 <App title={`Compétence : ${slug}`} activePage="">
   <style is:global>
-    .skill-page { padding: 28px 24px 80px; max-width: 1100px; margin: 0 auto; }
-    .skill-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 20px; background: none; border: none; padding: 0; text-decoration: none; }
+    .skill-outer {
+      min-height: calc(100vh - 64px);
+      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+      padding: 40px 32px 80px;
+    }
+    .skill-page { max-width: 1400px; margin: 0 auto; }
+    .skill-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 24px; background: none; border: none; padding: 0; text-decoration: none; }
     .skill-back:hover { text-decoration: underline; }
-    .skill-chip { display: inline-flex; align-items: center; gap: 6px; background: #f3e8ff; color: #7c3aed; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: .95rem; }
-    .skill-prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; background: var(--fill); border-radius: 10px; font-size: .82rem; color: var(--ink-soft); }
+    .skill-page-title {
+      font-size: 2rem; font-weight: 800; margin-bottom: 4px;
+      background: linear-gradient(135deg, #4361ee, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .skill-chip { display: inline-flex; align-items: center; gap: 6px; background: #f3e8ff; color: #7c3aed; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: .95rem; margin-bottom: 12px; }
+    .skill-prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 12px 16px; background: #ffffffcc; border: 1.5px solid #e2e8f0; border-radius: 14px; backdrop-filter: blur(8px); font-size: .82rem; color: var(--ink-soft); }
     .skill-prog-pct { font-weight: 700; font-size: 1rem; }
-    .level-section { margin-top: 28px; }
-    .level-section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-    .level-section-title::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-    .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-    .course-card { background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; padding: 16px 18px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: box-shadow .15s, border-color .15s; cursor: pointer; }
-    .course-card:hover { box-shadow: 0 4px 16px -4px rgba(30,60,120,.15); border-color: var(--blue); }
-    .course-card.card-done { border-color: #16a34a; background: #f0fdf4; }
-    .course-card.card-ongoing { border-color: var(--blue); }
+    .level-section { margin-top: 32px; }
+    .level-section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .level-section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+    .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .course-card { background: #ffffffcc; border: 1.5px solid #e2e8f0; border-radius: 14px; backdrop-filter: blur(8px); padding: 18px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: box-shadow .15s, border-color .15s, transform .15s; }
+    .course-card:hover { box-shadow: 0 6px 24px rgba(67,97,238,.12); border-color: #a5b4fc; transform: translateY(-2px); }
+    .course-card.card-done { border-color: #86efac; background: #f0fdf4cc; }
+    .course-card.card-done:hover { border-color: #22c55e; box-shadow: 0 6px 24px rgba(34,197,94,.12); }
+    .course-card.card-ongoing { border-color: #93c5fd; }
     .course-card-title { font-size: 1rem; font-weight: 700; color: var(--ink); }
-    .course-card-desc { font-size: .83rem; color: var(--ink-soft); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .course-card-desc { font-size: .83rem; color: var(--ink-soft); line-height: 1.5; }
     .course-card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
     .badge-diff { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-    .diff-beginner  { background: #dcfce7; color: #15803d; }
+    .diff-beginner     { background: #dcfce7; color: #15803d; }
     .diff-intermediate { background: #fef9c3; color: #a16207; }
-    .diff-advanced  { background: #fee2e2; color: #b91c1c; }
-    .diff-default   { background: var(--fill); color: var(--ink-soft); }
+    .diff-advanced     { background: #fee2e2; color: #b91c1c; }
+    .diff-default      { background: var(--fill); color: var(--ink-soft); }
     .course-modules-hint { font-size: .75rem; color: var(--ink-soft); }
     .badge-status { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-    .badge-done     { background: #dcfce7; color: #15803d; }
-    .badge-ongoing  { background: #dbeafe; color: #1d4ed8; }
+    .badge-done    { background: #dcfce7; color: #15803d; }
+    .badge-ongoing { background: #dbeafe; color: #1d4ed8; }
     .cc-progress-wrap { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
     .cc-progress-bar  { flex: 1; height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
     .cc-progress-fill { height: 100%; background: var(--blue); border-radius: 4px; }
     .cc-progress-label { font-size: .7rem; color: var(--ink-soft); white-space: nowrap; }
     .cc-cta { font-size: .78rem; font-weight: 600; color: var(--blue); margin-top: 2px; }
     .skill-empty { text-align: center; padding: 60px 24px; color: var(--ink-soft); }
-    .section-title { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
-    .section-sub { font-size: .82rem; color: var(--ink-soft); }
+    .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; margin-top: 28px; }
+    .section-sub { font-size: .85rem; color: var(--ink-soft); margin-bottom: 8px; }
   </style>
 
+  <div class="skill-outer">
   <div class="skill-page">
     <button onclick="history.back()" class="skill-back">◂ Retour</button>
+    <h1 class="skill-page-title" id="skill-page-title">Compétence</h1>
 
     <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
@@ -60,6 +73,7 @@ const { slug } = Astro.params;
         Aucun cours trouvé pour cette compétence.
       </div>
     </div>
+  </div>
   </div>
 
   <script define:vars={{ slug }}>
@@ -156,6 +170,7 @@ const { slug } = Astro.params;
 
         const label = slug.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
         document.getElementById('skill-name').textContent = label;
+        document.getElementById('skill-page-title').textContent = label;
 
         // Compute progression from skill modules
         const modules = skillData.modules ?? [];

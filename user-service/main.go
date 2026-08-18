@@ -70,10 +70,38 @@ func main() {
 // blocks until a shutdown signal is received. Keeping this logic separate
 // from main lets deferred cleanup (e.g. closing the database pool) run to
 // completion instead of being skipped by a direct [os.Exit] call.
-func run() error {
-	cfg := config.Load()
+func run() error { //nolint:funlen // multiple boot phases each require their own guard clauses
+	zap.L().Info("starting user-service")
+
+	// ── Configuration ────────────────────────────────────────────────────────
+	zap.L().Info("loading configuration")
+
+	cfg, warnings := config.Load()
+
+	for _, w := range warnings {
+		zap.L().Warn("configuration warning", zap.String("detail", w))
+	}
+
+	kubeMode := "in-cluster"
+	if cfg.Kubeconfig != "" {
+		kubeMode = cfg.Kubeconfig
+	}
+
+	zap.L().Info("configuration loaded",
+		zap.Int("port", cfg.Port),
+		zap.String("k8sNamespace", cfg.K8sNamespace),
+		zap.String("kubeconfig", kubeMode),
+		zap.Bool("databaseConfigured", cfg.DatabaseURL != ""),
+		zap.String("courseServiceURL", cfg.CourseServiceURL),
+		zap.Bool("oidcEnabled", cfg.OIDC.Enabled),
+		zap.Int("providersCount", len(cfg.Providers)),
+		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
+	)
 
 	ctx := context.Background()
+
+	// ── Database ──────────────────────────────────────────────────────────────
+	zap.L().Info("connecting to database")
 
 	gdb, err := db.Connect(ctx, cfg.DatabaseURL, cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
 	if err != nil {
@@ -88,6 +116,9 @@ func run() error {
 
 	zap.L().Info("database connected")
 
+	// ── Migrations & seed ─────────────────────────────────────────────────────
+	zap.L().Info("running migrations and seeding")
+
 	repos := repository.NewGormRepositories(gdb)
 
 	err = seedDatabase(ctx, gdb, repos, cfg)
@@ -95,18 +126,23 @@ func run() error {
 		return err
 	}
 
-	// Watch the admin password file for live rotation (no pod restart needed).
-	// Active only when ADMIN_PASSWORD_FILE is set (i.e. K8s Secret volume mount).
+	// ── Background watchers ───────────────────────────────────────────────────
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
 
 	if cfg.AdminPasswordFile != "" {
+		zap.L().Info("watching admin password file", zap.String("path", cfg.AdminPasswordFile))
 		go db.WatchAdminPassword(watchCtx, repos.Users, cfg.AdminPasswordFile)
 	}
 
 	// MarkdownPattern CRD watcher — syncs CRDs into the markdown_patterns
 	// table. Disabled when K8sNamespace is empty (local dev without cluster).
+	zap.L().Info("starting pattern CRD watcher")
+
 	defer startPatternWatcher(ctx, cfg, repos.Patterns)()
+
+	// ── HTTP router ───────────────────────────────────────────────────────────
+	zap.L().Info("building HTTP router")
 
 	state := &handlers.State{
 		Repos:  repos,

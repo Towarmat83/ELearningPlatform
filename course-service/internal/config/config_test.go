@@ -17,7 +17,7 @@ func TestLoad_Defaults(t *testing.T) { //nolint:paralleltest // t.Setenv is call
 		t.Setenv(k, "")
 	}
 
-	c := Load()
+	c, _ := Load()
 
 	if c.JWTSecret != defaultJWTSecret {
 		t.Errorf("unexpected default JWTSecret: %q", c.JWTSecret)
@@ -62,7 +62,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("GIT_CREDENTIALS_PATH", "/etc/creds.yaml")
 	t.Setenv("GIT_CACHE_TTL", "30")
 
-	c := Load()
+	c, _ := Load()
 
 	if c.JWTSecret != "my-secret" {
 		t.Errorf("expected JWTSecret=my-secret, got %q", c.JWTSecret)
@@ -110,7 +110,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 func TestLoad_InvalidPort_Ignored(t *testing.T) {
 	t.Setenv("PORT", "notanumber")
 
-	c := Load()
+	c, _ := Load()
 	if c.Port != defaultPort {
 		t.Errorf("expected default port %d on invalid PORT env, got %d", defaultPort, c.Port)
 	}
@@ -121,7 +121,7 @@ func TestLoad_InvalidPort_Ignored(t *testing.T) {
 func TestLoad_InvalidGitCacheTTL_Ignored(t *testing.T) {
 	t.Setenv("GIT_CACHE_TTL", "0")
 
-	c := Load()
+	c, _ := Load()
 	if c.GitCacheTTL != defaultGitCacheTTLMinutes {
 		t.Errorf("expected default GitCacheTTL=%d when 0 provided, got %d", defaultGitCacheTTLMinutes, c.GitCacheTTL)
 	}
@@ -152,7 +152,7 @@ corsOrigins:
 
 	t.Setenv("CONFIG_PATH", f.Name())
 
-	c := Load()
+	c, _ := Load()
 	if c.JWTSecret != "from-file" {
 		t.Errorf("expected JWTSecret=from-file, got %q", c.JWTSecret)
 	}
@@ -167,7 +167,7 @@ corsOrigins:
 func TestLoad_Kubeconfig(t *testing.T) {
 	t.Setenv("KUBECONFIG", "/home/user/.kube/config")
 
-	c := Load()
+	c, _ := Load()
 	if c.Kubeconfig != "/home/user/.kube/config" {
 		t.Errorf("expected Kubeconfig set, got %q", c.Kubeconfig)
 	}

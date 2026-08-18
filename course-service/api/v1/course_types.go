@@ -243,10 +243,9 @@ type Module struct {
 }
 
 // CourseSession describes one scheduled in-person session of a course.
+// The session ID is the key in the Sessions map on CourseSpec; it is not
+// stored inside the struct itself.
 type CourseSession struct {
-	// ID uniquely identifies this session within the course.
-	// +kubebuilder:validation:MinLength=1
-	ID string `json:"id"`
 	// Title is the display name of this session.
 	// +kubebuilder:validation:MinLength=1
 	Title string `json:"title"`
@@ -310,9 +309,11 @@ type CourseSpec struct {
 	// InPerson marks this course as available on-site, unlocking the sessions schedule.
 	// +kubebuilder:validation:Optional
 	InPerson bool `json:"inPerson,omitempty"`
-	// Sessions lists the scheduled in-person sessions for this course.
+	// Sessions holds the scheduled in-person sessions for this course, keyed by
+	// session ID. Using a map makes writes idempotent: retrying a failed update
+	// with the same ID overwrites the same slot rather than appending a duplicate.
 	// +kubebuilder:validation:Optional
-	Sessions []CourseSession `json:"sessions,omitempty"`
+	Sessions map[string]CourseSession `json:"sessions,omitempty"`
 	// XPRequired is the minimum XP a learner must have earned to enroll in this course.
 	// Zero (the default) means no XP gate.
 	// +kubebuilder:validation:Minimum=0

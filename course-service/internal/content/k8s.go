@@ -117,9 +117,9 @@ func courseFromCR(cr *coursev1.Course) *Course {
 	}
 
 	sessions := make([]Session, 0, len(spec.Sessions))
-	for _, sess := range spec.Sessions {
+	for id, sess := range spec.Sessions {
 		sessions = append(sessions, Session{
-			ID:       sess.ID,
+			ID:       id,
 			Title:    sess.Title,
 			Date:     sess.Date,
 			Location: sess.Location,

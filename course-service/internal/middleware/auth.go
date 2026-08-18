@@ -18,6 +18,9 @@ import (
 // roleAdmin is the Role value required to access admin-only endpoints.
 const roleAdmin = "admin"
 
+// roleManager is the Role value for manager-level access.
+const roleManager = "manager"
+
 // jwtIssuer is the iss claim expected on every session token.
 const jwtIssuer = "user-service"
 
@@ -117,6 +120,37 @@ func Auth(secret string) func(http.Handler) http.Handler {
 			if err != nil {
 				zap.L().Error("token verification failed", zap.Error(err))
 				httpErr(resp, http.StatusUnauthorized, "Invalid token")
+
+				return
+			}
+
+			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
+			next.ServeHTTP(resp, req.WithContext(ctx))
+		})
+	}
+}
+
+// AdminOrManager middleware: same as Auth but enforces admin or manager role.
+func AdminOrManager(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			auth := req.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, "Bearer ") {
+				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
+
+				return
+			}
+
+			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
+			if err != nil {
+				zap.L().Error("token verification failed", zap.Error(err))
+				httpErr(resp, http.StatusUnauthorized, "Invalid token")
+
+				return
+			}
+
+			if claims.Role != roleAdmin && claims.Role != roleManager {
+				httpErr(resp, http.StatusForbidden, "Admin or manager access required")
 
 				return
 			}

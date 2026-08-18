@@ -8,19 +8,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
+	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
 const (
 	// sessionIDBytes is the number of random bytes used to generate a session ID.
 	// 8 bytes = 16 hex chars; collision probability is negligible even at scale.
 	sessionIDBytes = 8
-
-	// sessionMaxRetry caps K8s optimistic-lock conflict retries.
-	sessionMaxRetry = 5
 )
 
 // sessionBody is the request payload for creating or updating a session.
@@ -43,12 +40,23 @@ func generateSessionID() (string, error) {
 	return "sess-" + hex.EncodeToString(buf), nil
 }
 
+// sessionFromBody converts a sessionBody and ID into a content.Session.
+func sessionFromBody(id string, body sessionBody) content.Session {
+	return content.Session{
+		ID:       id,
+		Title:    body.Title,
+		Date:     body.Date,
+		Location: body.Location,
+		Capacity: body.Capacity,
+	}
+}
+
 // CreateSession godoc
 // @Summary  Add a session to a course (admin or manager)
 // @Tags     Admin - Sessions
 // @Security BearerAuth
 // @Router   /api/admin/courses/{slug}/sessions [post].
-func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { //nolint:funlen,gocyclo,cyclop // retry loop requires multiple guard clauses
+func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { //nolint:funlen // multiple guard clauses required
 	slug := chi.URLParam(req, "slug")
 
 	var body sessionBody
@@ -74,9 +82,6 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 		return
 	}
 
-	// Generate the ID once before the retry loop so that a conflict retry
-	// sets the same map key — idempotent even if the first update reached K8s
-	// but the response was lost in transit.
 	sessionID, err := generateSessionID()
 	if err != nil {
 		zap.L().Error("generate session id failed", zap.Error(err))
@@ -88,44 +93,32 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 	ctx := req.Context()
 	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
 
-	var updateErr error
+	var course coursev1.Course
 
-	for range sessionMaxRetry {
-		var course coursev1.Course
+	getErr := kubeClient.Get(ctx, key, &course)
+	if getErr != nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
 
-		getErr := kubeClient.Get(ctx, key, &course)
-		if getErr != nil {
-			s.Error(writer, http.StatusNotFound, "Course not found")
-
-			return
-		}
-
-		if course.Spec.Sessions == nil {
-			course.Spec.Sessions = make(map[string]coursev1.CourseSession)
-		}
-
-		course.Spec.Sessions[sessionID] = coursev1.CourseSession{
-			Title:    body.Title,
-			Date:     body.Date,
-			Location: body.Location,
-			Capacity: body.Capacity,
-		}
-
-		updateErr = kubeClient.Update(ctx, &course)
-		if updateErr == nil {
-			break
-		}
-
-		if !apierrors.IsConflict(updateErr) {
-			zap.L().Error("update course sessions failed", zap.String("slug", slug), zap.Error(updateErr))
-			s.Error(writer, http.StatusInternalServerError, "Failed to create session")
-
-			return
-		}
+		return
 	}
 
+	if course.Spec.Sessions == nil {
+		course.Spec.Sessions = make(map[string]coursev1.CourseSession)
+	}
+
+	course.Spec.Sessions[sessionID] = coursev1.CourseSession{
+		Title:    body.Title,
+		Date:     body.Date,
+		Location: body.Location,
+		Capacity: body.Capacity,
+	}
+
+	rollback := s.Content.AddSession(slug, sessionFromBody(sessionID, body))
+
+	updateErr := kubeClient.Update(ctx, &course)
 	if updateErr != nil {
-		zap.L().Error("update course sessions exhausted retries", zap.String("slug", slug), zap.Error(updateErr))
+		zap.L().Error("update course sessions failed", zap.String("slug", slug), zap.Error(updateErr))
+		rollback()
 		s.Error(writer, http.StatusInternalServerError, "Failed to create session")
 
 		return
@@ -139,7 +132,7 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 // @Tags     Admin - Sessions
 // @Security BearerAuth
 // @Router   /api/admin/courses/{slug}/sessions/{sessionId} [put].
-func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) { //nolint:funlen // retry loop requires multiple guard clauses
+func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) {
 	slug := chi.URLParam(req, "slug")
 	sessionID := chi.URLParam(req, "sessionId")
 
@@ -163,46 +156,34 @@ func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) { /
 	ctx := req.Context()
 	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
 
-	var updateErr error
+	var course coursev1.Course
 
-	for range sessionMaxRetry {
-		var course coursev1.Course
+	getErr := kubeClient.Get(ctx, key, &course)
+	if getErr != nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
 
-		getErr := kubeClient.Get(ctx, key, &course)
-		if getErr != nil {
-			s.Error(writer, http.StatusNotFound, "Course not found")
-
-			return
-		}
-
-		if _, ok := course.Spec.Sessions[sessionID]; !ok {
-			s.Error(writer, http.StatusNotFound, "Session not found")
-
-			return
-		}
-
-		course.Spec.Sessions[sessionID] = coursev1.CourseSession{
-			Title:    body.Title,
-			Date:     body.Date,
-			Location: body.Location,
-			Capacity: body.Capacity,
-		}
-
-		updateErr = kubeClient.Update(ctx, &course)
-		if updateErr == nil {
-			break
-		}
-
-		if !apierrors.IsConflict(updateErr) {
-			zap.L().Error("update course sessions failed", zap.String("slug", slug), zap.Error(updateErr))
-			s.Error(writer, http.StatusInternalServerError, "Failed to update session")
-
-			return
-		}
+		return
 	}
 
+	if _, ok := course.Spec.Sessions[sessionID]; !ok {
+		s.Error(writer, http.StatusNotFound, "Session not found")
+
+		return
+	}
+
+	course.Spec.Sessions[sessionID] = coursev1.CourseSession{
+		Title:    body.Title,
+		Date:     body.Date,
+		Location: body.Location,
+		Capacity: body.Capacity,
+	}
+
+	rollback := s.Content.ReplaceSession(slug, sessionFromBody(sessionID, body))
+
+	updateErr := kubeClient.Update(ctx, &course)
 	if updateErr != nil {
-		zap.L().Error("update course sessions exhausted retries", zap.String("slug", slug), zap.Error(updateErr))
+		zap.L().Error("update course sessions failed", zap.String("slug", slug), zap.Error(updateErr))
+		rollback()
 		s.Error(writer, http.StatusInternalServerError, "Failed to update session")
 
 		return
@@ -231,41 +212,29 @@ func (s *State) DeleteSession(writer http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
 
-	var updateErr error
+	var course coursev1.Course
 
-	for range sessionMaxRetry {
-		var course coursev1.Course
+	getErr := kubeClient.Get(ctx, key, &course)
+	if getErr != nil {
+		s.Error(writer, http.StatusNotFound, "Course not found")
 
-		getErr := kubeClient.Get(ctx, key, &course)
-		if getErr != nil {
-			s.Error(writer, http.StatusNotFound, "Course not found")
-
-			return
-		}
-
-		if _, ok := course.Spec.Sessions[sessionID]; !ok {
-			s.Error(writer, http.StatusNotFound, "Session not found")
-
-			return
-		}
-
-		delete(course.Spec.Sessions, sessionID)
-
-		updateErr = kubeClient.Update(ctx, &course)
-		if updateErr == nil {
-			break
-		}
-
-		if !apierrors.IsConflict(updateErr) {
-			zap.L().Error("delete course session failed", zap.String("slug", slug), zap.Error(updateErr))
-			s.Error(writer, http.StatusInternalServerError, "Failed to delete session")
-
-			return
-		}
+		return
 	}
 
+	if _, ok := course.Spec.Sessions[sessionID]; !ok {
+		s.Error(writer, http.StatusNotFound, "Session not found")
+
+		return
+	}
+
+	delete(course.Spec.Sessions, sessionID)
+
+	rollback := s.Content.RemoveSession(slug, sessionID)
+
+	updateErr := kubeClient.Update(ctx, &course)
 	if updateErr != nil {
-		zap.L().Error("delete course session exhausted retries", zap.String("slug", slug), zap.Error(updateErr))
+		zap.L().Error("delete course session failed", zap.String("slug", slug), zap.Error(updateErr))
+		rollback()
 		s.Error(writer, http.StatusInternalServerError, "Failed to delete session")
 
 		return

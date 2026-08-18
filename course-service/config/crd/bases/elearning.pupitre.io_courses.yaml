@@ -443,11 +443,11 @@ spec:
                   the named group.
                 type: string
               sessions:
-                description: Sessions lists the scheduled in-person sessions for this
-                  course.
-                items:
-                  description: CourseSession describes one scheduled in-person session
-                    of a course.
+                additionalProperties:
+                  description: |-
+                    CourseSession describes one scheduled in-person session of a course.
+                    The session ID is the key in the Sessions map on CourseSpec; it is not
+                    stored inside the struct itself.
                   properties:
                     capacity:
                       description: Capacity is the maximum number of seats. 0 means
@@ -457,11 +457,6 @@ spec:
                     date:
                       description: Date is the start date and time of the session
                         in RFC3339 format.
-                      minLength: 1
-                      type: string
-                    id:
-                      description: ID uniquely identifies this session within the
-                        course.
                       minLength: 1
                       type: string
                     location:
@@ -474,10 +469,13 @@ spec:
                       type: string
                   required:
                   - date
-                  - id
                   - title
                   type: object
-                type: array
+                description: |-
+                  Sessions holds the scheduled in-person sessions for this course, keyed by
+                  session ID. Using a map makes writes idempotent: retrying a failed update
+                  with the same ID overwrites the same slot rather than appending a duplicate.
+                type: object
               title:
                 description: Title is the course's display name; defaults to the resource
                   name if omitted.

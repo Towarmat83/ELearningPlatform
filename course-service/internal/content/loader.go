@@ -73,6 +73,114 @@ func (s *Store) Put(c *Course) {
 	s.courses[c.Slug] = c
 }
 
+// AddSession atomically appends a session to a cached course. The returned
+// rollback function removes it; it is a no-op when the course is not cached.
+// The rollback itself is safe for concurrent use.
+func (s *Store) AddSession(slug string, sess Session) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	course, ok := s.courses[slug]
+	if !ok {
+		return func() {}
+	}
+
+	updated := *course
+	updated.Sessions = append(append([]Session{}, course.Sessions...), sess)
+	s.courses[slug] = &updated
+
+	prev := course
+
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		s.courses[slug] = prev
+	}
+}
+
+// ReplaceSession atomically updates an existing session in a cached course.
+// The returned rollback function restores the previous state; it is a no-op
+// when the course or session is not cached.
+func (s *Store) ReplaceSession(slug string, sess Session) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	course, ok := s.courses[slug]
+	if !ok {
+		return func() {}
+	}
+
+	sessions := make([]Session, len(course.Sessions))
+	copy(sessions, course.Sessions)
+
+	found := false
+
+	for i, existing := range sessions {
+		if existing.ID == sess.ID {
+			sessions[i] = sess
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		return func() {}
+	}
+
+	updated := *course
+	updated.Sessions = sessions
+	s.courses[slug] = &updated
+
+	prev := course
+
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		s.courses[slug] = prev
+	}
+}
+
+// RemoveSession atomically deletes a session from a cached course. The
+// returned rollback function restores the previous state; it is a no-op when
+// the course or session is not cached.
+func (s *Store) RemoveSession(slug, sessionID string) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	course, ok := s.courses[slug]
+	if !ok {
+		return func() {}
+	}
+
+	newSessions := make([]Session, 0, len(course.Sessions))
+
+	for _, sess := range course.Sessions {
+		if sess.ID != sessionID {
+			newSessions = append(newSessions, sess)
+		}
+	}
+
+	if len(newSessions) == len(course.Sessions) {
+		return func() {}
+	}
+
+	updated := *course
+	updated.Sessions = newSessions
+	s.courses[slug] = &updated
+
+	prev := course
+
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		s.courses[slug] = prev
+	}
+}
+
 // DeleteBySource removes all courses whose Source field equals source.
 func (s *Store) DeleteBySource(source string) {
 	s.mu.Lock()

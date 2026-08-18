@@ -12,7 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
@@ -45,6 +47,7 @@ const (
 func main() {
 	logger := initLogger()
 	zap.ReplaceGlobals(logger)
+	ctrl.SetLogger(zapr.NewLogger(logger))
 
 	zap.L().Info("starting course-service")
 

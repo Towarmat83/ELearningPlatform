@@ -31,12 +31,28 @@ func main() {
 	logger := initLogger()
 	zap.ReplaceGlobals(logger)
 
+	zap.L().Info("starting checker-service")
+
+	// ── Configuration ────────────────────────────────────────────────────────
+	zap.L().Info("loading configuration")
+
 	cfg := config.Load()
+
+	zap.L().Info("configuration loaded",
+		zap.Int("port", cfg.Port),
+		zap.String("gitlabBaseURL", cfg.GitLabBaseURL),
+		zap.Bool("gitlabTokenConfigured", cfg.GitLabToken != ""),
+		zap.Int("rateLimitRequests", cfg.RateLimitRequests),
+		zap.Int("rateLimitWindowSeconds", cfg.RateLimitWindowSeconds),
+		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
+	)
+
+	// ── Handler & router ─────────────────────────────────────────────────────
+	zap.L().Info("building HTTP router")
+
 	handler := handlers.New(cfg)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	zap.L().Info("checker-service starting", zap.String("addr", addr), zap.String("gitlab_base_url", cfg.GitLabBaseURL))
-
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler.BuildRouter(),
@@ -45,6 +61,8 @@ func main() {
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
+
+	zap.L().Info("API listening", zap.String("addr", addr))
 
 	err := srv.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {

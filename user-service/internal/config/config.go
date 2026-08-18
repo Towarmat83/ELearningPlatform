@@ -164,13 +164,14 @@ func (c *Config) FindProvider(id string) *ProviderConfig {
 
 // Load builds a Config from built-in defaults, then overlays an optional
 // YAML file referenced by CONFIG_PATH, then overlays environment variable
-// overrides.
-func Load() *Config {
+// overrides. The returned warnings slice contains non-fatal diagnostics
+// (e.g. config file parse errors) to be logged by the caller.
+func Load() (cfg *Config, warnings []string) { //nolint:nonamedreturns // gocritic requires named results here
 	_ = godotenv.Load()
 
-	cfg := defaultConfig()
+	cfg = defaultConfig()
 
-	loadFromFile(cfg)
+	warnings = loadFromFile(cfg)
 
 	cfg.DatabaseURL = stringFromEnv("DATABASE_URL", cfg.DatabaseURL)
 	cfg.DBMaxOpenConns = positiveIntFromEnv("DB_MAX_OPEN_CONNS", cfg.DBMaxOpenConns)
@@ -195,7 +196,7 @@ func Load() *Config {
 
 	loadProviderSecrets(cfg)
 
-	return cfg
+	return cfg, warnings
 }
 
 // defaultConfig returns a Config populated with the built-in default
@@ -219,21 +220,26 @@ func defaultConfig() *Config {
 }
 
 // loadFromFile overlays cfg with values from the YAML file referenced by
-// the CONFIG_PATH environment variable, if set. Errors are ignored: an
-// absent or unreadable config file simply leaves cfg at its current
-// values.
-func loadFromFile(cfg *Config) {
+// the CONFIG_PATH environment variable, if set. It returns a non-empty
+// warnings slice when the file is set but cannot be read or parsed, so
+// the caller can log the issue without taking a hard dependency on a logger.
+func loadFromFile(cfg *Config) []string {
 	path := os.Getenv("CONFIG_PATH")
 	if path == "" {
-		return
+		return nil
 	}
 
 	data, err := os.ReadFile(path) //nolint:gosec // path is operator-controlled via the CONFIG_PATH env var, not user input
 	if err != nil {
-		return
+		return []string{"CONFIG_PATH=" + path + ": cannot read file: " + err.Error()}
 	}
 
-	_ = yaml.Unmarshal(data, cfg)
+	unmarshErr := yaml.Unmarshal(data, cfg)
+	if unmarshErr != nil {
+		return []string{"CONFIG_PATH=" + path + ": YAML parse error: " + unmarshErr.Error()}
+	}
+
+	return nil
 }
 
 // stringFromEnv returns the value of the environment variable key, or

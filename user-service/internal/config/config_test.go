@@ -22,7 +22,7 @@ func TestLoad_Defaults(t *testing.T) {
 		os.Unsetenv(k)
 	}
 
-	c := Load()
+	c, _ := Load()
 	if c.Port != 8081 {
 		t.Errorf("default port: want 8081, got %d", c.Port)
 	}
@@ -53,7 +53,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://test:test@localhost/testdb")
 	t.Setenv("CORS_ORIGINS", "http://a.com,http://b.com")
 
-	c := Load()
+	c, _ := Load()
 	if c.JWTSecret != "my-secret" {
 		t.Errorf("JWT_SECRET override: want my-secret, got %q", c.JWTSecret)
 	}
@@ -81,7 +81,7 @@ func TestLoad_InvalidIntegers(t *testing.T) {
 	t.Setenv("PORT", "not-a-number")
 	t.Setenv("JWT_EXPIRY_HOURS", "bad")
 
-	c := Load()
+	c, _ := Load()
 	// Should fall back to defaults.
 	if c.Port != 8081 {
 		t.Errorf("invalid PORT: want default 8081, got %d", c.Port)
@@ -97,7 +97,7 @@ func TestLoad_InvalidIntegers(t *testing.T) {
 func TestLoad_AdminPassword(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD", "S3cr3t!")
 
-	c := Load()
+	c, _ := Load()
 	if c.AdminPassword != "S3cr3t!" {
 		t.Errorf("admin password: want S3cr3t!, got %q", c.AdminPassword)
 	}
@@ -117,7 +117,7 @@ func TestLoad_AdminPasswordFile(t *testing.T) {
 
 	t.Setenv("ADMIN_PASSWORD_FILE", f.Name())
 
-	c := Load()
+	c, _ := Load()
 	if c.AdminPassword != "FilePassword!" {
 		t.Errorf("admin password file: want FilePassword!, got %q", c.AdminPassword)
 	}
@@ -131,7 +131,7 @@ func TestLoad_OIDC(t *testing.T) {
 	t.Setenv("OIDC_CLIENT_ID", "client123")
 	t.Setenv("OIDC_CLIENT_SECRET", "secret456")
 
-	c := Load()
+	c, _ := Load()
 	if !c.OIDC.Enabled {
 		t.Error("OIDC.Enabled: want true")
 	}
@@ -159,7 +159,7 @@ func TestLoad_ConfigFile(t *testing.T) {
 
 	t.Setenv("CONFIG_PATH", f.Name())
 
-	c := Load()
+	c, _ := Load()
 	if c.Port != 7777 {
 		t.Errorf("config file port: want 7777, got %d", c.Port)
 	}
@@ -265,7 +265,7 @@ func TestLoad_K8sNamespaceAndKubeconfig(t *testing.T) {
 	t.Setenv("K8S_NAMESPACE", "my-ns")
 	t.Setenv("KUBECONFIG", "/tmp/kube.conf")
 
-	c := Load()
+	c, _ := Load()
 	if c.K8sNamespace != "my-ns" {
 		t.Errorf("K8S_NAMESPACE: want my-ns, got %q", c.K8sNamespace)
 	}
@@ -282,7 +282,7 @@ func TestLoad_AdminPasswordFileMissing_FallsBackToEnv(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD_FILE", "/nonexistent/path/pw.txt")
 	t.Setenv("ADMIN_PASSWORD", "fallback-pw")
 
-	c := Load()
+	c, _ := Load()
 	if c.AdminPassword != "fallback-pw" {
 		t.Errorf("expected fallback-pw when file missing, got %q", c.AdminPassword)
 	}
@@ -298,7 +298,7 @@ func TestLoad_OAuthRedirectBaseAndCourseURL(t *testing.T) {
 	t.Setenv("OAUTH_REDIRECT_BASE", "https://app.example.com")
 	t.Setenv("COURSE_SERVICE_URL", "http://course-svc:8082")
 
-	c := Load()
+	c, _ := Load()
 	if c.OAuthRedirectBase != "https://app.example.com" {
 		t.Errorf("OAuthRedirectBase: want https://app.example.com, got %q", c.OAuthRedirectBase)
 	}
@@ -324,7 +324,7 @@ func TestLoad_ProviderSecretFromEnv(t *testing.T) {
 	t.Setenv("CONFIG_PATH", f.Name())
 	t.Setenv("SSO_GITHUB_CLIENT_SECRET", "gh-secret-from-env")
 
-	c := Load()
+	c, _ := Load()
 	if len(c.Providers) == 0 {
 		t.Skip("provider not loaded from config (yaml parsing may differ)")
 	}

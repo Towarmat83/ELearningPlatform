@@ -127,15 +127,24 @@ func NewState(cfg *config.Config, store *content.Store, paths *content.PathStore
 		GitCache:        gitCache,
 	}
 
-	if cfg.GitCredentialsPath != "" {
+	switch {
+	case cfg.GitCredentialsPath != "":
 		creds, err := content.LoadCredentials(cfg.GitCredentialsPath)
 
 		switch {
 		case err == nil:
 			state.GitCreds = creds
-		case !os.IsNotExist(err):
+
+			zap.L().Info("git credentials loaded", zap.String("path", cfg.GitCredentialsPath))
+		case os.IsNotExist(err):
+			zap.L().Debug("git credentials file not found, skipped", zap.String("path", cfg.GitCredentialsPath))
+		default:
 			zap.L().Warn("failed to load git credentials", zap.String("path", cfg.GitCredentialsPath), zap.Error(err))
 		}
+	case cfg.GitToken != "":
+		zap.L().Info("git global token configured (GIT_TOKEN)")
+	default:
+		zap.L().Warn("no git token configured — modules from private repositories will fail")
 	}
 
 	return state

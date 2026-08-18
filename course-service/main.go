@@ -46,20 +46,42 @@ func main() {
 	logger := initLogger()
 	zap.ReplaceGlobals(logger)
 
-	cfg := config.Load()
+	zap.L().Info("starting course-service")
+
+	// ── Configuration ────────────────────────────────────────────────────────
+	zap.L().Info("loading configuration")
+
+	cfg, warnings := config.Load()
+
+	for _, w := range warnings {
+		zap.L().Warn("configuration warning", zap.String("detail", w))
+	}
+
+	logConfig(cfg)
 
 	ctx := context.Background()
 
-	// Content store — populated from K8s CRD watcher
+	// ── Stores & state ───────────────────────────────────────────────────────
+	zap.L().Info("initializing in-memory stores")
+
 	store := content.NewStore()
 	pathStore := content.NewPathStore()
-
 	state := handlers.NewState(cfg, store, pathStore)
 
+	// ── Database ──────────────────────────────────────────────────────────────
+	zap.L().Info("connecting to database")
+
 	connectDatabase(ctx, cfg, state)
+
+	// ── K8s watchers ──────────────────────────────────────────────────────────
+	zap.L().Info("starting Kubernetes watchers", zap.String("namespace", cfg.K8sNamespace))
+
 	startWatchers(ctx, cfg, store, pathStore)
 
-	zap.L().Info("K8s CRD watchers started", zap.String("namespace", cfg.K8sNamespace))
+	zap.L().Info("Kubernetes watchers started")
+
+	// ── HTTP router ───────────────────────────────────────────────────────────
+	zap.L().Info("building HTTP router")
 
 	r := handlers.BuildRouter(state, cfg, true)
 
@@ -72,11 +94,19 @@ func main() {
 		IdleTimeout:  idleTimeout,
 	}
 
+	serveAndWait(srv)
+
+	_ = logger.Sync()
+}
+
+// serveAndWait starts the HTTP server in a goroutine, blocks until SIGINT or
+// SIGTERM is received, then performs a graceful shutdown.
+func serveAndWait(srv *http.Server) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		zap.L().Info("API listening", zap.String("addr", addr))
+		zap.L().Info("API listening", zap.String("addr", srv.Addr))
 
 		err := srv.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
@@ -86,7 +116,7 @@ func main() {
 	}()
 
 	<-quit
-	zap.L().Info("shutting down...")
+	zap.L().Info("shutting down")
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
@@ -97,8 +127,26 @@ func main() {
 	}
 
 	zap.L().Info("server stopped")
+}
 
-	_ = logger.Sync()
+// logConfig logs the effective (post-override) configuration values,
+// omitting secrets and connection strings.
+func logConfig(cfg *config.Config) {
+	kubeMode := "in-cluster"
+	if cfg.Kubeconfig != "" {
+		kubeMode = cfg.Kubeconfig
+	}
+
+	zap.L().Info("configuration loaded",
+		zap.Int("port", cfg.Port),
+		zap.String("k8sNamespace", cfg.K8sNamespace),
+		zap.String("kubeconfig", kubeMode),
+		zap.Bool("databaseConfigured", cfg.DatabaseURL != ""),
+		zap.String("userServiceURL", cfg.UserServiceURL),
+		zap.String("checkerServiceURL", cfg.CheckerServiceURL),
+		zap.Int("gitCacheTTLMin", cfg.GitCacheTTL),
+		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
+	)
 }
 
 // connectDatabase connects to the database configured via cfg.DatabaseURL,

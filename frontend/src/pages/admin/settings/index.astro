@@ -2,39 +2,7 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Paramètres">
-  <style is:global>
-    .toggle {
-      width: 44px; height: 24px; border-radius: 12px;
-      background: #d1d5db; position: relative; flex-shrink: 0;
-      transition: background .2s; cursor: pointer; border: none;
-    }
-    .toggle.on { background: #22c55e; }
-    .toggle-thumb {
-      position: absolute; top: 3px; left: 3px;
-      width: 18px; height: 18px; border-radius: 50%;
-      background: white; box-shadow: 0 1px 3px rgba(0,0,0,.25);
-      transition: transform .2s; pointer-events: none;
-    }
-    .toggle.on .toggle-thumb { transform: translateX(20px); }
-    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .setting-label p { font-size: .875rem; font-weight: 500; color: var(--ink); margin-bottom: 2px; }
-    .setting-label small { font-size: .75rem; color: var(--ink-soft); }
-    .section { margin-bottom: 20px; }
-    .section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
-    .stack { display: flex; flex-direction: column; gap: 16px; }
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .warn-box { background: #fffbeb; border: 1px solid #fbbf24; border-radius: var(--radius); padding: 12px; font-size: .8rem; color: #92400e; }
-    .info-box { background: var(--blue-soft); border: 1px solid var(--blue); border-radius: var(--radius); padding: 12px; font-size: .8rem; color: var(--blue-deep); }
-    .pwd-preview { background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
-    .pwd-preview p { font-size: .75rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
-    .pwd-preview ul { list-style: none; display: flex; flex-direction: column; gap: 3px; }
-    .pwd-preview li { font-size: .78rem; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
-    .pwd-preview li::before { content: '✓'; color: #22c55e; font-weight: 700; }
-    .domain-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-    .domain-chip { background: #dcfce7; color: #166534; font-size: .72rem; font-family: monospace; padding: 2px 8px; border-radius: 100px; }
-  </style>
-
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+  <div class="flex items-center justify-between mb-7">
     <div>
       <h1 style="font-size:1.5rem">Paramètres</h1>
       <p class="text-soft text-sm" style="margin-top:4px">Configuration runtime — les changements prennent effet immédiatement.</p>
@@ -47,9 +15,9 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="settings-body" style="display:none;max-width:680px">
 
     <!-- ── Inscription ── -->
-    <div class="card section">
+    <div class="card mb-5">
       <h2>📝 Inscription</h2>
-      <div class="stack">
+      <div class="flex flex-col gap-4">
         <div class="setting-row">
           <div class="setting-label">
             <p>Inscription ouverte</p>
@@ -67,9 +35,9 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
 
     <!-- ── Politique de mot de passe ── -->
-    <div class="card section">
+    <div class="card mb-5">
       <h2>🔑 Politique de mot de passe</h2>
-      <div class="stack">
+      <div class="flex flex-col gap-4">
         <div class="setting-row">
           <div class="setting-label">
             <p>Longueur minimale</p>
@@ -99,7 +67,7 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
 
     <!-- ── Profils ── -->
-    <div class="card section">
+    <div class="card mb-5">
       <h2>👤 Profils utilisateurs</h2>
       <div class="setting-row">
         <div class="setting-label">
@@ -111,9 +79,9 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
 
     <!-- ── SSO ── -->
-    <div class="card section">
+    <div class="card mb-5">
       <h2>🔐 SSO &amp; Authentification</h2>
-      <div class="stack">
+      <div class="flex flex-col gap-4">
         <div class="setting-row">
           <div class="setting-label">
             <p>Autoriser la connexion locale</p>
@@ -133,10 +101,10 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
 
     <!-- ── OIDC ── -->
-    <div class="card section">
+    <div class="card mb-5">
       <h2>🌐 OIDC (OpenID Connect)</h2>
       <p class="text-soft text-sm" style="margin-top:-10px;margin-bottom:14px">SSO avec Authentik, Keycloak, Azure AD, Google Workspace…</p>
-      <div class="stack">
+      <div class="flex flex-col gap-4">
         <div class="setting-row">
           <div class="setting-label">
             <p>Activer l'authentification OIDC</p>
@@ -196,10 +164,10 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
 
     <!-- ── LDAP ── -->
-    <div class="card section">
+    <div class="card mb-5">
       <h2>🗂️ LDAP / Active Directory</h2>
       <p class="text-soft text-sm" style="margin-top:-10px;margin-bottom:14px">Authentification via Authentik LDAP, OpenLDAP, Active Directory…</p>
-      <div class="stack">
+      <div class="flex flex-col gap-4">
         <div class="setting-row">
           <div class="setting-label">
             <p>Activer l'authentification LDAP</p>

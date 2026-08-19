@@ -2,44 +2,11 @@
 import Manager from '../../../layouts/Manager.astro';
 ---
 <Manager title="Mes membres">
-  <style is:global>
-    .mu-header {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: 16px; margin-bottom: 28px; flex-wrap: wrap;
-    }
-    .mu-title {
-      font-size: 2rem; font-weight: 800;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .mu-subtitle { font-size: .875rem; color: var(--ink-soft); margin-top: 4px; }
-    .mu-filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
-    .mu-table-wrap {
-      border: 1.5px solid #e2e8f0; border-radius: 16px;
-      background: #ffffffcc; backdrop-filter: blur(8px);
-      overflow: hidden;
-    }
-    .mu-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
-    .mu-table thead tr { border-bottom: 1.5px solid #e2e8f0; background: #f8faff; }
-    .mu-table th { padding: 12px 16px; text-align: left; font-weight: 700; color: var(--ink-soft); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
-    .mu-table th:last-child { text-align: right; }
-    .mu-table tbody tr { border-bottom: 1px solid #f1f5f9; transition: background .12s; }
-    .mu-table tbody tr:last-child { border-bottom: none; }
-    .mu-table tbody tr:hover { background: #f0f4ff66; }
-    .mu-avatar {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: linear-gradient(135deg, #e0e7ff, #ede9fe);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: .85rem; color: #4361ee; flex-shrink: 0;
-      border: 1.5px solid #c7d2fe;
-    }
-  </style>
-
-  <div class="mu-header">
+  <div class="flex items-baseline justify-between gap-4 mb-7 flex-wrap">
     <div>
       <h1 class="mu-title">Mes membres</h1>
       <p class="mu-subtitle" id="member-count">Chargement…</p>
-      <div id="scope-groups" class="mu-filter-row">
+      <div id="scope-groups" class="flex flex-wrap gap-1.5 mt-2 items-center">
         <span class="text-soft text-sm" style="font-size:.75rem">Filtrer :</span>
       </div>
     </div>

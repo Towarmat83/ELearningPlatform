@@ -2,141 +2,22 @@
 import App from '../layouts/App.astro';
 ---
 <App title="Mon XP" activePage="xp">
-  <style is:global>
-    .xp-page {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 40px 32px 80px;
-    }
-    .xp-inner { max-width: 1400px; margin: 0 auto; }
-
-    .xp-page-title {
-      font-size: 2rem; font-weight: 800; margin-bottom: 4px;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .xp-page-sub { font-size: .9rem; color: var(--ink-soft); margin-bottom: 28px; }
-
-    /* Hero */
-    .xp-hero {
-      display: flex; align-items: center; gap: 28px;
-      background: #ffffffcc; backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 20px; padding: 28px 32px;
-      margin-bottom: 20px;
-    }
-    .xp-orb {
-      width: 88px; height: 88px; border-radius: 50%;
-      background: linear-gradient(135deg, #fefce8, #fef08a);
-      border: 3px solid #fcd34d;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2.4rem; flex-shrink: 0;
-      box-shadow: 0 4px 20px rgba(251,191,36,.25);
-    }
-    .xp-total {
-      font-size: 2.8rem; font-weight: 800; line-height: 1;
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .xp-total-label { font-size: .82rem; color: var(--ink-soft); margin-top: 2px; }
-    .xp-level-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: #fef9c3; color: #a16207;
-      border: 1.5px solid #fcd34d; border-radius: 20px;
-      padding: 4px 14px; font-size: .84rem; font-weight: 600; margin-top: 10px;
-    }
-    .xp-progress-bar {
-      height: 8px; background: #fef3c7;
-      border-radius: 4px; overflow: hidden; margin-top: 14px;
-    }
-    .xp-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #fbbf24, #f59e0b);
-      transition: width .4s ease;
-    }
-    .xp-next-label { font-size: .75rem; color: var(--ink-soft); margin-top: 6px; }
-
-    /* Level cards */
-    .xp-levels {
-      display: grid; grid-template-columns: repeat(5, 1fr);
-      gap: 10px; margin-bottom: 24px;
-    }
-    .xp-level-card {
-      background: #ffffffcc; backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 14px; padding: 16px 10px;
-      text-align: center; transition: border-color .15s, transform .15s;
-    }
-    .xp-level-card.current {
-      border-color: #fcd34d;
-      background: #fffbeb;
-      box-shadow: 0 4px 16px rgba(251,191,36,.2);
-      transform: translateY(-2px);
-    }
-    .xp-level-icon { font-size: 1.7rem; margin-bottom: 6px; }
-    .xp-level-name { font-size: .8rem; font-weight: 700; }
-    .xp-level-thresh { font-size: .72rem; color: var(--ink-soft); margin-top: 2px; }
-
-    /* History */
-    .xp-hist-title {
-      font-size: .8rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: var(--ink-soft); margin-bottom: 12px;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .xp-hist-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
-
-    .xp-hist-item {
-      display: flex; align-items: center; gap: 14px;
-      padding: 12px 18px;
-      background: #ffffffcc; backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0; border-radius: 14px;
-      margin-bottom: 8px;
-      text-decoration: none; color: inherit;
-      transition: border-color .15s, box-shadow .15s, transform .15s;
-    }
-    .xp-hist-item:hover { border-color: #fcd34d; box-shadow: 0 4px 16px rgba(251,191,36,.12); transform: translateX(3px); }
-
-    .xp-hist-icon {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: linear-gradient(135deg, #fefce8, #fef08a);
-      border: 1.5px solid #fcd34d44;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.1rem; flex-shrink: 0;
-    }
-    .xp-hist-meta { flex: 1; min-width: 0; }
-    .xp-hist-slug { font-size: .88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .xp-hist-source { font-size: .75rem; color: var(--ink-soft); margin-top: 1px; }
-    .xp-hist-amount {
-      font-size: .95rem; font-weight: 800; white-space: nowrap;
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .xp-empty { text-align: center; color: var(--ink-soft); padding: 48px 0; font-size: .95rem; }
-
-    @media (max-width: 600px) {
-      .xp-page { padding: 20px 14px 80px; }
-      .xp-levels { grid-template-columns: repeat(3, 1fr); }
-      .xp-hero { flex-direction: column; text-align: center; gap: 16px; }
-    }
-  </style>
-
-  <div class="xp-page">
-    <div class="xp-inner">
-      <h1 class="xp-page-title">Mon XP</h1>
-      <p class="xp-page-sub" id="xp-sub">Chargement…</p>
+  <div class="page-outer">
+    <div class="page-inner">
+      <h1 class="page-title mb-1">Mon XP</h1>
+      <p class="text-[.9rem] text-ink-soft mb-7" id="xp-sub">Chargement…</p>
 
       <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
-      <div id="xp-content" style="display:none">
+      <div id="xp-content" class="hidden">
         <div class="xp-hero">
           <div class="xp-orb">⚡</div>
-          <div style="flex:1;min-width:0">
+          <div class="flex-1 min-w-0">
             <div class="xp-total" id="xp-total">0</div>
             <div class="xp-total-label">points d'expérience</div>
             <div class="xp-level-chip" id="xp-level-chip">Niveau 1 — Novice</div>
             <div class="xp-progress-bar">
-              <div class="xp-progress-fill" id="xp-bar" style="width:0%"></div>
+              <div class="xp-progress-fill" id="xp-bar"></div>
             </div>
             <div class="xp-next-label" id="xp-next-label"></div>
           </div>
@@ -146,7 +27,7 @@ import App from '../layouts/App.astro';
 
         <div id="xp-inprogress"></div>
 
-        <div class="xp-hist-title">Historique des gains</div>
+        <div class="section-title">Historique des gains</div>
         <div id="xp-hist-list"></div>
       </div>
     </div>
@@ -184,14 +65,13 @@ import App from '../layouts/App.astro';
           apiFetch('/my/courses'),
         ]) as any[];
 
-        document.getElementById('loading')!.style.display = 'none';
-        document.getElementById('xp-content')!.style.display = 'block';
+        document.getElementById('loading')!.classList.add('hidden');
+        document.getElementById('xp-content')!.classList.remove('hidden');
 
         const total: number = data.total ?? 0;
         const level: number = data.level ?? 1;
         const levelName: string = data.levelName ?? 'Novice';
 
-        // Build course slug → title map
         const allCourses: any[] = coursesData?.courses ?? [];
         const courseTitle: Record<string,string> = {};
         for (const c of allCourses) courseTitle[c.slug] = c.title || c.slug;
@@ -220,7 +100,6 @@ import App from '../layouts/App.astro';
           </div>
         `).join('');
 
-        // Courses in progress
         const myCourses: any[] = myCoursesData?.courses ?? [];
         const completedSlugs = new Set(
           (data.history ?? []).filter((e: any) => e.amount === 200).map((e: any) => e.sourceSlug?.split('/')[0] ?? '')
@@ -229,17 +108,17 @@ import App from '../layouts/App.astro';
 
         if (inProgress.length > 0) {
           document.getElementById('xp-inprogress')!.innerHTML = `
-            <div class="xp-hist-title" style="margin-bottom:12px">En cours <span style="font-size:.75rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">(${inProgress.length} cours)</span></div>
+            <div class="section-title">En cours <span class="text-[.75rem] font-normal normal-case tracking-normal text-ink-soft">(${inProgress.length} cours)</span></div>
             ${inProgress.map((c: any) => {
               const title = courseTitle[c.slug] || c.title || c.slug.replace(/-/g, ' ');
               return `
-                <a href="/courses/${c.slug}" class="xp-hist-item" style="border-color:#e2e8f0;margin-bottom:8px">
-                  <div class="xp-hist-icon" style="background:linear-gradient(135deg,#f0f4ff,#e0e7ff);border-color:#c7d2fe44">📖</div>
+                <a href="/courses/${c.slug}" class="xp-hist-item">
+                  <div class="xp-hist-icon xp-hist-icon-inprogress">📖</div>
                   <div class="xp-hist-meta">
                     <div class="xp-hist-slug">${title}</div>
                     <div class="xp-hist-source">En cours · Compléter pour +200 XP</div>
                   </div>
-                  <div style="font-size:.82rem;font-weight:600;color:#94a3b8;white-space:nowrap">→</div>
+                  <div class="text-[.82rem] font-semibold text-slate-400 whitespace-nowrap">→</div>
                 </a>`;
             }).join('')}
           `;
@@ -254,7 +133,6 @@ import App from '../layouts/App.astro';
             const icon = SOURCE_ICONS[e.source] ?? '⚡';
             const label = SOURCE_LABELS[e.source] ?? e.source;
             const date = new Date(e.earnedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-            // Extract course slug (first segment before /)
             const courseSlug = e.sourceSlug?.split('/')[0] ?? '';
             const displayTitle = courseTitle[courseSlug] || courseSlug.replace(/-/g, ' ');
             const href = `/courses/${courseSlug}`;

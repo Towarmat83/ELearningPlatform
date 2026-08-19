@@ -3,71 +3,23 @@ import App from '../../layouts/App.astro';
 const { slug } = Astro.params;
 ---
 <App title={`Compétence : ${slug}`} activePage="">
-  <style is:global>
-    .skill-outer {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 40px 32px 80px;
-    }
-    .skill-page { max-width: 1400px; margin: 0 auto; }
-    .skill-back { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; color: var(--blue); cursor: pointer; margin-bottom: 24px; background: none; border: none; padding: 0; text-decoration: none; }
-    .skill-back:hover { text-decoration: underline; }
-    .skill-page-title {
-      font-size: 2rem; font-weight: 800; margin-bottom: 4px;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .skill-chip { display: inline-flex; align-items: center; gap: 6px; background: #f3e8ff; color: #7c3aed; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: .95rem; margin-bottom: 12px; }
-    .skill-prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 12px 16px; background: #ffffffcc; border: 1.5px solid #e2e8f0; border-radius: 14px; backdrop-filter: blur(8px); font-size: .82rem; color: var(--ink-soft); }
-    .skill-prog-pct { font-weight: 700; font-size: 1rem; }
-    .level-section { margin-top: 32px; }
-    .level-section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .level-section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
-    .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .course-card { background: #ffffffcc; border: 1.5px solid #e2e8f0; border-radius: 14px; backdrop-filter: blur(8px); padding: 18px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: box-shadow .15s, border-color .15s, transform .15s; }
-    .course-card:hover { box-shadow: 0 6px 24px rgba(67,97,238,.12); border-color: #a5b4fc; transform: translateY(-2px); }
-    .course-card.card-done { border-color: #86efac; background: #f0fdf4cc; }
-    .course-card.card-done:hover { border-color: #22c55e; box-shadow: 0 6px 24px rgba(34,197,94,.12); }
-    .course-card.card-ongoing { border-color: #93c5fd; }
-    .course-card-title { font-size: 1rem; font-weight: 700; color: var(--ink); }
-    .course-card-desc { font-size: .83rem; color: var(--ink-soft); line-height: 1.5; }
-    .course-card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
-    .badge-diff { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-    .diff-beginner     { background: #dcfce7; color: #15803d; }
-    .diff-intermediate { background: #fef9c3; color: #a16207; }
-    .diff-advanced     { background: #fee2e2; color: #b91c1c; }
-    .diff-default      { background: var(--fill); color: var(--ink-soft); }
-    .course-modules-hint { font-size: .75rem; color: var(--ink-soft); }
-    .badge-status { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-    .badge-done    { background: #dcfce7; color: #15803d; }
-    .badge-ongoing { background: #dbeafe; color: #1d4ed8; }
-    .cc-progress-wrap { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
-    .cc-progress-bar  { flex: 1; height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
-    .cc-progress-fill { height: 100%; background: var(--blue); border-radius: 4px; }
-    .cc-progress-label { font-size: .7rem; color: var(--ink-soft); white-space: nowrap; }
-    .cc-cta { font-size: .78rem; font-weight: 600; color: var(--blue); margin-top: 2px; }
-    .skill-empty { text-align: center; padding: 60px 24px; color: var(--ink-soft); }
-    .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; margin-top: 28px; }
-    .section-sub { font-size: .85rem; color: var(--ink-soft); margin-bottom: 8px; }
-  </style>
-
   <div class="skill-outer">
-  <div class="skill-page">
+  <div class="page-inner">
     <button onclick="history.back()" class="skill-back">◂ Retour</button>
     <h1 class="skill-page-title" id="skill-page-title">Compétence</h1>
 
     <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
-    <div id="skill-content" style="display:none">
-      <div id="skill-name" style="display:none"></div>
-      <div class="skill-prog" id="skill-prog" style="display:none;margin-bottom:20px"></div>
+    <div id="skill-content" class="hidden">
+      <div id="skill-name" class="hidden"></div>
+      <div class="skill-prog hidden mb-5" id="skill-prog"></div>
 
-      <div class="section-title" id="courses-section-title"></div>
-      <div class="section-sub" id="courses-section-sub"></div>
+      <div class="text-[1.1rem] font-bold mb-1 mt-7" id="courses-section-title"></div>
+      <div class="text-[.85rem] text-ink-soft mb-2" id="courses-section-sub"></div>
 
       <div id="courses-by-level"></div>
 
-      <div id="skill-empty" class="skill-empty" style="display:none">
+      <div id="skill-empty" class="skill-empty hidden">
         Aucun cours trouvé pour cette compétence.
       </div>
     </div>
@@ -98,7 +50,7 @@ const { slug } = Astro.params;
       let statusBadge = '';
       let progressBar  = '';
       let cta          = '';
-      let cardClass    = 'course-card';
+      let cardClass    = 'sk-card';
 
       if (isCompleted) {
         cardClass += ' card-done';
@@ -122,12 +74,12 @@ const { slug } = Astro.params;
 
       return `
         <a class="${cardClass}" href="/courses/${c.slug}">
-          <div class="course-card-title">${c.title}</div>
-          ${c.description ? `<div class="course-card-desc">${c.description}</div>` : ''}
-          <div class="course-card-meta">
+          <div class="sk-card-title">${c.title}</div>
+          ${c.description ? `<div class="sk-card-desc">${c.description}</div>` : ''}
+          <div class="sk-card-meta">
             ${diffBadge(c.difficulty)}
             ${statusBadge}
-            ${hint ? `<span class="course-modules-hint">· ${hint}</span>` : ''}
+            ${hint ? `<span class="sk-modules-hint">· ${hint}</span>` : ''}
           </div>
           ${progressBar}
           ${cta}
@@ -163,8 +115,8 @@ const { slug } = Astro.params;
           if (c.completed) completedSlugs.add(c.slug);
         }
 
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('skill-content').style.display = 'block';
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('skill-content').classList.remove('hidden');
 
         const label = slug.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
         document.getElementById('skill-name').textContent = label;
@@ -176,14 +128,14 @@ const { slug } = Astro.params;
           const done = modules.filter(m => m.status === 'completed').length;
           const total = modules.length;
           const pct = Math.round(done / total * 100);
-          const col = pct === 100 ? 'var(--good)' : 'var(--blue)';
+          const colCls = pct === 100 ? 'bg-good text-good' : 'text-blue';
           const progEl = document.getElementById('skill-prog');
-          progEl.style.display = 'flex';
+          progEl.classList.remove('hidden');
           progEl.innerHTML = `
-            <div class="progress-bar" style="flex:1">
-              <div class="progress-bar-fill" style="width:${pct}%;background:${col}"></div>
+            <div class="progress-bar flex-1">
+              <div class="progress-bar-fill ${colCls}" style="width:${pct}%"></div>
             </div>
-            <span class="skill-prog-pct" style="color:${col}">${pct}%</span>
+            <span class="skill-prog-pct ${colCls}">${pct}%</span>
             <span>${done}/${total} modules complétés</span>`;
         }
 
@@ -213,7 +165,7 @@ const { slug } = Astro.params;
           });
 
         if (related.length === 0) {
-          document.getElementById('skill-empty').style.display = 'block';
+          document.getElementById('skill-empty').classList.remove('hidden');
           return;
         }
 
@@ -240,7 +192,7 @@ const { slug } = Astro.params;
           .map(l => `
             <div class="level-section">
               <div class="level-section-title">${l.label}</div>
-              <div class="courses-grid">
+              <div class="sk-courses-grid">
                 ${grouped[l.key].map(c => renderCourseCard(c, skillModules, modDone, modTotal, completedSlugs.has(c.slug), enrolledSlugs.has(c.slug))).join('')}
               </div>
             </div>`)
@@ -249,8 +201,8 @@ const { slug } = Astro.params;
         document.getElementById('courses-by-level').innerHTML = html;
 
       } catch (e) {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('skill-content').style.display = 'block';
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('skill-content').classList.remove('hidden');
         document.getElementById('skill-empty').style.display = 'block';
       }
     }

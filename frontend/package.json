@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@astrojs/node": "^9.0.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.11.1",
     "astro": "^5.0.0",
-    "marked": "^15.0.0"
+    "marked": "^15.0.0",
+    "tailwindcss": "^4.3.3"
   }
 }

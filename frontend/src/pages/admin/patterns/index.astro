@@ -2,36 +2,7 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Patterns">
-  <style is:global>
-    .pat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-bottom: 24px; }
-    @media (max-width: 900px) { .pat-grid { grid-template-columns: 1fr; } }
-    .pat-item { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; transition: border-color .15s; }
-    .pat-item.open { border-color: var(--blue); }
-    .pat-row { display: flex; align-items: center; gap: 14px; padding: 14px 18px; }
-    .pat-info { flex: 1; min-width: 0; }
-    .pat-name { font-family: monospace; font-weight: 600; font-size: .9rem; color: var(--ink); }
-    .pat-html { font-family: monospace; font-size: .72rem; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-    .pat-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-    .pat-inline-form { border-top: 1px solid var(--line); padding: 18px 20px; background: var(--fill); display: flex; flex-direction: column; gap: 10px; }
-    .pat-inline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .link-btn { background: none; border: none; cursor: pointer; font-size: .8rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; }
-    .link-btn.violet { color: #7c3aed; } .link-btn.violet:hover { background: #ede9fe; }
-    .link-btn.gray { color: var(--ink-soft); } .link-btn.gray:hover { background: var(--fill); }
-    .link-btn.red { color: var(--bad); } .link-btn.red:hover { background: var(--bad-soft); }
-    .form-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); }
-    .form-stack { display: flex; flex-direction: column; gap: 14px; }
-    .form-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .label-hint { font-size: .72rem; color: var(--ink-soft); margin-bottom: 4px; margin-top: -2px; }
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300; align-items: center; justify-content: center; padding: 24px; }
-    .modal-overlay.open { display: flex; }
-    .modal-box { background: var(--paper); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: 100%; max-width: 680px; display: flex; flex-direction: column; max-height: 85vh; }
-    .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--line); }
-    .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
-    .modal-foot { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
-    pre.yaml { background: #1a1a2e; color: #7ee787; font-size: .75rem; border-radius: var(--radius); padding: 18px; overflow: auto; font-family: monospace; line-height: 1.6; }
-  </style>
-
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+  <div class="flex items-center justify-between mb-6">
     <div>
       <h1 style="font-size:1.5rem">Markdown Patterns</h1>
       <p class="text-soft text-sm" style="margin-top:4px">Gérés comme des CRDs <code>MarkdownPattern</code>. Utiliser <code>kubectl apply</code> pour les ajouter.</p>

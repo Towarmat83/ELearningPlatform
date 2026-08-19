@@ -15,15 +15,15 @@ const { title, description, activePage } = Astro.props;
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <a href="/courses" class="brand">
-      <img src="/pioupitre.png" alt="pioupitre" />
-      <span>pupitre</span>
+      <img src="/pioupitre.png" alt="pioupitre" class="w-8 h-8 object-contain" />
+      <span class="brand-font text-[1.3rem] font-bold text-ink">pupitre</span>
     </a>
-    <a href="/courses" class={`navlink${activePage === 'catalogue' ? ' active' : ''}`} id="nav-catalogue">Catalogue</a>
-    <a href="/my-courses" class={`navlink${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
-    <a href="/manager/users" class="navlink" id="nav-manager" style="display:none">Mon espace</a>
+    <a href="/courses" class={`navlink hidden sm:inline-flex${activePage === 'catalogue' ? ' active' : ''}`} id="nav-catalogue">Catalogue</a>
+    <a href="/my-courses" class={`navlink hidden sm:inline-flex${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
+    <a href="/manager/users" class="navlink hidden" id="nav-manager">Mon espace</a>
     <div class="nav-spacer"></div>
     <slot name="nav-extra" />
-    <div id="nav-user">
+    <div id="nav-user" class="flex items-center gap-2">
       <a href="/login" class="btn btn-secondary btn-sm" id="nav-login-link">Se connecter</a>
     </div>
   </nav>
@@ -34,12 +34,18 @@ const { title, description, activePage } = Astro.props;
   <!-- Side drawer -->
   <aside class="nav-drawer" id="nav-drawer">
     <div class="nav-drawer-header">
-      <span style="font-family:'Caveat',cursive;font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,#4361ee,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.6;display:inline-block;padding:2px 6px 4px 2px">pupitre</span>
+      <span class="brand-font text-2xl font-bold" style="background:linear-gradient(135deg,#4361ee,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.6;display:inline-block;padding:2px 6px 4px 2px">pupitre</span>
       <button class="nav-drawer-close" id="drawer-close" aria-label="Fermer">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
     <div class="nav-drawer-body">
+      <!-- Navigation links visible on small screens -->
+      <div class="nav-drawer-section sm:hidden">
+        <div class="nav-drawer-label">Navigation</div>
+        <a href="/courses"    class="nav-drawer-link" id="dl-catalogue"><span class="nav-drawer-icon">📚</span>Catalogue</a>
+        <a href="/my-courses" class="nav-drawer-link" id="dl-my-courses"><span class="nav-drawer-icon">🎓</span>Mes cours</a>
+      </div>
       <div class="nav-drawer-section">
         <div class="nav-drawer-label">Mon apprentissage</div>
         <a href="/my-paths"  class="nav-drawer-link" id="dl-paths"><span class="nav-drawer-icon">🗺️</span>Mes parcours</a>
@@ -81,6 +87,7 @@ const { title, description, activePage } = Astro.props;
     // Highlight active drawer link from current path
     const _path = window.location.pathname;
     const _drawerMap: Record<string, string> = {
+      '/courses': 'dl-catalogue', '/my-courses': 'dl-my-courses',
       '/my-paths': 'dl-paths', '/my-groups': 'dl-groups',
       '/my-badges': 'dl-badges', '/my-xp': 'dl-xp',
       '/leaderboard': 'dl-leaderboard', '/my-skills': 'dl-skills', '/agenda': 'dl-agenda',
@@ -104,31 +111,25 @@ const { title, description, activePage } = Astro.props;
         const isUrl = user.avatarUrl && (user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://'));
         let avatarEl: string;
         if (isUrl) {
-          avatarEl = `<img src="${user.avatarUrl}" alt="${user.username}" class="nav-avatar" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="nav-avatar-initial" style="display:none">${initial}</div>`;
+          avatarEl = `<img src="${user.avatarUrl}" alt="${user.username}" class="nav-avatar" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="nav-avatar-initial hidden">${initial}</div>`;
         } else if (user.avatarUrl) {
-          const span = document.createElement('div');
-          span.className = 'nav-avatar-initial';
-          span.style.fontSize = '1.2rem';
-          span.textContent = user.avatarUrl;
-          avatarEl = span.outerHTML;
+          avatarEl = `<div class="nav-avatar-initial text-[1.2rem]">${user.avatarUrl}</div>`;
         } else {
           avatarEl = `<div class="nav-avatar-initial">${initial}</div>`;
         }
 
         navUser.innerHTML = `
-          <a href="/profile" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit" title="${user.username}">
+          <a href="/profile" class="flex items-center gap-2 no-underline text-inherit" title="${user.username}">
             ${avatarEl}
-            <span style="font-size:.875rem;font-weight:500;color:var(--ink-soft);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${user.username}</span>
+            <span class="text-[.875rem] font-medium text-ink-soft max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap hidden sm:inline">${user.username}</span>
           </a>
-          ${user.role === 'admin' ? '<a href="/admin" class="btn btn-sm" style="background:linear-gradient(135deg,#4361ee,#7c3aed);color:#fff;font-weight:600;padding:5px 14px;border-radius:9px">⚙ Admin</a>' : ''}
+          ${user.role === 'admin' ? '<a href="/admin" class="btn btn-sm" style="background:linear-gradient(135deg,#4361ee,#7c3aed);color:#fff;font-weight:600">⚙ Admin</a>' : ''}
           <button id="nav-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
         `;
 
-        // Admins can also learn — all nav links remain visible
-
         if (user.role === 'manager') {
           const managerLink = document.getElementById('nav-manager');
-          if (managerLink) managerLink.style.display = '';
+          if (managerLink) managerLink.classList.remove('hidden');
         }
 
         document.getElementById('nav-logout')?.addEventListener('click', () => {
@@ -169,95 +170,6 @@ const { title, description, activePage } = Astro.props;
       window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }));
     }
 
-    // Make showToast globally available
     (window as any).showToast = showToast;
   </script>
-
-  <style>
-    body { display: flex; flex-direction: column; min-height: 100vh; }
-
-    /* ── Hamburger ── */
-    .nav-hamburger {
-      display: flex; align-items: center; justify-content: center;
-      width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
-      background: none; border: none; cursor: pointer; color: var(--ink);
-      transition: background .15s; margin-right: 2px;
-    }
-    .nav-hamburger:hover { background: var(--fill); }
-
-    /* ── Drawer overlay ── */
-    .nav-drawer-overlay {
-      position: fixed; inset: 0;
-      background: rgba(15,23,42,.32); backdrop-filter: blur(3px);
-      z-index: 300;
-      opacity: 0; pointer-events: none;
-      transition: opacity .38s ease;
-    }
-    .nav-drawer-overlay.open { opacity: 1; pointer-events: auto; }
-
-    /* ── Drawer panel ── */
-    .nav-drawer {
-      position: fixed; top: 0; left: 0;
-      width: 272px; height: 100dvh;
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 55%, #f0fdf4 100%);
-      border-right: none;
-      box-shadow: 10px 0 48px rgba(67,97,238,.16);
-      z-index: 301;
-      transform: translateX(-100%);
-      transition: transform .38s cubic-bezier(0, 0, 0.2, 1);
-      will-change: transform;
-      display: flex; flex-direction: column;
-      overflow-y: auto;
-    }
-    .nav-drawer.open { transform: translateX(0); }
-
-    .nav-drawer-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 16px; flex-shrink: 0;
-      background: rgba(255,255,255,.75); backdrop-filter: blur(12px);
-      border-bottom: 1px solid #e2e8f0;
-      overflow: visible;
-    }
-    .nav-drawer-close {
-      display: flex; align-items: center; justify-content: center;
-      width: 32px; height: 32px; border-radius: 8px;
-      background: none; border: none; cursor: pointer; color: var(--ink-soft);
-      transition: background .12s, color .12s;
-    }
-    .nav-drawer-close:hover { background: #e8ecf5; color: var(--ink); }
-
-    .nav-drawer-body { padding: 14px 12px 32px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
-
-    .nav-drawer-section {
-      background: rgba(255,255,255,.7);
-      backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 14px;
-      overflow: hidden;
-      padding: 6px 6px 8px;
-    }
-
-    .nav-drawer-label {
-      font-size: .63rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .1em; color: var(--ink-soft);
-      padding: 8px 10px 4px;
-    }
-
-    .nav-drawer-link {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 10px; border-radius: 10px;
-      text-decoration: none; color: var(--ink);
-      font-size: .875rem; font-weight: 500;
-      transition: background .12s, color .12s;
-    }
-    .nav-drawer-link:hover { background: rgba(67,97,238,.07); color: var(--blue); }
-    .nav-drawer-link.active {
-      background: linear-gradient(135deg, rgba(67,97,238,.12), rgba(124,58,237,.1));
-      color: #4361ee; font-weight: 700;
-      border-left: 3px solid #4361ee;
-      padding-left: 7px;
-    }
-
-    .nav-drawer-icon { font-size: 1rem; width: 22px; text-align: center; flex-shrink: 0; }
-  </style>
 </Base>

@@ -24,9 +24,6 @@ const (
 	defaultBaseBranch = "main"
 	// noOpenMRMessage is returned when a check requires an open MR but none exists.
 	noOpenMRMessage = "Aucune MR ouverte. Ouvrez d'abord une Merge Request."
-	// commitMessageParts is the limit passed to SplitN when extracting the first
-	// line of a commit message.
-	commitMessageParts = 2
 	// gitLabPageSize is the number of items fetched per page in paginated calls.
 	gitLabPageSize = 100
 )
@@ -218,7 +215,7 @@ func mrsByAuthor(mrs []*gitlab.BasicMergeRequest, username string) []*gitlab.Bas
 
 // isConventionalMessage reports whether msg is a conventional commit.
 func isConventionalMessage(msg string) bool {
-	firstLine := strings.SplitN(msg, "\n", commitMessageParts)[0]
+	firstLine, _, _ := strings.Cut(msg, "\n")
 
 	return conventionalCommitRe.MatchString(firstLine)
 }
@@ -456,7 +453,7 @@ func (f *GitLabFetcher) checkConventionalCommitOnBranch(req StepRequest, state *
 
 	for _, commit := range cmp.Commits {
 		if !isConventionalMessage(commit.Message) {
-			firstLine := strings.SplitN(commit.Message, "\n", commitMessageParts)[0]
+			firstLine, _, _ := strings.Cut(commit.Message, "\n")
 
 			return &StepResponse{
 				Allow:      false,

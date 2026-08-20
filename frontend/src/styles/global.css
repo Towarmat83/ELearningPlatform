@@ -1252,6 +1252,8 @@
 
   /* ── Stats grid (admin/index) ────────────────────────────────────────── */
   .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+  @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .stats-grid { grid-template-columns: 1fr; } }
   .stat-value { font-size: 2rem; font-weight: 700; }
   .stat-label { font-size: .875rem; color: var(--ink-soft); margin-top: 4px; }
 
@@ -1263,6 +1265,7 @@
   .profile-avatar-wrapper { position: relative; width: 80px; height: 80px; margin: 0 auto 12px; cursor: pointer; }
   .profile-avatar-overlay { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; color: #fff; font-size: .7rem; font-weight: 600; text-align: center; line-height: 1.2; }
   .profile-field-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: start; }
+  @media (max-width: 480px) { .profile-field-row { grid-template-columns: 1fr; } }
   .sso-notice { font-size: .8rem; color: var(--blue); background: var(--blue-soft); border: 1px solid var(--blue); border-radius: var(--radius); padding: 10px 14px; }
   .avatar-pick-btn { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line); background: var(--fill); font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: border-color .15s; }
   .avatar-pick-btn:hover { border-color: var(--blue); }
@@ -1287,6 +1290,7 @@
   .admin-tr { border-bottom: 1px solid var(--line); }
   .admin-tr-head { border-bottom: 1px solid var(--line); background: var(--fill); }
   .admin-table-wrap { padding: 0; overflow: hidden; }
+  @media (max-width: 768px) { .admin-table { min-width: 520px; } }
 
   /* ── Labs page ───────────────────────────────────────────────────────── */
   .labs-status-ok { display: inline-flex; align-items: center; gap: 4px; background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 20px; font-size: .78rem; font-weight: 600; }
@@ -1343,6 +1347,7 @@
 
   /* ── Sidebar admin layout ────────────────────────────────────────────── */
   .admin-layout { display: grid; grid-template-columns: 230px 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 768px) { .admin-layout { grid-template-columns: 1fr; } }
   .admin-sidebar-card { margin-bottom: 12px; padding: 14px; }
   .admin-sidebar-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 10px; }
 

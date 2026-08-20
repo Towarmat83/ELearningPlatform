@@ -10,6 +10,7 @@ import App from '../../../../../layouts/App.astro';
 
     <div class="presence-stats" id="stats-row"></div>
 
+    <div class="overflow-x-auto">
     <table class="presence-table hidden" id="participants-table">
       <thead>
         <tr>
@@ -21,6 +22,7 @@ import App from '../../../../../layouts/App.astro';
       </thead>
       <tbody id="participants-body"></tbody>
     </table>
+    </div>
 
     <div class="no-participants hidden" id="no-participants">
       Aucun participant inscrit pour cette session.

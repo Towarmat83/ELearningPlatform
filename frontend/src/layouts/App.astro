@@ -18,8 +18,8 @@ const { title, description, activePage } = Astro.props;
       <img src="/pioupitre.png" alt="pioupitre" class="w-8 h-8 object-contain" />
       <span class="brand-font text-[1.3rem] font-bold text-ink">pupitre</span>
     </a>
-    <a href="/courses" class={`navlink hidden sm:inline-flex${activePage === 'catalogue' ? ' active' : ''}`} id="nav-catalogue">Catalogue</a>
-    <a href="/my-courses" class={`navlink hidden sm:inline-flex${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
+    <a href="/courses" class={`navlink${activePage === 'catalogue' ? ' active' : ''}`} id="nav-catalogue">Catalogue</a>
+    <a href="/my-courses" class={`navlink${activePage === 'courses' ? ' active' : ''}`} id="nav-my-courses">Mes cours</a>
     <a href="/manager/users" class="navlink hidden" id="nav-manager">Mon espace</a>
     <div class="nav-spacer"></div>
     <slot name="nav-extra" />
@@ -40,16 +40,12 @@ const { title, description, activePage } = Astro.props;
       </button>
     </div>
     <div class="nav-drawer-body">
-      <!-- Navigation links visible on small screens -->
-      <div class="nav-drawer-section sm:hidden">
-        <div class="nav-drawer-label">Navigation</div>
-        <a href="/courses"    class="nav-drawer-link" id="dl-catalogue"><span class="nav-drawer-icon">📚</span>Catalogue</a>
-        <a href="/my-courses" class="nav-drawer-link" id="dl-my-courses"><span class="nav-drawer-icon">🎓</span>Mes cours</a>
-      </div>
       <div class="nav-drawer-section">
         <div class="nav-drawer-label">Mon apprentissage</div>
-        <a href="/my-paths"  class="nav-drawer-link" id="dl-paths"><span class="nav-drawer-icon">🗺️</span>Mes parcours</a>
-        <a href="/my-groups" class="nav-drawer-link" id="dl-groups"><span class="nav-drawer-icon">👥</span>Mes groupes</a>
+        <a href="/courses"    class="nav-drawer-link" id="dl-catalogue"><span class="nav-drawer-icon">📚</span>Catalogue</a>
+        <a href="/my-courses" class="nav-drawer-link" id="dl-my-courses"><span class="nav-drawer-icon">🎓</span>Mes cours</a>
+        <a href="/my-paths"   class="nav-drawer-link" id="dl-paths"><span class="nav-drawer-icon">🗺️</span>Mes parcours</a>
+        <a href="/my-groups"  class="nav-drawer-link" id="dl-groups"><span class="nav-drawer-icon">👥</span>Mes groupes</a>
       </div>
       <div class="nav-drawer-section">
         <div class="nav-drawer-label">Progression & Gamification</div>
@@ -61,6 +57,9 @@ const { title, description, activePage } = Astro.props;
         <div class="nav-drawer-label">Compétences & Planning</div>
         <a href="/my-skills" class="nav-drawer-link" id="dl-skills"><span class="nav-drawer-icon">🎯</span>Mes compétences</a>
         <a href="/agenda"    class="nav-drawer-link" id="dl-agenda"><span class="nav-drawer-icon">📅</span>Agenda</a>
+      </div>
+      <div class="nav-drawer-section">
+        <button class="nav-drawer-link w-full text-left text-bad" id="drawer-logout"><span class="nav-drawer-icon">🚪</span>Déconnexion</button>
       </div>
     </div>
   </aside>
@@ -83,6 +82,12 @@ const { title, description, activePage } = Astro.props;
     hamburger?.addEventListener('click', openDrawer);
     overlay?.addEventListener('click', closeDrawer);
     closeBtn?.addEventListener('click', closeDrawer);
+
+    document.getElementById('drawer-logout')?.addEventListener('click', () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    });
 
     // Highlight active drawer link from current path
     const _path = window.location.pathname;

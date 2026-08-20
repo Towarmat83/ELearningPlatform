@@ -6,46 +6,46 @@ import App from '../../../layouts/App.astro';
   <div class="course-outer">
   <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
-  <div id="not-found" style="display:none;text-align:center;padding:80px 24px">
-    <div style="font-size:3rem;margin-bottom:16px">😕</div>
+  <div id="not-found" class="not-found-state" style="display:none">
+    <div class="not-found-icon">😕</div>
     <h2>Cours introuvable</h2>
-    <a href="/courses" class="btn btn-primary" style="margin-top:16px;display:inline-flex">Retour au catalogue</a>
+    <a href="/courses" class="btn btn-primary mt-4 inline-flex">Retour au catalogue</a>
   </div>
 
   <div id="course-content" class="course-page" style="display:none">
     <!-- Left sticky sidebar -->
     <aside class="course-sidebar">
       <div class="course-thumb" id="thumb-area"></div>
-      <h1 id="course-title" style="font-size:1.1rem;font-weight:700;line-height:1.35"></h1>
+      <h1 id="course-title" class="course-title-head"></h1>
       <div id="course-tags" class="course-tags"></div>
-      <p id="course-desc" class="text-soft text-sm" style="line-height:1.6;font-size:.85rem"></p>
+      <p id="course-desc" class="text-soft text-sm course-desc-text"></p>
       <div id="course-badge-area"></div>
       <div id="enroll-area"></div>
-      <div id="course-meta" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px;margin-top:4px"></div>
+      <div id="course-meta" class="stack course-meta-divider"></div>
     </aside>
 
     <!-- Right: module list -->
     <div class="course-main">
       <div class="course-main-header">
-        <h2 style="font-size:1rem;font-weight:700">Contenu du cours</h2>
+        <h2 class="text-[1rem] font-bold">Contenu du cours</h2>
         <span id="module-count" class="text-soft text-sm"></span>
       </div>
       <div id="modules-list"></div>
-      <div id="modules-empty" style="display:none;padding:48px 24px;text-align:center;color:var(--ink-soft)">
-        <div style="font-size:2.5rem;margin-bottom:12px">📭</div>
+      <div id="modules-empty" class="modules-empty" style="display:none">
+        <div class="text-[2.5rem] mb-3">📭</div>
         <p>Inscrivez-vous pour accéder aux modules.</p>
       </div>
-      <div id="prereq-blocked" style="display:none;background:var(--orange-soft);border:1.5px solid var(--orange);border-radius:14px;padding:32px;text-align:center">
-        <div style="font-size:2rem;margin-bottom:10px">🔒</div>
-        <p style="font-weight:600;margin-bottom:4px">Prérequis non satisfaits</p>
+      <div id="prereq-blocked" class="prereq-blocked" style="display:none">
+        <div class="text-[2rem] mb-2.5">🔒</div>
+        <p class="font-semibold mb-1">Prérequis non satisfaits</p>
         <p class="text-soft text-sm">Terminez les cours prérequis pour accéder à ce contenu.</p>
       </div>
 
-      <!-- Sessions présentiel -->
-      <div id="sessions-section" style="display:none;margin-top:32px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-          <span style="font-size:1.2rem">📍</span>
-          <h2 style="font-size:1rem;font-weight:700">Sessions en présentiel</h2>
+      <!-- In-person sessions -->
+      <div id="sessions-section" class="mt-8" style="display:none">
+        <div class="sessions-section-header">
+          <span class="text-[1.2rem]">📍</span>
+          <h2 class="text-[1rem] font-bold">Sessions en présentiel</h2>
         </div>
         <div id="sessions-list"></div>
       </div>
@@ -114,22 +114,22 @@ import App from '../../../layouts/App.astro';
       const parts: string[] = [];
       const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lab: 'Lab', lesson: 'Lecture' };
       const typeStr = typeLabel[m.type];
-      if (typeStr) parts.push(`<span class="badge badge-gray" style="font-size:.7rem">${typeStr}</span>`);
+      if (typeStr) parts.push(`<span class="badge badge-gray text-[.7rem]">${typeStr}</span>`);
       if (m.locked) {
-        parts.push(`<span class="badge badge-gray" style="font-size:.7rem">Verrouillé</span>`);
+        parts.push(`<span class="badge badge-gray text-[.7rem]">Verrouillé</span>`);
       } else if (m.type === 'quiz') {
-        if (m.passed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ ${m.bestScore}/${m.maxScore} pts</span>`);
-        else if (m.attempts > 0) parts.push(`<span class="badge badge-orange" style="font-size:.7rem">${m.attempts} tentative${m.attempts > 1 ? 's' : ''}</span>`);
-        else parts.push(`<span class="badge badge-orange" style="font-size:.7rem">★ quiz</span>`);
+        if (m.passed) parts.push(`<span class="badge badge-green text-[.7rem]">✓ ${m.bestScore}/${m.maxScore} pts</span>`);
+        else if (m.attempts > 0) parts.push(`<span class="badge badge-orange text-[.7rem]">${m.attempts} tentative${m.attempts > 1 ? 's' : ''}</span>`);
+        else parts.push(`<span class="badge badge-orange text-[.7rem]">★ quiz</span>`);
       } else {
-        if (m.viewed) parts.push(`<span class="badge badge-green" style="font-size:.7rem">✓ Vu</span>`);
+        if (m.viewed) parts.push(`<span class="badge badge-green text-[.7rem]">✓ Vu</span>`);
       }
       return parts.join('');
     }
 
     function moduleSkillBadges(m: any): string {
       return (m.skills ?? []).map((s: string) =>
-        `<span class="badge badge-purple" style="font-size:.65rem;cursor:pointer" onclick="event.preventDefault();event.stopPropagation();window.location.href='/skills/${s}'">🎯 ${s}</span>`
+        `<span class="badge badge-purple text-[.65rem] cursor-pointer" onclick="event.preventDefault();event.stopPropagation();window.location.href='/skills/${s}'">🎯 ${s}</span>`
       ).join('');
     }
 
@@ -144,7 +144,7 @@ import App from '../../../layouts/App.astro';
         return `
           <${tag} ${hrefAttr} class="mod-row${m.locked ? ' locked' : ''}">
             ${icon ? `<div class="mod-icon${iconCls}">${icon}</div>` : ''}
-            <div class="mod-name flex-1">${m.name}${skillBadges ? `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:8px;vertical-align:middle">${skillBadges}</span>` : ''}</div>
+            <div class="mod-name flex-1">${m.name}${skillBadges ? `<span class="mod-skill-badges">${skillBadges}</span>` : ''}</div>
             <div class="mod-badges">${moduleStatusBadges(m)}</div>
             ${href ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>` : ''}
           </${tag}>
@@ -177,7 +177,7 @@ import App from '../../../layouts/App.astro';
           tagParts.push(`<span class="badge ${map[course.difficulty] || 'badge-blue'}">${labels[course.difficulty] || course.difficulty}</span>`);
         }
         if (course.category) tagParts.push(`<span class="badge badge-blue">${course.category}</span>`);
-        (course.skills ?? []).forEach((s: string) => tagParts.push(`<a href="/skills/${s}" class="badge badge-purple" style="font-size:.75rem;text-decoration:none">🎯 ${s}</a>`));
+        (course.skills ?? []).forEach((s: string) => tagParts.push(`<a href="/skills/${s}" class="badge badge-purple text-[.75rem] no-underline">🎯 ${s}</a>`));
         tagsEl.innerHTML = tagParts.join('');
 
         document.getElementById('course-meta')!.style.display = 'none';
@@ -216,16 +216,16 @@ import App from '../../../layouts/App.astro';
           const earned = earnedSlugs.has(slug);
           const iconEl = document.createElement('a');
           iconEl.href = earned ? '/my-badges' : '#';
-          iconEl.style.cssText = `display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);margin-top:8px;border:1.5px solid ${earned ? 'var(--green,#22c55e)' : 'var(--line)'};background:${earned ? 'var(--green-soft,#f0fdf4)' : 'var(--fill)'};text-decoration:none;color:inherit;${earned ? 'cursor:pointer' : 'cursor:default'}`;
+          iconEl.className = `course-badge-card ${earned ? 'course-badge-earned' : 'course-badge-locked'}`;
           const iconSpan = document.createElement('span');
-          iconSpan.style.fontSize = '1.6rem';
+          iconSpan.className = 'text-[1.6rem]';
           iconSpan.textContent = course.badge.icon || '🏅';
           const textDiv = document.createElement('div');
           const labelDiv = document.createElement('div');
-          labelDiv.style.cssText = `font-size:.72rem;font-weight:600;${earned ? 'color:var(--green,#16a34a)' : 'color:var(--ink-soft)'}`;
+          labelDiv.className = `course-badge-label ${earned ? 'course-badge-label-earned' : 'course-badge-label-locked'}`;
           labelDiv.textContent = earned ? '✓ Badge obtenu' : 'Badge à obtenir';
           const nameDiv = document.createElement('div');
-          nameDiv.style.cssText = 'font-weight:600;font-size:.8rem';
+          nameDiv.className = 'course-badge-name';
           nameDiv.textContent = course.badge.name || 'Badge';
           textDiv.appendChild(labelDiv);
           textDiv.appendChild(nameDiv);
@@ -255,7 +255,7 @@ import App from '../../../layouts/App.astro';
             });
           } else {
             enrollArea.innerHTML = `
-              <div style="background:var(--fill);border:1px solid var(--line);border-radius:var(--radius);padding:14px;font-size:.875rem;color:var(--ink-soft);text-align:center">
+              <div class="course-restricted">
                 🔒 Accès restreint — contactez un administrateur
               </div>
             `;
@@ -269,21 +269,21 @@ import App from '../../../layouts/App.astro';
 
           const xpEarned = Math.round(pct / 100 * 200);
           enrollArea.innerHTML = `
-            <div style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--ink-soft);margin-bottom:6px">
+            <div class="course-enroll-progress">
+              <div class="course-enroll-progress-header">
                 <span>${completedCount}/${totalCount} modules</span>
-                <span style="font-weight:600;color:var(--blue)">${pct}%</span>
+                <span class="course-enroll-pct">${pct}%</span>
               </div>
               <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
             </div>
-            <div style="margin-bottom:12px;padding:10px 12px;background:#fefce8;border:1.5px solid #fcd34d66;border-radius:10px">
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:.75rem;color:#a16207;margin-bottom:${pct === 100 ? '0' : '5px'}">
+            <div class="course-xp-card">
+              <div class="course-xp-row ${pct < 100 ? 'mb-[5px]' : ''}">
                 <span>⚡ XP de ce cours</span>
-                <span style="font-weight:800">${pct === 100 ? '+200 XP ✓' : `${xpEarned} / 200 XP`}</span>
+                <span class="course-xp-amount">${pct === 100 ? '+200 XP ✓' : `${xpEarned} / 200 XP`}</span>
               </div>
-              ${pct < 100 ? `<div style="height:4px;background:#fef3c7;border-radius:4px;overflow:hidden"><div style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);border-radius:4px;width:${pct}%;transition:width .4s"></div></div>` : ''}
+              ${pct < 100 ? `<div class="course-xp-bar"><div class="course-xp-bar-fill" style="width:${pct}%"></div></div>` : ''}
             </div>
-            <a href="${ctaHref}" class="btn btn-primary w-full" style="display:inline-flex">
+            <a href="${ctaHref}" class="btn btn-primary w-full inline-flex">
               ${pct === 0 ? 'Commencer le cours ▸' : pct === 100 ? 'Revoir le cours ▸' : 'Continuer le cours ▸'}
             </a>
           `;
@@ -340,17 +340,17 @@ import App from '../../../layouts/App.astro';
             const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             const btnId = `btn-session-${s.id}`;
             return `
-              <div style="border:1.5px solid ${isBooked ? '#22c55e' : '#e2e8f0'};border-radius:12px;padding:16px 20px;margin-bottom:10px;background:${isBooked ? '#f0fdf4cc' : '#ffffffcc'};backdrop-filter:blur(8px);opacity:${isPast ? '.5' : '1'}">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div class="session-card ${isBooked ? 'session-card-booked' : 'session-card-default'}${isPast ? ' opacity-50' : ''}">
+                <div class="session-card-inner">
                   <div>
-                    <div style="font-weight:600;margin-bottom:4px">${s.title}</div>
-                    <div style="font-size:.85rem;color:var(--ink-soft)">📅 ${dateStr} à ${timeStr}</div>
-                    ${s.location ? `<div style="font-size:.85rem;color:var(--ink-soft);margin-top:2px">📍 ${s.location}</div>` : ''}
-                    ${s.capacity > 0 ? `<div style="font-size:.8rem;color:var(--ink-soft);margin-top:2px">🪑 ${s.capacity} places</div>` : ''}
+                    <div class="session-title">${s.title}</div>
+                    <div class="session-meta-text">📅 ${dateStr} à ${timeStr}</div>
+                    ${s.location ? `<div class="session-meta-text mt-0.5">📍 ${s.location}</div>` : ''}
+                    ${s.capacity > 0 ? `<div class="session-capacity">🪑 ${s.capacity} places</div>` : ''}
                   </div>
                   ${!isPast && token ? `
                     <button id="${btnId}" data-sid="${s.id}" data-booked="${isBooked}"
-                      class="btn ${isBooked ? 'btn-secondary' : 'btn-primary'}" style="white-space:nowrap;flex-shrink:0">
+                      class="btn ${isBooked ? 'btn-secondary' : 'btn-primary'} whitespace-nowrap shrink-0">
                       ${isBooked ? '✓ Réservé — Annuler' : 'Réserver'}
                     </button>
                   ` : ''}

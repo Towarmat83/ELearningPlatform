@@ -9,12 +9,12 @@ import App from '../../layouts/App.astro';
     <h1 class="cat-page-title">Catalogue</h1>
 
     <!-- Toolbar -->
-    <div class="flex items-center gap-2.5 mb-3.5">
-      <div class="relative flex-1 max-w-[420px]">
+    <div class="flex items-center gap-2.5 mb-3.5 flex-wrap">
+      <div class="relative flex-1 min-w-[160px] max-w-[420px]">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft pointer-events-none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input class="input js-cat-search pl-9 w-full h-[38px] text-[.875rem] bg-white/80 backdrop-blur-[8px]" type="search" placeholder="Rechercher un cours…" />
       </div>
-      <select class="input js-diff-filter" style="width:auto;padding:8px 14px;font-size:.85rem;flex-shrink:0">
+      <select class="input js-diff-filter cat-diff-filter">
         <option value="">Toutes difficultés</option>
         <option value="beginner">Débutant</option>
         <option value="intermediate">Intermédiaire</option>
@@ -44,9 +44,9 @@ import App from '../../layouts/App.astro';
       <div id="continue-hero"></div>
 
       <!-- Empty state -->
-      <div id="empty" style="display:none;text-align:center;padding:64px 24px">
-        <div style="font-size:3rem;margin-bottom:16px">📭</div>
-        <h3 style="margin-bottom:6px">Aucun cours trouvé</h3>
+      <div id="empty" class="cat-empty" style="display:none">
+        <div class="cat-empty-icon">📭</div>
+        <h3 class="cat-empty-title">Aucun cours trouvé</h3>
         <p class="text-soft text-sm">Essayez d'ajuster votre recherche ou vos filtres</p>
       </div>
 
@@ -179,20 +179,20 @@ import App from '../../layouts/App.astro';
         ? `<span class="badge ${diffColors[c.difficulty] || 'badge-blue'}">${diffLabels[c.difficulty] || c.difficulty}</span>`
         : '';
       const skillChips = (c.skills ?? []).slice(0, 3).map((s: string) =>
-        `<a href="/skills/${s}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none">🎯 ${s}</a>`).join('');
+        `<a href="/skills/${s}" class="badge badge-purple text-[.65rem] no-underline">🎯 ${s}</a>`).join('');
       const inPersonBadge = c.inPerson
-        ? `<span class="badge" style="background:#e0f7fa;color:#0891b2;font-size:.65rem">🏢 Présentiel</span>`
+        ? `<span class="badge badge-inperson text-[.65rem]">🏢 Présentiel</span>`
         : '';
       const xpGate = c.xpRequired > 0
         ? `<span class="badge badge-orange" title="${c.xpRequired} XP requis">⚡ ${c.xpRequired} XP requis</span>`
         : '';
-      const xpReward = `<span class="badge" style="background:#fefce8;color:#a16207;border:1px solid #fcd34d;font-size:.65rem">+200 XP</span>`;
+      const xpReward = `<span class="badge badge-xp-reward text-[.65rem]">+200 XP</span>`;
       const prog = enrolled
         ? `<div class="rail-card-prog"><div class="rail-card-prog-fill" style="width:100%"></div></div>`
         : '';
       const thumbContent = c.thumbnail
         ? `<img src="${c.thumbnail}" alt="${c.title}" />`
-        : `<span style="font-size:2rem">${courseThumbIcon(c)}</span>`;
+        : `<span class="text-[2rem]">${courseThumbIcon(c)}</span>`;
       const catLabel = getCatLabel(c.category || '');
       const catIcon  = getCatIcon(c.category || '');
 

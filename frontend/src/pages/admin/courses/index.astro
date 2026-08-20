@@ -3,12 +3,12 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Cours">
 
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+  <div class="admin-page-header">
     <div>
-      <h1 style="font-size:1.5rem">Cours</h1>
-      <p class="text-soft text-sm" style="margin-top:4px" id="course-count">Chargement…</p>
+      <h1 class="text-2xl">Cours</h1>
+      <p class="text-soft text-sm mt-1" id="course-count">Chargement…</p>
     </div>
-    <div style="display:flex;gap:8px">
+    <div class="flex gap-2">
       <button class="btn btn-primary btn-sm" id="new-course-btn">+ Nouveau cours</button>
       <button class="btn btn-secondary btn-sm" id="clear-all-cache">🗑 Vider tout le cache</button>
     </div>
@@ -16,19 +16,19 @@ import Admin from '../../../layouts/Admin.astro';
 
   <!-- Course draft form -->
   <div id="draft-panel" class="draft-panel" style="display:none">
-    <h3 id="draft-title" style="margin-bottom:16px">Nouveau cours</h3>
+    <h3 id="draft-title" class="mb-4">Nouveau cours</h3>
     <div class="draft-grid">
       <div>
-        <label class="label" for="d-slug">Slug <span style="color:var(--bad)">*</span></label>
-        <input class="input" id="d-slug" type="text" style="font-family:monospace" placeholder="mon-cours" />
+        <label class="label" for="d-slug">Slug <span class="text-bad">*</span></label>
+        <input class="input font-mono" id="d-slug" type="text" placeholder="mon-cours" />
         <p class="slug-warn" id="slug-warn" style="display:none">Lettres minuscules, chiffres et tirets uniquement.</p>
       </div>
       <div>
-        <label class="label" for="d-title">Titre <span style="color:var(--bad)">*</span></label>
+        <label class="label" for="d-title">Titre <span class="text-bad">*</span></label>
         <input class="input" id="d-title" type="text" placeholder="Introduction à Kubernetes" />
       </div>
     </div>
-    <div style="margin-bottom:14px">
+    <div class="mb-3.5">
       <label class="label" for="d-desc">Description</label>
       <textarea class="input" id="d-desc" rows="2" placeholder="Une courte description du cours…"></textarea>
     </div>
@@ -46,19 +46,19 @@ import Admin from '../../../layouts/Admin.astro';
         </select>
       </div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px">
-      <input type="checkbox" id="d-public" style="width:16px;height:16px;accent-color:var(--blue)" />
-      <span style="font-size:.875rem">Public <span class="text-soft" style="font-size:.8rem">(visible sans inscription)</span></span>
+    <label class="flex items-center gap-2 cursor-pointer mb-4 text-[.875rem]">
+      <input type="checkbox" id="d-public" class="w-4 h-4" />
+      <span>Public <span class="text-soft text-[.8rem]">(visible sans inscription)</span></span>
     </label>
-    <div style="display:flex;gap:8px">
+    <div class="flex gap-2">
       <button class="btn btn-primary btn-sm" id="draft-save">Créer le cours</button>
       <button class="btn btn-secondary btn-sm" id="draft-cancel">Annuler</button>
     </div>
   </div>
 
   <!-- Search -->
-  <div style="margin-bottom:16px">
-    <input id="search-input" class="input" style="width:300px" placeholder="Rechercher un cours…" />
+  <div class="mb-4">
+    <input id="search-input" class="input w-full max-w-[300px]" placeholder="Rechercher un cours…" />
   </div>
 
   <!-- Course list -->
@@ -129,7 +129,7 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('loading')!.style.display = 'none';
         render();
       } catch (e: any) {
-        document.getElementById('loading')!.innerHTML = `<p style="color:var(--bad);padding:24px">${e.message}</p>`;
+        document.getElementById('loading')!.innerHTML = `<p class="text-bad p-6">${e.message}</p>`;
       }
     }
 
@@ -141,7 +141,7 @@ import Admin from '../../../layouts/Admin.astro';
         : allCourses;
       const list = document.getElementById('courses-list')!;
       if (!courses.length) {
-        list.innerHTML = `<div class="card" style="text-align:center;padding:40px;color:var(--ink-soft)">Aucun cours trouvé</div>`;
+        list.innerHTML = `<div class="card text-center p-10 text-ink-soft">Aucun cours trouvé</div>`;
         return;
       }
       list.innerHTML = courses.map(c => renderCourseItem(c)).join('');
@@ -157,9 +157,9 @@ import Admin from '../../../layouts/Admin.astro';
               <div class="course-title">${escHtml(c.title)}</div>
               <div class="course-meta">
                 <span class="course-slug">${escHtml(c.id)}</span>
-                ${c.difficulty ? `<span class="badge ${DIFF[c.difficulty] || 'badge-gray'}" style="font-size:.7rem">${c.difficulty}</span>` : ''}
-                ${c.category ? `<span class="badge badge-blue" style="font-size:.7rem">${escHtml(c.category)}</span>` : ''}
-                <span class="badge ${c.isPublic ? 'badge-green' : 'badge-gray'}" style="font-size:.7rem">${c.isPublic ? 'Public' : 'Privé'}</span>
+                ${c.difficulty ? `<span class="badge ${DIFF[c.difficulty] || 'badge-gray'} text-[.7rem]">${c.difficulty}</span>` : ''}
+                ${c.category ? `<span class="badge badge-blue text-[.7rem]">${escHtml(c.category)}</span>` : ''}
+                <span class="badge ${c.isPublic ? 'badge-green' : 'badge-gray'} text-[.7rem]">${c.isPublic ? 'Public' : 'Privé'}</span>
               </div>
             </div>
             <div class="course-actions">
@@ -189,40 +189,40 @@ import Admin from '../../../layouts/Admin.astro';
       const pub = spec.public !== undefined ? spec.public : !!c.isPublic;
       return `
         <div class="course-inline-form">
-          <p style="font-size:.78rem;font-weight:700;color:var(--blue);margin-bottom:14px">Modifier — ${escHtml(c.id)}</p>
+          <p class="text-[.78rem] font-bold text-blue mb-3.5">Modifier — ${escHtml(c.id)}</p>
           <div class="draft-grid">
             <div>
-              <label class="label" style="font-size:.78rem">Slug</label>
-              <input class="input" id="ce-slug" type="text" style="font-family:monospace;font-size:.82rem" value="${escHtml(c.id)}" disabled />
+              <label class="label text-[.78rem]">Slug</label>
+              <input class="input font-mono text-[.82rem]" id="ce-slug" type="text" value="${escHtml(c.id)}" disabled />
             </div>
             <div>
-              <label class="label" style="font-size:.78rem">Titre <span style="color:var(--bad)">*</span></label>
+              <label class="label text-[.78rem]">Titre <span class="text-bad">*</span></label>
               <input class="input" id="ce-title" type="text" value="${escHtml(title)}" placeholder="Introduction à Kubernetes" />
             </div>
           </div>
-          <div style="margin-bottom:14px">
-            <label class="label" style="font-size:.78rem">Description</label>
+          <div class="mb-3.5">
+            <label class="label text-[.78rem]">Description</label>
             <textarea class="input" id="ce-desc" rows="2" placeholder="Une courte description du cours…">${escHtml(desc)}</textarea>
           </div>
           <div class="draft-grid">
             <div>
-              <label class="label" style="font-size:.78rem">Catégorie</label>
+              <label class="label text-[.78rem]">Catégorie</label>
               <input class="input" id="ce-category" type="text" placeholder="DevOps" value="${escHtml(cat)}" />
             </div>
             <div>
-              <label class="label" style="font-size:.78rem">Difficulté</label>
-              <select class="input" id="ce-difficulty" style="font-size:.85rem">
+              <label class="label text-[.78rem]">Difficulté</label>
+              <select class="input text-[.85rem]" id="ce-difficulty">
                 <option value="beginner" ${diff === 'beginner' ? 'selected' : ''}>Débutant</option>
                 <option value="intermediate" ${diff === 'intermediate' ? 'selected' : ''}>Intermédiaire</option>
                 <option value="advanced" ${diff === 'advanced' ? 'selected' : ''}>Avancé</option>
               </select>
             </div>
           </div>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px;font-size:.85rem">
-            <input type="checkbox" id="ce-public" style="width:16px;height:16px;accent-color:var(--blue)" ${pub ? 'checked' : ''} />
-            <span>Public <span class="text-soft" style="font-size:.8rem">(visible sans inscription)</span></span>
+          <label class="flex items-center gap-2 cursor-pointer mb-4 text-[.85rem]">
+            <input type="checkbox" id="ce-public" class="w-4 h-4" ${pub ? 'checked' : ''} />
+            <span>Public <span class="text-soft text-[.8rem]">(visible sans inscription)</span></span>
           </label>
-          <div style="display:flex;gap:8px">
+          <div class="flex gap-2">
             <button class="btn btn-primary btn-sm" data-action="course-edit-save" data-course="${c.id}">Enregistrer</button>
             <button class="btn btn-secondary btn-sm" data-action="course-edit-cancel">Annuler</button>
           </div>
@@ -257,45 +257,45 @@ import Admin from '../../../layouts/Admin.astro';
       return `
         <div class="mod-form-grid">
           <div>
-            <label class="label" style="font-size:.78rem">Nom *</label>
-            <input class="input" id="mf-name" type="text" style="font-size:.82rem" value="${escHtml(moduleDraft.name)}" placeholder="Introduction" />
+            <label class="label text-[.78rem]">Nom *</label>
+            <input class="input text-[.82rem]" id="mf-name" type="text" value="${escHtml(moduleDraft.name)}" placeholder="Introduction" />
           </div>
           <div>
-            <label class="label" style="font-size:.78rem">Type</label>
-            <select class="input" id="mf-type" style="font-size:.82rem">
+            <label class="label text-[.78rem]">Type</label>
+            <select class="input text-[.82rem]" id="mf-type">
               ${['text','video','image','quiz','modules'].map(t => `<option value="${t}" ${moduleDraft!.type === t ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
           </div>
         </div>
         <div class="mod-form-grid">
           <div>
-            <label class="label" style="font-size:.78rem">URL repo Git</label>
-            <input class="input" id="mf-src" type="text" style="font-size:.78rem;font-family:monospace" value="${escHtml(moduleDraft.src || '')}" placeholder="https://github.com/org/repo" />
+            <label class="label text-[.78rem]">URL repo Git</label>
+            <input class="input text-[.78rem] font-mono" id="mf-src" type="text" value="${escHtml(moduleDraft.src || '')}" placeholder="https://github.com/org/repo" />
           </div>
           <div>
-            <label class="label" style="font-size:.78rem">Branche / tag</label>
-            <input class="input" id="mf-ref" type="text" style="font-size:.82rem;font-family:monospace" value="${escHtml(moduleDraft.ref || 'main')}" placeholder="main" />
+            <label class="label text-[.78rem]">Branche / tag</label>
+            <input class="input text-[.82rem] font-mono" id="mf-ref" type="text" value="${escHtml(moduleDraft.ref || 'main')}" placeholder="main" />
           </div>
         </div>
-        <div style="margin-bottom:10px">
-          <label class="label" style="font-size:.78rem">Chemin dans le repo</label>
-          <input class="input" id="mf-path" type="text" style="font-size:.78rem;font-family:monospace" value="${escHtml(moduleDraft.path || '')}" placeholder="modules/01-intro/index.md" />
+        <div class="mb-2.5">
+          <label class="label text-[.78rem]">Chemin dans le repo</label>
+          <input class="input text-[.78rem] font-mono" id="mf-path" type="text" value="${escHtml(moduleDraft.path || '')}" placeholder="modules/01-intro/index.md" />
         </div>
-        <div id="mf-quizref-row" style="margin-bottom:10px;display:${moduleDraft.type === 'quiz' ? 'block' : 'none'}">
-          <label class="label" style="font-size:.78rem">Quiz ref</label>
-          <input class="input" id="mf-quizref" type="text" style="font-size:.78rem;font-family:monospace" value="${escHtml(moduleDraft.quizRef || '')}" placeholder="quizzes/01-intro.yaml" />
+        <div id="mf-quizref-row" class="mb-2.5" style="display:${moduleDraft.type === 'quiz' ? 'block' : 'none'}">
+          <label class="label text-[.78rem]">Quiz ref</label>
+          <input class="input text-[.78rem] font-mono" id="mf-quizref" type="text" value="${escHtml(moduleDraft.quizRef || '')}" placeholder="quizzes/01-intro.yaml" />
         </div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:8px;font-size:.82rem">
-          <input type="checkbox" id="mf-hidden" ${moduleDraft.hidden ? 'checked' : ''} style="width:14px;height:14px;accent-color:var(--blue)" />
-          Masqué <span class="text-soft" style="font-size:.75rem">(non visible par les étudiants)</span>
+        <label class="flex items-center gap-1.5 cursor-pointer mb-2 text-[.82rem]">
+          <input type="checkbox" id="mf-hidden" ${moduleDraft.hidden ? 'checked' : ''} class="w-3.5 h-3.5" />
+          Masqué <span class="text-soft text-[.75rem]">(non visible par les étudiants)</span>
         </label>
-        <div id="mf-inline-row" style="margin-bottom:12px;display:${moduleDraft.type === 'quiz' ? 'block' : 'none'}">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem">
-            <input type="checkbox" id="mf-inline" ${moduleDraft.inline ? 'checked' : ''} style="width:14px;height:14px;accent-color:var(--blue)" />
-            Inline <span class="text-soft" style="font-size:.75rem">(mini-quiz affiché en bas du module précédent)</span>
+        <div id="mf-inline-row" class="mb-3" style="display:${moduleDraft.type === 'quiz' ? 'block' : 'none'}">
+          <label class="flex items-center gap-1.5 cursor-pointer text-[.82rem]">
+            <input type="checkbox" id="mf-inline" ${moduleDraft.inline ? 'checked' : ''} class="w-3.5 h-3.5" />
+            Inline <span class="text-soft text-[.75rem]">(mini-quiz affiché en bas du module précédent)</span>
           </label>
         </div>
-        <div style="display:flex;gap:6px">
+        <div class="flex gap-1.5">
           <button class="btn btn-primary btn-sm" data-action="mf-save" data-course="${courseId}">${moduleDraftIdx !== null ? 'Enregistrer' : 'Ajouter'}</button>
           <button class="btn btn-secondary btn-sm" data-action="mf-cancel">Annuler</button>
         </div>
@@ -307,7 +307,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       let modList = '';
       if (panelModules === null) {
-        modList = '<div class="loading-state" style="padding:20px 0"><div class="spinner"></div></div>';
+        modList = '<div class="loading-state !py-5 !px-0"><div class="spinner"></div></div>';
       } else if (!panelModules.length) {
         modList = '<p class="text-soft text-sm">Aucun module. Cliquez <strong>+ Ajouter</strong>.</p>';
       } else {
@@ -319,13 +319,13 @@ import Admin from '../../../layouts/Admin.astro';
                 ${moduleEditMode ? `<span class="mod-drag-handle" draggable="true" data-mod-arr-idx="${i}" data-mod-course="${courseId}" title="Glisser pour réordonner">⠿</span>` : ''}
                 <span class="mod-idx">${m.index}</span>
                 <div class="mod-info">
-                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="mod-name">${escHtml(m.name)}</span>
-                    <span class="badge ${modTypeBadge(m.type)}" style="font-size:.7rem">${m.type}</span>
-                    ${m.hidden ? `<span class="badge badge-red" style="font-size:.7rem">masqué</span>` : ''}
-                    ${m.inline ? `<span class="badge badge-blue" style="font-size:.7rem">inline</span>` : ''}
+                    <span class="badge ${modTypeBadge(m.type)} text-[.7rem]">${m.type}</span>
+                    ${m.hidden ? `<span class="badge badge-red text-[.7rem]">masqué</span>` : ''}
+                    ${m.inline ? `<span class="badge badge-blue text-[.7rem]">inline</span>` : ''}
                   </div>
-                  ${m.path ? `<div style="font-size:.72rem;color:var(--ink-soft);margin-top:2px;font-family:monospace">${escHtml(m.path)}${m.src ? ` · ${escHtml(m.src)} @ ${escHtml(m.ref || 'main')}` : ''}</div>` : ''}
+                  ${m.path ? `<div class="text-[.72rem] text-ink-soft mt-0.5 font-mono">${escHtml(m.path)}${m.src ? ` · ${escHtml(m.src)} @ ${escHtml(m.ref || 'main')}` : ''}</div>` : ''}
                 </div>
                 <div class="mod-actions">
                   ${m.src ? `<button class="link-btn gray" data-action="mod-cache" data-course="${courseId}" data-idx="${m.index}" title="Vider cache">🗑</button>` : ''}
@@ -341,17 +341,17 @@ import Admin from '../../../layouts/Admin.astro';
 
       const newFormHtml = showNewForm ? `
         <div class="mod-form">
-          <p style="font-size:.78rem;font-weight:700;color:var(--blue);margin-bottom:10px">Nouveau module</p>
+          <p class="text-[.78rem] font-bold text-blue mb-2.5">Nouveau module</p>
           ${renderModFormFields(courseId)}
         </div>
       ` : '';
 
       return `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="flex items-center justify-between mb-3">
           <button class="btn btn-sm ${moduleEditMode ? 'btn-primary' : 'btn-secondary'}" data-action="toggle-edit-mode" data-course="${courseId}" title="${moduleEditMode ? 'Désactiver le mode édition' : 'Activer le glisser-déposer pour réordonner'}">
             ${moduleEditMode ? '↕ Édition active' : '↕ Réordonner'}
           </button>
-          <div style="display:flex;gap:6px">
+          <div class="flex gap-1.5">
             ${!showNewForm && !moduleEditMode ? `<button class="btn btn-primary btn-sm" data-action="mod-add" data-course="${courseId}">+ Ajouter</button>` : ''}
             <button class="btn btn-secondary btn-sm" data-action="course-cache" data-course="${courseId}">🗑 Cache</button>
           </div>
@@ -363,7 +363,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function renderEnrollmentsTab(courseId: string) {
       if (panelEnrollments === null && panelGroupEnrollments === null) {
-        return '<div class="loading-state" style="padding:20px 0"><div class="spinner"></div></div>';
+        return '<div class="loading-state !py-5 !px-0"><div class="spinner"></div></div>';
       }
       const groups = panelGroupEnrollments || [];
       const users  = panelEnrollments || [];
@@ -373,17 +373,17 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="stack">
           <div>
             <p class="section-label">Groupes</p>
-            ${groups.length ? `<div class="stack-sm" style="margin-bottom:10px">${groups.map((g: any) => `
+            ${groups.length ? `<div class="stack-sm mb-2.5">${groups.map((g: any) => `
               <div class="enroll-row">
-                <span style="font-size:.875rem"><strong>${escHtml(g.name)}</strong>
-                  <span class="text-soft text-sm" style="margin-left:6px">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''}</span>
+                <span class="text-[.875rem]"><strong>${escHtml(g.name)}</strong>
+                  <span class="text-soft text-sm ml-1.5">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''}</span>
                 </span>
                 <button class="link-btn red" data-action="unenroll-group" data-course="${courseId}" data-gid="${g.id}" data-gname="${escHtml(g.name)}">Retirer</button>
               </div>
             `).join('')}</div>` : ''}
             ${availGroups.length ? `
               <div class="flex-row">
-                <select id="enroll-group-sel" class="input" style="flex:1;font-size:.85rem;height:auto;padding:8px 12px">
+                <select id="enroll-group-sel" class="input text-[.85rem] flex-1">
                   <option value="">— Ajouter un groupe —</option>
                   ${availGroups.map((g: any) => `<option value="${g.id}">${escHtml(g.name)} (${g.memberCount} membres)</option>`).join('')}
                 </select>
@@ -391,13 +391,13 @@ import Admin from '../../../layouts/Admin.astro';
               </div>
             ` : `<p class="text-soft text-sm">${allGroups.length ? 'Tous les groupes déjà inscrits.' : 'Aucun groupe disponible.'}</p>`}
           </div>
-          <hr style="border:none;border-top:1px solid var(--line)" />
+          <hr class="border-0 border-t border-line" />
           <div>
             <p class="section-label">Utilisateurs individuels</p>
-            <div class="flex-row" style="margin-bottom:12px;position:relative">
-              <div style="flex:1;position:relative">
+            <div class="flex-row mb-3 relative">
+              <div class="flex-1 relative">
                 <input id="enroll-user-search" class="input" type="text" placeholder="Rechercher un utilisateur…" autocomplete="off" />
-                <div id="enroll-user-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;max-height:200px;overflow-y:auto;margin-top:4px"></div>
+                <div id="enroll-user-suggestions" class="user-suggest-dropdown" style="display:none"></div>
               </div>
               <button class="btn btn-primary btn-sm" data-action="enroll-user" data-course="${courseId}">Inscrire</button>
             </div>
@@ -405,10 +405,10 @@ import Admin from '../../../layouts/Admin.astro';
               <div class="stack-sm">${users.map((e: any) => `
                 <div class="enroll-row">
                   <div>
-                    <span style="font-weight:500;font-size:.875rem">${escHtml(e.username)}</span>
-                    <span class="text-soft text-sm" style="margin-left:6px">${escHtml(e.email)}</span>
+                    <span class="font-medium text-[.875rem]">${escHtml(e.username)}</span>
+                    <span class="text-soft text-sm ml-1.5">${escHtml(e.email)}</span>
                   </div>
-                  <div style="display:flex;align-items:center;gap:12px">
+                  <div class="flex items-center gap-3">
                     <span class="text-soft text-sm">${new Date(e.enrolledAt).toLocaleDateString('fr')}</span>
                     <button class="link-btn red" data-action="unenroll-user" data-course="${courseId}" data-uid="${e.userId}" data-uname="${escHtml(e.username)}">Retirer</button>
                   </div>
@@ -719,14 +719,12 @@ import Admin from '../../../layouts/Admin.astro';
             const users: any[] = res.users || [];
             if (!users.length) { suggestEl.style.display = 'none'; return; }
             suggestEl.innerHTML = users.map(u => `
-              <div class="user-suggest-row" data-uid="${u.id}" data-name="${escHtml(u.username)}" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:6px;margin:2px">
-                <span style="font-weight:500;font-size:.875rem">${escHtml(u.username)}</span>
+              <div class="user-suggest-row" data-uid="${u.id}" data-name="${escHtml(u.username)}">
+                <span class="font-medium text-[.875rem]">${escHtml(u.username)}</span>
                 <span class="text-soft text-sm">${escHtml(u.email || '')}</span>
               </div>`).join('');
             suggestEl.style.display = 'block';
             suggestEl.querySelectorAll('.user-suggest-row').forEach(row => {
-              (row as HTMLElement).addEventListener('mouseenter', () => (row as HTMLElement).style.background = 'var(--fill)');
-              (row as HTMLElement).addEventListener('mouseleave', () => (row as HTMLElement).style.background = '');
               row.addEventListener('click', () => {
                 enrollUserSelectedId = (row as HTMLElement).dataset.uid || '';
                 searchEl.value = (row as HTMLElement).dataset.name || '';

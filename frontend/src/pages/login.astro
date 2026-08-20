@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 ---
 <Base title="Connexion">
   <div class="min-h-screen bg-fill flex items-start justify-center px-4 pt-10 pb-10 sm:items-center sm:pt-0">
-    <div class="w-full max-w-[430px] bg-paper border-[1.5px] border-line rounded-[18px] px-9 pt-9 pb-8 flex flex-col gap-[18px] shadow-[0_20px_50px_-28px_rgba(30,60,120,.45)] sm:max-sm:rounded-2xl sm:max-sm:px-5 sm:max-sm:pt-7 sm:max-sm:pb-6">
+    <div class="w-full max-w-[430px] bg-paper border-[1.5px] border-line rounded-[18px] px-5 pt-7 pb-6 flex flex-col gap-[18px] shadow-[0_20px_50px_-28px_rgba(30,60,120,.45)] sm:px-9 sm:pt-9 sm:pb-8">
 
       <!-- Logo -->
       <div class="flex items-center justify-center gap-3">
@@ -13,9 +13,18 @@ import Base from '../layouts/Base.astro';
 
       <!-- Tab switcher -->
       <div class="flex bg-fill rounded-[11px] p-1 gap-[3px]" id="login-seg">
-        <button class="seg-btn flex-1 h-[34px] rounded-lg text-[13px] font-semibold text-ink-soft bg-transparent transition-colors duration-[.12s] active" data-tab="password">Mot de passe</button>
-        <button class="seg-btn flex-1 h-[34px] rounded-lg text-[13px] font-semibold text-ink-soft bg-transparent transition-colors duration-[.12s] hidden" data-tab="sso" id="seg-sso">SSO</button>
-        <button class="seg-btn flex-1 h-[34px] rounded-lg text-[13px] font-semibold text-ink-soft bg-transparent transition-colors duration-[.12s] hidden" data-tab="ldap" id="seg-ldap">LDAP</button>
+        <button class="seg-btn flex-1 h-[36px] rounded-lg text-[13px] font-semibold transition-all duration-[.12s] flex items-center justify-center gap-1.5 active" data-tab="password" data-color="blue">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Email
+        </button>
+        <button class="seg-btn flex-1 h-[36px] rounded-lg text-[13px] font-semibold transition-all duration-[.12s] flex items-center justify-center gap-1.5 hidden" data-tab="sso" data-color="violet" id="seg-sso">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          SSO
+        </button>
+        <button class="seg-btn flex-1 h-[36px] rounded-lg text-[13px] font-semibold transition-all duration-[.12s] flex items-center justify-center gap-1.5 hidden" data-tab="ldap" data-color="teal" id="seg-ldap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+          LDAP
+        </button>
       </div>
 
       <!-- Error banner -->
@@ -51,11 +60,6 @@ import Base from '../layouts/Base.astro';
     </div>
   </div>
 
-  <style>
-    /* Active tab button — needs a tiny local rule for the dynamic .active class */
-    .seg-btn.active { background: var(--color-blue); color: #fff; }
-  </style>
-
   <script>
     async function apiFetch(path: string, opts: { method?: string; body?: unknown } = {}) {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -80,6 +84,26 @@ import Base from '../layouts/Base.astro';
       document.getElementById('login-error')!.classList.add('hidden');
     }
 
+    // Tab color palette
+    const TAB_COLORS: Record<string, { bg: string; text: string }> = {
+      blue:   { bg: '#1b86f2', text: '#fff' },
+      violet: { bg: '#1b86f2', text: '#fff' },
+      teal:   { bg: '#0d9488', text: '#fff' },
+    };
+
+    function activateTab(btn: HTMLButtonElement) {
+      const seg = document.getElementById('login-seg')!;
+      seg.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach(b => {
+        b.style.background = '';
+        b.style.color = '';
+        b.style.boxShadow = '';
+      });
+      const color = TAB_COLORS[btn.dataset.color ?? 'blue'];
+      btn.style.background = color.bg;
+      btn.style.color = color.text;
+      btn.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)';
+    }
+
     // Tab switching
     const seg = document.getElementById('login-seg')!;
     seg.addEventListener('click', (e) => {
@@ -87,13 +111,16 @@ import Base from '../layouts/Base.astro';
       if (!btn || !btn.dataset.tab) return;
       hideError();
       const tab = btn.dataset.tab;
-      seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      activateTab(btn);
       ['password', 'sso', 'ldap'].forEach(t => {
         const el = document.getElementById(`tab-${t}`)!;
         if (el) el.classList.toggle('hidden', t !== tab);
       });
     });
+
+    // Set initial active color on page load
+    const initBtn = seg.querySelector<HTMLButtonElement>('.seg-btn.active');
+    if (initBtn) activateTab(initBtn);
 
     async function init() {
       let oidcEnabled = false;

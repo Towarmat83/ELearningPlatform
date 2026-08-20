@@ -80,7 +80,7 @@
 
   /* ── Top nav ── */
   .topnav {
-    @apply h-14 bg-paper border-b border-line flex items-center gap-2 px-6 sticky top-0 z-[100];
+    @apply h-14 bg-paper border-b border-line flex items-center gap-2 px-4 sm:px-6 sticky top-0 z-[100];
   }
   .topnav .brand {
     @apply flex items-center gap-2 mr-2 no-underline;
@@ -91,8 +91,11 @@
     @apply text-[1.3rem] font-bold text-ink;
   }
   .navlink {
+    display: none;
     @apply text-[0.9rem] font-medium text-ink-soft px-3 py-1.5 rounded-lg transition-colors duration-150 no-underline;
+    @media (min-width: 640px) { display: inline-flex; }
   }
+  @media (max-width: 640px) { #nav-logout { display: none !important; } }
   .navlink:hover, .navlink.active {
     @apply text-blue bg-blue-soft;
   }
@@ -144,6 +147,7 @@
   }
   .nav-drawer-link {
     @apply flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px] no-underline text-ink text-[0.875rem] font-medium transition-colors duration-150;
+    background: none; border: none; cursor: pointer; width: 100%;
   }
   .nav-drawer-link:hover { @apply bg-blue/[.07] text-blue; }
   .nav-drawer-link.active {
@@ -348,6 +352,8 @@
     @apply w-full max-w-[420px] bg-paper rounded-2xl p-10;
     box-shadow: var(--shadow-lg);
   }
+  .seg-btn { color: var(--color-ink-soft); background: transparent; border: none; cursor: pointer; }
+  .seg-btn.active { color: var(--color-ink-soft); background: transparent; }
 
   /* ── SSO ── */
   .sso-btn {
@@ -451,6 +457,7 @@
   /* ── Auto-fill responsive grid ── */
   .auto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
   .auto-grid-lg { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+  @media (max-width: 640px) { .auto-grid-lg { grid-template-columns: 1fr; } }
 
   /* ── Leaderboard ── */
   .lb-row {
@@ -467,6 +474,7 @@
   .lb-username { @apply font-semibold text-[.95rem] truncate; }
   .lb-count { @apply text-[.78rem] text-ink-soft mt-0.5; }
   .lb-icons { @apply flex gap-1 flex-wrap justify-end max-w-[240px] text-[1.15rem] leading-none; }
+  @media (max-width: 480px) { .lb-row { padding-left: 12px; padding-right: 12px; gap: 10px; } .lb-icons { max-width: 100px; } .lb-podium-block { width: 70px; } }
   .lb-podium-card { @apply flex flex-col items-center no-underline text-inherit transition-transform duration-200 hover:-translate-y-1; }
   .lb-podium-avatar {
     @apply rounded-full flex items-center justify-center font-extrabold shrink-0 overflow-hidden border-4 border-transparent;
@@ -505,7 +513,7 @@
 
   /* ── XP page ── */
   .xp-hero {
-    @apply flex items-center gap-7 bg-white/80 backdrop-blur-[8px] border-[1.5px] border-slate-200 rounded-[20px] px-8 py-7 mb-5 sm:flex-col sm:text-center sm:gap-4;
+    @apply flex flex-col items-center text-center gap-4 bg-white/80 backdrop-blur-[8px] border-[1.5px] border-slate-200 rounded-[20px] px-6 py-6 mb-5 sm:flex-row sm:text-left sm:gap-7 sm:px-8 sm:py-7;
   }
   .xp-orb {
     @apply w-[88px] h-[88px] rounded-full flex items-center justify-center text-[2.4rem] shrink-0;
@@ -514,7 +522,7 @@
     box-shadow: 0 4px 20px rgba(251,191,36,.25);
   }
   .xp-total {
-    @apply text-[2.8rem] font-extrabold leading-none;
+    @apply text-[2rem] font-extrabold leading-none;
     background: linear-gradient(135deg, #f59e0b, #d97706);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
@@ -552,7 +560,7 @@
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .xp-empty { @apply text-center text-ink-soft py-12 text-[.95rem]; }
-  .xp-levels { @apply grid grid-cols-5 gap-2.5 mb-6 sm:grid-cols-3; }
+  .xp-levels { @apply grid grid-cols-3 gap-2.5 mb-6 sm:grid-cols-5; }
 
   /* ── Paths page ── */
   .path-list-card {
@@ -696,7 +704,7 @@
   /* ── Manager users page ────────────────────────────────────────────── */
   .mu-title { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #4361ee, #7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   .mu-subtitle { font-size: .875rem; color: var(--ink-soft); }
-  .mu-table-wrap { border: 1.5px solid #e2e8f0; border-radius: 16px; background: #ffffffcc; backdrop-filter: blur(8px); overflow: hidden; }
+  .mu-table-wrap { border: 1.5px solid #e2e8f0; border-radius: 16px; background: #ffffffcc; backdrop-filter: blur(8px); overflow-x: auto; }
   .mu-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
   .mu-table thead tr { border-bottom: 1.5px solid #e2e8f0; background: #f8faff; }
   .mu-table th { padding: 12px 16px; text-align: left; font-weight: 700; color: var(--ink-soft); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
@@ -715,6 +723,7 @@
   .setting-label p { font-size: .875rem; font-weight: 500; color: var(--ink); margin-bottom: 2px; }
   .setting-label small { font-size: .75rem; color: var(--ink-soft); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
   .warn-box { background: #fffbeb; border: 1px solid #fbbf24; border-radius: var(--radius); padding: 12px; font-size: .8rem; color: #92400e; }
   .info-box { background: var(--blue-soft); border: 1px solid var(--blue); border-radius: var(--radius); padding: 12px; font-size: .8rem; color: var(--blue-deep); }
   .pwd-preview { background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
@@ -761,9 +770,11 @@
   .pat-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
   .pat-inline-form { border-top: 1px solid var(--line); padding: 18px 20px; background: var(--fill); display: flex; flex-direction: column; gap: 10px; }
   .pat-inline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .pat-inline-grid { grid-template-columns: 1fr; } }
   .form-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); }
   .form-stack { display: flex; flex-direction: column; gap: 14px; }
   .form-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .form-grid2 { grid-template-columns: 1fr; } }
   .label-hint { font-size: .72rem; color: var(--ink-soft); margin-bottom: 4px; margin-top: -2px; }
 
   /* ── Admin courses management ────────────────────────────────────────── */
@@ -800,10 +811,12 @@
   .mod-inline-form { background: var(--blue-soft); border: 1px solid var(--blue); border-top: none; border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); padding: 14px 16px; margin-bottom: 0; }
   .mod-form { background: var(--paper); border: 1px solid var(--blue); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
   .mod-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  @media (max-width: 640px) { .mod-form-grid { grid-template-columns: 1fr; } }
   .enroll-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius); }
   .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 8px; }
   .draft-panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
   .draft-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 640px) { .draft-grid { grid-template-columns: 1fr; } }
   .stack-sm { display: flex; flex-direction: column; gap: 6px; }
   .flex-row { display: flex; gap: 8px; align-items: center; }
   .slug-warn { font-size: .73rem; color: var(--bad); margin-top: 3px; }
@@ -896,11 +909,11 @@
   /* ── Lesson 3-column layout ──────────────────────────────────────────── */
   .lesson-layout { display: grid; grid-template-columns: 230px 1fr 210px; min-height: calc(100vh - 56px); gap: 0; }
   .lesson-left { border-right: 1px solid var(--line); background: var(--paper); position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; padding: 20px 0; }
-  .lesson-center { padding: 34px 48px; max-width: 680px; width: 100%; }
+  .lesson-center { padding: 34px 48px; width: 100%; }
   .lesson-right { border-left: 1px solid var(--line); position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; padding: 24px 18px; }
   body.focus-mode .lesson-layout { grid-template-columns: 1fr; }
   body.focus-mode .lesson-left { display: none; }
-  body.focus-mode .lesson-center { width: 620px; max-width: 620px; margin: 0 auto; padding: 40px 0; }
+  body.focus-mode .lesson-center { max-width: 760px; margin: 0 auto; padding: 40px 48px; }
   body.focus-mode .lesson-right { display: none; }
   body.focus-mode .lesson-mobile-open { display: none !important; }
   .floating-mode-btn { position: fixed; left: 24px; bottom: 24px; z-index: 60; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 999px; font-size: .78rem; font-weight: 600; color: var(--ink-soft); background: var(--paper); border: 1.5px solid var(--line); box-shadow: 0 4px 16px rgba(30,60,120,.10); cursor: pointer; transition: border-color .14s, color .14s, box-shadow .14s, transform .12s; white-space: nowrap; user-select: none; }
@@ -1045,6 +1058,15 @@
   .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
   .btn-new-session { margin-left: auto; background: var(--blue); color: #fff; border: none; border-radius: 8px; padding: 6px 14px; font-size: .82rem; font-weight: 600; cursor: pointer; display: none; }
   .btn-new-session:hover { background: #1466c4; }
+  @media (max-width: 640px) {
+    .agenda-wrap { flex-direction: column; height: auto; overflow-y: auto; padding: 10px 12px; gap: 12px; }
+    .cal-area { flex: none; }
+    .cal-body { grid-auto-rows: 64px; overflow-y: auto; }
+    .side-panel { width: 100%; flex-shrink: 1; }
+    .cal-topbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+    .cal-topbar-title { display: none; }
+    .cal-month-btn { min-width: 110px; }
+  }
 
   /* ── Admin/Manager shell layout ──────────────────────────────────────── */
   .shell-hidden { display: none; }
@@ -1058,7 +1080,15 @@
   .shell-sidebar-bottom { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
   .shell-main { padding: 32px 36px; min-width: 0; background: linear-gradient(160deg,#f0f4ff 0%,#faf5ff 50%,#f0fdf4 100%); min-height: calc(100vh - 56px); }
   @media (max-width: 1024px) { .shell-layout { grid-template-columns: 180px 1fr; } .shell-main { padding: 24px 20px; } }
-  @media (max-width: 640px) { .shell-layout { grid-template-columns: 1fr; } .shell-sidebar { position: static; height: auto; } .shell-main { padding: 20px 14px; } }
+  @media (max-width: 640px) {
+    .shell-layout { grid-template-columns: 1fr; }
+    .shell-sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 8px 10px; display: flex; flex-direction: row; align-items: center; gap: 4px; overflow-x: auto; }
+    .shell-sidebar-label { display: none; }
+    .shell-sidebar-nav { flex-direction: row; gap: 4px; }
+    .shell-sidebar-bottom { display: none; }
+    .sidebar-link { white-space: nowrap; padding: 7px 12px; font-size: .78rem; }
+    .shell-main { padding: 16px 14px; }
+  }
 
   /* ── Manager/Users modal ─────────────────────────────────────────────── */
   .mu-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; align-items: center; justify-content: center; }
@@ -1414,6 +1444,7 @@
   .brand-logo-text { background: linear-gradient(135deg,#4361ee,#7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1.6; display: inline-block; padding: 2px 6px 4px 2px; }
   /* ── Admin nav button gradient ───────────────────────────────────────── */
   .btn-admin-nav { background: linear-gradient(135deg,#4361ee,#7c3aed); color: #fff !important; font-weight: 600; }
+  @media (max-width: 640px) { .btn-admin-nav { display: none !important; } }
 
   /* ── Small spinner override ──────────────────────────────────────────── */
   .spinner-sm { width: 20px; height: 20px; }
@@ -1449,3 +1480,6 @@
 #toast-container {
   @apply fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none;
 }
+
+/* ── Manager link always visible once JS activates it (all screen sizes) ── */
+#nav-manager:not(.hidden) { display: inline-flex !important; }

@@ -80,6 +80,8 @@ func registerPublicRoutes(router chi.Router, state *State) {
 
 // registerAuthRoutes wires the course-content endpoints that require a valid
 // JWT (any authenticated user).
+//
+//nolint:dupl // structurally mirrors registerAdminRoutes but uses different handler methods
 func registerAuthRoutes(router chi.Router, state *State) {
 	router.Get("/api/courses/{slug}/modules", state.ListModules)
 	router.Get("/api/courses/{slug}/modules/{index}", state.GetModule)
@@ -106,12 +108,17 @@ func registerTrainerRoutes(router chi.Router, state *State) {
 
 // registerAdminRoutes wires the admin-only endpoints behind the Admin
 // middleware, which enforces role == "admin" in addition to JWT validity.
+//
+//nolint:dupl // structurally mirrors registerAuthRoutes but registers admin-only handlers
 func registerAdminRoutes(router chi.Router, state *State) {
 	router.Get("/api/admin/courses", state.ListAdminCourses)
 	router.Post("/api/admin/courses", state.CreateCourseCRD)
 	router.Get("/api/admin/courses/{slug}/crd", state.GetCourseCRD)
 	router.Put("/api/admin/courses/{slug}/crd", state.UpdateCourseCRD)
 	router.Delete("/api/admin/courses/{slug}/crd", state.DeleteCourseCRD)
+	router.Post("/api/admin/courses/paths", state.CreatePathCRD)
+	router.Put("/api/admin/courses/paths/{slug}/crd", state.UpdatePathCRD)
+	router.Delete("/api/admin/courses/paths/{slug}/crd", state.DeletePathCRD)
 	router.Get("/api/admin/lab-checks", state.GetLabResults)
 	router.Post("/api/admin/cache/clear", state.ClearCache)
 	router.Post("/api/admin/courses/{slug}/cache/clear", state.ClearCourseCache)

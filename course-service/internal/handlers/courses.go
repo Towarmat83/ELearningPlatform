@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -299,8 +301,66 @@ func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request)
 	})
 }
 
+// pathsContainingCourse returns the slugs of all in-memory paths that include
+// courseSlug in their ordered course list.
+func (s *State) pathsContainingCourse(courseSlug string) []string {
+	var slugs []string
+
+	for _, p := range s.Paths.List() {
+		if slices.Contains(p.Courses, courseSlug) {
+			slugs = append(slugs, p.Slug)
+		}
+	}
+
+	return slugs
+}
+
+// isEnrolledViaPath returns true if userID is enrolled in any learning path
+// that contains courseSlug.
+func (s *State) isEnrolledViaPath(req *http.Request, courseSlug, userID string) bool {
+	pathSlugs := s.pathsContainingCourse(courseSlug)
+	if len(pathSlugs) == 0 {
+		return false
+	}
+
+	target, err := url.Parse(s.Config.UserServiceURL + "/internal/paths/check")
+	if err != nil {
+		return false
+	}
+
+	q := target.Query()
+	q.Set(userIDJSONKey, userID)
+	q.Set("pathSlugs", strings.Join(pathSlugs, ","))
+	target.RawQuery = q.Encode()
+
+	httpReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, target.String(), http.NoBody)
+	if err != nil {
+		return false
+	}
+
+	s.setInternalHeader(httpReq)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var result struct {
+		Enrolled bool `json:"enrolled"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		return false
+	}
+
+	return result.Enrolled
+}
+
 // canViewPrivateCourse reports whether the requester is authorized to view
-// a course that is not public: an admin, or a user enrolled in it.
+// a course that is not public: an admin, a user enrolled in the course, or
+// a user enrolled in any path that contains the course.
 func (s *State) canViewPrivateCourse(req *http.Request, slug string) bool {
 	claims := s.claims(req)
 	if claims == nil {
@@ -315,7 +375,15 @@ func (s *State) canViewPrivateCourse(req *http.Request, slug string) bool {
 		}
 	}
 
-	return claims != nil && (claims.Role == roleAdmin || s.isEnrolled(req, slug, claims.Subject))
+	if claims == nil {
+		return false
+	}
+
+	if claims.Role == roleAdmin {
+		return true
+	}
+
+	return s.isEnrolled(req, slug, claims.Subject) || s.isEnrolledViaPath(req, slug, claims.Subject)
 }
 
 // GetCourse godoc

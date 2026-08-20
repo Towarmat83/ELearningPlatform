@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -32,6 +33,9 @@ type PathEnrolledUserRow struct {
 type PathEnrollmentRepository interface {
 	MyEnrollments(ctx context.Context, userID string, limit *int, offset int) ([]PathEnrollmentRow, error)
 	ListBySlug(ctx context.Context, pathSlug string) ([]PathEnrolledUserRow, error)
+	// EnrolledInAny returns whether userID is enrolled in any of the given
+	// path slugs.
+	EnrolledInAny(ctx context.Context, userID string, pathSlugs []string) (bool, error)
 	Enroll(ctx context.Context, userID, pathSlug string) error
 	Unenroll(ctx context.Context, userID, pathSlug string) error
 }
@@ -88,6 +92,24 @@ func (r *gormPathEnrollmentRepository) ListBySlug(ctx context.Context, pathSlug 
 	}
 
 	return rows, nil
+}
+
+// EnrolledInAny returns whether userID is enrolled in any of pathSlugs.
+func (r *gormPathEnrollmentRepository) EnrolledInAny(ctx context.Context, userID string, pathSlugs []string) (bool, error) {
+	if len(pathSlugs) == 0 {
+		return false, nil
+	}
+
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.PathEnrollment{}).
+		Where("userid = ?::uuid AND path_slug = ANY(?)", userID, pq.StringArray(pathSlugs)).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check path enrollments: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // Enroll enrolls userID in pathSlug, doing nothing if already enrolled.

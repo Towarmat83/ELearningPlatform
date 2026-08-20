@@ -11,6 +11,7 @@ const path = Astro.url.pathname.replace(/\/$/, '') || '/manager';
 const navItems = [
   { href: '/manager/users',  label: '👥 Mes membres' },
   { href: '/manager/groups', label: '🏷️ Mes groupes' },
+  { href: '/manager/paths',  label: '🗺️ Parcours'    },
 ];
 
 function isActive(href: string) {

@@ -191,6 +191,7 @@ func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.
 		group.Get("/api/manager/groups/{groupId}/members", state.ManagerListGroupMembers)
 		group.Post("/api/manager/groups/{groupId}/members", state.ManagerAddGroupMember)
 		group.Delete("/api/manager/groups/{groupId}/members/{userId}", state.ManagerRemoveGroupMember)
+		group.Get("/api/manager/paths/{slug}/enrollments", state.ManagerListPathEnrollments)
 		group.Post("/api/manager/paths/{slug}/enrollments", state.ManagerEnrollUserPath)
 		group.Delete("/api/manager/paths/{slug}/enrollments/{userId}", state.ManagerUnenrollUserPath)
 		group.Get("/api/manager/courses/{slug}/sessions/{sessionId}/bookings", state.ListSessionBookings)
@@ -223,6 +224,7 @@ func registerInternalRoutes(router chi.Router, state *State, internalMW func(htt
 
 		group.Post("/internal/enrollments/auto", state.InternalAutoEnroll)
 		group.Get("/internal/enrollments/check", state.InternalCheckEnrollment)
+		group.Get("/internal/paths/check", state.InternalCheckPathEnrollment)
 		group.Get("/internal/progress/viewed", state.InternalViewedLessons)
 		group.Post("/internal/progress/complete", state.InternalMarkComplete)
 		group.Post("/internal/progress/course-complete", state.InternalMarkCourseComplete)

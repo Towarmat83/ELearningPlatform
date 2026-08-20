@@ -95,12 +95,11 @@ type enrolledUser struct {
 //
 // Rules:
 //   - "completed" if the user finished the course (cross-path counts).
-//   - "available" for the first non-completed course in an unbroken chain.
-//   - "locked" otherwise. A cross-path completion mid-path does not
-//     unlock the next course if preceding courses are not yet done.
+//   - "available" if this is the first course or the immediately preceding
+//     course is "completed".
+//   - "locked" otherwise.
 func buildCourseStatuses(courses []string, completed map[string]struct{}) []courseStatus {
 	out := make([]courseStatus, len(courses))
-	sequential := true // true while no non-completed course has been seen yet
 
 	for idx, slug := range courses {
 		_, done := completed[slug]
@@ -108,9 +107,8 @@ func buildCourseStatuses(courses []string, completed map[string]struct{}) []cour
 		switch {
 		case done:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusCompleted}
-		case sequential:
+		case idx == 0 || out[idx-1].Status == pathStatusCompleted:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusAvailable}
-			sequential = false
 		default:
 			out[idx] = courseStatus{Slug: slug, Status: pathStatusLocked}
 		}
@@ -330,6 +328,91 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
 }
 
+// ManagerListPathEnrollments lists users enrolled in a learning path, filtered
+// to those within the manager's group scope.
+// @Summary   List users enrolled in a path (manager, scope-restricted)
+// @Tags      Manager
+// @Security  BearerAuth
+// @Produce   json
+// @Param     slug  path  string  true  "Path slug"
+// @Success   200   {object}  map[string]interface{}
+// @Router    /api/manager/paths/{slug}/enrollments [get].
+func (s *State) ManagerListPathEnrollments(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	slug := param(request, "slug")
+	claims := s.claims(request)
+
+	groups, err := s.Repos.Groups.GetGroupsByUserID(ctx, claims.Subject)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	groupIDs := managerScopeIDs(groups)
+
+	detail, err := s.fetchPathDetail(request, slug)
+	if err != nil {
+		zap.L().Warn("failed to fetch path detail for manager enrollment list", zap.String("slug", slug), zap.Error(err))
+	}
+
+	rows, err := s.Repos.Paths.ListBySlug(ctx, slug)
+	if err != nil {
+		zap.L().Error("failed to query path enrollments", zap.String("slug", slug), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	users := make([]enrolledUser, 0, len(rows))
+
+	for _, row := range rows {
+		inScope, scopeErr := s.Repos.Groups.UserInAnyGroup(ctx, row.UserID, groupIDs)
+		if scopeErr != nil || !inScope {
+			continue
+		}
+
+		member := enrolledUser{UserID: row.UserID, Email: row.Email, Role: row.Role, EnrolledAt: row.EnrolledAt}
+
+		if detail != nil {
+			completed := s.completedCoursesCtx(request, member.UserID, detail.Courses)
+			member.TotalCourses = len(detail.Courses)
+			member.Courses = buildCourseStatuses(detail.Courses, completed)
+
+			for _, cs := range member.Courses {
+				if cs.Status == pathStatusCompleted {
+					member.CompletedCourses++
+				}
+			}
+		}
+
+		users = append(users, member)
+	}
+
+	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
+}
+
+// enrollPathCourses auto-enrolls userID in each course belonging to pathSlug.
+// Best-effort: failures are only logged so the caller's HTTP response is
+// not affected.
+func (s *State) enrollPathCourses(req *http.Request, userID, pathSlug string) {
+	detail, err := s.fetchPathDetail(req, pathSlug)
+	if err != nil {
+		zap.L().Warn("could not fetch path detail for course auto-enroll",
+			zap.String("pathSlug", pathSlug), zap.Error(err))
+
+		return
+	}
+
+	for _, courseSlug := range detail.Courses {
+		cerr := s.Repos.Enrollments.Create(req.Context(), userID, courseSlug)
+		if cerr != nil {
+			zap.L().Warn("failed to auto-enroll user in path course",
+				zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(cerr))
+		}
+	}
+}
+
 // AdminEnrollUserInPath enrolls a user in a learning path. Idempotent:
 // enrolling an already-enrolled user is a no-op.
 // @Summary   Enroll a user in a learning path (admin)
@@ -363,6 +446,8 @@ func (s *State) AdminEnrollUserInPath(writer http.ResponseWriter, request *http.
 
 		return
 	}
+
+	s.enrollPathCourses(request, body.UserID, slug)
 
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Enrolled in path"})
 }

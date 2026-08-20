@@ -34,10 +34,10 @@ func TestBuildCourseStatuses_Sequential(t *testing.T) {
 	}
 }
 
-// TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock verifies a course
-// completed in another path does not unlock the next course when preceding
-// courses in this path are not completed.
-func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
+// TestBuildCourseStatuses_CrossPathCompletionUnlocksNext verifies a course
+// completed in another path unlocks the immediately following course, but
+// courses before the gap remain locked.
+func TestBuildCourseStatuses_CrossPathCompletionUnlocksNext(t *testing.T) {
 	t.Parallel()
 
 	// Simulates security path where "secrets-management" (index 6)
@@ -61,8 +61,34 @@ func TestBuildCourseStatuses_CrossPathHoleDoesNotUnlock(t *testing.T) {
 		t.Errorf("secrets-management: want completed, got %q", out[6].Status)
 	}
 
-	if out[7].Status != pathStatusLocked {
-		t.Errorf("container-security: want locked, got %q", out[7].Status)
+	// The course immediately after the completed one is unlocked.
+	if out[7].Status != pathStatusAvailable {
+		t.Errorf("container-security: want available, got %q", out[7].Status)
+	}
+}
+
+// TestBuildCourseStatuses_PrecedingCourseUnlocks verifies that completing the
+// immediately preceding course unlocks the next one even when earlier courses
+// in the path are not done (networking-basics done before cybersecurity-intro).
+func TestBuildCourseStatuses_PrecedingCourseUnlocks(t *testing.T) {
+	t.Parallel()
+
+	// Simulates a user who completed networking-basics before cybersecurity-intro.
+	courses := []string{"cybersecurity-intro", "networking-basics", "container-security"}
+	completed := map[string]struct{}{"networking-basics": {}}
+
+	out := buildCourseStatuses(courses, completed)
+
+	if out[0].Status != pathStatusAvailable {
+		t.Errorf("cybersecurity-intro: want available, got %q", out[0].Status)
+	}
+
+	if out[1].Status != pathStatusCompleted {
+		t.Errorf("networking-basics: want completed, got %q", out[1].Status)
+	}
+
+	if out[2].Status != pathStatusAvailable {
+		t.Errorf("container-security: want available, got %q", out[2].Status)
 	}
 }
 

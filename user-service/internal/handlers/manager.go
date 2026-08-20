@@ -112,7 +112,7 @@ func (s *State) ManagerListUsers(writer http.ResponseWriter, request *http.Reque
 // @Failure   400   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Router    /api/manager/courses/{slug}/enrollments [post].
-func (s *State) ManagerEnrollUser(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerEnrollUserPath; different repository (Enrollments vs Paths)
+func (s *State) ManagerEnrollUser(writer http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	slug := param(request, "slug")
 	claims := s.claims(request)
@@ -468,7 +468,7 @@ func (s *State) ManagerRemoveGroupMember(writer http.ResponseWriter, request *ht
 // @Success   200     {object}  map[string]string
 // @Failure   403     {object}  map[string]string
 // @Router    /api/manager/courses/{slug}/enrollments/{userId} [delete].
-func (s *State) ManagerUnenrollUser(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerUnenrollUserPath; different repository (Enrollments vs Paths)
+func (s *State) ManagerUnenrollUser(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // scope check identical to ManagerUnenrollUserPath; different repo (Enrollments vs Paths)
 	ctx := request.Context()
 	slug := param(request, "slug")
 	userID := param(request, "userId")
@@ -568,7 +568,7 @@ func (s *State) ManagerGetUserPathEnrollments(writer http.ResponseWriter, reques
 // @Failure   400   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Router    /api/manager/paths/{slug}/enrollments [post].
-func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerEnrollUser; different repository (Paths vs Enrollments)
+func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	slug := param(request, "slug")
 	claims := s.claims(request)
@@ -613,6 +613,8 @@ func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.
 		return
 	}
 
+	s.enrollPathCourses(request, body.UserID, slug)
+
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: adminMsgUserEnrolled})
 }
 
@@ -626,7 +628,7 @@ func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.
 // @Success   200     {object}  map[string]string
 // @Failure   403     {object}  map[string]string
 // @Router    /api/manager/paths/{slug}/enrollments/{userId} [delete].
-func (s *State) ManagerUnenrollUserPath(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerUnenrollUser; different repository (Paths vs Enrollments)
+func (s *State) ManagerUnenrollUserPath(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // scope check identical to ManagerUnenrollUser; different repo (Paths vs Enrollments)
 	ctx := request.Context()
 	slug := param(request, "slug")
 	userID := param(request, "userId")

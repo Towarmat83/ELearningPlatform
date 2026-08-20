@@ -12,7 +12,7 @@ import Manager from '../../../layouts/Manager.astro';
 
   <div class="card !p-0 overflow-hidden">
     <div id="groups-list">
-      <div class="loading-state" style="padding:32px"><div class="spinner"></div></div>
+      <div class="loading-state !p-8"><div class="spinner"></div></div>
     </div>
   </div>
 
@@ -42,7 +42,7 @@ import Manager from '../../../layouts/Manager.astro';
       <div class="modal-section">
         <h4 class="modal-section-title">Membres actuels</h4>
         <div id="members-list">
-          <div class="loading-state" style="padding:12px 0"><div class="spinner spinner-sm"></div></div>
+          <div class="loading-state !py-3"><div class="spinner spinner-sm"></div></div>
         </div>
       </div>
 
@@ -129,7 +129,7 @@ import Manager from '../../../layouts/Manager.astro';
 
     async function refreshMembers() {
       const el = document.getElementById('members-list')!;
-      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner spinner-sm"></div></div>';
+      el.innerHTML = '<div class="loading-state !py-3"><div class="spinner spinner-sm"></div></div>';
       try {
         const { members } = await api(`/manager/groups/${selectedGroupId}/members`);
         const list: any[] = members || [];

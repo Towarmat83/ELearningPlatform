@@ -54,31 +54,31 @@ import Admin from '../../../layouts/Admin.astro';
       return res.status === 204 ? null : res.json();
     }
 
-    const STAT_DEFS: { key: string; label: string; color: string; fmt?: (v: any) => string }[] = [
-      { key: 'total_users',       label: 'Utilisateurs',    color: 'var(--blue)'   },
-      { key: 'totalCourses',     label: 'Cours',           color: 'var(--blue)'   },
-      { key: 'total_enrollments', label: 'Inscriptions',    color: 'var(--orange)' },
-      { key: 'total_submissions', label: 'Soumissions',     color: 'var(--ink)'    },
-      { key: 'total_labs',        label: 'Labs',            color: 'var(--blue)'   },
-      { key: 'success_rate',      label: 'Taux de réussite',color: 'var(--good)',  fmt: (v) => v != null ? `${v}%` : '—' },
+    const STAT_DEFS: { key: string; label: string; cls: string; fmt?: (v: any) => string }[] = [
+      { key: 'total_users',       label: 'Utilisateurs',    cls: 'text-blue'   },
+      { key: 'totalCourses',     label: 'Cours',           cls: 'text-blue'   },
+      { key: 'total_enrollments', label: 'Inscriptions',    cls: 'text-orange' },
+      { key: 'total_submissions', label: 'Soumissions',     cls: 'text-ink'    },
+      { key: 'total_labs',        label: 'Labs',            cls: 'text-blue'   },
+      { key: 'success_rate',      label: 'Taux de réussite',cls: 'text-good',  fmt: (v) => v != null ? `${v}%` : '—' },
     ];
 
     async function loadStats() {
       const grid = document.getElementById('stats-grid')!;
       try {
         const s = await api('/admin/stats');
-        grid.innerHTML = STAT_DEFS.map(({ key, label, color, fmt }) => {
+        grid.innerHTML = STAT_DEFS.map(({ key, label, cls, fmt }) => {
           const raw = s[key];
           const val = raw != null ? (fmt ? fmt(raw) : raw) : '—';
           return `
             <div class="card-sm stat-card">
-              <div class="stat-card-value" style="color:${color}">${val}</div>
+              <div class="stat-card-value ${cls}">${val}</div>
               <div class="stat-card-label">${label}</div>
             </div>
           `;
         }).join('');
       } catch {
-        grid.innerHTML = '<div class="text-soft text-sm p-4" style="grid-column:1/-1">Statistiques indisponibles</div>';
+        grid.innerHTML = '<div class="text-soft text-sm p-4 col-span-full">Statistiques indisponibles</div>';
       }
     }
 
@@ -107,7 +107,7 @@ import Admin from '../../../layouts/Admin.astro';
                 <tr ${i < courses.length - 1 ? 'class="admin-tr"' : ''}>
                   <td class="admin-td">
                     <div class="username-text">${c.title}</div>
-                    <div style="font-size:.72rem;color:var(--ink-soft);margin-top:1px;font-family:monospace">${c.id}</div>
+                    <div class="mono-id">${c.id}</div>
                   </td>
                   <td class="admin-td text-soft">${c.category || '—'}</td>
                   <td class="admin-td-center">${c.labCount ?? '—'}</td>

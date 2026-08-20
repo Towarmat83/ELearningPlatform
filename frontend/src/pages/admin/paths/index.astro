@@ -19,7 +19,7 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 
   <!-- Enroll form -->
-  <div id="enroll-form" class="card mb-5" style="padding:16px 20px;display:none">
+  <div id="enroll-form" class="card mb-5 !px-5 !py-4" style="display:none">
     <div class="flex-row-gap3-wrap">
       <select id="user-select" class="input flex-1 min-w-[200px]">
         <option value="">Sélectionner un utilisateur…</option>
@@ -77,7 +77,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function loadEnrollments(slug: string) {
       const tbody = document.getElementById('enrollments-body')!;
-      tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center"><div class="loading-state" style="padding:0"><div class="spinner"></div></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div></div></td></tr>`;
       try {
         const data = await api(`/admin/paths/${slug}/enrollments`) as { users: any[] };
         const users = data.users ?? [];
@@ -88,18 +88,17 @@ import Admin from '../../../layouts/Admin.astro';
           return;
         }
 
-        // Dynamic course status colors driven by data
-        const statusColor: Record<string, string> = {
-          completed: 'background:var(--good-soft);color:var(--good)',
-          available:  'background:var(--blue-soft);color:var(--blue)',
-          locked:     'background:var(--fill);color:var(--ink-soft)',
+        const statusCls: Record<string, string> = {
+          completed: 'course-tag-completed',
+          available:  'course-tag-available',
+          locked:     'course-tag-locked',
         };
         const statusIcon: Record<string, string> = { completed: '✓', available: '▶', locked: '🔒' };
 
         tbody.innerHTML = users.map((u: any) => {
           const pct = u.totalCourses > 0 ? Math.round(u.completedCourses / u.totalCourses * 100) : 0;
           const courses = (u.courses ?? []).map((c: any) =>
-            `<span class="course-tag" style="${statusColor[c.status]}">${statusIcon[c.status]} ${c.slug}</span>`
+            `<span class="course-tag ${statusCls[c.status] ?? ''}">${statusIcon[c.status]} ${c.slug}</span>`
           ).join(' ');
           const bar = u.totalCourses > 0 ? `
             <div class="path-progress-row">

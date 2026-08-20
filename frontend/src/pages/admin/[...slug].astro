@@ -66,7 +66,7 @@ import App from '../../layouts/App.astro';
           <div class="card mt-5">
             <h3 class="mb-4">Classement</h3>
             <div id="leaderboard-list">
-              <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
+              <div class="loading-state !p-6"><div class="spinner"></div></div>
             </div>
           </div>
         </div>
@@ -112,15 +112,15 @@ import App from '../../layouts/App.astro';
         const grid = document.getElementById('stats-grid')!;
         grid.innerHTML = `
           <div class="card-sm stat-card">
-            <div class="stat-card-value" style="color:var(--blue)">${stats.total_users ?? '—'}</div>
+            <div class="stat-card-value text-blue">${stats.total_users ?? '—'}</div>
             <div class="stat-card-label">Utilisateurs</div>
           </div>
           <div class="card-sm stat-card">
-            <div class="stat-card-value" style="color:var(--blue)">${stats.totalCourses ?? '—'}</div>
+            <div class="stat-card-value text-blue">${stats.totalCourses ?? '—'}</div>
             <div class="stat-card-label">Cours</div>
           </div>
           <div class="card-sm stat-card">
-            <div class="stat-card-value" style="color:var(--good)">${stats.success_rate ?? '—'}</div>
+            <div class="stat-card-value text-good">${stats.success_rate ?? '—'}</div>
             <div class="stat-card-label">Taux de réussite</div>
           </div>
         `;

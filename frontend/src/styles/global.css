@@ -1417,6 +1417,14 @@
 
   /* ── Small spinner override ──────────────────────────────────────────── */
   .spinner-sm { width: 20px; height: 20px; }
+
+  /* ── Course status tag variants (paths admin) ───────────────────────── */
+  .course-tag-completed { background: var(--good-soft); color: var(--good); }
+  .course-tag-available { background: var(--blue-soft); color: var(--blue); }
+  .course-tag-locked    { background: var(--fill);      color: var(--ink-soft); }
+
+  /* ── Monospace ID label (course IDs in tables) ──────────────────────── */
+  .mono-id { font-size: .72rem; color: var(--ink-soft); margin-top: 1px; font-family: var(--font-mono); }
 }
 
 /* ── CSS compat aliases (old var(--blue) → var(--color-blue)) ───────── */

@@ -19,7 +19,7 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
       <div class="card !p-0 overflow-hidden">
         <div id="groups-list">
-          <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
+          <div class="loading-state !p-6"><div class="spinner"></div></div>
         </div>
       </div>
     </div>
@@ -31,7 +31,7 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
       <div class="card !p-0 overflow-hidden mb-4">
         <div id="mappings-list">
-          <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
+          <div class="loading-state !p-6"><div class="spinner"></div></div>
         </div>
       </div>
       <div class="card">
@@ -82,7 +82,7 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="modal-section">
         <h4 class="modal-section-title">Membres actuels</h4>
         <div id="members-list">
-          <div class="loading-state" style="padding:12px 0"><div class="spinner spinner-sm"></div></div>
+          <div class="loading-state !py-3"><div class="spinner spinner-sm"></div></div>
         </div>
       </div>
 
@@ -202,7 +202,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function refreshMembers() {
       const el = document.getElementById('members-list')!;
-      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner spinner-sm"></div></div>';
+      el.innerHTML = '<div class="loading-state !py-3"><div class="spinner spinner-sm"></div></div>';
       try {
         const { members } = await api(`/admin/groups/${selectedGroupId}/members`);
         const list: any[] = members || [];

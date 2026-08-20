@@ -32,7 +32,7 @@ import Admin from '../../../layouts/Admin.astro';
         </tr>
       </thead>
       <tbody id="lab-body">
-        <tr><td colspan="6" class="p-8 text-center"><div class="loading-state" style="padding:0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div></td></tr>
+        <tr><td colspan="6" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div></td></tr>
       </tbody>
     </table>
   </div>
@@ -73,7 +73,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function load(course = '') {
       const body = document.getElementById('lab-body')!;
-      body.innerHTML = `<tr><td colspan="6" class="p-8 text-center"><div class="loading-state" style="padding:0"><div class="spinner"></div></div></td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div></div></td></tr>`;
 
       const qs = course ? `?course=${encodeURIComponent(course)}` : '';
       allRows = await api(`/admin/lab-checks${qs}`);
@@ -95,13 +95,13 @@ import Admin from '../../../layouts/Admin.astro';
       count.textContent = `${total} vérification${total > 1 ? 's' : ''} — ${unique} apprenant${unique > 1 ? 's' : ''}`;
 
       stats.innerHTML = [
-        { label: 'Total vérifications', value: total,  color: 'var(--blue)'  },
-        { label: 'Labs validés',        value: passed, color: 'var(--good)'  },
-        { label: 'Labs échoués',        value: failed, color: 'var(--bad)'   },
-        { label: 'Apprenants actifs',   value: unique, color: 'var(--ink)'   },
+        { label: 'Total vérifications', value: total,  cls: 'text-blue'  },
+        { label: 'Labs validés',        value: passed, cls: 'text-good'  },
+        { label: 'Labs échoués',        value: failed, cls: 'text-bad'   },
+        { label: 'Apprenants actifs',   value: unique, cls: 'text-ink'   },
       ].map(s => `
         <div class="card stat-card">
-          <div class="stat-card-value" style="color:${s.color}">${s.value}</div>
+          <div class="stat-card-value ${s.cls}">${s.value}</div>
           <div class="stat-card-label">${s.label}</div>
         </div>
       `).join('');
@@ -122,7 +122,7 @@ import Admin from '../../../layouts/Admin.astro';
           <td class="admin-td text-soft text-sm">${r.courseSlug}</td>
           <td class="admin-td text-sm">${r.moduleName}</td>
           <td class="admin-td">${statusBadge(r.allow)}</td>
-          <td class="admin-td" style="max-width:340px">
+          <td class="admin-td max-w-[340px]">
             ${r.violations && r.violations.length
               ? r.violations.map((v: string) => `<div class="violation-item">• ${v}</div>`).join('')
               : `<span class="text-soft text-sm">—</span>`}

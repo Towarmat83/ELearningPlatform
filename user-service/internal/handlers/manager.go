@@ -624,6 +624,8 @@ func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.
 		return
 	}
 
+	s.enrollPathCourses(request, body.UserID, slug)
+
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: adminMsgUserEnrolled})
 }
 

@@ -130,13 +130,15 @@ jobs:
           CI: "true"
 
       - name: Commit new Linux snapshots if any
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           find frontend/e2e -name '*-linux.png' -exec git add {} +
           if ! git diff --cached --quiet; then
             git commit -m "test(e2e): add Linux baseline screenshots"
-            git push
+            git push origin HEAD:"$BRANCH"
           fi
 
       - name: Run Playwright tests

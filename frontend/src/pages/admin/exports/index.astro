@@ -276,7 +276,7 @@ import Admin from '../../../layouts/Admin.astro';
         previewBody.innerHTML = rows.length === 0
           ? `<tr><td colspan="${headers.length}" class="admin-td text-soft text-center py-6">Aucune donnée.</td></tr>`
           : rows.map(row => `<tr class="admin-tr">${
-              headers.map(h => `<td class="admin-td">${escHtml(row[h] ?? '')}</td>`).join('')
+              headers.map(h => `<td class="admin-td preview-td" title="${escHtml(row[h] ?? '')}">${escHtml(row[h] ?? '')}</td>`).join('')
             }</tr>`).join('');
 
         const shown = rows.length;

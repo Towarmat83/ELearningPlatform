@@ -17,7 +17,7 @@ import (
 type ModuleProgressRepository interface {
 	// RecordProgress upserts a module attempt: it keeps the best score, ORs
 	// the passed flag across attempts, and increments the attempt count.
-	RecordProgress(ctx context.Context, userID, courseSlug string, moduleIndex int, moduleSlug string, score, maxScore int, passed bool) error
+	RecordProgress(ctx context.Context, userID, courseSlug string, moduleIndex int, moduleSlug, moduleType string, score, maxScore int, passed bool) error
 	TotalScore(ctx context.Context, userID, courseSlug string) (int64, error)
 	PassedModuleSlugs(ctx context.Context, userID, courseSlug string) ([]string, error)
 	ListByUserCourse(ctx context.Context, userID, courseSlug string) ([]models.ModuleProgress, error)
@@ -51,7 +51,7 @@ func NewGormModuleProgressRepository(db *gorm.DB) ModuleProgressRepository {
 // RecordProgress upserts userID's score for a module, keeping the best
 // score/pass state seen across attempts rather than overwriting them.
 func (r *gormModuleProgressRepository) RecordProgress(
-	ctx context.Context, userID, courseSlug string, moduleIndex int, moduleSlug string, score, maxScore int, passed bool,
+	ctx context.Context, userID, courseSlug string, moduleIndex int, moduleSlug, moduleType string, score, maxScore int, passed bool,
 ) error {
 	var moduleSlugPtr *string
 	if moduleSlug != "" {
@@ -70,6 +70,7 @@ func (r *gormModuleProgressRepository) RecordProgress(
 		CourseSlug:  courseSlug,
 		ModuleIndex: moduleIndex,
 		ModuleSlug:  moduleSlugPtr,
+		ModuleType:  moduleType,
 		BestScore:   score,
 		MaxScore:    maxScore,
 		Passed:      passed,
@@ -82,10 +83,11 @@ func (r *gormModuleProgressRepository) RecordProgress(
 		DoUpdates: clause.Assignments(map[string]any{
 			"attempts":   gorm.Expr("module_progress.attempts + 1"),
 			"bestscore":  gorm.Expr("GREATEST(module_progress.bestscore, ?)", score),
-			"maxscore":   maxScore,
-			"passed":     gorm.Expr("module_progress.passed OR ?", passed),
+			colMaxScore:  maxScore,
+			colPassed:    gorm.Expr("module_progress.passed OR ?", passed),
 			"moduleslug": gorm.Expr("COALESCE(module_progress.moduleslug, ?)", moduleSlugPtr),
-			"completed_at": gorm.Expr(
+			"moduletype": moduleType,
+			colCompletedAt: gorm.Expr(
 				"CASE WHEN ? AND module_progress.completed_at IS NULL THEN NOW() ELSE module_progress.completed_at END", passed),
 			colUpdatedAt: gorm.Expr("NOW()"),
 		}),

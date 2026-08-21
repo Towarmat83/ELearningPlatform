@@ -12,6 +12,10 @@ export default defineConfig({
     plugins: [tailwindcss()],
     server: {
       proxy: {
+        '/api/admin/exports/lab-checks': {
+          target: 'http://localhost:8082',
+          changeOrigin: true,
+        },
         '/api': {
           target: 'http://localhost:8080',
           changeOrigin: true,

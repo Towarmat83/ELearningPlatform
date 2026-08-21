@@ -276,8 +276,11 @@ func fetchOAuthProfile(
 // oauthFinishLogin enrolls the user in their default/group courses, issues
 // a session JWT, and writes the login response.
 func (s *State) oauthFinishLogin(writer http.ResponseWriter, request *http.Request, user *userPublicRow) {
-	addToDefaultGroup(request.Context(), s.Repos.Groups, user.ID)
-	syncGroupEnrollments(request.Context(), s.Repos.Groups, user.ID)
+	ctx := request.Context()
+
+	addToDefaultGroup(ctx, s.Repos.Groups, user.ID)
+	syncGroupEnrollments(ctx, s.Repos.Groups, user.ID)
+	s.touchLastLogin(ctx, user.ID)
 
 	token, err := middleware.CreateToken(user.ID, user.Email, user.Role, user.Username, s.Config.JWTSecret, s.Config.JWTExpiryH)
 	if err != nil {

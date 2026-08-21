@@ -5,6 +5,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -22,6 +23,17 @@ type LabCheckRepository interface {
 	List(ctx context.Context, courseSlug string) ([]models.LabCheck, error)
 	// Create inserts a new lab check row.
 	Create(ctx context.Context, check *models.LabCheck) error
+	// ListExport returns filtered rows and their total count for export.
+	// Pass limit=0 to fetch all rows (used for CSV download).
+	ListExport(ctx context.Context, filter LabCheckFilter, limit int) ([]models.LabCheck, int64, error)
+}
+
+// LabCheckFilter holds optional filter criteria for ListExport.
+type LabCheckFilter struct {
+	CourseSlug string
+	Allow      *bool
+	From       *time.Time
+	To         *time.Time
 }
 
 // gormLabCheckRepository is the GORM-backed LabCheckRepository.
@@ -57,4 +69,53 @@ func (r *gormLabCheckRepository) List(ctx context.Context, courseSlug string) ([
 // Create inserts a new lab check row.
 func (r *gormLabCheckRepository) Create(ctx context.Context, check *models.LabCheck) error {
 	return r.db.WithContext(ctx).Create(check).Error
+}
+
+// ListExport returns filtered lab check rows and their total count. When
+// limit is 0, all matching rows are returned (CSV download).
+func (r *gormLabCheckRepository) ListExport(ctx context.Context, filter LabCheckFilter, limit int) ([]models.LabCheck, int64, error) {
+	query := r.applyLabFilter(r.db.WithContext(ctx).Model(&models.LabCheck{}), filter)
+
+	var total int64
+
+	countErr := query.Count(&total).Error
+	if countErr != nil {
+		return nil, 0, countErr
+	}
+
+	query = query.Order("checkedat DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	var rows []models.LabCheck
+
+	err := query.Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return rows, total, nil
+}
+
+// applyLabFilter adds WHERE clauses for each non-nil filter field.
+func (r *gormLabCheckRepository) applyLabFilter(query *gorm.DB, filter LabCheckFilter) *gorm.DB {
+	if filter.CourseSlug != "" {
+		query = query.Where("courseslug = ?", filter.CourseSlug)
+	}
+
+	if filter.Allow != nil {
+		query = query.Where("allow = ?", *filter.Allow)
+	}
+
+	if filter.From != nil {
+		query = query.Where("checkedat >= ?", *filter.From)
+	}
+
+	if filter.To != nil {
+		query = query.Where("checkedat <= ?", *filter.To)
+	}
+
+	return query
 }

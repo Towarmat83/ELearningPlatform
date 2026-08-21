@@ -1510,4 +1510,15 @@
     padding: 12px 20px 6px;
     border-bottom: 1px solid var(--line);
   }
+
+  /* ── Exports CSV page ────────────────────────────────────────────────── */
+  .export-grid { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .export-grid { grid-template-columns: 1fr; } }
+  .export-config-panel { padding: 24px; }
+  .export-preview-panel { padding: 24px; min-height: 300px; min-width: 0; overflow: hidden; }
+  .export-cat-btn { text-align: left; background: var(--fill); border: 1.5px solid var(--line); border-radius: var(--radius); padding: 10px 14px; font-size: .875rem; font-weight: 500; cursor: pointer; transition: border-color .15s, background .15s; color: var(--ink); }
+  .export-cat-btn:hover { border-color: var(--blue); background: var(--blue-soft); }
+  .export-cat-btn.active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+  .export-field-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; border-radius: 6px; user-select: none; }
+  .export-field-row:hover { color: var(--blue); }
 }

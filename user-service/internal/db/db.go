@@ -65,6 +65,7 @@ var allModels = []any{
 	&models.UserSkillLevel{},
 	&models.SessionBooking{},
 	&models.UserXPEvent{},
+	&models.ExportLog{},
 }
 
 // RunMigrations brings the database schema up to date. Schema management is

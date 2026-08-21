@@ -89,6 +89,7 @@ type UserRepository interface {
 	ExistsByEmailOrUsername(ctx context.Context, email, username string) (bool, error)
 	Create(ctx context.Context, u *models.User) error
 	FindByEmailActive(ctx context.Context, email string) (*models.User, error)
+	TouchLastLogin(ctx context.Context, id uuid.UUID) error
 
 	// Profile self-service
 	FindByID(ctx context.Context, id uuid.UUID) (*models.User, error)
@@ -483,6 +484,18 @@ func (r *gormUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	err := r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
+	}
+
+	return nil
+}
+
+// TouchLastLogin updates the lastloginat timestamp for the given user to NOW().
+func (r *gormUserRepository) TouchLastLogin(ctx context.Context, id uuid.UUID) error {
+	err := r.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ?", id).
+		Update("lastloginat", gorm.Expr("NOW()")).Error
+	if err != nil {
+		return fmt.Errorf("touch last login: %w", err)
 	}
 
 	return nil

@@ -14,6 +14,7 @@ type ModuleProgress struct {
 	MaxScore    int        `gorm:"column:maxscore;not null;default:0"`
 	Passed      bool       `gorm:"column:passed;not null;default:false"`
 	Attempts    int        `gorm:"column:attempts;not null;default:0"`
+	ModuleType  string     `gorm:"column:moduletype"`
 	CompletedAt *time.Time `gorm:"column:completed_at"` // already snake_case in SQL
 	UpdatedAt   time.Time  `gorm:"column:updatedat;not null;default:now()"`
 }

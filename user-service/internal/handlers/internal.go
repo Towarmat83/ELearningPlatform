@@ -50,6 +50,7 @@ type moduleProgressBody struct {
 	ModuleIndex int `json:"moduleIndex"`
 
 	ModuleSlug string `json:"moduleSlug"`
+	ModuleType string `json:"moduleType"`
 	Score      int    `json:"score"`
 
 	MaxScore int  `json:"maxScore"`
@@ -276,7 +277,7 @@ func (s *State) InternalRecordModuleProgress(writer http.ResponseWriter, req *ht
 	}
 
 	err := s.Repos.ModuleProgress.RecordProgress(req.Context(), body.UserID, body.CourseSlug,
-		body.ModuleIndex, body.ModuleSlug, body.Score, body.MaxScore, body.Passed)
+		body.ModuleIndex, body.ModuleSlug, body.ModuleType, body.Score, body.MaxScore, body.Passed)
 
 	if err == nil && body.Passed {
 		_ = s.awardXP(req, body.UserID, repository.XPSourceModule, body.CourseSlug+"/"+body.ModuleSlug, repository.XPAmountModule)

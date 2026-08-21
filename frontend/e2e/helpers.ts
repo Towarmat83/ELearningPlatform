@@ -2,12 +2,12 @@ import { Page, Locator } from '@playwright/test';
 
 /** Waits for the loading spinner to disappear and the page content to stabilise. */
 export async function waitForPageReady(page: Page): Promise<void> {
-  await page.waitForLoadState('networkidle');
+  // Timeouts explicites pour ne pas consommer tout le budget du test (30s par défaut).
+  // Les deux attentes sont cumulables donc on les plafonne à ~8s chacune.
+  await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
   const spinner = page.locator('.spinner');
   if (await spinner.count() > 0) {
-    // .catch() : si le spinner ne disparaît pas (service indisponible en CI), on
-    // continue quand même pour capturer l'état réel de la page.
-    await spinner.first().waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+    await spinner.first().waitFor({ state: 'hidden', timeout: 8_000 }).catch(() => {});
   }
 }
 

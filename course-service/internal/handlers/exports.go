@@ -216,12 +216,16 @@ func (s *State) ExportLabDownload(writer http.ResponseWriter, req *http.Request)
 	writer.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 
+	_, _ = writer.Write([]byte{0xEF, 0xBB, 0xBF})
+
 	writeLabCSV(writer, fields, rows)
 }
 
 // writeLabCSV writes a CSV of the given rows to w.
 func writeLabCSV(writer http.ResponseWriter, fields []string, rows []models.LabCheck) {
 	csvWriter := csv.NewWriter(writer)
+	csvWriter.Comma = ';'
+
 	defer csvWriter.Flush()
 
 	headers := make([]string, 0, len(fields))

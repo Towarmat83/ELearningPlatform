@@ -274,6 +274,7 @@
   .admin-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
   .admin-th { padding: 12px 16px; text-align: left; font-weight: 600; color: var(--ink-soft); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
   .admin-td { padding: 12px 16px; }
+  .preview-td { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .admin-tr { border-bottom: 1px solid var(--line); }
   .admin-tr-head { border-bottom: 1px solid var(--line); background: var(--fill); }
   .admin-table-wrap { padding: 0; overflow: hidden; }

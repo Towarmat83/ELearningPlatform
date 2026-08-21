@@ -124,6 +124,8 @@ func (s *State) ExportDownload(writer http.ResponseWriter, req *http.Request) {
 	writer.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 
+	_, _ = writer.Write([]byte{0xEF, 0xBB, 0xBF})
+
 	sqlFields, virtualFields := splitVirtualFields(body.Fields)
 
 	var rowCount int
@@ -180,6 +182,7 @@ func (s *State) writeEnrichedCSV(
 	rows = removeHelperFields(rows, helperFields)
 
 	csvWriter := csv.NewWriter(writer)
+	csvWriter.Comma = ';'
 
 	headerErr := csvWriter.Write(append([]string(nil), origFields...))
 	if headerErr != nil {

@@ -752,6 +752,7 @@ func (r *gormExportRepository) WriteCSV(
 	}
 
 	csvWriter := csv.NewWriter(writer)
+	csvWriter.Comma = ';'
 
 	headerErr := csvWriter.Write(headers)
 	if headerErr != nil {

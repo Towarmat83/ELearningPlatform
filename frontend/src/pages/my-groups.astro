@@ -2,110 +2,15 @@
 import App from '../layouts/App.astro';
 ---
 <App title="Mes groupes" activePage="groups">
-  <style is:global>
-    .mg-page {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 40px 32px 80px;
-    }
-    .mg-inner { max-width: 1400px; margin: 0 auto; }
-
-    .mg-header { margin-bottom: 36px; }
-    .mg-title {
-      font-size: 2rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 4px;
-    }
-    .mg-subtitle { font-size: .9rem; color: var(--ink-soft); }
-
-    .mg-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 20px;
-    }
-
-    .mg-card {
-      background: #ffffffcc;
-      backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 18px;
-      padding: 24px;
-      transition: box-shadow .2s, transform .2s;
-    }
-    .mg-card:hover { box-shadow: 0 8px 30px rgba(67,97,238,.1); transform: translateY(-2px); }
-
-    .mg-card-top { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
-
-    .mg-icon {
-      width: 52px; height: 52px;
-      border-radius: 14px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.5rem; flex-shrink: 0;
-    }
-    .mg-icon.local { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); }
-    .mg-icon.remote { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
-
-    .mg-name { font-weight: 700; font-size: 1.05rem; }
-    .mg-source { font-size: .8rem; color: var(--ink-soft); margin-top: 2px; }
-
-    .mg-role-badge {
-      margin-left: auto;
-      font-size: .72rem;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 999px;
-      flex-shrink: 0;
-    }
-    .mg-role-admin { background: #fee2e2; color: #b91c1c; }
-    .mg-role-manager { background: #fed7aa; color: #c2410c; }
-    .mg-role-student { background: #dbeafe; color: #1d4ed8; }
-
-    .mg-divider { height: 1px; background: #e2e8f0; margin-bottom: 14px; }
-
-    .mg-courses-label {
-      font-size: .72rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: var(--ink-soft); margin-bottom: 10px;
-    }
-
-    .mg-course-link {
-      display: flex; align-items: center; gap: 10px;
-      text-decoration: none; color: inherit;
-      padding: 10px 12px; border-radius: 10px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      margin-bottom: 8px;
-      transition: background .15s, border-color .15s;
-    }
-    .mg-course-link:hover { background: #e0e7ff; border-color: #a5b4fc; }
-    .mg-course-icon { font-size: 1.1rem; }
-    .mg-course-title { font-size: .875rem; font-weight: 500; }
-
-    .mg-empty-card {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 60px 24px;
-      background: #ffffffcc;
-      border: 1.5px dashed #cbd5e1;
-      border-radius: 18px;
-      color: var(--ink-soft);
-    }
-    .mg-empty-icon { font-size: 3rem; margin-bottom: 12px; }
-  </style>
-
-  <div class="mg-page">
-    <div class="mg-inner">
-      <div class="mg-header">
-        <h1 class="mg-title">Mes groupes</h1>
-        <p class="mg-subtitle" id="group-count">Chargement…</p>
+  <div class="page-outer">
+    <div class="page-inner">
+      <div class="mb-9">
+        <h1 class="page-title mb-1">Mes groupes</h1>
+        <p class="text-[.9rem] text-ink-soft" id="group-count">Chargement…</p>
       </div>
 
       <div id="groups-container">
-        <div class="loading-state" style="padding:40px"><div class="spinner"></div></div>
+        <div class="loading-state py-10"><div class="spinner"></div></div>
       </div>
     </div>
   </div>
@@ -138,14 +43,14 @@ import App from '../layouts/App.astro';
         if (!groups.length) {
           container.innerHTML = `
             <div class="mg-empty-card">
-              <div class="mg-empty-icon">👥</div>
+              <div class="text-[3rem] mb-3">👥</div>
               <p>Vous n'appartenez à aucun groupe pour le moment.</p>
-              <p class="text-sm" style="margin-top:6px">Un administrateur peut vous ajouter à un groupe.</p>
+              <p class="text-[.8rem] text-ink-soft mt-1.5">Un administrateur peut vous ajouter à un groupe.</p>
             </div>`;
           return;
         }
 
-        container.innerHTML = `<div class="mg-grid">${groups.map((g: any) => {
+        container.innerHTML = `<div class="auto-grid-lg">${groups.map((g: any) => {
           const slugs: string[] = g.courseSlugs || [];
           const courses = slugs.map((s: string) => courseBySlug[s]).filter(Boolean);
           const isLocal = g.source === 'local';
@@ -163,7 +68,7 @@ import App from '../layouts/App.astro';
                   <span class="mg-course-icon">${c.icon || '📘'}</span>
                   <span class="mg-course-title">${c.title || c.slug}</span>
                 </a>`).join('')
-            : `<p style="font-size:.8rem;color:var(--ink-soft);font-style:italic">Aucun cours associé à ce groupe.</p>`;
+            : `<p class="text-[.8rem] text-ink-soft italic">Aucun cours associé à ce groupe.</p>`;
 
           return `
             <div class="mg-card">
@@ -175,14 +80,14 @@ import App from '../layouts/App.astro';
                 </div>
                 ${roleBadge}
               </div>
-              <div class="mg-divider"></div>
+              <div class="h-px bg-line mb-3.5"></div>
               <div class="mg-courses-label">Cours du groupe</div>
               ${coursesHtml}
             </div>`;
         }).join('')}</div>`;
       } catch (e: any) {
         document.getElementById('groups-container')!.innerHTML =
-          `<div class="mg-card" style="color:var(--bad)">Erreur : ${e.message}</div>`;
+          `<div class="mg-card text-bad">Erreur : ${e.message}</div>`;
       }
     }
 

@@ -2,31 +2,29 @@
 import Manager from '../../../layouts/Manager.astro';
 ---
 <Manager title="Mes groupes">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+  <div class="admin-page-header">
     <div>
-      <h1 style="font-size:1.5rem">Mes groupes</h1>
-      <p class="text-soft text-sm" style="margin-top:4px">Gérez les groupes dont vous êtes responsable et leurs membres</p>
+      <h1 class="text-2xl">Mes groupes</h1>
+      <p class="text-soft text-sm mt-1">Gérez les groupes dont vous êtes responsable et leurs membres</p>
     </div>
     <button class="btn btn-primary" id="new-group-btn">+ Nouveau groupe</button>
   </div>
 
-  <div class="card" style="padding:0;overflow:hidden">
+  <div class="card !p-0 overflow-hidden">
     <div id="groups-list">
-      <div class="loading-state" style="padding:32px"><div class="spinner"></div></div>
+      <div class="loading-state !p-8"><div class="spinner"></div></div>
     </div>
   </div>
 
-  <!-- Members panel (shown inline below selected group) -->
-
   <!-- Create group modal -->
-  <div id="create-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
-    <div class="card" style="width:380px;max-width:95vw;padding:28px">
-      <h3 style="margin-bottom:20px">Nouveau groupe</h3>
-      <div class="form-group" style="margin-bottom:20px">
+  <div id="create-modal" class="modal-overlay">
+    <div class="card modal-box-sm">
+      <h3 class="mb-5">Nouveau groupe</h3>
+      <div class="form-group mb-5">
         <label class="label">Nom du groupe</label>
         <input id="create-group-name" class="input" placeholder="ex : equipe-frontend" />
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
+      <div class="flex-end-gap2">
         <button class="btn btn-secondary" id="create-cancel">Annuler</button>
         <button class="btn btn-primary" id="create-confirm">Créer</button>
       </div>
@@ -34,24 +32,24 @@ import Manager from '../../../layouts/Manager.astro';
   </div>
 
   <!-- Members modal -->
-  <div id="members-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
-    <div class="card" style="width:540px;max-width:95vw;padding:28px;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <div id="members-modal" class="modal-overlay">
+    <div class="card modal-box-lg">
+      <div class="modal-header">
         <h3 id="members-modal-title">Membres</h3>
-        <button id="members-close" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--ink-soft)">✕</button>
+        <button id="members-close" class="modal-close-btn">✕</button>
       </div>
 
-      <div style="margin-bottom:20px">
-        <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Membres actuels</h4>
+      <div class="modal-section">
+        <h4 class="modal-section-title">Membres actuels</h4>
         <div id="members-list">
-          <div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>
+          <div class="loading-state !py-3"><div class="spinner spinner-sm"></div></div>
         </div>
       </div>
 
-      <div style="border-top:1px solid var(--line);padding-top:20px">
-        <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Ajouter un membre</h4>
-        <div style="display:flex;gap:8px">
-          <select id="add-member-select" class="input" style="flex:1;height:auto;padding:9px 14px">
+      <div class="modal-divider">
+        <h4 class="modal-section-title">Ajouter un membre</h4>
+        <div class="flex gap-2">
+          <select id="add-member-select" class="input flex-1">
             <option value="">Choisir un utilisateur…</option>
           </select>
           <button class="btn btn-primary" id="add-member-btn">Ajouter</button>
@@ -77,17 +75,17 @@ import Manager from '../../../layouts/Manager.astro';
       try {
         const { groups } = await api('/manager/groups');
         if (!groups || !groups.length) {
-          el.innerHTML = '<p class="text-soft text-sm" style="padding:20px">Aucun groupe. Créez-en un pour commencer.</p>';
+          el.innerHTML = '<p class="text-soft text-sm p-5">Aucun groupe. Créez-en un pour commencer.</p>';
           return;
         }
         el.innerHTML = groups.map((g: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:500">${g.name}</div>
-              <div style="font-size:.78rem;color:var(--ink-soft);margin-top:2px">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''}</div>
+          <div class="list-row-lg">
+            <div class="row-info">
+              <div class="username-text">${g.name}</div>
+              <div class="row-sub-xs">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''}</div>
             </div>
             <button class="btn btn-secondary btn-sm members-btn" data-id="${g.id}" data-name="${g.name}">Membres</button>
-            <button class="btn btn-sm del-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${g.id}" data-name="${g.name}">Supprimer</button>
+            <button class="btn btn-sm btn-danger del-btn" data-id="${g.id}" data-name="${g.name}">Supprimer</button>
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.members-btn').forEach(btn => {
@@ -97,7 +95,7 @@ import Manager from '../../../layouts/Manager.astro';
           btn.addEventListener('click', () => deleteGroup(btn.dataset.id!, btn.dataset.name!));
         });
       } catch (e: any) {
-        el.innerHTML = `<p style="color:var(--bad);padding:20px">${e.message}</p>`;
+        el.innerHTML = `<p class="text-bad p-5">${e.message}</p>`;
       }
     }
 
@@ -131,20 +129,20 @@ import Manager from '../../../layouts/Manager.astro';
 
     async function refreshMembers() {
       const el = document.getElementById('members-list')!;
-      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      el.innerHTML = '<div class="loading-state !py-3"><div class="spinner spinner-sm"></div></div>';
       try {
         const { members } = await api(`/manager/groups/${selectedGroupId}/members`);
         const list: any[] = members || [];
         if (!list.length) { el.innerHTML = '<p class="text-soft text-sm">Aucun membre.</p>'; return; }
         el.innerHTML = list.map((u: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
-            <div style="width:30px;height:30px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;color:var(--blue);flex-shrink:0">${(u.username || '?')[0].toUpperCase()}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.875rem;font-weight:500">${u.username}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${u.email}</div>
+          <div class="list-row-compact">
+            <div class="user-avatar-sm">${(u.username || '?')[0].toUpperCase()}</div>
+            <div class="flex-1-min0">
+              <div class="text-sm font-medium">${u.username}</div>
+              <div class="row-sub">${u.email}</div>
             </div>
-            <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'}" style="flex-shrink:0">${u.role}</span>
-            <button class="btn btn-sm remove-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-uid="${u.id}">Retirer</button>
+            <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'} flex-shrink-0">${u.role}</span>
+            <button class="btn btn-sm btn-danger remove-btn" data-uid="${u.id}">Retirer</button>
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.remove-btn').forEach(btn => {
@@ -158,7 +156,7 @@ import Manager from '../../../layouts/Manager.astro';
           });
         });
       } catch (e: any) {
-        el.innerHTML = `<p style="color:var(--bad);font-size:.875rem">${e.message}</p>`;
+        el.innerHTML = `<p class="text-bad text-sm">${e.message}</p>`;
       }
     }
 

@@ -1,123 +1,48 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
 ---
-<Admin title="Parcours">
+<Admin title="Parcours — Inscriptions">
   <div class="admin-page-header">
     <div>
-      <h1 class="text-2xl">Parcours</h1>
-      <p class="text-soft text-sm mt-1" id="path-count">Chargement…</p>
-    </div>
-    <button class="btn btn-primary btn-sm" id="new-path-btn">+ Nouveau parcours</button>
-  </div>
-
-  <!-- Path form (create / edit) -->
-  <div id="path-form-panel" class="draft-panel" style="display:none">
-    <h3 id="path-form-title" class="mb-4">Nouveau parcours</h3>
-    <div class="draft-grid">
-      <div>
-        <label class="label" for="pf-slug">Slug <span class="text-bad">*</span></label>
-        <input class="input font-mono" id="pf-slug" type="text" placeholder="parcours-devops" />
-        <p class="slug-warn" id="pf-slug-warn" style="display:none">Lettres minuscules, chiffres et tirets uniquement.</p>
-      </div>
-      <div>
-        <label class="label" for="pf-title">Titre <span class="text-bad">*</span></label>
-        <input class="input" id="pf-title" type="text" placeholder="Parcours DevOps" />
-      </div>
-    </div>
-    <div class="mb-3.5">
-      <label class="label" for="pf-desc">Description</label>
-      <textarea class="input" id="pf-desc" rows="2" placeholder="Une description du parcours…"></textarea>
-    </div>
-    <div class="draft-grid">
-      <div>
-        <label class="label" for="pf-level">Niveau</label>
-        <select class="input" id="pf-level">
-          <option value="beginner">Débutant</option>
-          <option value="intermediate">Intermédiaire</option>
-          <option value="advanced">Avancé</option>
-        </select>
-      </div>
-      <div>
-        <label class="label" for="pf-kind">Type</label>
-        <select class="input" id="pf-kind">
-          <option value="course">Par cours</option>
-          <option value="skill">Par compétence</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Course picker -->
-    <div class="mb-3.5" id="pf-courses-group">
-      <label class="label">Cours <span class="text-soft text-[.8rem]">(dans l'ordre)</span></label>
-      <div class="flex gap-3">
-        <!-- Available -->
-        <div class="flex-1 min-w-0">
-          <p class="text-[.75rem] text-soft mb-1 font-medium uppercase tracking-wide">Disponibles</p>
-          <input type="text" id="course-search" class="input text-sm mb-1.5" placeholder="Rechercher un cours…" />
-          <div id="course-available-list" class="border rounded overflow-y-auto divide-y" style="height:200px;border-color:var(--border);divide-color:var(--border)"></div>
-        </div>
-        <!-- Selected (ordered) -->
-        <div class="flex-1 min-w-0">
-          <p class="text-[.75rem] text-soft mb-1 font-medium uppercase tracking-wide">Sélectionnés</p>
-          <div id="course-selected-list" class="border rounded overflow-y-auto divide-y" style="height:228px;border-color:var(--border);divide-color:var(--border)"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Skills picker -->
-    <div class="mb-3.5" id="pf-skills-group" style="display:none">
-      <label class="label">Compétences <span class="text-soft text-[.8rem]">(dans l'ordre)</span></label>
-      <div class="flex gap-2 mb-1.5">
-        <input type="text" id="skill-input" class="input text-sm font-mono flex-1" placeholder="docker, kubernetes, python…" />
-        <button id="skill-add-btn" class="btn btn-secondary btn-sm flex-shrink-0">+ Ajouter</button>
-      </div>
-      <p class="text-[.73rem] text-soft mb-1.5">Entrez un slug et cliquez Ajouter (ex : <code>docker</code>, <code>linux</code>).</p>
-      <div id="skill-selected-list" class="border rounded divide-y" style="border-color:var(--border);divide-color:var(--border);min-height:48px"></div>
-    </div>
-
-    <div class="flex gap-2">
-      <button class="btn btn-primary btn-sm" id="pf-save">Créer le parcours</button>
-      <button class="btn btn-secondary btn-sm" id="pf-cancel">Annuler</button>
+      <h1 class="text-2xl">Parcours — Inscriptions</h1>
+      <p class="text-soft text-sm mt-1">Gérer les utilisateurs inscrits à chaque parcours</p>
     </div>
   </div>
 
-  <!-- Path list -->
-  <div id="paths-loading" class="loading-state"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div>
-  <div id="paths-list" class="flex flex-col gap-3 mb-8" style="display:none"></div>
-  <div id="paths-empty" class="card text-center p-10" style="display:none">
-    <p class="text-soft">Aucun parcours. Cliquez <strong>+ Nouveau parcours</strong> pour en créer un.</p>
+  <!-- Path selector -->
+  <div class="flex items-center gap-3 mb-5 flex-wrap">
+    <label class="label m-0 whitespace-nowrap">Parcours :</label>
+    <select id="path-select" class="input w-auto min-w-[220px]">
+      <option value="">Chargement…</option>
+    </select>
+    <span class="text-soft text-sm" id="enroll-count"></span>
   </div>
 
-  <!-- Enrollments section (appears when a path is selected) -->
-  <div id="enrollment-section" style="display:none">
-    <div class="divider-text mb-5" id="enroll-path-title">Inscriptions</div>
-
-    <!-- Enroll form -->
-    <div class="card mb-4 !px-5 !py-4">
-      <div class="flex-row-gap3-wrap">
-        <select id="user-select" class="input flex-1 min-w-[200px]">
-          <option value="">Sélectionner un utilisateur…</option>
-        </select>
-        <button id="enroll-btn" class="btn btn-primary btn-sm">Inscrire</button>
-      </div>
+  <!-- Enroll form -->
+  <div id="enroll-form" class="card mb-5 !px-5 !py-4" style="display:none">
+    <div class="flex-row-gap3-wrap">
+      <select id="user-select" class="input flex-1 min-w-[200px]">
+        <option value="">Sélectionner un utilisateur…</option>
+      </select>
+      <button id="enroll-btn" class="btn btn-primary btn-sm">Inscrire</button>
     </div>
+  </div>
 
-    <!-- Enrollments table -->
-    <div class="card !p-0 overflow-x-auto">
-      <table class="admin-table" id="enrollments-table">
-        <thead>
-          <tr class="admin-tr-head">
-            <th class="admin-th">Utilisateur</th>
-            <th class="admin-th">Progression</th>
-            <th class="admin-th">Inscrit le</th>
-            <th class="admin-th-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="enrollments-body">
-          <tr><td colspan="4" class="p-8 text-center text-soft">Sélectionnez un parcours</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <!-- Enrollments table -->
+  <div class="card !p-0 overflow-x-auto" id="table-card">
+    <table class="admin-table" id="enrollments-table">
+      <thead>
+        <tr class="admin-tr-head">
+          <th class="admin-th">Utilisateur</th>
+          <th class="admin-th">Progression</th>
+          <th class="admin-th">Inscrit le</th>
+          <th class="admin-th-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="enrollments-body">
+        <tr><td colspan="4" class="p-8 text-center text-soft">Sélectionnez un parcours</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <script>
@@ -130,349 +55,17 @@ import Admin from '../../../layouts/Admin.astro';
       return res.status === 204 ? null : res.json();
     }
 
-    let allPaths: any[] = [];
     let allUsers: any[] = [];
-    let allCourses: any[] = [];
-    let selectedCourses: { slug: string; title: string }[] = [];
-    let selectedSkills: string[] = [];
-    let activeSlug = '';
-    let editingSlug = '';
-    const slugRe = /^[a-z0-9][a-z0-9-]*$/;
-
-    const levelLabel: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
-    const kindLabel:  Record<string, string> = { course: 'Par cours', skill: 'Par compétence' };
-
-    // ── Course picker ─────────────────────────────────────────────────────────
-
-    function renderAvailableCourses() {
-      const search = ((document.getElementById('course-search') as HTMLInputElement)?.value ?? '').toLowerCase();
-      const selectedSlugs = new Set(selectedCourses.map(c => c.slug));
-      const container = document.getElementById('course-available-list')!;
-
-      const filtered = allCourses.filter(c =>
-        !selectedSlugs.has(c.slug) &&
-        (!search || (c.title ?? '').toLowerCase().includes(search) || c.slug.includes(search))
-      );
-
-      if (filtered.length === 0) {
-        container.innerHTML = `<p class="text-soft text-sm text-center p-4">${search ? 'Aucun résultat' : 'Tous les cours sont sélectionnés'}</p>`;
-        return;
-      }
-
-      container.innerHTML = filtered.map((c: any) => `
-        <div class="flex items-center justify-between px-3 py-1.5 text-sm hover:bg-[var(--surface-hover)] cursor-pointer add-avail-row" data-slug="${c.slug}" data-title="${escHtml(c.title ?? c.slug)}">
-          <div class="min-w-0 flex-1">
-            <div class="truncate text-ink">${escHtml(c.title ?? c.slug)}</div>
-            <div class="text-soft text-[.72rem] font-mono truncate">${c.slug}</div>
-          </div>
-          <span class="text-accent font-bold ml-2 flex-shrink-0 text-base leading-none">+</span>
-        </div>
-      `).join('');
-
-      container.querySelectorAll<HTMLElement>('.add-avail-row').forEach(row => {
-        row.addEventListener('click', () => addCourse(row.dataset.slug!, row.dataset.title!));
-      });
-    }
-
-    function renderSelectedCourses() {
-      const container = document.getElementById('course-selected-list')!;
-
-      if (selectedCourses.length === 0) {
-        container.innerHTML = `<p class="text-soft text-sm text-center p-4">Cliquez sur un cours pour l'ajouter</p>`;
-        return;
-      }
-
-      container.innerHTML = selectedCourses.map((c, i) => `
-        <div class="flex items-center gap-1.5 px-3 py-1.5 text-sm" data-slug="${c.slug}">
-          <span class="text-soft text-[.72rem] w-4 text-right flex-shrink-0">${i + 1}.</span>
-          <span class="flex-1 truncate text-ink" title="${c.slug}">${escHtml(c.title)}</span>
-          <div class="flex gap-0.5 flex-shrink-0 items-center">
-            <button class="move-up-btn text-soft hover:text-ink px-0.5 text-base leading-none ${i === 0 ? 'opacity-20 pointer-events-none' : ''}" data-slug="${c.slug}">↑</button>
-            <button class="move-dn-btn text-soft hover:text-ink px-0.5 text-base leading-none ${i === selectedCourses.length - 1 ? 'opacity-20 pointer-events-none' : ''}" data-slug="${c.slug}">↓</button>
-            <button class="rm-course-btn text-bad hover:opacity-70 px-0.5 font-bold" data-slug="${c.slug}">×</button>
-          </div>
-        </div>
-      `).join('');
-
-      container.querySelectorAll<HTMLElement>('.move-up-btn').forEach(btn => {
-        btn.addEventListener('click', () => moveCourse(btn.dataset.slug!, -1));
-      });
-      container.querySelectorAll<HTMLElement>('.move-dn-btn').forEach(btn => {
-        btn.addEventListener('click', () => moveCourse(btn.dataset.slug!, 1));
-      });
-      container.querySelectorAll<HTMLElement>('.rm-course-btn').forEach(btn => {
-        btn.addEventListener('click', () => removeCourse(btn.dataset.slug!));
-      });
-    }
-
-    function renderCoursePicker() {
-      renderAvailableCourses();
-      renderSelectedCourses();
-    }
-
-    function addCourse(slug: string, title: string) {
-      if (!selectedCourses.find(c => c.slug === slug)) {
-        selectedCourses.push({ slug, title });
-        renderCoursePicker();
-      }
-    }
-
-    function removeCourse(slug: string) {
-      selectedCourses = selectedCourses.filter(c => c.slug !== slug);
-      renderCoursePicker();
-    }
-
-    function moveCourse(slug: string, dir: number) {
-      const i = selectedCourses.findIndex(c => c.slug === slug);
-      if (i < 0) return;
-      const j = i + dir;
-      if (j < 0 || j >= selectedCourses.length) return;
-      [selectedCourses[i], selectedCourses[j]] = [selectedCourses[j], selectedCourses[i]];
-      renderCoursePicker();
-    }
-
-    function escHtml(s: string) {
-      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    // ── Skills picker ─────────────────────────────────────────────────────────
-
-    function renderSelectedSkills() {
-      const container = document.getElementById('skill-selected-list')!;
-      if (selectedSkills.length === 0) {
-        container.innerHTML = `<p class="text-soft text-sm text-center p-3">Aucune compétence sélectionnée</p>`;
-        return;
-      }
-      container.innerHTML = selectedSkills.map((s, i) => `
-        <div class="flex items-center gap-1.5 px-3 py-1.5 text-sm" data-skill="${s}">
-          <span class="text-soft text-[.72rem] w-4 text-right flex-shrink-0">${i + 1}.</span>
-          <span class="flex-1 font-mono text-ink">${escHtml(s)}</span>
-          <div class="flex gap-0.5 flex-shrink-0 items-center">
-            <button class="skill-up text-soft hover:text-ink px-0.5 text-base leading-none ${i === 0 ? 'opacity-20 pointer-events-none' : ''}" data-skill="${s}">↑</button>
-            <button class="skill-dn text-soft hover:text-ink px-0.5 text-base leading-none ${i === selectedSkills.length - 1 ? 'opacity-20 pointer-events-none' : ''}" data-skill="${s}">↓</button>
-            <button class="skill-rm text-bad hover:opacity-70 px-0.5 font-bold" data-skill="${s}">×</button>
-          </div>
-        </div>
-      `).join('');
-      container.querySelectorAll<HTMLElement>('.skill-up').forEach(b => b.addEventListener('click', () => moveSkill(b.dataset.skill!, -1)));
-      container.querySelectorAll<HTMLElement>('.skill-dn').forEach(b => b.addEventListener('click', () => moveSkill(b.dataset.skill!, 1)));
-      container.querySelectorAll<HTMLElement>('.skill-rm').forEach(b => b.addEventListener('click', () => removeSkill(b.dataset.skill!)));
-    }
-
-    function addSkill(slug: string) {
-      slug = slug.trim().toLowerCase();
-      if (!slug || selectedSkills.includes(slug)) return;
-      selectedSkills.push(slug);
-      (document.getElementById('skill-input') as HTMLInputElement).value = '';
-      renderSelectedSkills();
-    }
-
-    function removeSkill(slug: string) {
-      selectedSkills = selectedSkills.filter(s => s !== slug);
-      renderSelectedSkills();
-    }
-
-    function moveSkill(slug: string, dir: number) {
-      const i = selectedSkills.indexOf(slug);
-      if (i < 0) return;
-      const j = i + dir;
-      if (j < 0 || j >= selectedSkills.length) return;
-      [selectedSkills[i], selectedSkills[j]] = [selectedSkills[j], selectedSkills[i]];
-      renderSelectedSkills();
-    }
-
-    // ── Form helpers ─────────────────────────────────────────────────────────
-
-    function getFormValues() {
-      const kind = (document.getElementById('pf-kind') as HTMLSelectElement).value;
-      return {
-        slug:        (document.getElementById('pf-slug')  as HTMLInputElement).value.trim(),
-        title:       (document.getElementById('pf-title') as HTMLInputElement).value.trim(),
-        description: (document.getElementById('pf-desc')  as HTMLTextAreaElement).value.trim(),
-        level:       (document.getElementById('pf-level') as HTMLSelectElement).value,
-        kind,
-        courses: kind === 'course' ? selectedCourses.map(c => c.slug) : [],
-        skills:  kind === 'skill'  ? selectedSkills.slice() : [],
-      };
-    }
-
-    function resetForm() {
-      (document.getElementById('pf-slug')   as HTMLInputElement).value = '';
-      (document.getElementById('pf-title')  as HTMLInputElement).value = '';
-      (document.getElementById('pf-desc')   as HTMLTextAreaElement).value = '';
-      (document.getElementById('pf-level')  as HTMLSelectElement).value = 'beginner';
-      (document.getElementById('pf-kind')   as HTMLSelectElement).value = 'course';
-      (document.getElementById('pf-slug') as HTMLInputElement).disabled = false;
-      (document.getElementById('course-search') as HTMLInputElement).value = '';
-      (document.getElementById('skill-input') as HTMLInputElement).value = '';
-      document.getElementById('pf-slug-warn')!.style.display = 'none';
-      document.getElementById('pf-courses-group')!.style.display = '';
-      document.getElementById('pf-skills-group')!.style.display = 'none';
-      selectedCourses = [];
-      selectedSkills = [];
-      editingSlug = '';
-      renderCoursePicker();
-      renderSelectedSkills();
-    }
-
-    function openForm(path?: any) {
-      resetForm();
-      const panel = document.getElementById('path-form-panel')!;
-      const saveBtn = document.getElementById('pf-save')!;
-      if (path) {
-        editingSlug = path.slug;
-        document.getElementById('path-form-title')!.textContent = `Modifier — ${path.title}`;
-        (document.getElementById('pf-slug')   as HTMLInputElement).value = path.slug;
-        (document.getElementById('pf-slug')   as HTMLInputElement).disabled = true;
-        (document.getElementById('pf-title')  as HTMLInputElement).value = path.title ?? '';
-        (document.getElementById('pf-desc')   as HTMLTextAreaElement).value = path.description ?? '';
-        (document.getElementById('pf-level')  as HTMLSelectElement).value = path.level ?? 'beginner';
-        (document.getElementById('pf-kind')   as HTMLSelectElement).value = path.kind ?? 'course';
-        selectedSkills = [...(path.skills ?? [])];
-        selectedCourses = (path.courses ?? []).map((slug: string) => {
-          const found = allCourses.find((c: any) => c.slug === slug);
-          return { slug, title: found?.title ?? slug };
-        });
-        syncKindVisibility();
-        saveBtn.textContent = 'Enregistrer les modifications';
-      } else {
-        document.getElementById('path-form-title')!.textContent = 'Nouveau parcours';
-        saveBtn.textContent = 'Créer le parcours';
-      }
-      renderCoursePicker();
-      renderSelectedSkills();
-      panel.style.display = 'block';
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    function syncKindVisibility() {
-      const kind = (document.getElementById('pf-kind') as HTMLSelectElement).value;
-      document.getElementById('pf-courses-group')!.style.display = kind === 'course' ? '' : 'none';
-      document.getElementById('pf-skills-group')!.style.display  = kind === 'skill'  ? '' : 'none';
-    }
-
-    // ── Path list rendering ───────────────────────────────────────────────────
-
-    function renderPaths(paths: any[]) {
-      const list = document.getElementById('paths-list')!;
-      const empty = document.getElementById('paths-empty')!;
-      document.getElementById('path-count')!.textContent = `${paths.length} parcours`;
-      if (paths.length === 0) {
-        list.style.display = 'none';
-        empty.style.display = 'block';
-        return;
-      }
-      list.style.display = 'flex';
-      empty.style.display = 'none';
-      list.innerHTML = paths.map((p: any) => {
-        const isActive = p.slug === activeSlug;
-        const courseCount = (p.courses ?? p.skills ?? []).length;
-        const typeLabel = kindLabel[p.kind ?? 'course'] ?? p.kind;
-        const lvl = levelLabel[p.level ?? ''] ?? p.level ?? '';
-        return `
-        <div class="card !px-5 !py-4 ${isActive ? 'ring-2 ring-accent' : ''}">
-          <div class="flex items-start justify-between gap-4 flex-wrap">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap mb-1">
-                <span class="font-semibold text-ink">${escHtml(p.title ?? p.slug)}</span>
-                <span class="badge-pill">${typeLabel}</span>
-                ${lvl ? `<span class="badge-pill">${lvl}</span>` : ''}
-              </div>
-              <div class="text-soft text-sm font-mono">${p.slug}</div>
-              ${p.description ? `<div class="text-[.85rem] text-ink-soft mt-1">${escHtml(p.description)}</div>` : ''}
-              <div class="text-[.8rem] text-soft mt-1.5">${courseCount} ${p.kind === 'skill' ? 'compétence' : 'cours'}${courseCount > 1 ? 's' : ''}</div>
-            </div>
-            <div class="flex gap-2 flex-shrink-0 flex-wrap">
-              <button class="btn btn-sm btn-secondary enroll-path-btn" data-slug="${p.slug}" data-title="${escHtml(p.title ?? p.slug)}">Inscriptions</button>
-              <button class="btn btn-sm btn-secondary edit-path-btn" data-slug="${p.slug}">Modifier</button>
-              <button class="btn btn-sm btn-danger delete-path-btn" data-slug="${p.slug}" data-title="${escHtml(p.title ?? p.slug)}">Supprimer</button>
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-
-      list.querySelectorAll<HTMLButtonElement>('.enroll-path-btn').forEach(btn => {
-        btn.addEventListener('click', () => openEnrollments(btn.dataset.slug!, btn.dataset.title!));
-      });
-      list.querySelectorAll<HTMLButtonElement>('.edit-path-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const path = allPaths.find((p: any) => p.slug === btn.dataset.slug);
-          if (path) openForm(path);
-        });
-      });
-      list.querySelectorAll<HTMLButtonElement>('.delete-path-btn').forEach(btn => {
-        btn.addEventListener('click', () => deletePath(btn.dataset.slug!, btn.dataset.title!));
-      });
-    }
-
-    // ── API actions ───────────────────────────────────────────────────────────
+    let currentSlug = '';
 
     async function loadPaths() {
-      try {
-        const data = await api('/paths') as { paths: any[] };
-        allPaths = data.paths ?? [];
-        document.getElementById('paths-loading')!.style.display = 'none';
-        renderPaths(allPaths);
-      } catch {
-        document.getElementById('paths-loading')!.innerHTML = '<p class="text-bad text-sm">Erreur de chargement des parcours</p>';
-      }
+      const data = await api('/paths') as { paths: any[] };
+      const paths = data.paths ?? [];
+      const select = document.getElementById('path-select') as HTMLSelectElement;
+      select.innerHTML = paths.length
+        ? `<option value="">— Choisir un parcours —</option>` + paths.map((p: any) => `<option value="${p.slug}">${p.title}</option>`).join('')
+        : `<option value="">Aucun parcours disponible</option>`;
     }
-
-    async function loadAllCourses() {
-      try {
-        const data = await api('/admin/courses') as { courses: any[] };
-        allCourses = (data.courses ?? []).slice().sort((a: any, b: any) => (a.title ?? a.slug).localeCompare(b.title ?? b.slug, 'fr'));
-        renderCoursePicker();
-      } catch {
-        /* non-blocking */
-      }
-    }
-
-    async function savePath() {
-      const vals = getFormValues();
-      const warn = document.getElementById('pf-slug-warn')!;
-
-      if (!vals.title) { (window as any).showToast?.('Le titre est requis', 'error'); return; }
-
-      const btn = document.getElementById('pf-save') as HTMLButtonElement;
-      btn.disabled = true;
-
-      try {
-        if (editingSlug) {
-          await api(`/admin/courses/paths/${editingSlug}/crd`, { method: 'PUT', body: vals });
-          (window as any).showToast?.('Parcours mis à jour', 'success');
-        } else {
-          if (!vals.slug || !slugRe.test(vals.slug)) { warn.style.display = ''; btn.disabled = false; return; }
-          warn.style.display = 'none';
-          await api('/admin/courses/paths', { method: 'POST', body: vals });
-          (window as any).showToast?.('Parcours créé', 'success');
-        }
-        document.getElementById('path-form-panel')!.style.display = 'none';
-        resetForm();
-        await loadPaths();
-      } catch (e: any) {
-        (window as any).showToast?.(e.message || 'Erreur', 'error');
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    async function deletePath(slug: string, title: string) {
-      if (!confirm(`Supprimer le parcours « ${title} » ? Cette action est irréversible.`)) return;
-      try {
-        await api(`/admin/courses/paths/${slug}/crd`, { method: 'DELETE' });
-        (window as any).showToast?.('Parcours supprimé', 'success');
-        if (activeSlug === slug) {
-          activeSlug = '';
-          document.getElementById('enrollment-section')!.style.display = 'none';
-        }
-        await loadPaths();
-      } catch (e: any) {
-        (window as any).showToast?.(e.message || 'Erreur', 'error');
-      }
-    }
-
-    // ── Enrollments ───────────────────────────────────────────────────────────
 
     async function loadUsers() {
       const data = await api('/admin/users') as { users: any[] };
@@ -482,28 +75,26 @@ import Admin from '../../../layouts/Admin.astro';
         allUsers.map((u: any) => `<option value="${u.id}">${u.username} (${u.email})</option>`).join('');
     }
 
-    async function openEnrollments(slug: string, title: string) {
-      activeSlug = slug;
-      renderPaths(allPaths);
-      document.getElementById('enroll-path-title')!.textContent = `Inscriptions — ${title}`;
-      const section = document.getElementById('enrollment-section')!;
-      section.style.display = 'block';
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      await loadEnrollments(slug);
-    }
-
     async function loadEnrollments(slug: string) {
       const tbody = document.getElementById('enrollments-body')!;
       tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div></div></td></tr>`;
       try {
         const data = await api(`/admin/paths/${slug}/enrollments`) as { users: any[] };
         const users = data.users ?? [];
+        document.getElementById('enroll-count')!.textContent = `${users.length} inscrit${users.length > 1 ? 's' : ''}`;
+
         if (users.length === 0) {
           tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-soft">Aucun utilisateur inscrit à ce parcours</td></tr>`;
           return;
         }
-        const statusCls: Record<string, string> = { completed: 'course-tag-completed', available: 'course-tag-available', locked: 'course-tag-locked' };
+
+        const statusCls: Record<string, string> = {
+          completed: 'course-tag-completed',
+          available:  'course-tag-available',
+          locked:     'course-tag-locked',
+        };
         const statusIcon: Record<string, string> = { completed: '✓', available: '▶', locked: '🔒' };
+
         tbody.innerHTML = users.map((u: any) => {
           const pct = u.totalCourses > 0 ? Math.round(u.completedCourses / u.totalCourses * 100) : 0;
           const courses = (u.courses ?? []).map((c: any) =>
@@ -511,7 +102,9 @@ import Admin from '../../../layouts/Admin.astro';
           ).join(' ');
           const bar = u.totalCourses > 0 ? `
             <div class="path-progress-row">
-              <div class="progress-track"><div class="progress-fill ${pct === 100 ? 'complete' : 'partial'}" style="width:${pct}%"></div></div>
+              <div class="progress-track">
+                <div class="progress-fill ${pct === 100 ? 'complete' : 'partial'}" style="width:${pct}%"></div>
+              </div>
               <span class="path-progress-pct">${u.completedCourses}/${u.totalCourses}</span>
             </div>` : '';
           return `
@@ -525,11 +118,17 @@ import Admin from '../../../layouts/Admin.astro';
                 </div>
               </div>
             </td>
-            <td class="admin-td"><div class="flex flex-wrap gap-1">${courses}</div>${bar}</td>
+            <td class="admin-td">
+              <div class="flex flex-wrap gap-1">${courses}</div>
+              ${bar}
+            </td>
             <td class="admin-td text-soft text-sm whitespace-nowrap">${new Date(u.enrolledAt).toLocaleDateString('fr-FR')}</td>
-            <td class="admin-td-right"><button class="btn btn-sm btn-danger unenroll-btn" data-uid="${u.userId}">Désinscrire</button></td>
+            <td class="admin-td-right">
+              <button class="btn btn-sm btn-danger unenroll-btn" data-uid="${u.userId}">Désinscrire</button>
+            </td>
           </tr>`;
         }).join('');
+
         tbody.querySelectorAll<HTMLButtonElement>('.unenroll-btn').forEach(btn => {
           btn.addEventListener('click', () => unenroll(slug, btn.dataset.uid!));
         });
@@ -542,7 +141,7 @@ import Admin from '../../../layouts/Admin.astro';
       const btn = document.getElementById('enroll-btn') as HTMLButtonElement;
       btn.disabled = true; btn.textContent = 'Inscription…';
       try {
-        await api(`/admin/paths/${slug}/enrollments`, { method: 'POST', body: { userId } });
+        await api(`/admin/paths/${slug}/enrollments`, { method: 'POST', body: { userId: userId } });
         (window as any).showToast?.('Utilisateur inscrit au parcours', 'success');
         (document.getElementById('user-select') as HTMLSelectElement).value = '';
         await loadEnrollments(slug);
@@ -564,38 +163,25 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
-    // ── Event listeners ───────────────────────────────────────────────────────
-
-    document.getElementById('new-path-btn')!.addEventListener('click', () => openForm());
-    document.getElementById('pf-cancel')!.addEventListener('click', () => {
-      document.getElementById('path-form-panel')!.style.display = 'none';
-      resetForm();
-    });
-    document.getElementById('pf-save')!.addEventListener('click', savePath);
-    document.getElementById('pf-kind')!.addEventListener('change', syncKindVisibility);
-    document.getElementById('course-search')!.addEventListener('input', renderAvailableCourses);
-    document.getElementById('skill-add-btn')!.addEventListener('click', () => {
-      addSkill((document.getElementById('skill-input') as HTMLInputElement).value);
-    });
-    document.getElementById('skill-input')!.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { e.preventDefault(); addSkill((e.target as HTMLInputElement).value); }
-    });
-
-    document.getElementById('pf-slug')!.addEventListener('input', () => {
-      const v = (document.getElementById('pf-slug') as HTMLInputElement).value;
-      document.getElementById('pf-slug-warn')!.style.display = v && !slugRe.test(v) ? '' : 'none';
+    document.getElementById('path-select')!.addEventListener('change', async (e) => {
+      currentSlug = (e.target as HTMLSelectElement).value;
+      const form = document.getElementById('enroll-form')!;
+      if (!currentSlug) {
+        form.style.display = 'none';
+        document.getElementById('enroll-count')!.textContent = '';
+        document.getElementById('enrollments-body')!.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-soft">Sélectionnez un parcours</td></tr>`;
+        return;
+      }
+      form.style.display = 'block';
+      await loadEnrollments(currentSlug);
     });
 
     document.getElementById('enroll-btn')!.addEventListener('click', () => {
       const userId = (document.getElementById('user-select') as HTMLSelectElement).value;
       if (!userId) { (window as any).showToast?.('Sélectionnez un utilisateur', 'error'); return; }
-      enroll(activeSlug, userId);
+      enroll(currentSlug, userId);
     });
 
-    // ── Init ──────────────────────────────────────────────────────────────────
-
-    renderCoursePicker();
-    renderSelectedSkills();
-    Promise.all([loadPaths(), loadUsers(), loadAllCourses()]);
+    Promise.all([loadPaths(), loadUsers()]);
   </script>
 </Admin>

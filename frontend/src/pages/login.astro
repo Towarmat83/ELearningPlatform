@@ -2,149 +2,61 @@
 import Base from '../layouts/Base.astro';
 ---
 <Base title="Connexion">
-  <style is:global>
-    .lbg {
-      min-height: 100vh;
-      background: var(--fill);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 16px;
-    }
-    .lcard {
-      width: 430px;
-      max-width: 100%;
-      background: var(--paper);
-      border: 1.5px solid var(--line);
-      border-radius: 18px;
-      padding: 36px 36px 30px;
-      box-shadow: 0 20px 50px -28px rgba(30,60,120,.45);
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-    .l-logo {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-    }
-    .l-logo img { width: 60px; height: 60px; object-fit: contain; }
-    .l-logo .l-name { font-family: 'Caveat', cursive; font-size: 2.2rem; font-weight: 700; color: var(--ink); line-height: 1; }
-    .l-seg {
-      display: flex;
-      background: var(--fill);
-      border-radius: 11px;
-      padding: 4px;
-      gap: 3px;
-    }
-    .l-seg .seg-btn {
-      flex: 1;
-      height: 34px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--ink-soft);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      transition: .12s;
-    }
-    .l-seg .seg-btn.active {
-      background: var(--blue);
-      color: #fff;
-    }
-    .l-fields {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .l-fields .input { height: 44px; }
-    .l-err {
-      background: var(--bad-soft);
-      border: 1px solid var(--bad);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: .875rem;
-      color: var(--bad);
-    }
-    .sso-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      height: 46px;
-      padding: 0 16px;
-      border-radius: 9px;
-      border: 1.5px solid var(--line);
-      background: var(--paper);
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--ink);
-      width: 100%;
-      cursor: pointer;
-      transition: .12s;
-      text-align: left;
-    }
-    .sso-btn:hover { border-color: var(--blue); background: var(--blue-soft); }
-    .sso-btn:disabled { opacity: .5; cursor: not-allowed; }
-    .l-register {
-      text-align: center;
-      font-size: .875rem;
-      color: var(--ink-soft);
-    }
-    .l-register a { color: var(--blue); font-weight: 600; }
+  <div class="min-h-screen bg-fill flex items-start justify-center px-4 pt-10 pb-10 sm:items-center sm:pt-0">
+    <div class="w-full max-w-[430px] bg-paper border-[1.5px] border-line rounded-[18px] px-5 pt-7 pb-6 flex flex-col gap-[18px] shadow-[0_20px_50px_-28px_rgba(30,60,120,.45)] sm:px-9 sm:pt-9 sm:pb-8">
 
-    /* ── Responsive ── */
-    @media (max-width: 480px) {
-      .lbg { padding: 20px 12px; align-items: flex-start; padding-top: 32px; }
-      .lcard { padding: 28px 20px 22px; border-radius: 14px; }
-      .l-logo img { width: 48px; height: 48px; }
-      .l-logo .l-name { font-size: 1.8rem; }
-    }
-  </style>
-
-  <div class="lbg">
-    <div class="lcard">
-      <div class="l-logo">
-        <img src="/pioupitre.png" alt="pioupitre" />
-        <span class="l-name">pupitre</span>
+      <!-- Logo -->
+      <div class="flex items-center justify-center gap-3">
+        <img src="/pioupitre.png" alt="pioupitre" class="w-[60px] h-[60px] object-contain sm:w-12 sm:h-12" />
+        <span class="brand-font text-[2.2rem] font-bold text-ink leading-none sm:text-[1.8rem]">pupitre</span>
       </div>
 
-      <div class="l-seg" id="login-seg">
-        <button class="seg-btn active" data-tab="password">Mot de passe</button>
-        <button class="seg-btn" data-tab="sso" id="seg-sso" style="display:none">SSO</button>
-        <button class="seg-btn" data-tab="ldap" id="seg-ldap" style="display:none">LDAP</button>
+      <!-- Tab switcher -->
+      <div class="flex bg-fill rounded-[11px] p-1 gap-[3px]" id="login-seg">
+        <button class="seg-btn flex-1 h-[36px] rounded-lg text-[13px] font-semibold transition-all duration-[.12s] flex items-center justify-center gap-1.5 active" data-tab="password" data-color="blue">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Email
+        </button>
+        <button class="seg-btn flex-1 h-[36px] rounded-lg text-[13px] font-semibold transition-all duration-[.12s] flex items-center justify-center gap-1.5 hidden" data-tab="sso" data-color="violet" id="seg-sso">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          SSO
+        </button>
+        <button class="seg-btn flex-1 h-[36px] rounded-lg text-[13px] font-semibold transition-all duration-[.12s] flex items-center justify-center gap-1.5 hidden" data-tab="ldap" data-color="teal" id="seg-ldap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+          LDAP
+        </button>
       </div>
 
-      <div class="l-err" id="login-error" style="display:none"></div>
+      <!-- Error banner -->
+      <div class="hidden bg-bad-soft border border-bad rounded-lg px-3.5 py-2.5 text-[.875rem] text-bad" id="login-error"></div>
 
       <!-- Tab: Password -->
       <div id="tab-password">
-        <form id="login-form" class="l-fields">
-          <input class="input" type="email" id="email" placeholder="identifiant ou e-mail" required autocomplete="email" />
-          <input class="input" type="password" id="password" placeholder="mot de passe" required autocomplete="current-password" />
+        <form id="login-form" class="flex flex-col gap-3">
+          <input class="input h-11" type="email" id="email" placeholder="identifiant ou e-mail" required autocomplete="email" />
+          <input class="input h-11" type="password" id="password" placeholder="mot de passe" required autocomplete="current-password" />
           <button type="submit" class="btn btn-primary btn-lg w-full" id="login-btn">Se connecter</button>
         </form>
       </div>
 
       <!-- Tab: SSO -->
-      <div id="tab-sso" style="display:none">
-        <div id="sso-list" class="l-fields"></div>
+      <div id="tab-sso" class="hidden">
+        <div id="sso-list" class="flex flex-col gap-3"></div>
       </div>
 
       <!-- Tab: LDAP -->
-      <div id="tab-ldap" style="display:none">
-        <form id="ldap-form" class="l-fields">
-          <input class="input" type="text" id="ldap-user" placeholder="identifiant LDAP" required />
-          <input class="input" type="password" id="ldap-pass" placeholder="mot de passe" required autocomplete="current-password" />
+      <div id="tab-ldap" class="hidden">
+        <form id="ldap-form" class="flex flex-col gap-3">
+          <input class="input h-11" type="text" id="ldap-user" placeholder="identifiant LDAP" required />
+          <input class="input h-11" type="password" id="ldap-pass" placeholder="mot de passe" required autocomplete="current-password" />
           <button type="submit" class="btn btn-primary btn-lg w-full" id="ldap-btn">Se connecter</button>
         </form>
       </div>
 
       <div class="divider"></div>
-      <div class="l-register" id="register-link">
-        Pas encore de compte ? <a href="/register">Créer un compte</a>
-      </div>
+      <p class="text-center text-[.875rem] text-ink-soft" id="register-link">
+        Pas encore de compte ? <a href="/register" class="text-blue font-semibold">Créer un compte</a>
+      </p>
     </div>
   </div>
 
@@ -166,10 +78,30 @@ import Base from '../layouts/Base.astro';
     function showError(msg: string) {
       const el = document.getElementById('login-error')!;
       el.textContent = msg;
-      el.style.display = 'block';
+      el.classList.remove('hidden');
     }
     function hideError() {
-      document.getElementById('login-error')!.style.display = 'none';
+      document.getElementById('login-error')!.classList.add('hidden');
+    }
+
+    // Tab color palette
+    const TAB_COLORS: Record<string, { bg: string; text: string }> = {
+      blue:   { bg: '#1b86f2', text: '#fff' },
+      violet: { bg: '#1b86f2', text: '#fff' },
+      teal:   { bg: '#0d9488', text: '#fff' },
+    };
+
+    function activateTab(btn: HTMLButtonElement) {
+      const seg = document.getElementById('login-seg')!;
+      seg.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach(b => {
+        b.style.background = '';
+        b.style.color = '';
+        b.style.boxShadow = '';
+      });
+      const color = TAB_COLORS[btn.dataset.color ?? 'blue'];
+      btn.style.background = color.bg;
+      btn.style.color = color.text;
+      btn.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)';
     }
 
     // Tab switching
@@ -179,13 +111,16 @@ import Base from '../layouts/Base.astro';
       if (!btn || !btn.dataset.tab) return;
       hideError();
       const tab = btn.dataset.tab;
-      seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      activateTab(btn);
       ['password', 'sso', 'ldap'].forEach(t => {
         const el = document.getElementById(`tab-${t}`)!;
-        if (el) el.style.display = t === tab ? 'block' : 'none';
+        if (el) el.classList.toggle('hidden', t !== tab);
       });
     });
+
+    // Set initial active color on page load
+    const initBtn = seg.querySelector<HTMLButtonElement>('.seg-btn.active');
+    if (initBtn) activateTab(initBtn);
 
     async function init() {
       let oidcEnabled = false;
@@ -201,10 +136,9 @@ import Base from '../layouts/Base.astro';
 
       if (!registrationEnabled) {
         const rl = document.getElementById('register-link');
-        if (rl) rl.style.display = 'none';
+        if (rl) rl.classList.add('hidden');
       }
 
-      // SSO providers
       let providers: { id: string; name: string }[] = [];
       try {
         const res = await apiFetch('/auth/oauth/providers') as any;
@@ -213,7 +147,7 @@ import Base from '../layouts/Base.astro';
 
       const hasSso = providers.length > 0 || oidcEnabled;
       if (hasSso) {
-        document.getElementById('seg-sso')!.style.display = '';
+        document.getElementById('seg-sso')!.classList.remove('hidden');
         const ssoList = document.getElementById('sso-list')!;
         const providerIcons: Record<string, string> = {
           github: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>`,
@@ -225,7 +159,7 @@ import Base from '../layouts/Base.astro';
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'sso-btn';
-          btn.innerHTML = `${providerIcons[p.id] ?? '<span style="width:18px;height:18px;border-radius:4px;background:var(--fill);display:inline-block"></span>'}<span>Continuer avec ${p.name}</span>`;
+          btn.innerHTML = `${providerIcons[p.id] ?? '<span class="w-[18px] h-[18px] rounded bg-fill inline-block"></span>'}<span>Continuer avec ${p.name}</span>`;
           btn.addEventListener('click', () => loginWithProvider(p.id));
           ssoList.appendChild(btn);
         }
@@ -241,13 +175,12 @@ import Base from '../layouts/Base.astro';
       }
 
       if (ldapEnabled) {
-        document.getElementById('seg-ldap')!.style.display = '';
+        document.getElementById('seg-ldap')!.classList.remove('hidden');
       }
 
-      // Hide the tab switcher when only one tab is visible (avoids a lone blue button)
       const visibleTabs = [hasSso, ldapEnabled].filter(Boolean).length;
       if (visibleTabs === 0) {
-        document.getElementById('login-seg')!.style.display = 'none';
+        document.getElementById('login-seg')!.classList.add('hidden');
       }
     }
 

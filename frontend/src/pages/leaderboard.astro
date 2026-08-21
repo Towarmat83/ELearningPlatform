@@ -2,221 +2,23 @@
 import App from '../layouts/App.astro';
 ---
 <App title="Classement" activePage="leaderboard">
-  <style is:global>
-    /* ── Page shell ───────────────────────────────────────────────────── */
-    .lb-page {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 40px 32px 80px;
-    }
-
-    .lb-inner { max-width: 1400px; margin: 0 auto; }
-
-    /* ── Header ───────────────────────────────────────────────────────── */
-    .lb-header {
-      text-align: center;
-      margin-bottom: 48px;
-    }
-    .lb-title {
-      font-size: 2rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 6px;
-    }
-    .lb-subtitle { font-size: .9rem; color: var(--ink-soft); }
-
-    /* ── Podium top 3 ─────────────────────────────────────────────────── */
-    .lb-podium {
-      display: flex;
-      justify-content: center;
-      align-items: flex-end;
-      gap: 16px;
-      margin-bottom: 40px;
-    }
-
-    .lb-podium-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-decoration: none;
-      color: inherit;
-      transition: transform .2s;
-    }
-    .lb-podium-card:hover { transform: translateY(-4px); }
-
-    .lb-podium-card.p-1 { order: 2; }
-    .lb-podium-card.p-2 { order: 1; }
-    .lb-podium-card.p-3 { order: 3; }
-
-    .lb-podium-avatar {
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      flex-shrink: 0;
-      overflow: hidden;
-      border: 4px solid transparent;
-      box-shadow: 0 8px 24px rgba(0,0,0,.12);
-    }
-    .lb-podium-avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-    .p-1 .lb-podium-avatar {
-      width: 88px; height: 88px; font-size: 1.8rem;
-      border-color: #fcd34d;
-      background: linear-gradient(135deg, #fefce8, #fef08a);
-      color: #a16207;
-    }
-    .p-2 .lb-podium-avatar {
-      width: 72px; height: 72px; font-size: 1.4rem;
-      border-color: #c7d2fe;
-      background: linear-gradient(135deg, #f0f4ff, #e0e7ff);
-      color: #4361ee;
-    }
-    .p-3 .lb-podium-avatar {
-      width: 68px; height: 68px; font-size: 1.3rem;
-      border-color: #fdba74;
-      background: linear-gradient(135deg, #fff7ed, #ffedd5);
-      color: #c2410c;
-    }
-
-    .lb-podium-medal { font-size: 1.8rem; margin: 8px 0 4px; }
-    .p-1 .lb-podium-medal { font-size: 2.2rem; }
-
-    .lb-podium-name {
-      font-weight: 700;
-      font-size: .9rem;
-      text-align: center;
-      max-width: 100px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .p-1 .lb-podium-name { font-size: 1rem; }
-
-    .lb-podium-count { font-size: .75rem; color: var(--ink-soft); margin-top: 2px; }
-
-    .lb-podium-block {
-      margin-top: 10px;
-      border-radius: 14px 14px 0 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.3rem;
-      font-weight: 800;
-      color: #fff;
-      width: 90px;
-    }
-    .p-1 .lb-podium-block { height: 80px; background: linear-gradient(180deg, #fde68a, #fcd34d); color: #a16207; }
-    .p-2 .lb-podium-block { height: 56px; background: linear-gradient(180deg, #c7d2fe, #a5b4fc); color: #3730a3; }
-    .p-3 .lb-podium-block { height: 40px; background: linear-gradient(180deg, #fdba74, #fb923c); color: #7c2d12; }
-
-    /* ── Rest of the list ─────────────────────────────────────────────── */
-    .lb-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .lb-row {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 14px 20px;
-      border-radius: 16px;
-      background: #ffffffcc;
-      backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0;
-      text-decoration: none;
-      color: inherit;
-      transition: border-color .15s, box-shadow .15s, transform .15s;
-    }
-    .lb-row:hover {
-      border-color: #4361ee55;
-      box-shadow: 0 4px 20px rgba(67,97,238,.1);
-      transform: translateX(4px);
-    }
-
-    .lb-rank {
-      font-size: .9rem;
-      font-weight: 700;
-      width: 32px;
-      text-align: center;
-      flex-shrink: 0;
-      color: var(--ink-soft);
-      background: #f1f5f9;
-      border-radius: 8px;
-      padding: 4px 0;
-    }
-
-    .lb-avatar {
-      width: 44px; height: 44px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #e0e7ff, #ddd6fe);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.1rem; font-weight: 700;
-      color: #4361ee;
-      flex-shrink: 0;
-      overflow: hidden;
-    }
-    .lb-avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-    .lb-info { flex: 1; min-width: 0; }
-    .lb-username {
-      font-weight: 600; font-size: .95rem;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .lb-count { font-size: .78rem; color: var(--ink-soft); margin-top: 2px; }
-
-    .lb-icons {
-      display: flex; gap: 4px; flex-wrap: wrap;
-      justify-content: flex-end; max-width: 240px;
-      font-size: 1.15rem; line-height: 1;
-    }
-
-    /* ── Divider ──────────────────────────────────────────────────────── */
-    .lb-divider {
-      display: flex; align-items: center; gap: 12px;
-      margin-bottom: 16px; color: var(--ink-soft); font-size: .8rem;
-    }
-    .lb-divider::before, .lb-divider::after {
-      content: ''; flex: 1; height: 1px; background: #e2e8f0;
-    }
-
-    /* ── Empty ────────────────────────────────────────────────────────── */
-    .lb-empty {
-      text-align: center; padding: 80px 24px; color: var(--ink-soft);
-    }
-    .lb-empty-icon { font-size: 3rem; margin-bottom: 12px; }
-
-    @media (max-width: 600px) {
-      .lb-page { padding: 20px 14px 80px; }
-      .lb-icons { display: none; }
-      .lb-podium { gap: 8px; }
-      .lb-podium-block { width: 70px; }
-    }
-  </style>
-
-  <div class="lb-page">
-    <div class="lb-inner">
-      <div class="lb-header">
-        <h1 class="lb-title">Classement</h1>
-        <p class="lb-subtitle">badges obtenus</p>
+  <div class="page-outer">
+    <div class="page-inner">
+      <div class="text-center mb-12">
+        <h1 class="page-title mb-1.5">Classement</h1>
+        <p class="text-[.9rem] text-ink-soft">badges obtenus</p>
       </div>
 
       <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
 
-      <div id="lb-podium" class="lb-podium" style="display:none"></div>
+      <div id="lb-podium" class="hidden justify-center items-end gap-2 mb-10 sm:gap-4 flex"></div>
 
-      <div id="lb-divider" class="lb-divider" style="display:none">Autres participants</div>
+      <div id="lb-divider" class="hidden divider-text mb-4">Autres participants</div>
 
-      <div id="lb-list" class="lb-list" style="display:none"></div>
+      <div id="lb-list" class="hidden flex-col gap-2 flex"></div>
 
-      <div id="lb-empty" class="lb-empty" style="display:none">
-        <div class="lb-empty-icon">🏅</div>
+      <div id="lb-empty" class="hidden text-center py-20 px-6 text-ink-soft">
+        <div class="text-[3rem] mb-3">🏅</div>
         <p>Aucun badge décerné pour l'instant.</p>
       </div>
     </div>
@@ -230,7 +32,7 @@ import App from '../layouts/App.astro';
       return `#${rank}`;
     }
 
-    function avatarContent(entry: any, size: 'small' | 'large') {
+    function avatarContent(entry: any) {
       const initial = (entry.username || '?')[0].toUpperCase();
       if (!entry.avatarUrl) return initial;
       const isUrl = entry.avatarUrl.startsWith('http://') || entry.avatarUrl.startsWith('https://');
@@ -239,14 +41,26 @@ import App from '../layouts/App.astro';
     }
 
     function podiumCard(e: any) {
-      const icons: string[] = (e.icons || []).slice(0, 5).join(' ');
+      const sizeMap: Record<number, string> = {
+        1: 'w-[88px] h-[88px] text-[1.8rem] border-[#fcd34d] bg-gradient-to-br from-[#fefce8] to-[#fef08a] text-[#a16207]',
+        2: 'w-[72px] h-[72px] text-[1.4rem] border-[#c7d2fe] bg-gradient-to-br from-[#f0f4ff] to-[#e0e7ff] text-[#4361ee]',
+        3: 'w-[68px] h-[68px] text-[1.3rem] border-[#fdba74] bg-gradient-to-br from-[#fff7ed] to-[#ffedd5] text-[#c2410c]',
+      };
+      const blockMap: Record<number, string> = {
+        1: 'h-20 bg-gradient-to-b from-[#fde68a] to-[#fcd34d] text-[#a16207]',
+        2: 'h-14 bg-gradient-to-b from-[#c7d2fe] to-[#a5b4fc] text-[#3730a3]',
+        3: 'h-10 bg-gradient-to-b from-[#fdba74] to-[#fb923c] text-[#7c2d12]',
+      };
+      const nameSize = e.rank === 1 ? 'text-base' : 'text-[.9rem]';
+      const medalSize = e.rank === 1 ? 'text-[2.2rem]' : 'text-[1.8rem]';
+      const orderMap: Record<number, string> = { 1: 'order-2', 2: 'order-1', 3: 'order-3' };
       return `
-        <a href="/users/${e.userId}" class="lb-podium-card p-${e.rank}">
-          <div class="lb-podium-avatar">${avatarContent(e, 'large')}</div>
-          <div class="lb-podium-medal">${medal(e.rank)}</div>
-          <div class="lb-podium-name">${e.username}</div>
+        <a href="/users/${e.userId}" class="lb-podium-card ${orderMap[e.rank] ?? ''}">
+          <div class="lb-podium-avatar ${sizeMap[e.rank] ?? 'w-16 h-16 text-lg border-line bg-fill'}">${avatarContent(e)}</div>
+          <div class="lb-podium-medal ${medalSize}">${medal(e.rank)}</div>
+          <div class="lb-podium-name ${nameSize}">${e.username}</div>
           <div class="lb-podium-count">${e.count} badge${e.count > 1 ? 's' : ''}</div>
-          <div class="lb-podium-block">${e.rank}</div>
+          <div class="lb-podium-block ${blockMap[e.rank] ?? 'h-8 bg-fill text-ink-soft'}">${e.rank}</div>
         </a>
       `;
     }
@@ -255,11 +69,11 @@ import App from '../layouts/App.astro';
       const icons: string[] = e.icons || [];
       const displayIcons = icons.slice(0, 10).join(' ');
       const extra = icons.length > 10
-        ? `<span style="font-size:.75rem;color:var(--ink-soft)">+${icons.length - 10}</span>`
+        ? `<span class="text-[.75rem] text-ink-soft">+${icons.length - 10}</span>`
         : '';
       const initial = (e.username || '?')[0].toUpperCase();
       const avatarHtml = e.avatarUrl
-        ? (e.avatarUrl.startsWith('http') ? `<img src="${e.avatarUrl}" alt="${e.username}" />` : e.avatarUrl)
+        ? (e.avatarUrl.startsWith('http') ? `<img src="${e.avatarUrl}" alt="${e.username}" class="w-full h-full object-cover" />` : e.avatarUrl)
         : initial;
       return `
         <a href="/users/${e.userId}" class="lb-row">
@@ -269,35 +83,35 @@ import App from '../layouts/App.astro';
             <div class="lb-username">${e.username}</div>
             <div class="lb-count">${e.count} badge${e.count > 1 ? 's' : ''}</div>
           </div>
-          <div class="lb-icons">${displayIcons}${extra}</div>
+          <div class="lb-icons sm:hidden">${displayIcons}${extra}</div>
         </a>
       `;
     }
 
     async function init() {
       const res = await fetch('/api/leaderboard');
-      document.getElementById('loading')!.style.display = 'none';
+      document.getElementById('loading')!.classList.add('hidden');
 
-      if (!res.ok) { document.getElementById('lb-empty')!.style.display = ''; return; }
+      if (!res.ok) { document.getElementById('lb-empty')!.classList.remove('hidden'); return; }
 
       const data = await res.json() as any;
       const entries: any[] = data.leaderboard || [];
 
-      if (entries.length === 0) { document.getElementById('lb-empty')!.style.display = ''; return; }
+      if (entries.length === 0) { document.getElementById('lb-empty')!.classList.remove('hidden'); return; }
 
       const top3 = entries.filter((e: any) => e.rank <= 3);
       const rest = entries.filter((e: any) => e.rank > 3);
 
       if (top3.length > 0) {
         const podium = document.getElementById('lb-podium')!;
-        podium.style.display = 'flex';
+        podium.classList.remove('hidden');
         podium.innerHTML = top3.map(podiumCard).join('');
       }
 
       if (rest.length > 0) {
-        document.getElementById('lb-divider')!.style.display = 'flex';
+        document.getElementById('lb-divider')!.classList.remove('hidden');
         const list = document.getElementById('lb-list')!;
-        list.style.display = 'flex';
+        list.classList.remove('hidden');
         list.innerHTML = rest.map(listRow).join('');
       }
     }

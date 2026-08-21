@@ -2,261 +2,35 @@
 import App from '../../../../layouts/App.astro';
 ---
 <App title="Leçon">
-  <style is:global>
-    /* ── Mode A: 3-column docs layout ─────────────────────────────── */
-    .lesson-layout {
-      display: grid;
-      grid-template-columns: 230px 1fr 210px;
-      min-height: calc(100vh - 56px);
-      gap: 0;
-    }
-    .lesson-left {
-      border-right: 1px solid var(--line);
-      background: var(--paper);
-      position: sticky;
-      top: 56px;
-      height: calc(100vh - 56px);
-      overflow-y: auto;
-      padding: 20px 0;
-    }
-    .lesson-center {
-      padding: 34px 48px;
-      max-width: 680px;
-      width: 100%;
-    }
-    .lesson-right {
-      border-left: 1px solid var(--line);
-      position: sticky;
-      top: 56px;
-      height: calc(100vh - 56px);
-      overflow-y: auto;
-      padding: 24px 18px;
-    }
-
-    /* ── Mode B: Focus reading ─────────────────────────────────────── */
-    body.focus-mode .lesson-layout {
-      grid-template-columns: 1fr;
-    }
-    body.focus-mode .lesson-left { display: none; }
-    body.focus-mode .lesson-center {
-      width: 620px;
-      max-width: 620px;
-      margin: 0 auto;
-      padding: 40px 0;
-    }
-    body.focus-mode .lesson-right { display: none; }
-    body.focus-mode .lesson-mobile-open { display: none !important; }
-
-    /* ── Floating mode toggle (always visible, décorrélé de la sidebar) ── */
-    .floating-mode-btn {
-      position: fixed;
-      left: 24px;
-      bottom: 24px;
-      z-index: 60;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      height: 34px;
-      padding: 0 14px;
-      border-radius: 999px;
-      font-size: .78rem;
-      font-weight: 600;
-      color: var(--ink-soft);
-      background: var(--paper);
-      border: 1.5px solid var(--line);
-      box-shadow: 0 4px 16px rgba(30,60,120,.10);
-      cursor: pointer;
-      transition: border-color .14s, color .14s, box-shadow .14s, transform .12s;
-      white-space: nowrap;
-      user-select: none;
-    }
-    .floating-mode-btn:hover {
-      border-color: var(--blue);
-      color: var(--blue-deep);
-      box-shadow: 0 6px 20px rgba(30,60,120,.18);
-      transform: translateY(-1px);
-    }
-    body.focus-mode .floating-mode-btn {
-      background: var(--blue-soft);
-      border-color: var(--blue);
-      color: var(--blue-deep);
-    }
-    /* on mobile, hide the floating mode btn to avoid clutter */
-    @media (max-width: 640px) { .floating-mode-btn { display: none; } }
-
-    /* Floating progress indicator (mode B) */
-    .floating-progress {
-      display: none;
-      position: fixed;
-      right: 24px;
-      bottom: 24px;
-      background: var(--paper);
-      border: 1.5px solid var(--line);
-      border-radius: 999px;
-      padding: 8px 14px;
-      box-shadow: 0 8px 24px rgba(30,60,120,.18);
-      align-items: center;
-      gap: 10px;
-      font-size: .8rem;
-      color: var(--ink-soft);
-      z-index: 50;
-    }
-    body.focus-mode .floating-progress { display: flex; }
-
-    .floating-prog-bar { width: 80px; height: 6px; background: var(--fill); border-radius: 3px; overflow: hidden; }
-    .floating-prog-fill { height: 100%; background: var(--blue); border-radius: 3px; }
-
-    /* Mini-quiz styling */
-    .mini-quiz-block {
-      background: var(--blue-soft);
-      border: 1.5px solid var(--blue);
-      border-radius: 14px;
-      padding: 24px;
-      margin-top: 32px;
-    }
-    .mini-quiz-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .mini-quiz-header img { width: 36px; height: 36px; object-fit: contain; }
-    .mini-quiz-title { font-weight: 700; color: var(--blue-deep); font-size: .9rem; }
-    .mini-quiz-subtitle { font-size: .8rem; color: var(--ink-soft); }
-
-    /* ── Responsive ── */
-    /* Tablet: hide TOC */
-    @media (max-width: 900px) {
-      .lesson-layout { grid-template-columns: 230px 1fr; }
-      .lesson-right { display: none; }
-      .lesson-center { max-width: 100%; }
-    }
-    /* Mobile: nav becomes a slide-out drawer */
-    @media (max-width: 640px) {
-      .lesson-layout { grid-template-columns: 1fr; }
-      .lesson-left {
-        position: fixed;
-        left: -264px;
-        top: 56px;
-        width: 264px;
-        height: calc(100vh - 56px);
-        z-index: 200;
-        background: var(--paper);
-        border-right: 1px solid var(--line);
-        box-shadow: none;
-        transition: left .22s ease, box-shadow .22s;
-        padding: 16px 0;
-      }
-      .lesson-left.nav-open {
-        left: 0;
-        box-shadow: 8px 0 32px rgba(0,0,0,.2);
-      }
-      .lesson-center { padding: 20px 16px; max-width: 100%; }
-      body.focus-mode .lesson-center { width: 100%; max-width: 100%; padding: 20px 16px; }
-      .lesson-mobile-open { display: flex !important; }
-    }
-    /* Mobile nav overlay */
-    .nav-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      top: 56px;
-      background: rgba(0,0,0,.38);
-      z-index: 190;
-    }
-    .nav-overlay.active { display: block; }
-    /* Mobile open button (hidden on desktop) */
-    .lesson-mobile-open {
-      display: none;
-      align-items: center;
-      gap: 6px;
-      height: 32px;
-      padding: 0 12px;
-      border-radius: 8px;
-      background: var(--fill);
-      border: 1.5px solid var(--line);
-      font-size: .82rem;
-      font-weight: 600;
-      color: var(--ink-soft);
-      cursor: pointer;
-      margin-bottom: 16px;
-      white-space: nowrap;
-    }
-    .lesson-mobile-open:hover { border-color: var(--blue); color: var(--blue-deep); }
-
-    /* Mini-quiz: option buttons, order drag, cooldown */
-    .quiz-options { display: flex; flex-direction: column; gap: 8px; }
-    .quiz-option {
-      display: flex; align-items: center; gap: 12px;
-      padding: 11px 14px; border: 1.5px solid var(--line); border-radius: 9px;
-      cursor: pointer; font-size: .875rem; background: var(--paper);
-      transition: .12s; text-align: left; width: 100%;
-    }
-    .quiz-option:hover { border-color: var(--blue); background: var(--blue-soft); }
-    .quiz-option.selected { border-color: var(--blue); background: var(--blue-soft); }
-    .quiz-option.selected .radio-circle { border-color: var(--blue); }
-    .quiz-option.selected .radio-circle::after { background: var(--blue); }
-    .quiz-option:disabled { opacity: .5; cursor: not-allowed; }
-    .radio-circle {
-      width: 18px; height: 18px; border-radius: 50%;
-      border: 2px solid var(--line); flex: 0 0 auto; position: relative;
-    }
-    .radio-circle::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: transparent; }
-    .cooldown-banner {
-      padding: 8px 12px; background: var(--orange-soft);
-      border: 1px solid var(--orange); border-radius: var(--radius);
-      font-size: .82rem; color: #b86800; margin-bottom: 8px;
-    }
-    .order-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 9px;
-      background: var(--paper); cursor: grab; user-select: none;
-      transition: opacity .15s, border-color .12s, background .12s, box-shadow .12s;
-      touch-action: none;
-    }
-    .order-item:active { cursor: grabbing; }
-    .order-item.dragging { opacity: .35; }
-    .order-item.drag-over { border-color: var(--blue) !important; background: var(--blue-soft) !important; box-shadow: 0 2px 12px rgba(27,134,242,.18); }
-    .drag-handle { color: var(--ink-soft); font-size: 1.1rem; line-height: 1; flex-shrink: 0; cursor: grab; }
-    .order-move-btn {
-      padding: 2px 5px; color: var(--ink-soft); background: none; border: none;
-      cursor: pointer; font-size: .85rem; border-radius: 4px; line-height: 1;
-      transition: background .1s, color .1s;
-    }
-    .order-move-btn:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
-    .order-move-btn:disabled { opacity: .25; cursor: default; }
-  </style>
 
   <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
   <div id="lesson-layout" class="lesson-layout" style="display:none">
 
     <!-- Left: module tree -->
     <aside class="lesson-left">
-      <div style="padding:0 16px;margin-bottom:10px">
-        <a id="back-to-course" href="#" style="font-size:.75rem;color:var(--ink-soft);display:flex;align-items:center;gap:4px;text-decoration:none">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          Retour
-        </a>
-      </div>
+      <a id="back-to-course" href="#" class="lesson-back-link">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Retour
+      </a>
 
       <div class="left-inner">
-        <div style="padding:0 16px;margin-bottom:12px">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:8px">Modules</div>
-          <div class="progress-bar" style="margin-bottom:4px"><div id="sidebar-progress" class="progress-bar-fill" style="width:0%"></div></div>
-          <div id="sidebar-progress-text" style="font-size:.72rem;color:var(--ink-soft)"></div>
+        <div class="lesson-sidebar-inner">
+          <div class="lesson-sidebar-label">Modules</div>
+          <div class="progress-bar mb-1"><div id="sidebar-progress" class="progress-bar-fill" style="width:0%"></div></div>
+          <div id="sidebar-progress-text" class="lesson-progress-text"></div>
         </div>
-        <nav id="module-tree" class="sidebar-nav" style="padding:0 8px"></nav>
+        <nav id="module-tree" class="sidebar-nav px-2"></nav>
       </div>
     </aside>
 
     <!-- Center: content -->
     <main class="lesson-center">
       <button class="lesson-mobile-open" id="mobile-nav-open">☰ Modules</button>
-      <div id="breadcrumb" style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--ink-soft);margin-bottom:20px;flex-wrap:wrap"></div>
-      <h1 id="lesson-title" style="margin-bottom:20px;font-size:1.5rem"></h1>
+      <div id="breadcrumb" class="lesson-breadcrumb"></div>
+      <h1 id="lesson-title" class="lesson-title"></h1>
       <div id="content-body" class="prose"></div>
-      <div id="mini-quiz" style="display:none;margin-top:8px"></div>
-      <div id="lesson-nav" style="display:flex;align-items:center;justify-content:space-between;margin-top:40px;padding-top:24px;border-top:1px solid var(--line)"></div>
+      <div id="mini-quiz" class="mt-2" style="display:none"></div>
+      <div id="lesson-nav" class="lesson-nav"></div>
     </main>
 
     <!-- Right: TOC + resources -->
@@ -265,10 +39,10 @@ import App from '../../../../layouts/App.astro';
         <div class="toc-title">Sur cette page</div>
         <nav id="toc-nav"></nav>
       </div>
-      <div class="divider" style="margin:16px 0"></div>
+      <div class="divider my-4"></div>
       <div id="git-resources" style="display:none">
         <div class="toc-title">Ressources</div>
-        <div id="git-links" class="stack" style="gap:6px;margin-top:8px"></div>
+        <div id="git-links" class="stack lesson-git-links"></div>
       </div>
     </aside>
   </div>
@@ -279,12 +53,12 @@ import App from '../../../../layouts/App.astro';
   <!-- Floating progress (focus mode only) -->
   <div class="floating-progress" id="floating-progress">
     <div class="floating-prog-bar"><div class="floating-prog-fill" id="floating-prog-fill" style="width:0%"></div></div>
-    <span id="floating-prog-text" style="font-size:.75rem;color:var(--ink-soft)"></span>
+    <span id="floating-prog-text" class="text-[.75rem] text-ink-soft"></span>
   </div>
 
   <!-- Floating mode toggle (always visible, décorrélé de la sidebar) -->
   <button class="floating-mode-btn" id="floating-mode-btn">
-    <span id="fmb-icon" style="display:flex;align-items:center;flex-shrink:0"></span>
+    <span id="fmb-icon" class="lesson-fmb-icon"></span>
     <span id="fmb-label"></span>
   </button>
 
@@ -508,7 +282,7 @@ import App from '../../../../layouts/App.astro';
         if (currentMod?.locked) { window.location.href = `/courses/${slug}`; return; }
       } catch (e: any) {
         if (e.status === 403) { window.location.href = `/courses/${slug}`; return; }
-        document.getElementById('loading')!.innerHTML = '<div style="text-align:center;padding:64px"><h2>Module introuvable</h2><a href="/courses" class="btn btn-primary" style="margin-top:16px;display:inline-flex">Catalogue</a></div>';
+        document.getElementById('loading')!.innerHTML = '<div class="text-center py-16"><h2>Module introuvable</h2><a href="/courses" class="btn btn-primary mt-4 inline-flex">Catalogue</a></div>';
         return;
       }
 
@@ -544,19 +318,19 @@ import App from '../../../../layouts/App.astro';
         const href = m.type === 'quiz' ? `/courses/${slug}/quiz/${m.index}` : `/courses/${slug}/lessons/${m.index}`;
         const isCurrent = m.index === moduleIndex;
         return `
-          <a href="${m.locked ? '#' : href}" class="sidebar-link${isCurrent ? ' active' : ''}" style="${m.locked ? 'opacity:.55;pointer-events:none' : ''}">
-            <span style="flex-shrink:0">${moduleIcon(m)}</span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem">${m.name}</span>
-            ${m.viewed || m.passed ? '<span style="margin-left:auto;color:var(--good);flex-shrink:0;font-size:.8rem">✓</span>' : ''}
+          <a href="${m.locked ? '#' : href}" class="sidebar-link${isCurrent ? ' active' : ''}${m.locked ? ' locked' : ''}">
+            <span class="sidebar-link-icon">${moduleIcon(m)}</span>
+            <span class="sidebar-link-text">${m.name}</span>
+            ${m.viewed || m.passed ? '<span class="sidebar-done-check">✓</span>' : ''}
           </a>
         `;
       }).join('');
 
       // Breadcrumb
       document.getElementById('breadcrumb')!.innerHTML = `
-        <a href="/courses" style="color:var(--blue);text-decoration:none">Catalogue</a>
+        <a href="/courses">Catalogue</a>
         <span>›</span>
-        <a href="/courses/${slug}" style="color:var(--blue);text-decoration:none">${slug}</a>
+        <a href="/courses/${slug}">${slug}</a>
         <span>›</span>
         <span>${mod.name}</span>
       `;
@@ -597,12 +371,12 @@ import App from '../../../../layouts/App.astro';
           steps.forEach((s, i) => {
             rawMd = rawMd.replace(
               `<!-- check:${i} -->`,
-              `<div id="step-block-${i}" style="margin:16px 0;padding:14px 18px;background:var(--blue-soft);border-radius:8px">
-<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-<span style="font-weight:500;color:var(--ink);font-size:0.95rem">✔ ${s.title}</span>
-<button id="step-btn-${i}" class="btn btn-primary" style="font-size:0.88rem;padding:7px 14px;white-space:nowrap;flex-shrink:0">Vérifier cette étape</button>
+              `<div id="step-block-${i}" class="step-block">
+<div class="step-block-header">
+<span class="step-block-title">✔ ${s.title}</span>
+<button id="step-btn-${i}" class="btn btn-primary text-[.88rem] whitespace-nowrap flex-shrink-0">Vérifier cette étape</button>
 </div>
-<div id="step-result-${i}" style="margin-top:8px"></div>
+<div id="step-result-${i}" class="step-result"></div>
 </div>`
             );
           });
@@ -612,28 +386,28 @@ import App from '../../../../layouts/App.astro';
         try { mdHtml = await renderMarkdown(rawMd); } catch { mdHtml = rawMd; }
 
         const successBanner = hasSteps ? `
-          <div id="lab-success-banner" style="display:none;margin-top:24px;padding:16px 20px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;color:#16a34a;font-weight:600;align-items:center;gap:8px">
+          <div id="lab-success-banner" class="lab-success-banner" style="display:none">
             ✓ Lab terminé ! Félicitations.
           </div>` : '';
 
         const checkBar = !hasSteps && mod.hasCheck ? `
-          <div style="margin-top:32px;padding:20px 24px;background:var(--blue-soft);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
-            <span style="color:var(--ink-soft);font-size:0.95rem">Une fois le lab terminé, revenez ici pour valider votre travail.</span>
+          <div class="check-bar">
+            <span class="check-bar-hint">Une fois le lab terminé, revenez ici pour valider votre travail.</span>
             <button id="check-btn" class="btn btn-primary">Vérifier mon travail</button>
           </div>
-          <div id="check-result" style="margin-top:12px"></div>` : '';
+          <div id="check-result" class="check-result"></div>` : '';
 
         contentBody.innerHTML = mdHtml + successBanner + checkBar;
         addCopyButtons(contentBody);
 
         const showResult = (resultDiv: HTMLElement, result: {allow: boolean; violations?: string[]}) => {
           if (result.allow) {
-            resultDiv.innerHTML = `<div style="padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;color:#16a34a;font-weight:600;font-size:0.88rem">✓ Étape validée !</div>`;
+            resultDiv.innerHTML = `<div class="check-ok">✓ Étape validée !</div>`;
           } else {
-            const items = (result.violations ?? []).map((v: string) => `<li style="margin-bottom:4px">${v}</li>`).join('');
-            resultDiv.innerHTML = `<div style="padding:8px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px">
-              <div style="color:#dc2626;font-weight:600;font-size:0.88rem;margin-bottom:4px">✗ Pas encore</div>
-              ${items ? `<ul style="margin:0;padding-left:16px;color:#7f1d1d;font-size:0.83rem">${items}</ul>` : ''}
+            const items = (result.violations ?? []).map((v: string) => `<li class="mb-1">${v}</li>`).join('');
+            resultDiv.innerHTML = `<div class="check-fail">
+              <div class="check-fail-title">✗ Pas encore</div>
+              ${items ? `<ul class="check-fail-items">${items}</ul>` : ''}
             </div>`;
           }
           return result.allow;
@@ -641,9 +415,9 @@ import App from '../../../../layouts/App.astro';
 
         const runCheck = async (checkType: string, checkParams: Record<string,unknown>, resultDiv: HTMLElement, stepIndex = -1) => {
           if (isLocal && !inTauri) {
-            resultDiv.innerHTML = `<div style="padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;color:#1d4ed8;display:flex;align-items:center;gap:10px;font-size:0.9rem">
+            resultDiv.innerHTML = `<div class="check-local">
               <span>Ce lab se vérifie dans Pupitre.</span>
-              <a href="${deepLinkUrl}" style="font-weight:600;white-space:nowrap;color:#1d4ed8">Ouvrir dans Pupitre →</a>
+              <a href="${deepLinkUrl}" class="check-local-link">Ouvrir dans Pupitre →</a>
             </div>`;
             return false;
           }
@@ -663,7 +437,7 @@ import App from '../../../../layouts/App.astro';
               return showResult(resultDiv, await resp.json());
             } catch (e: any) {
               const msg = typeof e === 'string' ? e : (e.message ?? 'Erreur lors de la vérification');
-              resultDiv.innerHTML = `<div style="padding:8px 12px;background:#fef2f2;border-radius:6px;color:#dc2626;font-size:0.88rem">${msg}</div>`;
+              resultDiv.innerHTML = `<div class="check-err">${msg}</div>`;
               return false;
             }
           }
@@ -680,7 +454,7 @@ import App from '../../../../layouts/App.astro';
             return showResult(resultDiv, result);
           } catch (e: any) {
             const msg = typeof e === 'string' ? e : (e.message ?? 'Erreur lors de la vérification');
-            resultDiv.innerHTML = `<div style="padding:8px 12px;background:#fef2f2;border-radius:6px;color:#dc2626;font-size:0.88rem">${msg}</div>`;
+            resultDiv.innerHTML = `<div class="check-err">${msg}</div>`;
             return false;
           }
         };
@@ -712,9 +486,9 @@ import App from '../../../../layouts/App.astro';
           });
         }
       } else if (mod.type === 'video' && mod.content) {
-        contentBody.innerHTML = `<div style="display:flex;justify-content:center;margin:24px 0"><video controls style="max-width:100%;border-radius:10px"><source src="${mod.content}" type="video/mp4" /></video></div>`;
+        contentBody.innerHTML = `<div class="media-wrap"><video controls class="max-w-full rounded-[10px]"><source src="${mod.content}" type="video/mp4" /></video></div>`;
       } else if (mod.type === 'image' && mod.content) {
-        contentBody.innerHTML = `<div style="display:flex;justify-content:center;margin:24px 0"><img src="${mod.content}" alt="${mod.name}" style="max-width:100%;border-radius:10px" /></div>`;
+        contentBody.innerHTML = `<div class="media-wrap"><img src="${mod.content}" alt="${mod.name}" class="max-w-full rounded-[10px]" /></div>`;
       } else if (mod.content) {
         try {
           contentBody.innerHTML = await renderMarkdown(mod.content);
@@ -723,7 +497,7 @@ import App from '../../../../layouts/App.astro';
           contentBody.textContent = mod.content;
         }
       } else {
-        contentBody.innerHTML = '<p style="color:var(--ink-soft)">Aucun contenu disponible.</p>';
+        contentBody.innerHTML = '<p class="text-ink-soft">Aucun contenu disponible.</p>';
       }
 
       // TOC
@@ -771,9 +545,9 @@ import App from '../../../../layouts/App.astro';
           (btn as HTMLButtonElement).disabled = true;
 
           const link = tree.querySelector<HTMLElement>(`a[href="/courses/${slug}/lessons/${moduleIndex}"]`);
-          if (link && !link.querySelector('.done-check')) {
+          if (link && !link.querySelector('.sidebar-done-check')) {
             const check = document.createElement('span');
-            check.style.cssText = 'margin-left:auto;color:var(--good);flex-shrink:0;font-size:.8rem';
+            check.className = 'sidebar-done-check';
             check.textContent = '✓';
             link.appendChild(check);
           }
@@ -877,14 +651,14 @@ import App from '../../../../layouts/App.astro';
           return `<div class="quiz-options">${(q.answers || []).map((a: any) => {
             const chk = Array.isArray(answers[q.id]) && answers[q.id].includes(a.id);
             return `<button type="button" class="quiz-option${chk ? ' selected' : ''}" data-qid="${q.id}" data-aid="${a.id}" data-type="multiple"${dis ? ' disabled' : ''}>
-              <span style="width:18px;height:18px;border-radius:4px;border:2px solid ${chk ? 'var(--blue)' : 'var(--line)'};background:${chk ? 'var(--blue)' : 'transparent'};flex:0 0 auto;display:flex;align-items:center;justify-content:center">${chk ? '<span style="color:#fff;font-size:.7rem;font-weight:700">✓</span>' : ''}</span>
+              <span class="quiz-cb ${chk ? 'checked' : ''}">${chk ? '<span class="quiz-cb-check">✓</span>' : ''}</span>
               <span>${a.text}</span>
             </button>`;
           }).join('')}</div>`;
         }
         if (q.type === 'boolean') {
-          return `<div style="display:flex;gap:12px">${[{v:'true',l:'Vrai'},{v:'false',l:'Faux'}].map(o => `
-            <button type="button" class="quiz-option${answers[q.id] === (o.v === 'true') ? ' selected' : ''}" data-qid="${q.id}" data-bool="${o.v}" data-type="boolean" style="flex:1;justify-content:center"${dis ? ' disabled' : ''}>${o.l}</button>`).join('')}</div>`;
+          return `<div class="flex gap-3">${[{v:'true',l:'Vrai'},{v:'false',l:'Faux'}].map(o => `
+            <button type="button" class="quiz-option flex-1 justify-center${answers[q.id] === (o.v === 'true') ? ' selected' : ''}" data-qid="${q.id}" data-bool="${o.v}" data-type="boolean"${dis ? ' disabled' : ''}>${o.l}</button>`).join('')}</div>`;
         }
         if (q.type === 'order') {
           const items = q.items || [];
@@ -893,9 +667,9 @@ import App from '../../../../layouts/App.astro';
             const item = items.find((i: any) => i.id === id);
             return `<div class="order-item" draggable="true" data-qid="${q.id}" data-id="${id}">
               <span class="drag-handle">⠿</span>
-              <span style="font-size:.8rem;font-weight:600;color:var(--ink-soft);width:20px;flex-shrink:0">${idx+1}.</span>
-              <span style="flex:1;font-size:.875rem">${item?.text || id}</span>
-              <div style="display:flex;gap:2px">
+              <span class="order-num">${idx+1}.</span>
+              <span class="order-text">${item?.text || id}</span>
+              <div class="order-btns">
                 <button type="button" class="order-move-btn" data-moveid="${q.id}" data-moveidx="${idx}" data-movedir="-1"${idx===0?' disabled':''}>↑</button>
                 <button type="button" class="order-move-btn" data-moveid="${q.id}" data-moveidx="${idx}" data-movedir="1"${idx===order.length-1?' disabled':''}>↓</button>
               </div>
@@ -1017,22 +791,22 @@ import App from '../../../../layouts/App.astro';
       function showBody() {
         const body = document.getElementById('mini-quiz-body')!;
         body.innerHTML = `
-          <div id="mini-questions" class="stack" style="gap:16px;margin-bottom:16px">
+          <div id="mini-questions" class="stack gap-4 mb-4">
             ${questions.map((q: any, i: number) => {
               const cd = cooldowns[q.id];
               const cdBanner = cd && (cd.locked || cd.remaining > 0)
                 ? `<div class="cooldown-banner" id="mini-cd-${q.id}">${cd.locked ? '🔒 Question verrouillée' : `⏳ Réessayez dans ${cd.remaining}s`}</div>`
                 : '';
               return `<div>
-                <p style="font-weight:600;font-size:.875rem;margin-bottom:8px">${i+1}. ${q.question}</p>
+                <p class="mini-q-text">${i+1}. ${q.question}</p>
                 ${cdBanner}
                 <div data-mini-opts="${q.id}">${renderOptions(q)}</div>
               </div>`;
             }).join('')}
           </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div class="mini-submit-row">
             <button class="btn btn-primary" id="mini-submit-btn">Valider le quiz ▸</button>
-            <span id="mini-answered" style="font-size:.8rem;color:var(--ink-soft)">${questions.filter((q: any) => isAnswered(q)).length}/${questions.length} répondues</span>
+            <span id="mini-answered" class="mini-answered">${questions.filter((q: any) => isAnswered(q)).length}/${questions.length} répondues</span>
           </div>
         `;
 
@@ -1078,17 +852,17 @@ import App from '../../../../layouts/App.astro';
 
         let reviewHtml = '';
         if (result.questionResults?.length > 0) {
-          reviewHtml = `<div style="margin-top:16px">
-            <p style="font-weight:700;font-size:.875rem;margin-bottom:10px">Correction</p>
+          reviewHtml = `<div class="mt-4">
+            <p class="font-bold text-[.875rem] mb-2.5">Correction</p>
             ${result.questionResults.map((qr: any, i: number) => {
               const q = questions.find((qq: any) => qq.id === qr.questionId);
-              return `<div style="border:1.5px solid ${qr.isCorrect ? 'var(--good)' : 'var(--bad)'};border-radius:10px;padding:12px 14px;margin-bottom:8px">
-                <div style="display:flex;align-items:flex-start;gap:8px">
-                  <span style="flex-shrink:0;color:${qr.isCorrect ? 'var(--good)' : 'var(--bad)'}">${qr.isCorrect ? '✓' : '✗'}</span>
-                  <div style="flex:1">
-                    <p style="font-weight:600;font-size:.8rem;margin-bottom:2px">${i+1}. ${q?.question || ''}</p>
-                    <p style="font-size:.75rem;color:var(--ink-soft)">${qr.pointsEarned}/${qr.pointsMax} pt${qr.pointsMax > 1 ? 's' : ''}</p>
-                    ${qr.feedback ? `<p style="font-size:.75rem;margin-top:4px;color:var(--ink-soft)">${qr.feedback}</p>` : ''}
+              return `<div class="review-item ${qr.isCorrect ? 'correct' : 'wrong'} mb-2">
+                <div class="review-item-inner">
+                  <span class="review-status-icon ${qr.isCorrect ? 'correct' : 'wrong'}">${qr.isCorrect ? '✓' : '✗'}</span>
+                  <div class="review-item-body">
+                    <p class="review-q-text">${i+1}. ${q?.question || ''}</p>
+                    <p class="review-q-score">${qr.pointsEarned}/${qr.pointsMax} pt${qr.pointsMax > 1 ? 's' : ''}</p>
+                    ${qr.feedback ? `<p class="review-q-feedback">${qr.feedback}</p>` : ''}
                   </div>
                 </div>
               </div>`;
@@ -1097,17 +871,17 @@ import App from '../../../../layouts/App.astro';
         }
 
         body.innerHTML = `
-          <div style="display:flex;align-items:center;gap:20px;background:${passed ? 'var(--good-soft)' : 'var(--bad-soft)'};border:1.5px solid ${passed ? 'var(--good)' : 'var(--bad)'};border-radius:12px;padding:20px;margin-bottom:12px;flex-wrap:wrap">
-            <div style="width:70px;height:70px;border-radius:50%;border:6px solid ${passed ? 'var(--good)' : 'var(--bad)'};background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 auto">
-              <div style="font-size:1.2rem;font-weight:700;color:${passed ? 'var(--good)' : 'var(--bad)'}">${pct}%</div>
-              <div style="font-size:.65rem;color:var(--ink-soft)">${result.totalScore}/${result.maxScore}</div>
+          <div class="mini-result ${passed ? 'pass' : 'fail'}">
+            <div class="mini-score-circle ${passed ? 'pass' : 'fail'}">
+              <div class="mini-score-pct ${passed ? 'pass' : 'fail'}">${pct}%</div>
+              <div class="mini-score-fraction">${result.totalScore}/${result.maxScore}</div>
             </div>
-            <div style="flex:1;min-width:160px">
-              <h3 style="font-size:.95rem;font-weight:700;margin-bottom:4px;color:${passed ? 'var(--good)' : 'var(--bad)'}">${passed ? '✓ Quiz réussi !' : '✗ Quiz échoué'}</h3>
-              <p style="font-size:.8rem;color:var(--ink-soft)">${passed ? `Félicitations — ${result.totalScore} pts sur ${result.maxScore}.` : `Score insuffisant (${pct}%). Réessayez !`}</p>
+            <div class="mini-result-body">
+              <h3 class="mini-result-title ${passed ? 'pass' : 'fail'}">${passed ? '✓ Quiz réussi !' : '✗ Quiz échoué'}</h3>
+              <p class="mini-result-sub">${passed ? `Félicitations — ${result.totalScore} pts sur ${result.maxScore}.` : `Score insuffisant (${pct}%). Réessayez !`}</p>
             </div>
           </div>
-          ${!passed ? `<div style="margin-bottom:12px"><button class="btn btn-primary" id="mini-retry-btn">Recommencer</button></div>` : ''}
+          ${!passed ? `<div class="mb-3"><button class="btn btn-primary" id="mini-retry-btn">Recommencer</button></div>` : ''}
           ${reviewHtml}
         `;
 

@@ -2,283 +2,22 @@
 import App from '../../../../layouts/App.astro';
 ---
 <App title="Quiz">
-  <style is:global>
-    /* Quiz layout: questions | palette */
-    .quiz-page-layout {
-      display: grid;
-      grid-template-columns: 1fr 230px;
-      gap: 0;
-      min-height: calc(100vh - 56px);
-      align-items: flex-start;
-    }
-    .quiz-main {
-      padding: 28px 34px;
-      max-width: 760px;
-      border-right: 1px solid var(--line);
-    }
-    .quiz-palette {
-      padding: 26px 22px;
-      position: sticky;
-      top: 56px;
-      height: calc(100vh - 56px);
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .palette-label {
-      font-size: .7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: var(--ink-soft);
-    }
-    .palette-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .palette-chip {
-      width: 34px;
-      height: 26px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1.5px solid var(--line);
-      background: var(--paper);
-      color: var(--ink-soft);
-      cursor: pointer;
-      transition: .12s;
-    }
-    .palette-chip:hover { border-color: var(--blue); color: var(--blue-deep); }
-    .palette-chip.answered { background: var(--good-soft); border-color: var(--good); color: #1f6e47; }
-    .palette-chip.current { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-deep); }
-    .palette-progress-wrap {
-      background: var(--fill);
-      border-radius: var(--radius);
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .palette-progress-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: .8rem;
-      color: var(--ink-soft);
-    }
-    .palette-progress-row span:last-child { color: var(--blue-deep); font-weight: 600; }
-
-    /* Question cards */
-    .quiz-q-card {
-      border: 1.5px solid var(--line);
-      border-radius: 14px;
-      padding: 22px 24px;
-      margin-bottom: 20px;
-      background: var(--paper);
-      scroll-margin-top: 80px;
-    }
-    .quiz-q-card.has-answer { border-color: var(--good); }
-    .quiz-q-header {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .qnum-chip {
-      flex: 0 0 auto;
-      height: 24px;
-      padding: 0 9px;
-      border-radius: 999px;
-      font-size: .75rem;
-      font-weight: 700;
-      background: var(--blue);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      margin-top: 2px;
-    }
-    .quiz-q-text {
-      font-weight: 600;
-      font-size: .95rem;
-      line-height: 1.5;
-    }
-    .quiz-q-points {
-      font-size: .8rem;
-      color: var(--ink-soft);
-      white-space: nowrap;
-      margin-left: auto;
-      flex: 0 0 auto;
-    }
-    .quiz-options { display: flex; flex-direction: column; gap: 8px; }
-    .quiz-option {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 13px 16px;
-      border: 1.5px solid var(--line);
-      border-radius: 9px;
-      cursor: pointer;
-      font-size: .875rem;
-      background: var(--paper);
-      transition: .12s;
-      text-align: left;
-      width: 100%;
-    }
-    .quiz-option:hover { border-color: var(--blue); background: var(--blue-soft); }
-    .quiz-option.selected { border-color: var(--blue); background: var(--blue-soft); }
-    .quiz-option.selected .radio-circle { border-color: var(--blue); }
-    .quiz-option.selected .radio-circle::after { background: var(--blue); }
-    .quiz-option:disabled { opacity: .5; cursor: not-allowed; }
-    .radio-circle {
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      border: 2px solid var(--line);
-      flex: 0 0 auto;
-      position: relative;
-    }
-    .radio-circle::after {
-      content: '';
-      position: absolute;
-      inset: 3px;
-      border-radius: 50%;
-      background: transparent;
-    }
-
-    /* Cooldown banner */
-    .cooldown-banner {
-      padding: 10px 14px;
-      background: var(--orange-soft);
-      border: 1px solid var(--orange);
-      border-radius: var(--radius);
-      font-size: .85rem;
-      color: #b86800;
-      margin-bottom: 12px;
-    }
-
-    /* Result screen */
-    .result-screen {
-      max-width: 740px;
-      margin: 0 auto;
-      padding: 32px 28px 80px;
-    }
-    .result-hero {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      background: var(--good-soft);
-      border: 1.5px solid var(--good);
-      border-radius: 16px;
-      padding: 26px 30px;
-      margin-bottom: 24px;
-    }
-    .result-hero.fail { background: var(--bad-soft); border-color: var(--bad); }
-    .score-circle {
-      width: 90px; height: 90px;
-      border-radius: 50%;
-      border: 8px solid var(--good);
-      background: var(--paper);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 auto;
-    }
-    .score-circle.fail { border-color: var(--bad); }
-    .score-num { font-size: 1.3rem; font-weight: 700; color: var(--good); line-height: 1; }
-    .score-circle.fail .score-num { color: var(--bad); }
-    .score-den { font-size: .7rem; color: var(--ink-soft); }
-    .result-review { display: flex; flex-direction: column; gap: 10px; }
-
-    /* Drag-and-drop order items */
-    .order-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border: 1.5px solid var(--line);
-      border-radius: 9px;
-      background: var(--paper);
-      cursor: grab;
-      user-select: none;
-      transition: opacity .15s, border-color .12s, background .12s, box-shadow .12s;
-      touch-action: none;
-    }
-    .order-item:active { cursor: grabbing; }
-    .order-item.dragging { opacity: .35; }
-    .order-item.drag-over {
-      border-color: var(--blue) !important;
-      background: var(--blue-soft) !important;
-      box-shadow: 0 2px 12px rgba(27,134,242,.18);
-    }
-    .drag-handle {
-      color: var(--ink-soft);
-      font-size: 1.1rem;
-      line-height: 1;
-      flex-shrink: 0;
-      cursor: grab;
-    }
-    .order-move-btn {
-      padding: 2px 5px;
-      color: var(--ink-soft);
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: .85rem;
-      border-radius: 4px;
-      line-height: 1;
-      transition: background .1s, color .1s;
-    }
-    .order-move-btn:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
-    .order-move-btn:disabled { opacity: .25; cursor: default; }
-
-    /* ── Responsive ── */
-    @media (max-width: 640px) {
-      /* Stack layout: palette on top, questions below */
-      .quiz-page-layout { display: flex; flex-direction: column; }
-      .quiz-palette {
-        order: -1;
-        position: sticky;
-        top: 56px;
-        height: auto;
-        border-left: none;
-        border-bottom: 1px solid var(--line);
-        padding: 12px 16px;
-        background: var(--paper);
-        z-index: 10;
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
-      }
-      .palette-chips { max-width: none; gap: 4px; }
-      .palette-progress-wrap { flex: 1; min-width: 140px; padding: 8px 10px; }
-      #submit-btn { min-width: 120px; height: 36px; font-size: .85rem; }
-      .quiz-main { padding: 16px; max-width: 100%; border-right: none; }
-      .result-screen { padding: 16px 16px 60px; }
-      .result-hero { flex-wrap: wrap; padding: 20px; gap: 16px; }
-      .result-hero img { display: none; }
-    }
-  </style>
 
   <div id="loading" class="loading-state"><div class="spinner"></div><span>Chargement du quiz…</span></div>
 
   <!-- Main quiz layout -->
   <div id="quiz-wrap" style="display:none">
     <!-- Breadcrumb -->
-    <div id="breadcrumb" style="padding:12px 34px 0;font-size:.8rem;color:var(--ink-soft);display:flex;align-items:center;gap:6px;flex-wrap:wrap"></div>
+    <div id="breadcrumb" class="quiz-breadcrumb"></div>
 
     <div class="quiz-page-layout">
       <!-- Left: all questions -->
       <div class="quiz-main">
-        <h1 id="quiz-title" style="font-size:1.25rem;margin-bottom:6px"></h1>
-        <p id="quiz-subtitle" class="text-soft text-sm" style="margin-bottom:24px"></p>
+        <h1 id="quiz-title" class="quiz-title-head"></h1>
+        <p id="quiz-subtitle" class="text-soft text-sm quiz-subtitle-text"></p>
         <div id="questions-container"></div>
         <!-- Mobile submit (below questions) -->
-        <button id="submit-btn-bottom" class="btn btn-primary btn-lg w-full" style="margin-top:8px">Soumettre le quiz</button>
+        <button id="submit-btn-bottom" class="btn btn-primary btn-lg w-full mt-2">Soumettre le quiz</button>
       </div>
 
       <!-- Right: palette -->
@@ -293,7 +32,7 @@ import App from '../../../../layouts/App.astro';
           <div class="progress-bar"><div id="palette-progress-fill" class="progress-bar-fill" style="width:0%"></div></div>
         </div>
         <button id="submit-btn" class="btn btn-primary btn-lg w-full">Soumettre le quiz</button>
-        <p class="text-soft text-sm" style="font-size:.78rem">Cliquez sur un numéro pour accéder directement à la question.</p>
+        <p class="text-soft text-[.78rem]">Cliquez sur un numéro pour accéder directement à la question.</p>
       </div>
     </div>
   </div>
@@ -306,14 +45,14 @@ import App from '../../../../layouts/App.astro';
           <div id="score-num" class="score-num"></div>
           <div id="score-den" class="score-den"></div>
         </div>
-        <div style="flex:1">
-          <h2 id="result-title" style="margin-bottom:6px"></h2>
-          <p id="result-subtitle" class="text-soft text-sm" style="margin-bottom:12px"></p>
-          <div id="result-badges" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <div class="flex-1">
+          <h2 id="result-title" class="mb-1.5"></h2>
+          <p id="result-subtitle" class="text-soft text-sm result-subtitle"></p>
+          <div id="result-badges" class="result-badges"></div>
         </div>
-        <img src="/pioupitre.png" alt="" style="width:80px;height:80px;object-fit:contain;flex:0 0 auto">
+        <img src="/pioupitre.png" alt="" class="w-20 h-20 object-contain flex-none">
       </div>
-      <div id="result-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px"></div>
+      <div id="result-actions" class="result-actions"></div>
       <div id="question-review" class="result-review"></div>
     </div>
   </div>
@@ -483,16 +222,16 @@ import App from '../../../../layouts/App.astro';
         }
       } catch (e: any) {
         if (e.status === 403) { window.location.href = `/courses/${slug}`; return; }
-        document.getElementById('loading')!.innerHTML = '<div style="text-align:center;padding:64px"><h2>Quiz introuvable</h2><a href="/courses" class="btn btn-primary" style="margin-top:16px;display:inline-flex">Catalogue</a></div>';
+        document.getElementById('loading')!.innerHTML = '<div class="text-center py-16"><h2>Quiz introuvable</h2><a href="/courses" class="btn btn-primary mt-4 inline-flex">Catalogue</a></div>';
         return;
       }
 
       document.title = `${quiz.name} — pupitre`;
 
       document.getElementById('breadcrumb')!.innerHTML = `
-        <a href="/courses" style="color:var(--blue);text-decoration:none">Catalogue</a>
+        <a href="/courses">Catalogue</a>
         <span>›</span>
-        <a href="/courses/${slug}" style="color:var(--blue);text-decoration:none">${slug}</a>
+        <a href="/courses/${slug}">${slug}</a>
         <span>›</span>
         <span>${quiz.name}</span>
       `;
@@ -598,9 +337,7 @@ import App from '../../../../layouts/App.astro';
             const checked = Array.isArray(answers[q.id]) && answers[q.id].includes(a.id);
             return `
               <button type="button" class="quiz-option${checked ? ' selected' : ''}" data-qid="${q.id}" data-aid="${a.id}" data-type="multiple" ${disabled ? 'disabled' : ''}>
-                <span style="width:18px;height:18px;border-radius:4px;border:2px solid ${checked ? 'var(--blue)' : 'var(--line)'};background:${checked ? 'var(--blue)' : 'transparent'};flex:0 0 auto;display:flex;align-items:center;justify-content:center">
-                  ${checked ? '<span style="color:#fff;font-size:.7rem;font-weight:700">✓</span>' : ''}
-                </span>
+                <span class="quiz-cb ${checked ? 'checked' : ''}">${checked ? '<span class="quiz-cb-check">✓</span>' : ''}</span>
                 <span>${a.text}</span>
               </button>
             `;
@@ -609,9 +346,9 @@ import App from '../../../../layouts/App.astro';
       }
 
       if (q.type === 'boolean') {
-        return `<div style="display:flex;gap:12px">
+        return `<div class="flex gap-3">
           ${[{ v: 'true', label: 'Vrai' }, { v: 'false', label: 'Faux' }].map(opt => `
-            <button type="button" class="quiz-option${answers[q.id] === (opt.v === 'true') ? ' selected' : ''}" data-qid="${q.id}" data-bool="${opt.v}" data-type="boolean" style="flex:1;justify-content:center" ${disabled ? 'disabled' : ''}>
+            <button type="button" class="quiz-option flex-1 justify-center${answers[q.id] === (opt.v === 'true') ? ' selected' : ''}" data-qid="${q.id}" data-bool="${opt.v}" data-type="boolean" ${disabled ? 'disabled' : ''}>
               ${opt.label}
             </button>
           `).join('')}
@@ -627,9 +364,9 @@ import App from '../../../../layouts/App.astro';
             return `
               <div class="order-item" draggable="true" data-qid="${q.id}" data-id="${id}">
                 <span class="drag-handle">⠿</span>
-                <span style="font-size:.8rem;font-weight:600;color:var(--ink-soft);width:20px;flex-shrink:0">${idx + 1}.</span>
-                <span style="flex:1;font-size:.875rem">${item?.text || id}</span>
-                <div style="display:flex;gap:2px">
+                <span class="order-num">${idx + 1}.</span>
+                <span class="order-text">${item?.text || id}</span>
+                <div class="order-btns">
                   <button type="button" class="order-move-btn" onclick="moveOrder('${q.id}',${idx},-1)" ${idx === 0 ? 'disabled' : ''}>↑</button>
                   <button type="button" class="order-move-btn" onclick="moveOrder('${q.id}',${idx},1)" ${idx === order.length - 1 ? 'disabled' : ''}>↓</button>
                 </div>
@@ -822,16 +559,16 @@ import App from '../../../../layouts/App.astro';
       // Per-question review
       const reviewDiv = document.getElementById('question-review')!;
       if (result.questionResults?.length > 0) {
-        reviewDiv.innerHTML = `<h3 style="font-size:1rem;margin-bottom:12px">Correction</h3>` + result.questionResults.map((qr: any, i: number) => {
+        reviewDiv.innerHTML = `<h3 class="quiz-review-heading">Correction</h3>` + result.questionResults.map((qr: any, i: number) => {
           const q = questions.find((q: any) => q.id === qr.questionId);
           return `
-            <div style="border:1.5px solid ${qr.isCorrect ? 'var(--good)' : 'var(--bad)'};border-radius:10px;padding:14px 16px">
-              <div style="display:flex;align-items:flex-start;gap:10px">
-                <span style="font-size:1rem;flex-shrink:0;color:${qr.isCorrect ? 'var(--good)' : 'var(--bad)'}">${qr.isCorrect ? '✓' : '✗'}</span>
-                <div style="flex:1">
-                  <p style="font-weight:600;font-size:.875rem;margin-bottom:4px">${i + 1}. ${q?.question || ''}</p>
-                  <p style="font-size:.8rem;color:var(--ink-soft)">${qr.pointsEarned}/${qr.pointsMax} pt${qr.pointsMax > 1 ? 's' : ''}</p>
-                  ${qr.feedback ? `<p style="font-size:.8rem;margin-top:4px;color:var(--ink-soft)">${qr.feedback}</p>` : ''}
+            <div class="review-item ${qr.isCorrect ? 'correct' : 'wrong'} mb-2">
+              <div class="review-item-inner">
+                <span class="review-status-icon ${qr.isCorrect ? 'correct' : 'wrong'}">${qr.isCorrect ? '✓' : '✗'}</span>
+                <div class="review-item-body">
+                  <p class="review-q-text">${i + 1}. ${q?.question || ''}</p>
+                  <p class="review-q-score">${qr.pointsEarned}/${qr.pointsMax} pt${qr.pointsMax > 1 ? 's' : ''}</p>
+                  ${qr.feedback ? `<p class="review-q-feedback">${qr.feedback}</p>` : ''}
                 </div>
               </div>
             </div>

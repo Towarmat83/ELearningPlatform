@@ -2,216 +2,19 @@
 import App from '../../layouts/App.astro';
 ---
 <App title="Catalogue" activePage="catalogue">
-  <style is:global>
-    .cat-outer {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 40px 32px 80px;
-    }
-    .cat-page { max-width: 1400px; margin: 0 auto; }
-    .cat-page-title {
-      font-size: 2rem; font-weight: 800; margin-bottom: 20px;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-
-    /* ── Continue hero ────────────────────────────────────────────────── */
-    .continue-hero {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      background: #ffffffcc;
-      backdrop-filter: blur(8px);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 16px;
-      padding: 20px;
-      cursor: pointer;
-      margin-bottom: 24px;
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .continue-hero:hover { border-color: #a5b4fc; box-shadow: 0 4px 20px rgba(67,97,238,.1); }
-    .continue-thumb {
-      width: 200px; height: 118px; border-radius: 12px;
-      background: linear-gradient(135deg, #e0e7ff, #ede9fe);
-      border: 1.5px solid #c7d2fe;
-      flex: 0 0 auto; overflow: hidden;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2.5rem;
-    }
-    .continue-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .continue-meta {
-      flex: 1; min-width: 0;
-      display: flex; flex-direction: column; gap: 10px; justify-content: center;
-    }
-    .continue-badge {
-      display: inline-flex; align-items: center;
-      height: 26px; padding: 0 11px; border-radius: 999px;
-      font-size: 12px; font-weight: 600;
-      background: #fef3c7; color: #a16207; border: 1px solid #fcd34d;
-      width: max-content;
-    }
-    .continue-title { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .continue-prog { height: 6px; background: #e0e7ff; border-radius: 5px; max-width: 340px; overflow: hidden; }
-    .continue-prog-fill { height: 100%; background: linear-gradient(90deg, #4361ee, #7c3aed); border-radius: 5px; }
-    .continue-sub { font-size: .8rem; color: var(--ink-soft); }
-    .continue-btn {
-      align-self: center; flex: 0 0 auto;
-      height: 40px; padding: 0 20px; border-radius: 10px;
-      background: linear-gradient(135deg, #4361ee, #7c3aed); color: #fff; font-size: 14px; font-weight: 600;
-      border: none; cursor: pointer; white-space: nowrap; transition: opacity .12s;
-    }
-    .continue-btn:hover { opacity: .88; }
-
-    /* ── Toolbar ──────────────────────────────────────────────────────── */
-    .cat-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .cat-toolbar .search-wrap { position: relative; flex: 1; max-width: 420px; }
-    .cat-toolbar .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); pointer-events: none; }
-    .cat-toolbar .input { padding-left: 38px; width: 100%; height: 38px; font-size: .875rem; background: #ffffffcc; backdrop-filter: blur(8px); }
-    .cat-toolbar select.input { background: #ffffffcc; backdrop-filter: blur(8px); }
-    .cat-count-label { font-size: .8rem; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
-
-    /* ── Active skill filter banner ───────────────────────────────────── */
-    .skill-filter-banner {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      padding: 7px 12px;
-      background: #ede9fe;
-      border: 1.5px solid #7c3aed;
-      border-radius: 10px;
-      font-size: .8rem;
-      font-weight: 600;
-      color: #5b21b6;
-    }
-    .skill-filter-banner button {
-      margin-left: auto;
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: .85rem;
-      color: #7c3aed;
-      font-weight: 700;
-      padding: 0 4px;
-    }
-    .skill-filter-banner button:hover { color: #5b21b6; }
-
-    /* ── Category chips ───────────────────────────────────────────────── */
-    .cat-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-bottom: 22px;
-      align-items: center;
-    }
-    .cat-chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      height: 30px; padding: 0 12px; border-radius: 999px;
-      font-size: .78rem; font-weight: 600;
-      border: 1.5px solid #e2e8f0; background: #ffffffcc; backdrop-filter: blur(4px); color: var(--ink-soft);
-      cursor: pointer; transition: all .15s; user-select: none; white-space: nowrap;
-    }
-    .cat-chip:hover { border-color: #a5b4fc; color: var(--ink); }
-    .cat-chip .chip-dot {
-      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-    }
-    .cat-chip .chip-count { font-size: .7rem; font-weight: 700; opacity: .55; }
-    .cat-chip.active { color: #fff !important; border-color: transparent; }
-    .cat-chip.active .chip-count { opacity: .8; }
-    /* "Tout" reset chip */
-    .chip-reset {
-      display: inline-flex; align-items: center;
-      height: 30px; padding: 0 12px; border-radius: 999px;
-      font-size: .78rem; font-weight: 600;
-      border: 1.5px solid #e2e8f0; background: #ffffffcc; backdrop-filter: blur(4px); color: var(--ink-soft);
-      cursor: pointer; transition: all .15s; user-select: none;
-    }
-    .chip-reset.has-filter {
-      border-color: #4361ee; color: #4361ee; background: #eff6ff;
-    }
-    .chip-reset.has-filter:hover { background: #4361ee; color: #fff; }
-
-    /* ── Flat course grid ─────────────────────────────────────────────── */
-    .courses-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 12px;
-    }
-
-    .rail-card {
-      border: 1.5px solid #e2e8f0;
-      border-top: 3px solid var(--cat-color, #e2e8f0);
-      border-radius: 14px;
-      background: #ffffffcc; backdrop-filter: blur(8px);
-      overflow: hidden;
-      cursor: pointer; transition: box-shadow .15s, transform .12s, border-color .15s;
-      display: flex; flex-direction: column;
-    }
-    .rail-card:hover {
-      box-shadow: 0 6px 24px rgba(67,97,238,.12);
-      transform: translateY(-3px);
-      border-color: #a5b4fc;
-    }
-    .rail-card-thumb-wrap {
-      position: relative; flex-shrink: 0;
-    }
-    .rail-card-thumb {
-      width: 100%; height: 88px;
-      overflow: hidden; display: flex; align-items: center; justify-content: center;
-      font-size: 1.8rem;
-    }
-    .rail-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .rail-card-cat {
-      position: absolute; top: 6px; right: 6px;
-      display: inline-flex; align-items: center; gap: 3px;
-      padding: 2px 7px 2px 5px;
-      border-radius: 99px;
-      font-size: .62rem; font-weight: 700; letter-spacing: .01em;
-      background: var(--cat-color, #888); color: #fff;
-      box-shadow: 0 1px 4px rgba(0,0,0,.18);
-      white-space: nowrap;
-    }
-    .rail-card-body { padding: 10px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
-    .rail-card-title {
-      font-size: .8rem; font-weight: 600; color: var(--ink); line-height: 1.3;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
-    .rail-card-footer { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
-    .rail-card-prog { height: 4px; background: var(--fill); border-radius: 3px; overflow: hidden; margin-top: 4px; }
-    .rail-card-prog-fill { height: 100%; background: var(--blue); border-radius: 3px; }
-
-    /* ── Responsive ───────────────────────────────────────────────────── */
-    @media (max-width: 640px) {
-      .cat-page { padding: 14px 14px 80px; }
-      .continue-hero { flex-direction: column; align-items: stretch; gap: 14px; }
-      .continue-thumb { width: 100%; height: 140px; }
-      .continue-prog { max-width: 100%; }
-      .continue-btn { align-self: stretch; width: 100%; }
-      .cat-toolbar .search-wrap { max-width: 100%; flex: 1; }
-      .courses-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-    }
-    @media (min-width: 1200px) {
-      .courses-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
-    }
-  </style>
 
   <div class="cat-outer">
-  <div class="cat-page">
+  <div class="page-inner">
 
     <h1 class="cat-page-title">Catalogue</h1>
 
     <!-- Toolbar -->
-    <div class="cat-toolbar">
-      <div class="search-wrap">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input class="input js-cat-search" type="search" placeholder="Rechercher un cours…" />
+    <div class="flex items-center gap-2.5 mb-3.5 flex-wrap">
+      <div class="relative flex-1 min-w-[160px] max-w-[420px]">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft pointer-events-none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="input js-cat-search pl-9 w-full h-[38px] text-[.875rem] bg-white/80 backdrop-blur-[8px]" type="search" placeholder="Rechercher un cours…" />
       </div>
-      <select class="input js-diff-filter" style="width:auto;padding:8px 14px;font-size:.85rem;flex-shrink:0">
+      <select class="input js-diff-filter cat-diff-filter">
         <option value="">Toutes difficultés</option>
         <option value="beginner">Débutant</option>
         <option value="intermediate">Intermédiaire</option>
@@ -241,9 +44,9 @@ import App from '../../layouts/App.astro';
       <div id="continue-hero"></div>
 
       <!-- Empty state -->
-      <div id="empty" style="display:none;text-align:center;padding:64px 24px">
-        <div style="font-size:3rem;margin-bottom:16px">📭</div>
-        <h3 style="margin-bottom:6px">Aucun cours trouvé</h3>
+      <div id="empty" class="cat-empty" style="display:none">
+        <div class="cat-empty-icon">📭</div>
+        <h3 class="cat-empty-title">Aucun cours trouvé</h3>
         <p class="text-soft text-sm">Essayez d'ajuster votre recherche ou vos filtres</p>
       </div>
 
@@ -376,20 +179,20 @@ import App from '../../layouts/App.astro';
         ? `<span class="badge ${diffColors[c.difficulty] || 'badge-blue'}">${diffLabels[c.difficulty] || c.difficulty}</span>`
         : '';
       const skillChips = (c.skills ?? []).slice(0, 3).map((s: string) =>
-        `<a href="/skills/${s}" class="badge badge-purple" style="font-size:.65rem;text-decoration:none">🎯 ${s}</a>`).join('');
+        `<a href="/skills/${s}" class="badge badge-purple text-[.65rem] no-underline">🎯 ${s}</a>`).join('');
       const inPersonBadge = c.inPerson
-        ? `<span class="badge" style="background:#e0f7fa;color:#0891b2;font-size:.65rem">🏢 Présentiel</span>`
+        ? `<span class="badge badge-inperson text-[.65rem]">🏢 Présentiel</span>`
         : '';
       const xpGate = c.xpRequired > 0
         ? `<span class="badge badge-orange" title="${c.xpRequired} XP requis">⚡ ${c.xpRequired} XP requis</span>`
         : '';
-      const xpReward = `<span class="badge" style="background:#fefce8;color:#a16207;border:1px solid #fcd34d;font-size:.65rem">+200 XP</span>`;
+      const xpReward = `<span class="badge badge-xp-reward text-[.65rem]">+200 XP</span>`;
       const prog = enrolled
         ? `<div class="rail-card-prog"><div class="rail-card-prog-fill" style="width:100%"></div></div>`
         : '';
       const thumbContent = c.thumbnail
         ? `<img src="${c.thumbnail}" alt="${c.title}" />`
-        : `<span style="font-size:2rem">${courseThumbIcon(c)}</span>`;
+        : `<span class="text-[2rem]">${courseThumbIcon(c)}</span>`;
       const catLabel = getCatLabel(c.category || '');
       const catIcon  = getCatIcon(c.category || '');
 
@@ -492,7 +295,7 @@ import App from '../../layouts/App.astro';
 
       const cards = sorted.map(c => renderCourseCard(c, getCatColor(c.category || ''))).join('');
       document.getElementById('groups-container')!.innerHTML =
-        `<div class="courses-grid">${cards}</div>`;
+        `<div class="courses-grid-lg">${cards}</div>`;
     }
 
     function rerender() {

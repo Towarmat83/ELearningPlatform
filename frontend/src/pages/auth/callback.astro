@@ -2,30 +2,26 @@
 import Base from '../../layouts/Base.astro';
 ---
 <Base title="Connexion…">
-  <div style="min-height:100vh;background:var(--page);display:flex;align-items:center;justify-content:center;padding:24px">
-    <div class="card" style="width:100%;max-width:380px;text-align:center;padding:48px 40px">
+  <div class="min-h-screen bg-page flex items-center justify-center p-6">
+    <div class="card w-full max-w-[380px] text-center px-10 py-12">
       <div id="loading-state">
-        <div style="width:48px;height:48px;border:3px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 20px"></div>
-        <h2 style="margin-bottom:8px">Finalisation de la connexion…</h2>
-        <p class="text-soft text-sm">Veuillez patienter pendant la vérification de votre identité.</p>
+        <div class="spinner w-12 h-12 border-[3px] mx-auto mb-5"></div>
+        <h2 class="mb-2">Finalisation de la connexion…</h2>
+        <p class="text-ink-soft text-[.875rem]">Veuillez patienter pendant la vérification de votre identité.</p>
       </div>
-      <div id="error-state" style="display:none">
-        <div style="font-size:2.5rem;margin-bottom:16px">✕</div>
-        <h2 style="color:var(--bad);margin-bottom:8px">Connexion échouée</h2>
-        <p id="error-msg" class="text-soft text-sm" style="margin-bottom:24px"></p>
+      <div id="error-state" class="hidden">
+        <div class="text-[2.5rem] mb-4">✕</div>
+        <h2 class="text-bad mb-2">Connexion échouée</h2>
+        <p id="error-msg" class="text-ink-soft text-[.875rem] mb-6"></p>
         <a href="/login" class="btn btn-primary">Retour à la connexion</a>
       </div>
     </div>
   </div>
 
-  <style>
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
-
   <script>
     function showError(msg: string) {
-      document.getElementById('loading-state')!.style.display = 'none';
-      document.getElementById('error-state')!.style.display = 'block';
+      document.getElementById('loading-state')!.classList.add('hidden');
+      document.getElementById('error-state')!.classList.remove('hidden');
       document.getElementById('error-msg')!.textContent = msg;
     }
 

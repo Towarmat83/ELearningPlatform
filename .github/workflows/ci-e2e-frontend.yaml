@@ -1,0 +1,171 @@
+name: E2E Frontend (screenshot regression)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "user-service/**"
+      - "course-service/**"
+      - ".github/workflows/ci-e2e-frontend.yaml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "user-service/**"
+      - "course-service/**"
+      - ".github/workflows/ci-e2e-frontend.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  e2e-frontend:
+    name: Playwright screenshot tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pupitre
+          POSTGRES_PASSWORD: pupitre
+          POSTGRES_DB: pupitre
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://pupitre:pupitre@localhost:5432/pupitre?sslmode=disable
+      JWT_SECRET: ci-jwt-secret-e2e-only
+      INTERNAL_SERVICE_SECRET: ci-internal-secret-e2e-only
+      ADMIN_PASSWORD: admin-e2e-password
+      AUTH_RATE_LIMIT_REQUESTS: "1000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: |
+            user-service/go.sum
+            course-service/go.sum
+
+      - name: Build user-service
+        working-directory: user-service
+        run: go build -o ../bin/user-service .
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Build course-service
+        working-directory: course-service
+        run: go build -o ../bin/course-service .
+        env:
+          CGO_ENABLED: "0"
+
+      # Les deux services partagent la même DB et utilisent la même table de migrations.
+      # Démarrage séquentiel pour éviter la race condition sur CREATE TABLE _schema_migrations.
+      - name: Start user-service
+        run: |
+          mkdir -p bin
+          ./bin/user-service &
+          echo "USER_SERVICE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for user-service
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8081/health && break
+            sleep 2
+          done
+
+      - name: Start course-service
+        run: |
+          ./bin/course-service &
+          echo "COURSE_SERVICE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for course-service
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8082/health && break
+            sleep 2
+          done
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Start frontend
+        working-directory: frontend
+        run: node dist/server/entry.mjs &
+        env:
+          HOST: 0.0.0.0
+          PORT: 4322
+          USER_API: http://localhost:8081
+          COURSE_API: http://localhost:8082
+
+      - name: Generate missing platform snapshots
+        working-directory: frontend
+        run: npx playwright test --update-snapshots=missing || true
+        env:
+          BASE_URL: http://localhost:4322
+          ADMIN_EMAIL: admin@pupitre.local
+          ADMIN_PASSWORD: admin-e2e-password
+          CI: "true"
+
+      - name: Commit new Linux snapshots if any
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Synchronise avec l'état courant de la branche distante (commits auto précédents)
+          # sans écraser les fichiers non-trackés générés par Playwright.
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+          # Ajoute uniquement les nouveaux snapshots Linux (fichiers non trackés survivent au reset)
+          find frontend/e2e -name '*-linux.png' -exec git add {} +
+          if ! git diff --cached --quiet; then
+            git commit -m "test(e2e): add Linux baseline screenshots"
+            git push origin "$BRANCH"
+          fi
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:4322
+          ADMIN_EMAIL: admin@pupitre.local
+          ADMIN_PASSWORD: admin-e2e-password
+          CI: "true"
+
+      - name: Stop services
+        if: always()
+        run: |
+          kill "$USER_SERVICE_PID" 2>/dev/null || true
+          kill "$COURSE_SERVICE_PID" 2>/dev/null || true

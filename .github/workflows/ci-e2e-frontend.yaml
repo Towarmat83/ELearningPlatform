@@ -1,0 +1,135 @@
+name: E2E Frontend (screenshot regression)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "user-service/**"
+      - ".github/workflows/ci-e2e-frontend.yaml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "user-service/**"
+      - ".github/workflows/ci-e2e-frontend.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-frontend:
+    name: Playwright screenshot tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pupitre
+          POSTGRES_PASSWORD: pupitre
+          POSTGRES_DB: pupitre
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://pupitre:pupitre@localhost:5432/pupitre?sslmode=disable
+      JWT_SECRET: ci-jwt-secret-e2e-only
+      INTERNAL_SERVICE_SECRET: ci-internal-secret-e2e-only
+      ADMIN_PASSWORD: admin-e2e-password
+      AUTH_RATE_LIMIT_REQUESTS: "1000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: user-service/go.sum
+
+      - name: Build user-service
+        working-directory: user-service
+        run: go build -o ../bin/user-service .
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Start user-service
+        run: |
+          mkdir -p bin
+          ./bin/user-service &
+          echo "USER_SERVICE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for user-service
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8081/health && break
+            sleep 2
+          done
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+        env:
+          API_URL: http://localhost:8080
+
+      - name: Start frontend
+        working-directory: frontend
+        run: node dist/server/entry.mjs &
+        env:
+          HOST: 0.0.0.0
+          PORT: 4322
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:4322
+          API_URL: http://localhost:8081
+          ADMIN_EMAIL: admin@pupitre.local
+          ADMIN_PASSWORD: admin-e2e-password
+          CI: "true"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshots diff
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots-diff
+          path: frontend/test-results/
+          retention-days: 14
+
+      - name: Stop services
+        if: always()
+        run: kill "$USER_SERVICE_PID" 2>/dev/null || true

@@ -8,19 +8,19 @@ import App from '../layouts/App.astro';
       <div class="profile-layout">
         <!-- Left sidebar nav -->
         <aside class="sidebar">
-          <div class="card-sm" style="margin-bottom:16px;text-align:center;padding:20px">
-            <div id="avatar-wrapper" style="position:relative;width:80px;height:80px;margin:0 auto 12px;cursor:pointer" title="Changer la photo de profil">
-              <div id="avatar-area" style="width:80px;height:80px"></div>
-              <div id="avatar-edit-overlay" style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;color:#fff;font-size:.7rem;font-weight:600;text-align:center;line-height:1.2">✏️<br>Modifier</div>
+          <div class="card-sm mb-4 text-center p-5">
+            <div id="avatar-wrapper" class="profile-avatar-wrapper" title="Changer la photo de profil">
+              <div id="avatar-area" class="w-20 h-20"></div>
+              <div id="avatar-edit-overlay" class="profile-avatar-overlay">✏️<br>Modifier</div>
             </div>
             <!-- Emoji picker for profile photo -->
-            <div id="avatar-picker" style="display:none;margin-bottom:12px">
-              <div style="font-size:.72rem;color:var(--ink-soft);margin-bottom:6px">Photo de profil</div>
-              <div id="avatar-picker-grid" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
+            <div id="avatar-picker" class="mb-3" style="display:none">
+              <div class="text-[.72rem] text-ink-soft mb-1.5">Photo de profil</div>
+              <div id="avatar-picker-grid" class="flex flex-wrap gap-1.5 justify-center"></div>
             </div>
-            <div id="profile-name" style="font-weight:700;margin-bottom:2px"></div>
-            <div id="profile-email" style="font-size:.8rem;color:var(--ink-soft)"></div>
-            <div id="profile-role" style="margin-top:8px"></div>
+            <div id="profile-name" class="font-bold mb-0.5"></div>
+            <div id="profile-email" class="text-[.8rem] text-ink-soft"></div>
+            <div id="profile-role" class="mt-2"></div>
           </div>
           <nav class="sidebar-nav">
             <a class="sidebar-link active" href="#compte" data-section="compte">👤 Compte</a>
@@ -32,35 +32,36 @@ import App from '../layouts/App.astro';
         <div class="stack-lg">
           <!-- Compte section -->
           <div id="section-compte" class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-              <h2 style="font-size:1.1rem">Mon compte</h2>
+            <div class="profile-section-header">
+              <h2 class="text-[1.1rem]">Mon compte</h2>
               <button class="btn btn-secondary btn-sm" id="edit-btn">Modifier</button>
             </div>
 
             <!-- View mode -->
             <div id="view-mode">
-              <div class="stack" style="gap:14px">
-                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
-                  <span class="text-soft text-sm" style="padding-top:2px">Nom d'utilisateur</span>
-                  <span id="view-username" style="font-weight:500;font-size:.9rem"></span>
+              <div class="stack gap-[14px]">
+                <div class="profile-field-row">
+                  <span class="text-soft text-sm pt-0.5">Nom d'utilisateur</span>
+                  <span id="view-username" class="font-medium text-[.9rem]"></span>
                 </div>
-                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
-                  <span class="text-soft text-sm" style="padding-top:2px">Email</span>
-                  <span id="view-email" style="font-size:.9rem"></span>
+                <div class="profile-field-row">
+                  <span class="text-soft text-sm pt-0.5">Email</span>
+                  <span id="view-email" class="text-[.9rem]"></span>
                 </div>
-                <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
-                  <span class="text-soft text-sm" style="padding-top:2px">Bio</span>
-                  <span id="view-bio" style="font-size:.9rem;color:var(--ink-soft)"></span>
+                <div class="profile-field-row">
+                  <span class="text-soft text-sm pt-0.5">Bio</span>
+                  <span id="view-bio" class="text-[.9rem] text-ink-soft"></span>
                 </div>
-                <div id="view-avatar-row" style="display:none;display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:start">
-                  <span class="text-soft text-sm" style="padding-top:2px">URL avatar</span>
-                  <span id="view-avatar" style="font-size:.85rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+                <!-- Shown only for non-SSO users with an avatar URL set -->
+                <div id="view-avatar-row" class="profile-field-row" style="display:none">
+                  <span class="text-soft text-sm pt-0.5">URL avatar</span>
+                  <span id="view-avatar" class="text-[.85rem] text-ink-soft overflow-hidden text-ellipsis whitespace-nowrap"></span>
                 </div>
               </div>
             </div>
 
             <!-- Edit mode -->
-            <form id="edit-mode" style="display:none" class="stack" style="gap:14px">
+            <form id="edit-mode" class="stack gap-[14px]" style="display:none">
               <div id="avatar-field" class="form-group" style="display:none">
                 <label class="label" for="edit-avatar">URL de l'avatar</label>
                 <input class="input" type="url" id="edit-avatar" placeholder="https://example.com/avatar.png" />
@@ -69,18 +70,18 @@ import App from '../layouts/App.astro';
                 <label class="label" for="edit-bio">Bio</label>
                 <textarea class="input" id="edit-bio" rows="3" placeholder="Dites-nous quelque chose sur vous…"></textarea>
               </div>
-              <div id="sso-avatar-notice" style="display:none;font-size:.8rem;color:var(--blue);background:var(--blue-soft);border:1px solid var(--blue);border-radius:var(--radius);padding:10px 14px"></div>
-              <div style="display:flex;gap:10px">
+              <div id="sso-avatar-notice" class="sso-notice" style="display:none"></div>
+              <div class="flex gap-2.5">
                 <button type="submit" class="btn btn-primary" id="save-btn">Enregistrer</button>
                 <button type="button" class="btn btn-secondary" id="cancel-btn">Annuler</button>
               </div>
-              <p id="save-error" style="display:none;color:var(--bad);font-size:.85rem"></p>
+              <p id="save-error" class="text-bad text-[.85rem]" style="display:none"></p>
             </form>
           </div>
 
           <!-- Sécurité section -->
           <div id="section-securite" class="card" style="display:none">
-            <h2 style="font-size:1.1rem;margin-bottom:20px">Sécurité</h2>
+            <h2 class="text-[1.1rem] mb-5">Sécurité</h2>
             <div id="security-content"></div>
           </div>
 
@@ -185,10 +186,10 @@ import App from '../layouts/App.astro';
       } else {
         secContent.innerHTML = `
           <div id="pw-view">
-            <p class="text-soft text-sm" style="margin-bottom:12px">Utilisez un mot de passe fort d'au moins 8 caractères.</p>
+            <p class="text-soft text-sm mb-3">Utilisez un mot de passe fort d'au moins 8 caractères.</p>
             <button class="btn btn-secondary btn-sm" id="change-pw-btn">Changer le mot de passe</button>
           </div>
-          <form id="pw-form" style="display:none" class="stack" style="gap:12px">
+          <form id="pw-form" class="stack gap-3" style="display:none">
             <div class="form-group">
               <label class="label" for="old-pw">Mot de passe actuel</label>
               <input class="input" type="password" id="old-pw" autocomplete="current-password" />
@@ -201,11 +202,11 @@ import App from '../layouts/App.astro';
               <label class="label" for="new-pw2">Confirmer le mot de passe</label>
               <input class="input" type="password" id="new-pw2" autocomplete="new-password" />
             </div>
-            <div style="display:flex;gap:10px">
+            <div class="flex gap-2.5">
               <button type="submit" class="btn btn-primary" id="pw-save-btn">Mettre à jour</button>
               <button type="button" class="btn btn-secondary" id="pw-cancel-btn">Annuler</button>
             </div>
-            <p id="pw-error" style="display:none;color:var(--bad);font-size:.85rem"></p>
+            <p id="pw-error" class="text-bad text-[.85rem]" style="display:none"></p>
           </form>
         `;
 
@@ -264,14 +265,9 @@ import App from '../layouts/App.astro';
         return;
       }
       grid.innerHTML = earnedIcons.map(icon => `
-        <button class="avatar-pick-btn" data-icon="${icon}" title="${icon}"
-          style="width:36px;height:36px;border-radius:50%;border:2px solid var(--line);background:var(--fill);font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:border-color .15s">
-          ${icon}
-        </button>
+        <button class="avatar-pick-btn" data-icon="${icon}" title="${icon}">${icon}</button>
       `).join('');
       grid.querySelectorAll<HTMLElement>('.avatar-pick-btn').forEach(btn => {
-        btn.addEventListener('mouseenter', () => btn.style.borderColor = 'var(--blue)');
-        btn.addEventListener('mouseleave', () => btn.style.borderColor = 'var(--line)');
         btn.addEventListener('click', async () => {
           const icon = btn.dataset.icon!;
           try {

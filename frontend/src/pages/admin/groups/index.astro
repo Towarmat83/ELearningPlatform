@@ -2,22 +2,22 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Groupes">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+  <div class="admin-page-header">
     <div>
-      <h1 style="font-size:1.5rem">Groupes</h1>
-      <p class="text-soft text-sm" style="margin-top:4px">Groupes synchronisés depuis les providers SSO/LDAP et groupes locaux</p>
+      <h1 class="text-2xl">Groupes</h1>
+      <p class="text-soft text-sm mt-1">Groupes synchronisés depuis les providers SSO/LDAP et groupes locaux</p>
     </div>
     <button class="btn btn-primary" id="new-group-btn">+ Nouveau groupe</button>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+  <div class="grid grid-cols-2 gap-6 items-start">
 
     <!-- Groups list -->
     <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <h2 style="font-size:1.1rem">Groupes <span id="groups-count" class="badge badge-gray" style="margin-left:6px"></span></h2>
+      <div class="flex items-center justify-between mb-[14px]">
+        <h2 class="text-[1.1rem]">Groupes <span id="groups-count" class="badge badge-gray ml-1.5"></span></h2>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
+      <div class="card !p-0 overflow-hidden">
         <div id="groups-list">
           <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
         </div>
@@ -26,44 +26,44 @@ import Admin from '../../../layouts/Admin.astro';
 
     <!-- Role mappings -->
     <div>
-      <div style="margin-bottom:14px">
-        <h2 style="font-size:1.1rem">Mappings de rôles</h2>
+      <div class="mb-[14px]">
+        <h2 class="text-[1.1rem]">Mappings de rôles</h2>
       </div>
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+      <div class="card !p-0 overflow-hidden mb-4">
         <div id="mappings-list">
           <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
         </div>
       </div>
       <div class="card">
-        <h3 style="font-size:.95rem;margin-bottom:14px">Ajouter un mapping</h3>
-        <div class="stack" style="gap:10px">
+        <h3 class="text-[.95rem] mb-[14px]">Ajouter un mapping</h3>
+        <div class="stack gap-[10px]">
           <div class="form-group">
             <label class="label">Nom du groupe SSO</label>
             <input id="new-group-name" class="input" placeholder="ex : devops-team" />
           </div>
           <div class="form-group">
             <label class="label">Rôle plateforme</label>
-            <select id="new-group-role" class="input" style="height:auto;padding:9px 14px">
+            <select id="new-group-role" class="input">
               <option value="student">Étudiant</option>
               <option value="manager">Manager de groupe</option>
               <option value="admin">Administrateur</option>
             </select>
           </div>
-          <button class="btn btn-primary btn-sm" id="add-mapping-btn" style="align-self:flex-start">Ajouter</button>
+          <button class="btn btn-primary btn-sm self-start" id="add-mapping-btn">Ajouter</button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Create group modal -->
-  <div id="create-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
-    <div class="card" style="width:380px;max-width:95vw;padding:28px">
-      <h3 style="margin-bottom:20px">Nouveau groupe local</h3>
-      <div class="form-group" style="margin-bottom:20px">
+  <div id="create-modal" class="modal-overlay">
+    <div class="card modal-box-sm">
+      <h3 class="mb-5">Nouveau groupe local</h3>
+      <div class="form-group mb-5">
         <label class="label">Nom du groupe</label>
         <input id="create-group-name" class="input" placeholder="ex : equipe-rh" />
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
+      <div class="flex-end-gap2">
         <button class="btn btn-secondary" id="create-cancel">Annuler</button>
         <button class="btn btn-primary" id="create-confirm">Créer</button>
       </div>
@@ -71,26 +71,26 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 
   <!-- Members modal -->
-  <div id="members-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
-    <div class="card" style="width:520px;max-width:95vw;padding:28px;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <div id="members-modal" class="modal-overlay">
+    <div class="card modal-box-lg">
+      <div class="modal-header">
         <h3 id="members-modal-title">Membres du groupe</h3>
-        <button id="members-close" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--ink-soft)">✕</button>
+        <button id="members-close" class="modal-close-btn">✕</button>
       </div>
 
       <!-- Current members -->
-      <div style="margin-bottom:20px">
-        <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Membres actuels</h4>
+      <div class="modal-section">
+        <h4 class="modal-section-title">Membres actuels</h4>
         <div id="members-list">
-          <div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>
+          <div class="loading-state" style="padding:12px 0"><div class="spinner spinner-sm"></div></div>
         </div>
       </div>
 
       <!-- Add member -->
-      <div style="border-top:1px solid var(--line);padding-top:20px">
-        <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Ajouter un membre</h4>
-        <div style="display:flex;gap:8px">
-          <select id="add-member-select" class="input" style="flex:1;height:auto;padding:9px 14px">
+      <div class="modal-divider">
+        <h4 class="modal-section-title">Ajouter un membre</h4>
+        <div class="flex gap-2">
+          <select id="add-member-select" class="input flex-1">
             <option value="">Choisir un utilisateur…</option>
           </select>
           <button class="btn btn-primary" id="add-member-btn">Ajouter</button>
@@ -117,28 +117,28 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('groups-count')!.textContent = String(groups.length);
         const el = document.getElementById('groups-list')!;
         if (!groups.length) {
-          el.innerHTML = '<p class="text-soft text-sm" style="padding:16px">Aucun groupe.</p>';
+          el.innerHTML = '<p class="text-soft text-sm p-4">Aucun groupe.</p>';
           return;
         }
         el.innerHTML = groups.map((g: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">${g.source}</span></div>
+          <div class="list-row">
+            <div class="row-info">
+              <div class="row-name">${g.name}</div>
+              <div class="row-sub">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray badge-xs">${g.source}</span></div>
             </div>
             ${g.mappedRole ? `<span class="badge ${g.mappedRole === 'admin' ? 'badge-red' : g.mappedRole === 'manager' ? 'badge-orange' : 'badge-blue'}">${g.mappedRole}</span>` : g.source !== 'local' ? '<span class="badge badge-gray">Non mappé</span>' : ''}
             <button class="btn btn-secondary btn-sm members-btn" data-id="${g.id}" data-name="${g.name}">Membres</button>
-            ${g.source === 'local' && g.name !== 'everyone' ? `<button class="btn btn-sm del-group-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${g.id}" data-name="${g.name}">✕</button>` : ''}
+            ${g.source === 'local' && g.name !== 'everyone' ? `<button class="btn btn-sm btn-danger members-btn-del" data-id="${g.id}" data-name="${g.name}">✕</button>` : ''}
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.members-btn').forEach(btn => {
           btn.addEventListener('click', () => openMembers(btn.dataset.id!, btn.dataset.name!));
         });
-        el.querySelectorAll<HTMLButtonElement>('.del-group-btn').forEach(btn => {
+        el.querySelectorAll<HTMLButtonElement>('.members-btn-del').forEach(btn => {
           btn.addEventListener('click', () => deleteGroup(btn.dataset.id!, btn.dataset.name!));
         });
       } catch (e: any) {
-        document.getElementById('groups-list')!.innerHTML = `<p style="color:var(--bad);padding:16px">${e.message}</p>`;
+        document.getElementById('groups-list')!.innerHTML = `<p class="text-bad p-4">${e.message}</p>`;
       }
     }
 
@@ -157,13 +157,13 @@ import Admin from '../../../layouts/Admin.astro';
       try {
         const { mappings } = await api('/admin/groups/mappings');
         const el = document.getElementById('mappings-list')!;
-        if (!mappings.length) { el.innerHTML = '<p class="text-soft text-sm" style="padding:16px">Aucun mapping défini.</p>'; return; }
+        if (!mappings.length) { el.innerHTML = '<p class="text-soft text-sm p-4">Aucun mapping défini.</p>'; return; }
         el.innerHTML = mappings.map((m: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)">
-            <code style="flex:1;font-size:.82rem;background:var(--fill);padding:3px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.groupName}</code>
-            <span style="color:var(--ink-soft);flex-shrink:0">→</span>
-            <span class="badge ${m.platformRole === 'admin' ? 'badge-red' : m.platformRole === 'manager' ? 'badge-orange' : 'badge-blue'}" style="flex-shrink:0">${m.platformRole}</span>
-            <button class="btn btn-sm del-mapping-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-group="${m.groupName}">✕</button>
+          <div class="list-row">
+            <code class="code-tag">${m.groupName}</code>
+            <span class="map-arrow">→</span>
+            <span class="badge ${m.platformRole === 'admin' ? 'badge-red' : m.platformRole === 'manager' ? 'badge-orange' : 'badge-blue'} flex-shrink-0">${m.platformRole}</span>
+            <button class="btn btn-sm btn-danger del-mapping-btn" data-group="${m.groupName}">✕</button>
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.del-mapping-btn').forEach(btn => {
@@ -176,7 +176,7 @@ import Admin from '../../../layouts/Admin.astro';
           });
         });
       } catch (e: any) {
-        document.getElementById('mappings-list')!.innerHTML = `<p style="color:var(--bad);padding:16px">${e.message}</p>`;
+        document.getElementById('mappings-list')!.innerHTML = `<p class="text-bad p-4">${e.message}</p>`;
       }
     }
 
@@ -202,20 +202,20 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function refreshMembers() {
       const el = document.getElementById('members-list')!;
-      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner spinner-sm"></div></div>';
       try {
         const { members } = await api(`/admin/groups/${selectedGroupId}/members`);
         const list: any[] = members || [];
         if (!list.length) { el.innerHTML = '<p class="text-soft text-sm">Aucun membre.</p>'; return; }
         el.innerHTML = list.map((u: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
-            <div style="width:30px;height:30px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;color:var(--blue);flex-shrink:0">${(u.username||'?')[0].toUpperCase()}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.875rem;font-weight:500">${u.username}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${u.email}</div>
+          <div class="list-row-compact">
+            <div class="user-avatar-sm">${(u.username||'?')[0].toUpperCase()}</div>
+            <div class="flex-1-min0">
+              <div class="text-sm font-medium">${u.username}</div>
+              <div class="row-sub">${u.email}</div>
             </div>
-            <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'}" style="flex-shrink:0">${u.role}</span>
-            <button class="btn btn-sm remove-member-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-uid="${u.id}">Retirer</button>
+            <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'} flex-shrink-0">${u.role}</span>
+            <button class="btn btn-sm btn-danger remove-member-btn" data-uid="${u.id}">Retirer</button>
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.remove-member-btn').forEach(btn => {
@@ -228,7 +228,7 @@ import Admin from '../../../layouts/Admin.astro';
           });
         });
       } catch (e: any) {
-        el.innerHTML = `<p style="color:var(--bad);font-size:.875rem">${e.message}</p>`;
+        el.innerHTML = `<p class="text-bad text-sm">${e.message}</p>`;
       }
     }
 

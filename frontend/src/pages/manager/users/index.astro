@@ -7,7 +7,7 @@ import Manager from '../../../layouts/Manager.astro';
       <h1 class="mu-title">Mes membres</h1>
       <p class="mu-subtitle" id="member-count">Chargement…</p>
       <div id="scope-groups" class="flex flex-wrap gap-1.5 mt-2 items-center">
-        <span class="text-soft text-sm" style="font-size:.75rem">Filtrer :</span>
+        <span class="text-soft text-[.75rem]">Filtrer :</span>
       </div>
     </div>
   </div>
@@ -23,40 +23,40 @@ import Manager from '../../../layouts/Manager.astro';
         </tr>
       </thead>
       <tbody id="members-body">
-        <tr><td colspan="3" style="padding:32px;text-align:center"><div class="loading-state" style="padding:0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div></td></tr>
+        <tr><td colspan="3" class="mu-empty-td"><div class="loading-state !p-0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div></td></tr>
       </tbody>
     </table>
   </div>
 
   <!-- Enrollment modal -->
-  <div id="enroll-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
-    <div class="card" style="width:520px;max-width:95vw;padding:28px;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <div id="enroll-modal" class="mu-modal-overlay">
+    <div class="card mu-modal-box">
+      <div class="mu-modal-header">
         <h3 id="modal-title">Gérer les inscriptions</h3>
-        <button id="modal-close" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--ink-soft)">✕</button>
+        <button id="modal-close" class="mu-modal-close">✕</button>
       </div>
 
       <!-- Current course enrollments -->
-      <div style="margin-bottom:20px">
-        <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Cours actuels</h4>
+      <div class="mu-section">
+        <h4 class="mu-section-title">Cours actuels</h4>
         <div id="current-enrollments">
-          <div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>
+          <div class="loading-state !py-3 !px-0"><div class="spinner w-5 h-5"></div></div>
         </div>
       </div>
 
       <!-- Current path enrollments -->
-      <div style="margin-bottom:20px;border-top:1px solid var(--line);padding-top:20px">
-        <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Parcours actuels</h4>
+      <div class="mu-section-divider">
+        <h4 class="mu-section-title">Parcours actuels</h4>
         <div id="current-path-enrollments">
-          <div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>
+          <div class="loading-state !py-3 !px-0"><div class="spinner w-5 h-5"></div></div>
         </div>
       </div>
 
       <!-- Enroll in a new course -->
-      <div style="border-top:1px solid var(--line);padding-top:20px;margin-bottom:16px">
-        <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Inscrire à un cours</h4>
-        <div style="display:flex;gap:8px">
-          <select id="course-select" class="input" style="flex:1;height:auto;padding:9px 14px">
+      <div class="mu-section-divider mb-4">
+        <h4 class="mu-section-title">Inscrire à un cours</h4>
+        <div class="mu-select-row">
+          <select id="course-select" class="input mu-select-input">
             <option value="">Choisir un cours…</option>
           </select>
           <button class="btn btn-primary" id="enroll-btn">Inscrire</button>
@@ -64,10 +64,10 @@ import Manager from '../../../layouts/Manager.astro';
       </div>
 
       <!-- Enroll in a new path -->
-      <div style="border-top:1px solid var(--line);padding-top:20px">
-        <h4 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Inscrire à un parcours</h4>
-        <div style="display:flex;gap:8px">
-          <select id="path-select" class="input" style="flex:1;height:auto;padding:9px 14px">
+      <div class="mu-section-divider">
+        <h4 class="mu-section-title">Inscrire à un parcours</h4>
+        <div class="mu-select-row">
+          <select id="path-select" class="input mu-select-input">
             <option value="">Choisir un parcours…</option>
           </select>
           <button class="btn btn-primary" id="enroll-path-btn">Inscrire</button>
@@ -132,7 +132,7 @@ import Manager from '../../../layouts/Manager.astro';
         populatePathSelect();
       } catch (e: any) {
         document.getElementById('members-body')!.innerHTML =
-          `<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--bad)">Erreur : ${e.message}</td></tr>`;
+          `<tr><td colspan="3" class="mu-error-td">Erreur : ${e.message}</td></tr>`;
       }
     }
 
@@ -150,13 +150,13 @@ import Manager from '../../../layouts/Manager.astro';
     function renderGroupBadges() {
       const scopeEl = document.getElementById('scope-groups')!;
       if (!scopeGroupsData.length) {
-        scopeEl.innerHTML = '<span class="text-soft text-sm" style="font-style:italic">Aucun groupe assigné</span>';
+        scopeEl.innerHTML = '<span class="text-soft text-sm italic">Aucun groupe assigné</span>';
         return;
       }
-      scopeEl.innerHTML = '<span class="text-soft text-sm" style="margin-right:2px;font-size:.75rem">Filtrer :</span>' +
+      scopeEl.innerHTML = '<span class="text-soft text-[.75rem] mr-0.5">Filtrer :</span>' +
         scopeGroupsData.map((g: any) => {
           const isActive = activeGroupFilter === g.id;
-          return `<button class="badge badge-orange group-filter-btn" data-gid="${g.id}" style="cursor:pointer;border:none;font-size:.75rem;${isActive ? 'outline:2px solid var(--orange,#f97316);outline-offset:1px;' : 'opacity:.7'}">${g.name}</button>`;
+          return `<button class="badge badge-orange mu-group-filter-btn${isActive ? ' active' : ''}" data-gid="${g.id}">${g.name}</button>`;
         }).join('');
       scopeEl.querySelectorAll<HTMLButtonElement>('.group-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -177,22 +177,22 @@ import Manager from '../../../layouts/Manager.astro';
           })
         : allMembers;
       if (!visible.length) {
-        tbody.innerHTML = `<tr><td colspan="3" style="padding:32px;text-align:center;color:var(--ink-soft)">Aucun membre${activeGroupFilter ? ' dans ce groupe' : ' dans vos groupes'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="3" class="mu-empty-td text-ink-soft">Aucun membre${activeGroupFilter ? ' dans ce groupe' : ' dans vos groupes'}</td></tr>`;
         return;
       }
       tbody.innerHTML = visible.map((u: any) => `
         <tr data-uid="${u.id}">
-          <td style="padding:12px 16px">
-            <div style="display:flex;align-items:center;gap:10px">
+          <td class="mu-td-member">
+            <div class="mu-member-info">
               <div class="mu-avatar">${(u.username || '?')[0].toUpperCase()}</div>
               <div>
-                <div style="font-weight:600">${u.username}</div>
-                <div style="font-size:.78rem;color:var(--ink-soft)">${u.email}</div>
+                <div class="mu-member-name">${u.username}</div>
+                <div class="mu-member-email">${u.email}</div>
               </div>
             </div>
           </td>
-          <td style="padding:12px 16px;color:var(--ink-soft)">${u.enrolledCourses ?? 0} cours</td>
-          <td style="padding:12px 16px;text-align:right">
+          <td class="mu-td-count">${u.enrolledCourses ?? 0} cours</td>
+          <td class="mu-td-action">
             <button class="btn btn-secondary btn-sm manage-btn" data-uid="${u.id}" data-name="${u.username}">Gérer les inscriptions</button>
           </td>
         </tr>
@@ -212,7 +212,7 @@ import Manager from '../../../layouts/Manager.astro';
 
     async function refreshEnrollments() {
       const el = document.getElementById('current-enrollments')!;
-      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      el.innerHTML = '<div class="loading-state !py-3 !px-0"><div class="spinner w-5 h-5"></div></div>';
       try {
         const { enrollments } = await api(`/manager/users/${selectedUserId}/enrollments`);
         const list: any[] = enrollments || [];
@@ -223,18 +223,18 @@ import Manager from '../../../layouts/Manager.astro';
           return;
         }
         el.innerHTML = list.map((e: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
-            <div style="flex:1;font-size:.875rem">
-              <span style="font-weight:500">${e.courseSlug}</span>
+          <div class="mu-enroll-item">
+            <div class="mu-enroll-name">
+              <span class="font-medium">${e.courseSlug}</span>
             </div>
-            <button class="btn btn-sm unenroll-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-slug="${e.courseSlug}">Retirer</button>
+            <button class="btn btn-sm unenroll-btn btn-remove" data-slug="${e.courseSlug}">Retirer</button>
           </div>
         `).join('');
         el.querySelectorAll<HTMLButtonElement>('.unenroll-btn').forEach(btn => {
           btn.addEventListener('click', () => unenroll(btn.dataset.slug!));
         });
       } catch (e: any) {
-        el.innerHTML = `<p style="color:var(--bad);font-size:.875rem">${e.message}</p>`;
+        el.innerHTML = `<p class="text-bad text-[.875rem]">${e.message}</p>`;
       }
     }
 
@@ -251,7 +251,7 @@ import Manager from '../../../layouts/Manager.astro';
 
     async function refreshPathEnrollments() {
       const el = document.getElementById('current-path-enrollments')!;
-      el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      el.innerHTML = '<div class="loading-state !py-3 !px-0"><div class="spinner w-5 h-5"></div></div>';
       try {
         const { pathEnrollments } = await api(`/manager/users/${selectedUserId}/path-enrollments`);
         const list: any[] = pathEnrollments || [];
@@ -264,18 +264,18 @@ import Manager from '../../../layouts/Manager.astro';
         el.innerHTML = list.map((e: any) => {
           const path = allPaths.find((p: any) => p.slug === e.Slug);
           return `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
-            <div style="flex:1;font-size:.875rem">
-              <span style="font-weight:500">${path?.title || e.Slug}</span>
+          <div class="mu-enroll-item">
+            <div class="mu-enroll-name">
+              <span class="font-medium">${path?.title || e.Slug}</span>
             </div>
-            <button class="btn btn-sm unenroll-path-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-slug="${e.Slug}">Retirer</button>
+            <button class="btn btn-sm unenroll-path-btn btn-remove" data-slug="${e.Slug}">Retirer</button>
           </div>`;
         }).join('');
         el.querySelectorAll<HTMLButtonElement>('.unenroll-path-btn').forEach(btn => {
           btn.addEventListener('click', () => unenrollPath(btn.dataset.slug!));
         });
       } catch (e: any) {
-        el.innerHTML = `<p style="color:var(--bad);font-size:.875rem">${e.message}</p>`;
+        el.innerHTML = `<p class="text-bad text-[.875rem]">${e.message}</p>`;
       }
     }
 

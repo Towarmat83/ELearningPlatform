@@ -2,17 +2,17 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Classement">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+  <div class="admin-page-header">
     <div>
-      <h1 style="font-size:1.5rem">Classement</h1>
-      <p class="text-soft text-sm" style="margin-top:4px">Progression globale des apprenants sur la plateforme</p>
+      <h1 class="text-2xl">Classement</h1>
+      <p class="text-soft text-sm mt-1">Progression globale des apprenants sur la plateforme</p>
     </div>
     <button class="btn btn-secondary btn-sm" id="sync-btn">⟳ Recalculer la progression</button>
   </div>
 
-  <div class="card" style="padding:0;overflow:hidden">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--line)">
-      <h2 style="font-size:1.1rem">Classement général</h2>
+  <div class="card !p-0 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-[18px] border-b border-line">
+      <h2 class="text-[1.1rem]">Classement général</h2>
       <span id="lb-count" class="badge badge-gray"></span>
     </div>
     <div id="leaderboard-body">
@@ -37,26 +37,26 @@ import Admin from '../../../layouts/Admin.astro';
         const entries: any[] = leaderboard || [];
         countEl.textContent = `${entries.length} participants`;
         if (!entries.length) {
-          body.innerHTML = '<p class="text-soft text-sm" style="padding:24px">Aucune donnée de classement.</p>';
+          body.innerHTML = '<p class="text-soft text-sm p-6">Aucune donnée de classement.</p>';
           return;
         }
         body.innerHTML = entries.map((e: any, i: number) => `
-          <div style="display:flex;align-items:center;gap:14px;padding:13px 20px;${i < entries.length - 1 ? 'border-bottom:1px solid var(--line)' : ''}">
-            <span style="width:28px;text-align:center;font-weight:700;font-size:.9rem;flex-shrink:0;color:${i < 3 ? 'var(--orange)' : 'var(--ink-soft)'}">${i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}</span>
-            <div style="width:36px;height:36px;border-radius:50%;background:${e.role === 'admin' ? 'var(--bad-soft)' : 'var(--blue-soft)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;color:${e.role === 'admin' ? 'var(--bad)' : 'var(--blue)'};flex-shrink:0">${(e.username || '?')[0].toUpperCase()}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.username}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft);margin-top:1px">${e.email || ''}</div>
-              <div style="font-size:.72rem;color:var(--ink-soft);margin-top:1px">${e.enrolledCourses ?? 0} cours · ${e.passedModules ?? 0} modules validés</div>
+          <div class="lb-row-padded">
+            <span class="lb-rank-lg ${i < 3 ? 'top' : ''}">${i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}</span>
+            <div class="lb-avatar-lg ${e.role === 'admin' ? 'lb-avatar-admin' : 'lb-avatar-user'}">${(e.username || '?')[0].toUpperCase()}</div>
+            <div class="lb-info">
+              <div class="lb-name">${e.username}</div>
+              <div class="lb-sub">${e.email || ''}</div>
+              <div class="lb-stats">${e.enrolledCourses ?? 0} cours · ${e.passedModules ?? 0} modules validés</div>
             </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-weight:700;color:var(--blue);font-size:.95rem">${e.totalScore ?? 0} pts</div>
-              ${e.success_rate != null ? `<div style="font-size:.72rem;color:var(--ink-soft)">${e.success_rate}% réussite</div>` : ''}
+            <div class="lb-score-col">
+              <div class="lb-score-main">${e.totalScore ?? 0} pts</div>
+              ${e.success_rate != null ? `<div class="lb-score-rate">${e.success_rate}% réussite</div>` : ''}
             </div>
           </div>
         `).join('');
       } catch (err: any) {
-        body.innerHTML = `<p style="color:var(--bad);padding:24px">${err.message}</p>`;
+        body.innerHTML = `<p class="text-bad p-6">${err.message}</p>`;
       }
     }
 

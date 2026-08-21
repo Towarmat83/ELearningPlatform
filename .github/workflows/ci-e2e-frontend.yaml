@@ -73,21 +73,29 @@ jobs:
         env:
           CGO_ENABLED: "0"
 
-      - name: Start services
+      # Les deux services partagent la même DB et utilisent la même table de migrations.
+      # Démarrage séquentiel pour éviter la race condition sur CREATE TABLE _schema_migrations.
+      - name: Start user-service
         run: |
           mkdir -p bin
           ./bin/user-service &
           echo "USER_SERVICE_PID=$!" >> "$GITHUB_ENV"
-          ./bin/course-service &
-          echo "COURSE_SERVICE_PID=$!" >> "$GITHUB_ENV"
 
-      - name: Wait for services
+      - name: Wait for user-service
         run: |
-          for i in $(seq 1 20); do
+          for i in $(seq 1 30); do
             curl -sf http://localhost:8081/health && break
             sleep 2
           done
-          for i in $(seq 1 20); do
+
+      - name: Start course-service
+        run: |
+          ./bin/course-service &
+          echo "COURSE_SERVICE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for course-service
+        run: |
+          for i in $(seq 1 30); do
             curl -sf http://localhost:8082/health && break
             sleep 2
           done
@@ -135,10 +143,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Synchronise avec l'état courant de la branche distante (commits auto précédents)
+          # sans écraser les fichiers non-trackés générés par Playwright.
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+          # Ajoute uniquement les nouveaux snapshots Linux (fichiers non trackés survivent au reset)
           find frontend/e2e -name '*-linux.png' -exec git add {} +
           if ! git diff --cached --quiet; then
             git commit -m "test(e2e): add Linux baseline screenshots"
-            git push origin HEAD:"$BRANCH"
+            git push origin "$BRANCH"
           fi
 
       - name: Run Playwright tests

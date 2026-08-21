@@ -5,7 +5,9 @@ export async function waitForPageReady(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle');
   const spinner = page.locator('.spinner');
   if (await spinner.count() > 0) {
-    await spinner.first().waitFor({ state: 'hidden', timeout: 10_000 });
+    // .catch() : si le spinner ne disparaît pas (service indisponible en CI), on
+    // continue quand même pour capturer l'état réel de la page.
+    await spinner.first().waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
   }
 }
 

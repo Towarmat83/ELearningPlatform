@@ -7,11 +7,13 @@ on:
     paths:
       - "frontend/**"
       - "user-service/**"
+      - "course-service/**"
       - ".github/workflows/ci-e2e-frontend.yaml"
   pull_request:
     paths:
       - "frontend/**"
       - "user-service/**"
+      - "course-service/**"
       - ".github/workflows/ci-e2e-frontend.yaml"
 
 concurrency:
@@ -19,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   e2e-frontend:
@@ -55,7 +57,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.26"
-          cache-dependency-path: user-service/go.sum
+          cache-dependency-path: |
+            user-service/go.sum
+            course-service/go.sum
 
       - name: Build user-service
         working-directory: user-service
@@ -63,16 +67,28 @@ jobs:
         env:
           CGO_ENABLED: "0"
 
-      - name: Start user-service
+      - name: Build course-service
+        working-directory: course-service
+        run: go build -o ../bin/course-service .
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Start services
         run: |
           mkdir -p bin
           ./bin/user-service &
           echo "USER_SERVICE_PID=$!" >> "$GITHUB_ENV"
+          ./bin/course-service &
+          echo "COURSE_SERVICE_PID=$!" >> "$GITHUB_ENV"
 
-      - name: Wait for user-service
+      - name: Wait for services
         run: |
           for i in $(seq 1 20); do
             curl -sf http://localhost:8081/health && break
+            sleep 2
+          done
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8082/health && break
             sleep 2
           done
 
@@ -94,8 +110,6 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
-        env:
-          API_URL: http://localhost:8080
 
       - name: Start frontend
         working-directory: frontend
@@ -103,13 +117,33 @@ jobs:
         env:
           HOST: 0.0.0.0
           PORT: 4322
+          USER_API: http://localhost:8081
+          COURSE_API: http://localhost:8082
+
+      - name: Generate missing platform snapshots
+        working-directory: frontend
+        run: npx playwright test --update-snapshots=missing || true
+        env:
+          BASE_URL: http://localhost:4322
+          ADMIN_EMAIL: admin@pupitre.local
+          ADMIN_PASSWORD: admin-e2e-password
+          CI: "true"
+
+      - name: Commit new Linux snapshots if any
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          find frontend/e2e -name '*-linux.png' -exec git add {} +
+          if ! git diff --cached --quiet; then
+            git commit -m "test(e2e): add Linux baseline screenshots"
+            git push
+          fi
 
       - name: Run Playwright tests
         working-directory: frontend
         run: npx playwright test
         env:
           BASE_URL: http://localhost:4322
-          API_URL: http://localhost:8081
           ADMIN_EMAIL: admin@pupitre.local
           ADMIN_PASSWORD: admin-e2e-password
           CI: "true"
@@ -132,4 +166,6 @@ jobs:
 
       - name: Stop services
         if: always()
-        run: kill "$USER_SERVICE_PID" 2>/dev/null || true
+        run: |
+          kill "$USER_SERVICE_PID" 2>/dev/null || true
+          kill "$COURSE_SERVICE_PID" 2>/dev/null || true

@@ -28,7 +28,7 @@ func NewModuleProgressRepository(seed ...models.ModuleProgress) *ModuleProgressR
 // RecordProgress upserts a module attempt: it keeps the best score, ORs the
 // passed flag across attempts, and increments the attempt count.
 func (f *ModuleProgressRepository) RecordProgress(
-	_ context.Context, userID, courseSlug string, moduleIndex int, moduleSlug string, score, maxScore int, passed bool,
+	_ context.Context, userID, courseSlug string, moduleIndex int, moduleSlug, moduleType string, score, maxScore int, passed bool,
 ) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -53,14 +53,15 @@ func (f *ModuleProgressRepository) RecordProgress(
 
 		f.progress = append(f.progress, models.ModuleProgress{
 			ID: uuid.NewString(), UserID: userID, CourseSlug: courseSlug, ModuleIndex: moduleIndex,
-			ModuleSlug: slugPtr, BestScore: score, MaxScore: maxScore, Passed: passed, Attempts: 1,
-			CompletedAt: completedAt, UpdatedAt: now,
+			ModuleSlug: slugPtr, ModuleType: moduleType, BestScore: score, MaxScore: maxScore,
+			Passed: passed, Attempts: 1, CompletedAt: completedAt, UpdatedAt: now,
 		})
 
 		return nil
 	}
 
 	entry := &f.progress[idx]
+	entry.ModuleType = moduleType
 	updateModuleProgress(entry, moduleSlug, score, maxScore, passed, now)
 
 	return nil

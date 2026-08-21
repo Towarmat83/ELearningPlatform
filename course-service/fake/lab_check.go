@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/genesary/pupitre/course-service/internal/models"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
 
 // LabCheckRepository is an in-memory fake of repository.LabCheckRepository.
@@ -51,4 +52,49 @@ func (f *LabCheckRepository) Create(_ context.Context, check *models.LabCheck) e
 	f.checks = append(f.checks, *check)
 
 	return nil
+}
+
+// ListExport returns filtered checks and their total count.
+func (f *LabCheckRepository) ListExport(_ context.Context, filter repository.LabCheckFilter, limit int) ([]models.LabCheck, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	results := make([]models.LabCheck, 0, len(f.checks))
+
+	for _, check := range slices.Backward(f.checks) {
+		if !matchesLabFilter(check, filter) {
+			continue
+		}
+
+		results = append(results, check)
+	}
+
+	total := int64(len(results))
+
+	if limit > 0 && int(total) > limit {
+		results = results[:limit]
+	}
+
+	return results, total, nil
+}
+
+// matchesLabFilter returns true when check satisfies all non-nil filter fields.
+func matchesLabFilter(check models.LabCheck, filter repository.LabCheckFilter) bool {
+	if filter.CourseSlug != "" && check.CourseSlug != filter.CourseSlug {
+		return false
+	}
+
+	if filter.Allow != nil && check.Allow != *filter.Allow {
+		return false
+	}
+
+	if filter.From != nil && check.CheckedAt.Before(*filter.From) {
+		return false
+	}
+
+	if filter.To != nil && check.CheckedAt.After(*filter.To) {
+		return false
+	}
+
+	return true
 }

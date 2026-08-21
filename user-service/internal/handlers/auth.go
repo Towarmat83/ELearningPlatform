@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/genesary/pupitre/user-service/internal/metrics"
@@ -350,6 +351,7 @@ func (s *State) Login(writer http.ResponseWriter, request *http.Request) {
 
 	addToDefaultGroup(ctx, s.Repos.Groups, row.user.ID)
 	syncGroupEnrollments(ctx, s.Repos.Groups, row.user.ID)
+	s.touchLastLogin(ctx, row.user.ID)
 	s.JSON(writer, http.StatusOK, authResponse{Token: token, User: row.user})
 }
 
@@ -572,4 +574,19 @@ func (s *State) applyNewPassword(ctx context.Context, subject, newPassword strin
 	}
 
 	return 0, "", true
+}
+
+// touchLastLogin updates lastloginat for the user identified by userIDStr.
+// Failures are logged at warn level only — a login should not fail because
+// of a best-effort timestamp update.
+func (s *State) touchLastLogin(ctx context.Context, userIDStr string) {
+	id, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return
+	}
+
+	touchErr := s.Repos.Users.TouchLastLogin(ctx, id)
+	if touchErr != nil {
+		zap.L().Warn("touch last login", zap.Error(touchErr))
+	}
 }

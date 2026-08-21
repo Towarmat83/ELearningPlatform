@@ -17,6 +17,7 @@ type Repositories struct {
 	SkillLevels     SkillLevelRepository
 	SessionBookings SessionBookingRepository
 	XP              XPRepository
+	Export          ExportRepository
 }
 
 // NewGormRepositories builds a Repositories backed by gdb.
@@ -34,5 +35,6 @@ func NewGormRepositories(gdb *gorm.DB) *Repositories {
 		SkillLevels:     NewGormSkillLevelRepository(gdb),
 		SessionBookings: NewGormSessionBookingRepository(gdb),
 		XP:              NewGormXPRepository(gdb),
+		Export:          NewGormExportRepository(gdb),
 	}
 }

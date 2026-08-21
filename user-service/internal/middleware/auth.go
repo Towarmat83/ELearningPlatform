@@ -187,3 +187,41 @@ func Manager(secret string) func(http.Handler) http.Handler {
 func Admin(secret string) func(http.Handler) http.Handler {
 	return requireRole(secret, roleAdmin, "Admin access required")
 }
+
+// ManagerOrAdmin returns middleware that requires a valid bearer token whose
+// claims carry either the manager or admin role.
+func ManagerOrAdmin(secret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			auth := req.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, "Bearer ") {
+				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
+
+				return
+			}
+
+			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
+			if err != nil {
+				zap.L().Error("token verification failed", zap.Error(err))
+				httpErr(resp, http.StatusUnauthorized, "Invalid token")
+
+				return
+			}
+
+			if claims.Subject == "" {
+				httpErr(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
+
+				return
+			}
+
+			if claims.Role != roleManager && claims.Role != roleAdmin {
+				httpErr(resp, http.StatusForbidden, "Manager or admin access required")
+
+				return
+			}
+
+			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
+			next.ServeHTTP(resp, req.WithContext(ctx))
+		})
+	}
+}

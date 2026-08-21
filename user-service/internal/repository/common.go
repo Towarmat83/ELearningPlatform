@@ -13,12 +13,18 @@ var returningAll = clause.Returning{} //nolint:gochecknoglobals // stateless cla
 // Column names shared by ON CONFLICT clauses and Updates() maps across
 // multiple repository files.
 const (
-	colName       = "name"
-	colEmail      = "email"
-	colUsername   = "username"
-	colUpdatedAt  = "updatedat"
-	colCourseSlug = "courseslug"
-	colUserID     = "userid"
+	colName        = "name"
+	colEmail       = "email"
+	colUsername    = "username"
+	colUpdatedAt   = "updatedat"
+	colCourseSlug  = "courseslug"
+	colUserID      = "userid"
+	colCreatedAt   = "createdat"
+	colMaxScore    = "maxscore"
+	colCompletedAt = "completed_at"
+	colLessonSlug  = "lessonslug"
+	colPassed      = "passed"
+	colSource      = "source"
 )
 
 // Platform role values, shared by group-role-mapping derivation and the

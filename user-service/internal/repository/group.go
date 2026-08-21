@@ -570,7 +570,7 @@ func syncGroupMembership(groupTx *gorm.DB, userID, name, source, currentRole str
 
 	err := groupTx.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: colName}},
-		DoUpdates: clause.Assignments(map[string]any{"source": source, colUpdatedAt: gorm.Expr("NOW()")}),
+		DoUpdates: clause.Assignments(map[string]any{colSource: source, colUpdatedAt: gorm.Expr("NOW()")}),
 	}).Create(&group).Error
 	if err != nil {
 		return currentRole, false, fmt.Errorf("upsert group %q: %w", name, err)

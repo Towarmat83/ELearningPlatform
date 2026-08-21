@@ -280,6 +280,7 @@ type moduleProgressRequest struct {
 	CourseSlug  string `json:"courseSlug"`
 	ModuleIndex int    `json:"moduleIndex"`
 	ModuleSlug  string `json:"moduleSlug"`
+	ModuleType  string `json:"moduleType"`
 	Score       int    `json:"score"`
 	MaxScore    int    `json:"maxScore"`
 	Passed      bool   `json:"passed"`
@@ -290,12 +291,13 @@ type moduleProgressRequest struct {
 const recordModuleProgressTimeout = 10 * time.Second
 
 // recordModuleProgress sends quiz results to user-service asynchronously.
-func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug string, idx, score, maxScore int, passed bool) {
+func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug, moduleType string, idx, score, maxScore int, passed bool) {
 	body, err := json.Marshal(moduleProgressRequest{
 		UserID:      userID,
 		CourseSlug:  courseSlug,
 		ModuleIndex: idx,
 		ModuleSlug:  moduleSlug,
+		ModuleType:  moduleType,
 		Score:       score,
 		MaxScore:    maxScore,
 		Passed:      passed,
@@ -999,7 +1001,7 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 	// Record cooldowns for wrong answers.
 	respCooldowns := s.recordQuestionCooldowns(userID, courseSlug, idx, result.QuestionResults, cooldownSpec, mod.MaxAttemptsPerQuestion, mod.LockOnMaxAttempts)
 
-	s.recordModuleProgress(courseSlug, userID, mod.Slug(), idx, result.TotalScore, result.MaxScore, result.Passed) //nolint:contextcheck // fire-and-forget async POST detached from the request context by design
+	s.recordModuleProgress(courseSlug, userID, mod.Slug(), mod.Type, idx, result.TotalScore, result.MaxScore, result.Passed) //nolint:contextcheck // fire-and-forget async POST detached from the request context by design
 
 	if result.Passed && isLastMeaningfulModule(course.Modules, fullIdx) &&
 		s.allQuizModulesPassed(req.Context(), course, userID, courseSlug, mod.Slug()) {

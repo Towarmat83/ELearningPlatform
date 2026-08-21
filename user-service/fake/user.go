@@ -653,6 +653,25 @@ func (f *UserRepository) UpsertMockStudent(_ context.Context, username, email, h
 	return newID, nil
 }
 
+// TouchLastLogin updates the lastloginat field for the given user.
+func (f *UserRepository) TouchLastLogin(_ context.Context, userID uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
+
+	now := time.Now()
+	i := f.findIndexByID(userID)
+
+	if i >= 0 {
+		f.users[i].LastLoginAt = &now
+	}
+
+	return nil
+}
+
 // findIndexByID returns the index of the user with the given id, or -1.
 func (f *UserRepository) findIndexByID(id uuid.UUID) int {
 	for i := range f.users {

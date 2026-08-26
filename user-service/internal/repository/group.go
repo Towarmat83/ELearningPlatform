@@ -27,6 +27,8 @@ type GroupRow struct {
 	ID          string
 	Name        string
 	Source      string
+	ParentID    string
+	Depth       int
 	CreatedAt   string
 	MemberCount int64
 	MappedRole  string
@@ -199,13 +201,16 @@ func (r *gormGroupRepository) List(ctx context.Context) ([]GroupRow, error) {
 	var rows []GroupRow
 
 	err := r.db.WithContext(ctx).Table("groups AS g").
-		Select(`g.id::text AS id, g.name, g.source, g.createdat::text AS created_at,
+		Select(`g.id::text AS id, g.name, g.source,
+			COALESCE(g.parent_id::text, '') AS parent_id,
+			g.depth,
+			g.createdat::text AS created_at,
 			COUNT(ug.userid) AS member_count,
 			COALESCE(grm.platformrole, '') AS mapped_role`).
 		Joins("LEFT JOIN user_groups ug ON ug.groupid = g.id").
 		Joins("LEFT JOIN group_role_mappings grm ON grm.groupname = g.name").
-		Group("g.id, g.name, g.source, g.createdat, grm.platformrole").
-		Order("g.name").
+		Group("g.id, g.name, g.source, g.parent_id, g.depth, g.createdat, grm.platformrole").
+		Order("g.depth, g.name").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list groups: %w", err)

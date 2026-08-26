@@ -229,7 +229,7 @@ import Admin from '../../../layouts/Admin.astro';
           ${toggleBtn}
           <div style="flex:1;min-width:0">
             <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${node.name}</div>
-            <div style="font-size:.75rem;color:var(--ink-soft)">${node.memberCount} membre${node.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">${node.source}</span>${node.depth > 0 ? ' · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">sous-groupe</span>' : ''}</div>
+            <div style="font-size:.75rem;color:var(--ink-soft)">${node.memberCount} membre${node.memberCount !== 1 ? 's' : ''}${node.source !== 'local' ? ' · <span class="badge badge-orange" style="font-size:.7rem;padding:1px 5px">' + node.source + '</span>' : ''}${node.depth > 0 ? ' · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">sous-groupe</span>' : ''}</div>
           </div>
           ${roleBadge}
           ${actions}

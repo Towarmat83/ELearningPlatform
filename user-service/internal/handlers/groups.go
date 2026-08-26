@@ -288,6 +288,8 @@ func (s *State) ListGroups(writer http.ResponseWriter, r *http.Request) {
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Source      string `json:"source"`
+		ParentID    string `json:"parentId"`
+		Depth       int    `json:"depth"`
 		CreatedAt   string `json:"createdAt"`
 		MemberCount int64  `json:"memberCount"`
 		MappedRole  string `json:"mappedRole"`
@@ -296,8 +298,9 @@ func (s *State) ListGroups(writer http.ResponseWriter, r *http.Request) {
 	groups := make([]groupRow, 0, len(rows))
 	for _, row := range rows {
 		groups = append(groups, groupRow{
-			ID: row.ID, Name: row.Name, Source: row.Source, CreatedAt: row.CreatedAt,
-			MemberCount: row.MemberCount, MappedRole: row.MappedRole,
+			ID: row.ID, Name: row.Name, Source: row.Source,
+			ParentID: row.ParentID, Depth: row.Depth,
+			CreatedAt: row.CreatedAt, MemberCount: row.MemberCount, MappedRole: row.MappedRole,
 		})
 	}
 

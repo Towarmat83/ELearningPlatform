@@ -254,6 +254,10 @@ var foreignKeys = []foreignKey{
 		Name: "user_xp_events_userid_fkey",
 		DDL:  "ALTER TABLE user_xp_events ADD CONSTRAINT user_xp_events_userid_fkey FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE",
 	},
+	{
+		Name: "groups_parent_id_fkey",
+		DDL:  "ALTER TABLE groups ADD CONSTRAINT groups_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES groups(id) ON DELETE RESTRICT",
+	},
 }
 
 // ensureForeignKeys adds every entry in foreignKeys that isn't already

@@ -573,6 +573,111 @@ func (f *GroupRepository) ListMemberIDs(_ context.Context, groupID string) ([]st
 	return ids, nil
 }
 
+// CreateSubgroup adds a child group under parentID in the fake store.
+func (f *GroupRepository) CreateSubgroup(_ context.Context, name, parentID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return "", f.Err
+	}
+
+	parentUUID, err := uuid.Parse(parentID)
+	if err != nil {
+		return "", fmt.Errorf("parse parent id: %w", err)
+	}
+
+	groupID := uuid.New()
+	f.Groups = append(f.Groups, models.Group{
+		ID:       groupID,
+		Name:     name,
+		Source:   authProviderLocal,
+		ParentID: &parentUUID,
+	})
+
+	return groupID.String(), nil
+}
+
+// GetByID returns the group with the given ID.
+func (f *GroupRepository) GetByID(_ context.Context, groupID string) (*models.Group, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	for i, g := range f.Groups {
+		if g.ID.String() == groupID {
+			return &f.Groups[i], nil
+		}
+	}
+
+	return nil, errors.New("group not found")
+}
+
+// GetSubgroups returns direct children of parentID.
+func (f *GroupRepository) GetSubgroups(_ context.Context, parentID string) ([]repository.GroupRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	var rows []repository.GroupRow
+
+	for _, g := range f.Groups {
+		if g.ParentID != nil && g.ParentID.String() == parentID {
+			rows = append(rows, repository.GroupRow{ID: g.ID.String(), Name: g.Name, Source: g.Source})
+		}
+	}
+
+	return rows, nil
+}
+
+// GetAncestors returns an empty list in the fake (path traversal is a no-op).
+func (f *GroupRepository) GetAncestors(_ context.Context, _ string) ([]repository.GroupRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return []repository.GroupRow{}, f.Err
+}
+
+// GetDescendants returns an empty list in the fake (path traversal is a no-op).
+func (f *GroupRepository) GetDescendants(_ context.Context, _ string) ([]repository.GroupRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return []repository.GroupRow{}, f.Err
+}
+
+// MoveGroup is a no-op in the fake.
+func (f *GroupRepository) MoveGroup(_ context.Context, _ string, _ *string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return f.Err
+}
+
+// HasChildren reports whether the group has any direct children.
+func (f *GroupRepository) HasChildren(_ context.Context, groupID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return false, f.Err
+	}
+
+	for _, g := range f.Groups {
+		if g.ParentID != nil && g.ParentID.String() == groupID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // applyGroupMembership adds userID to the group named name (creating it if
 // absent) and returns the updated userGroups slice, the (possibly updated)
 // role, and whether a group-role mapping applied.

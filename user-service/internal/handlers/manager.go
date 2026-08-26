@@ -290,6 +290,56 @@ func (s *State) ManagerCreateGroup(writer http.ResponseWriter, request *http.Req
 	s.JSON(writer, http.StatusCreated, map[string]string{"id": groupID, groupsRespKeyMessage: groupsMsgCreated})
 }
 
+// ManagerCreateSubgroup godoc
+// @Summary   Create a subgroup under a group the manager owns
+// @Tags      Manager
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Parent group UUID"
+// @Param     body     object  true    "name"
+// @Success   201  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   403  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
+// @Router    /api/manager/groups/{groupId}/subgroups [post].
+func (s *State) ManagerCreateSubgroup(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	claims := s.claims(request)
+	parentID := param(request, "groupId")
+
+	owns, err := s.managerOwnsGroup(request, claims.Subject, parentID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if !owns {
+		s.Error(writer, http.StatusForbidden, "Group not in manager scope")
+
+		return
+	}
+
+	var body managerCreateGroupBody
+
+	decodeErr := decode(request, &body)
+	if decodeErr != nil || body.Name == "" {
+		s.Error(writer, http.StatusBadRequest, "name required")
+
+		return
+	}
+
+	newID, err := s.Repos.Groups.CreateSubgroup(ctx, body.Name, parentID)
+	if err != nil {
+		s.Error(writer, http.StatusConflict, err.Error())
+
+		return
+	}
+
+	s.JSON(writer, http.StatusCreated, map[string]string{"id": newID, groupsRespKeyMessage: groupsMsgCreated})
+}
+
 // ManagerDeleteGroup godoc
 // @Summary   Delete a group the manager owns (is member of)
 // @Tags      Manager

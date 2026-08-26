@@ -527,15 +527,18 @@ func (r *gormGroupRepository) GetGroupsByUserID(ctx context.Context, userID stri
 	var rows []GroupRow
 
 	err := r.db.WithContext(ctx).Table("groups AS g").
-		Select(`g.id::text AS id, g.name, g.source, g.createdat::text AS created_at,
+		Select(`g.id::text AS id, g.name, g.source,
+			COALESCE(g.parent_id::text, '') AS parent_id,
+			g.depth,
+			g.createdat::text AS created_at,
 			COUNT(ug2.userid) AS member_count,
 			COALESCE(grm.platformrole, '') AS mapped_role`).
 		Joins("JOIN user_groups ug ON ug.groupid = g.id").
 		Joins("LEFT JOIN user_groups ug2 ON ug2.groupid = g.id").
 		Joins("LEFT JOIN group_role_mappings grm ON grm.groupname = g.name").
 		Where("ug.userid = ?::uuid", userID).
-		Group("g.id, g.name, g.source, g.createdat, grm.platformrole").
-		Order("g.name").
+		Group("g.id, g.name, g.source, g.parent_id, g.depth, g.createdat, grm.platformrole").
+		Order("g.depth, g.name").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("get groups by user id: %w", err)

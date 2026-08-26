@@ -25,6 +25,8 @@ type groupInfo struct {
 type managerGroupRow struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
+	ParentID    string `json:"parentId"`
+	Depth       int    `json:"depth"`
 	MemberCount int64  `json:"memberCount"`
 }
 
@@ -250,7 +252,11 @@ func (s *State) ManagerListGroups(writer http.ResponseWriter, request *http.Requ
 			continue
 		}
 
-		result = append(result, managerGroupRow{ID: grp.ID, Name: grp.Name, MemberCount: grp.MemberCount})
+		result = append(result, managerGroupRow{
+			ID: grp.ID, Name: grp.Name,
+			ParentID: grp.ParentID, Depth: grp.Depth,
+			MemberCount: grp.MemberCount,
+		})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{groupsRespKeyGroups: result})

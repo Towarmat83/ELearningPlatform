@@ -89,6 +89,37 @@ import Manager from '../../../layouts/Manager.astro';
     let subgroupParentId = '';
     let allUsers: any[] = [];
 
+    function buildTree(flat: any[]) {
+      const byId = new Map(flat.map((g: any) => [g.id, { ...g, children: [] as any[] }]));
+      const roots: any[] = [];
+      for (const g of flat) {
+        const node = byId.get(g.id)!;
+        if (g.parentId && byId.has(g.parentId)) byId.get(g.parentId)!.children.push(node);
+        else roots.push(node);
+      }
+      return roots;
+    }
+
+    function renderNode(node: any, indent: number): string {
+      const indentPx = indent * 20;
+      const hasChildren = node.children.length > 0;
+      const toggle = hasChildren
+        ? `<span style="font-size:.7rem;color:var(--ink-soft);margin-right:4px">${'└'}</span>`
+        : indent > 0 ? `<span style="display:inline-block;width:16px;flex-shrink:0"></span>` : '';
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);padding-left:${indentPx + 18}px">
+          ${indent > 0 ? `<span style="color:var(--ink-soft);font-size:.8rem;flex-shrink:0">└</span>` : ''}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500">${node.name}</div>
+            <div style="font-size:.78rem;color:var(--ink-soft);margin-top:2px">${node.memberCount} membre${node.memberCount !== 1 ? 's' : ''}${node.depth > 0 ? ' · sous-groupe' : ''}</div>
+          </div>
+          <button class="btn btn-secondary btn-sm members-btn" data-id="${node.id}" data-name="${node.name}">Membres</button>
+          <button class="btn btn-secondary btn-sm subgroup-btn" data-id="${node.id}" data-name="${node.name}" title="Créer un sous-groupe">+</button>
+          <button class="btn btn-sm del-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${node.id}" data-name="${node.name}">Supprimer</button>
+        </div>
+        ${node.children.map((c: any) => renderNode(c, indent + 1)).join('')}`;
+    }
+
     async function loadGroups() {
       const el = document.getElementById('groups-list')!;
       try {
@@ -97,17 +128,8 @@ import Manager from '../../../layouts/Manager.astro';
           el.innerHTML = '<p class="text-soft text-sm" style="padding:20px">Aucun groupe. Créez-en un pour commencer.</p>';
           return;
         }
-        el.innerHTML = groups.map((g: any) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:500">${g.name}</div>
-              <div style="font-size:.78rem;color:var(--ink-soft);margin-top:2px">${g.memberCount} membre${g.memberCount !== 1 ? 's' : ''}</div>
-            </div>
-            <button class="btn btn-secondary btn-sm members-btn" data-id="${g.id}" data-name="${g.name}">Membres</button>
-            <button class="btn btn-secondary btn-sm subgroup-btn" data-id="${g.id}" data-name="${g.name}" title="Créer un sous-groupe">+</button>
-            <button class="btn btn-sm del-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${g.id}" data-name="${g.name}">Supprimer</button>
-          </div>
-        `).join('');
+        const roots = buildTree(groups);
+        el.innerHTML = roots.map((n: any) => renderNode(n, 0)).join('');
         el.querySelectorAll<HTMLButtonElement>('.members-btn').forEach(btn => {
           btn.addEventListener('click', () => openMembers(btn.dataset.id!, btn.dataset.name!));
         });

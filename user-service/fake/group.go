@@ -671,7 +671,7 @@ func (f *GroupRepository) HasMembers(_ context.Context, groupID string) (bool, e
 
 	gid, parseErr := uuid.Parse(groupID)
 	if parseErr != nil {
-		return false, fmt.Errorf("parse group uuid: %w", parseErr)
+		return false, nil
 	}
 
 	for _, ug := range f.UserGroup {

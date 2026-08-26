@@ -166,6 +166,7 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 
 		group.Get("/api/admin/groups", state.ListGroups)
 		group.Post("/api/admin/groups", state.CreateGroup)
+		group.Put("/api/admin/groups/{groupId}", state.UpdateGroup)
 		group.Delete("/api/admin/groups/{groupId}", state.DeleteGroup)
 		group.Get("/api/admin/groups/{groupId}/members", state.ListGroupMembers)
 		group.Post("/api/admin/groups/{groupId}/members", state.AddGroupMember)

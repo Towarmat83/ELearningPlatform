@@ -119,6 +119,19 @@ func (s *State) DeleteGroup(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	hasMembers, err := s.Repos.Groups.HasMembers(req.Context(), groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if hasMembers {
+		s.Error(writer, http.StatusConflict, "Cannot delete a group that has members")
+
+		return
+	}
+
 	deleted, err := s.Repos.Groups.Delete(req.Context(), groupID)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
@@ -133,6 +146,49 @@ func (s *State) DeleteGroup(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgDeleted})
+}
+
+// UpdateGroup godoc
+// @Summary   Update a local group's name
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Group UUID"
+// @Param     body     object  true    "name"
+// @Success   200  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   404  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
+// @Router    /api/admin/groups/{groupId} [put].
+func (s *State) UpdateGroup(writer http.ResponseWriter, req *http.Request) {
+	groupID := chi.URLParam(req, "groupId")
+
+	var body struct {
+		Name string `json:"name"`
+	}
+
+	decodeErr := decode(req, &body)
+	if decodeErr != nil || body.Name == "" {
+		s.Error(writer, http.StatusBadRequest, "name required")
+
+		return
+	}
+
+	err := s.Repos.Groups.UpdateGroup(req.Context(), groupID, body.Name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			s.Error(writer, http.StatusNotFound, "Group not found or not a local group")
+
+			return
+		}
+
+		s.Error(writer, http.StatusConflict, "A group with this name already exists")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Group updated"})
 }
 
 // CreateSubgroup godoc

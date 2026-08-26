@@ -21,6 +21,22 @@ const defaultGroupName = "everyone"
 // admin, as opposed to one mirrored from an IdP during SSO login.
 const groupSourceLocal = "local"
 
+// GroupMemberRow is a single member row returned by ListMembersRecursive,
+// flagged with direct vs. inherited membership.
+type GroupMemberRow struct {
+	ID               string  `json:"id"`
+	Username         string  `json:"username"`
+	Email            string  `json:"email"`
+	Role             string  `json:"role"`
+	IsActive         bool    `json:"isActive"`
+	AvatarURL        *string `json:"avatarUrl,omitempty"`
+	Bio              *string `json:"bio,omitempty"`
+	AuthProvider     string  `json:"authProvider"`
+	CreatedAt        string  `json:"createdAt"`
+	EnrolledCourses  int64   `json:"enrolledCourses"`
+	DirectMembership bool    `json:"directMembership"`
+}
+
 // GroupRow is a single row of the admin group listing, joined with its
 // member count and any mapped platform role.
 type GroupRow struct {
@@ -74,6 +90,13 @@ type GroupRepository interface {
 	GetDescendants(ctx context.Context, id string) ([]GroupRow, error)
 	MoveGroup(ctx context.Context, id string, newParentID *string) error
 	HasChildren(ctx context.Context, id string) (bool, error)
+	// HasMembers reports whether the group identified by id has members.
+	HasMembers(ctx context.Context, id string) (bool, error)
+	// UpdateGroup renames the local group identified by id.
+	UpdateGroup(ctx context.Context, id, name string) error
+	// ListMembersRecursive returns members of groupID and all subgroups,
+	// flagging direct vs. inherited membership.
+	ListMembersRecursive(ctx context.Context, groupID string) ([]GroupMemberRow, error)
 
 	// Login-time sync (auth.go/oauth.go)
 	AddToDefault(ctx context.Context, userID string) error
@@ -817,6 +840,71 @@ func (r *gormGroupRepository) MoveGroup(ctx context.Context, groupID string, new
 	}
 
 	return nil
+}
+
+// HasMembers reports whether the group identified by id has any user members.
+func (r *gormGroupRepository) HasMembers(ctx context.Context, id string) (bool, error) {
+	var count int64
+
+	err := r.db.WithContext(ctx).Model(&models.UserGroup{}).
+		Where("groupid = ?::uuid", id).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check members: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+// UpdateGroup renames the local group identified by id.
+func (r *gormGroupRepository) UpdateGroup(ctx context.Context, id, name string) error {
+	result := r.db.WithContext(ctx).Model(&models.Group{}).
+		Where("id = ?::uuid AND source = ?", id, groupSourceLocal).
+		Update("name", name)
+	if result.Error != nil {
+		return fmt.Errorf("update group: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("group not found or not a local group")
+	}
+
+	return nil
+}
+
+// ListMembersRecursive returns members of groupID and all its subgroups,
+// flagging whether each user is a direct member of groupID.
+func (r *gormGroupRepository) ListMembersRecursive(ctx context.Context, groupID string) ([]GroupMemberRow, error) {
+	var group models.Group
+
+	findErr := r.db.WithContext(ctx).Where("id = ?::uuid", groupID).First(&group).Error
+	if findErr != nil {
+		return nil, fmt.Errorf("get group for recursive members: %w", findErr)
+	}
+
+	var rows []GroupMemberRow
+
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT DISTINCT u.id::text AS id, u.username, u.email, u.role,
+			u.isactive AS is_active, u.avatarurl AS avatar_url, u.bio,
+			u.authprovider AS auth_provider, u.createdat::text AS created_at,
+			0 AS enrolled_courses,
+			EXISTS (
+				SELECT 1 FROM user_groups ug2
+				WHERE ug2.userid = u.id AND ug2.groupid = ?::uuid
+			) AS direct_membership
+		FROM users u
+		JOIN user_groups ug ON ug.userid = u.id
+		JOIN groups g ON g.id = ug.groupid
+		WHERE g.id = ?::uuid OR g.path LIKE ?
+		ORDER BY u.username`,
+		groupID, groupID, group.Path+"/%",
+	).Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list recursive members: %w", err)
+	}
+
+	return rows, nil
 }
 
 // HasChildren reports whether the group identified by id has direct children.

@@ -70,6 +70,21 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
   </div>
 
+  <!-- Edit group modal -->
+  <div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
+    <div class="card" style="width:380px;max-width:95vw;padding:28px">
+      <h3 style="margin-bottom:20px">Renommer le groupe</h3>
+      <div class="form-group" style="margin-bottom:20px">
+        <label class="label">Nouveau nom</label>
+        <input id="edit-group-name" class="input" placeholder="ex : equipe-rh" />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary" id="edit-cancel">Annuler</button>
+        <button class="btn btn-primary" id="edit-confirm">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Create subgroup modal -->
   <div id="subgroup-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
     <div class="card" style="width:380px;max-width:95vw;padding:28px">
@@ -107,9 +122,13 @@ import Admin from '../../../layouts/Admin.astro';
   <!-- Members modal -->
   <div id="members-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
     <div class="card" style="width:520px;max-width:95vw;padding:28px;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <h3 id="members-modal-title">Membres du groupe</h3>
         <button id="members-close" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:var(--ink-soft)">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <input type="checkbox" id="recursive-toggle" style="cursor:pointer" />
+        <label for="recursive-toggle" style="font-size:.82rem;cursor:pointer;color:var(--ink-soft)">Inclure les membres des sous-groupes</label>
       </div>
       <div style="margin-bottom:20px">
         <h4 style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:10px">Membres actuels</h4>
@@ -145,6 +164,8 @@ import Admin from '../../../layouts/Admin.astro';
     let selectedGroupId = '';
     let subgroupParentId = '';
     let moveGroupId = '';
+    let editGroupId = '';
+    let membersRecursive = false;
     const expanded = new Set<string>();
 
     // ── Tree helpers ──────────────────────────────────────────────────────────
@@ -198,6 +219,7 @@ import Admin from '../../../layouts/Admin.astro';
       const actions = [
         `<button class="btn btn-secondary btn-sm members-btn" data-id="${node.id}" data-name="${node.name}" style="flex-shrink:0">Membres</button>`,
         isLocal && !isDefault ? `<button class="btn btn-secondary btn-sm subgroup-btn" data-id="${node.id}" data-name="${node.name}" style="flex-shrink:0" title="Créer un sous-groupe">+</button>` : '',
+        isLocal && !isDefault ? `<button class="btn btn-secondary btn-sm edit-group-btn" data-id="${node.id}" data-name="${node.name}" style="flex-shrink:0" title="Renommer">✎</button>` : '',
         isLocal && !isDefault ? `<button class="btn btn-secondary btn-sm move-btn" data-id="${node.id}" data-name="${node.name}" style="flex-shrink:0" title="Déplacer">⇄</button>` : '',
         isLocal && !isDefault ? `<button class="btn btn-sm del-group-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-id="${node.id}" data-name="${node.name}">✕</button>` : '',
       ].filter(Boolean).join('');
@@ -207,7 +229,7 @@ import Admin from '../../../layouts/Admin.astro';
           ${toggleBtn}
           <div style="flex:1;min-width:0">
             <div style="font-weight:500;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${node.name}</div>
-            <div style="font-size:.75rem;color:var(--ink-soft)">${node.memberCount} membre${node.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">${node.source}</span>${node.depth > 0 ? ' · profondeur ' + node.depth : ''}</div>
+            <div style="font-size:.75rem;color:var(--ink-soft)">${node.memberCount} membre${node.memberCount !== 1 ? 's' : ''} · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">${node.source}</span> · <span class="badge badge-gray" style="font-size:.7rem;padding:1px 5px">profondeur ${node.depth}</span></div>
           </div>
           ${roleBadge}
           ${actions}
@@ -257,6 +279,9 @@ import Admin from '../../../layouts/Admin.astro';
       });
       el.querySelectorAll<HTMLButtonElement>('.subgroup-btn').forEach(btn => {
         btn.addEventListener('click', () => openSubgroupModal(btn.dataset.id!, btn.dataset.name!));
+      });
+      el.querySelectorAll<HTMLButtonElement>('.edit-group-btn').forEach(btn => {
+        btn.addEventListener('click', () => openEditModal(btn.dataset.id!, btn.dataset.name!));
       });
       el.querySelectorAll<HTMLButtonElement>('.move-btn').forEach(btn => {
         btn.addEventListener('click', () => openMoveModal(btn.dataset.id!, btn.dataset.name!));
@@ -310,6 +335,36 @@ import Admin from '../../../layouts/Admin.astro';
       }
     });
 
+    // ── Edit group ────────────────────────────────────────────────────────────
+    function openEditModal(groupId: string, currentName: string) {
+      editGroupId = groupId;
+      (document.getElementById('edit-group-name') as HTMLInputElement).value = currentName;
+      document.getElementById('edit-modal')!.style.display = 'flex';
+    }
+
+    document.getElementById('edit-cancel')!.addEventListener('click', () => {
+      document.getElementById('edit-modal')!.style.display = 'none';
+    });
+    document.getElementById('edit-modal')!.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('edit-modal')) document.getElementById('edit-modal')!.style.display = 'none';
+    });
+    document.getElementById('edit-confirm')!.addEventListener('click', async () => {
+      const name = (document.getElementById('edit-group-name') as HTMLInputElement).value.trim();
+      if (!name) { (window as any).showToast?.('Nom requis', 'error'); return; }
+      const btn = document.getElementById('edit-confirm') as HTMLButtonElement;
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        await api(`/admin/groups/${editGroupId}`, { method: 'PUT', body: { name } });
+        document.getElementById('edit-modal')!.style.display = 'none';
+        (window as any).showToast?.('Groupe renommé', 'success');
+        await loadGroups();
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Enregistrer';
+      }
+    });
+
     // ── Move group ────────────────────────────────────────────────────────────
     function openMoveModal(groupId: string, groupName: string) {
       moveGroupId = groupId;
@@ -358,8 +413,15 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     // ── Members modal ─────────────────────────────────────────────────────────
+    document.getElementById('recursive-toggle')!.addEventListener('change', async (e) => {
+      membersRecursive = (e.target as HTMLInputElement).checked;
+      await refreshMembers();
+    });
+
     async function openMembers(groupId: string, groupName: string) {
       selectedGroupId = groupId;
+      membersRecursive = false;
+      (document.getElementById('recursive-toggle') as HTMLInputElement).checked = false;
       document.getElementById('members-modal-title')!.textContent = `Membres — ${groupName}`;
       document.getElementById('members-modal')!.style.display = 'flex';
       await refreshMembers();
@@ -374,20 +436,27 @@ import Admin from '../../../layouts/Admin.astro';
     async function refreshMembers() {
       const el = document.getElementById('members-list')!;
       el.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="spinner" style="width:20px;height:20px"></div></div>';
+      const suffix = membersRecursive ? '?recursive=true' : '';
       try {
-        const { members } = await api(`/admin/groups/${selectedGroupId}/members`);
+        const { members } = await api(`/admin/groups/${selectedGroupId}/members${suffix}`);
         const list: any[] = members || [];
         if (!list.length) { el.innerHTML = '<p class="text-soft text-sm">Aucun membre.</p>'; return; }
-        el.innerHTML = list.map((u: any) => `
+        el.innerHTML = list.map((u: any) => {
+          const memberBadge = membersRecursive
+            ? `<span class="badge ${u.directMembership ? 'badge-blue' : 'badge-gray'}" style="flex-shrink:0;font-size:.7rem">${u.directMembership ? 'Direct' : 'Hérité'}</span>`
+            : '';
+          return `
           <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
             <div style="width:30px;height:30px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;color:var(--blue);flex-shrink:0">${(u.username||'?')[0].toUpperCase()}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:.875rem;font-weight:500">${u.username}</div>
               <div style="font-size:.75rem;color:var(--ink-soft)">${u.email}</div>
             </div>
+            ${memberBadge}
             <span class="badge ${u.role === 'admin' ? 'badge-red' : u.role === 'manager' ? 'badge-orange' : 'badge-blue'}" style="flex-shrink:0">${u.role}</span>
             <button class="btn btn-sm remove-member-btn" style="background:var(--bad-soft);color:var(--bad);flex-shrink:0" data-uid="${u.id}">Retirer</button>
-          </div>`).join('');
+          </div>`;
+        }).join('');
         el.querySelectorAll<HTMLButtonElement>('.remove-member-btn').forEach(btn => {
           btn.addEventListener('click', async () => {
             try {

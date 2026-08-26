@@ -572,16 +572,30 @@ func (s *State) AdminLeaderboard(writer http.ResponseWriter, request *http.Reque
 }
 
 // ListGroupMembers godoc
-// @Summary   List members of a group (admin)
+// @Summary   List members of a group (admin); add ?recursive=true for subtree.
 // @Tags      Admin - Groups
 // @Security  BearerAuth
 // @Produce   json
-// @Param     groupId  path  string  true  "Group UUID"
-// @Success   200      {object}  map[string]interface{}
-// @Failure   400      {object}  map[string]string
+// @Param     groupId    path   string  true   "Group UUID"
+// @Param     recursive  query  bool    false  "Include subgroup members"
+// @Success   200  {object}  map[string]interface{}
+// @Failure   400  {object}  map[string]string
 // @Router    /api/admin/groups/{groupId}/members [get].
 func (s *State) ListGroupMembers(writer http.ResponseWriter, request *http.Request) {
 	groupID := param(request, "groupId")
+
+	if request.URL.Query().Get("recursive") == "true" {
+		members, err := s.Repos.Groups.ListMembersRecursive(request.Context(), groupID)
+		if err != nil {
+			s.Error(writer, http.StatusInternalServerError, "Database error")
+
+			return
+		}
+
+		s.JSON(writer, http.StatusOK, map[string]any{adminJSONKeyMembers: members, adminJSONKeyTotal: len(members)})
+
+		return
+	}
 
 	members, err := s.Repos.Groups.ListMembers(request.Context(), groupID)
 	if err != nil {

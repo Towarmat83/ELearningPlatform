@@ -660,6 +660,62 @@ func (f *GroupRepository) MoveGroup(_ context.Context, _ string, _ *string) erro
 	return f.Err
 }
 
+// HasMembers reports whether the group has any user members.
+func (f *GroupRepository) HasMembers(_ context.Context, groupID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return false, f.Err
+	}
+
+	gid, parseErr := uuid.Parse(groupID)
+	if parseErr != nil {
+		return false, fmt.Errorf("parse group uuid: %w", parseErr)
+	}
+
+	for _, ug := range f.UserGroup {
+		if ug.GroupID == gid {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// UpdateGroup renames the local group identified by groupID.
+func (f *GroupRepository) UpdateGroup(_ context.Context, groupID, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
+
+	for i, g := range f.Groups {
+		if g.ID.String() == groupID && g.Source == authProviderLocal {
+			f.Groups[i].Name = name
+
+			return nil
+		}
+	}
+
+	return errors.New("group not found or not a local group")
+}
+
+// ListMembersRecursive returns an empty list in the fake (path
+// traversal is a no-op without a real database).
+func (f *GroupRepository) ListMembersRecursive(_ context.Context, _ string) ([]repository.GroupMemberRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	return []repository.GroupMemberRow{}, nil
+}
+
 // HasChildren reports whether the group has any direct children.
 func (f *GroupRepository) HasChildren(_ context.Context, groupID string) (bool, error) {
 	f.mu.Lock()

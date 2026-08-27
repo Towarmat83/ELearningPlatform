@@ -161,6 +161,35 @@ func (f *PathEnrollmentRepository) EnrolledInAny(_ context.Context, userID strin
 	return false, nil
 }
 
+// EnrollWithCourses enrolls userID in pathSlug and records each course slug,
+// doing nothing on conflict. In the fake, course enrollments are not tracked
+// separately — this is a no-op beyond the path enrollment.
+func (f *PathEnrollmentRepository) EnrollWithCourses(_ context.Context, userID, pathSlug string, _ []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
+
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("parse user id: %w", err)
+	}
+
+	for _, e := range f.enrollments {
+		if e.UserID == parsedID && e.PathSlug == pathSlug {
+			return nil
+		}
+	}
+
+	f.enrollments = append(
+		f.enrollments, models.PathEnrollment{UserID: parsedID, PathSlug: pathSlug, EnrolledAt: time.Now()},
+	)
+
+	return nil
+}
+
 // Unenroll removes userID's enrollment in pathSlug.
 func (f *PathEnrollmentRepository) Unenroll(_ context.Context, userID, pathSlug string) error {
 	f.mu.Lock()

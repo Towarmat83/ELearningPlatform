@@ -11,6 +11,12 @@ import (
 	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
+// pathCheckResponse is the JSON body returned by user-service
+// /internal/paths/check.
+type pathCheckResponse struct {
+	Enrolled bool `json:"enrolled"`
+}
+
 // prerequisiteResponse describes a single course prerequisite in API
 // responses.
 type prerequisiteResponse struct {
@@ -301,18 +307,10 @@ func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request)
 	})
 }
 
-// pathsContainingCourse returns the slugs of all in-memory paths that include
-// courseSlug in their ordered course list.
+// pathsContainingCourse returns the slugs of all paths that include courseSlug,
+// using the PathStore reverse index for O(1) lookup.
 func (s *State) pathsContainingCourse(courseSlug string) []string {
-	var slugs []string
-
-	for _, p := range s.Paths.List() {
-		if slices.Contains(p.Courses, courseSlug) {
-			slugs = append(slugs, p.Slug)
-		}
-	}
-
-	return slugs
+	return s.Paths.PathsForCourse(courseSlug)
 }
 
 // isEnrolledViaPath returns true if userID is enrolled in any learning path
@@ -344,11 +342,9 @@ func (s *State) isEnrolledViaPath(req *http.Request, courseSlug, userID string) 
 	if err != nil {
 		return false
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck // best-effort close in read-only helper
 
-	var result struct {
-		Enrolled bool `json:"enrolled"`
-	}
+	var result pathCheckResponse
 
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {

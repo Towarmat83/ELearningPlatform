@@ -392,29 +392,10 @@ func (s *State) ManagerListPathEnrollments(writer http.ResponseWriter, request *
 	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
 }
 
-// enrollPathCourses auto-enrolls userID in each course belonging to pathSlug.
-// Best-effort: failures are only logged so the caller's HTTP response is
-// not affected.
-func (s *State) enrollPathCourses(req *http.Request, userID, pathSlug string) {
-	detail, err := s.fetchPathDetail(req, pathSlug)
-	if err != nil {
-		zap.L().Warn("could not fetch path detail for course auto-enroll",
-			zap.String("pathSlug", pathSlug), zap.Error(err))
-
-		return
-	}
-
-	for _, courseSlug := range detail.Courses {
-		cerr := s.Repos.Enrollments.Create(req.Context(), userID, courseSlug)
-		if cerr != nil {
-			zap.L().Warn("failed to auto-enroll user in path course",
-				zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(cerr))
-		}
-	}
-}
-
 // AdminEnrollUserInPath enrolls a user in a learning path. Idempotent:
 // enrolling an already-enrolled user is a no-op.
+// The path enrollment and all course auto-enrollments are committed in a single
+// transaction so a partial failure leaves no dangling state.
 // @Summary   Enroll a user in a learning path (admin)
 // @Tags      Admin - Paths
 // @Security  BearerAuth
@@ -439,15 +420,23 @@ func (s *State) AdminEnrollUserInPath(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	err = s.Repos.Paths.Enroll(request.Context(), body.UserID, slug)
+	detail, detailErr := s.fetchPathDetail(request, slug)
+	if detailErr != nil {
+		zap.L().Warn("could not fetch path detail for enrollment", zap.String("slug", slug), zap.Error(detailErr))
+	}
+
+	var courseSlugs []string
+	if detail != nil {
+		courseSlugs = detail.Courses
+	}
+
+	err = s.Repos.Paths.EnrollWithCourses(request.Context(), body.UserID, slug, courseSlugs)
 	if err != nil {
 		zap.L().Error("failed to enroll user in path", zap.String("slug", slug), zap.String("userID", body.UserID), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-
-	s.enrollPathCourses(request, body.UserID, slug)
 
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Enrolled in path"})
 }

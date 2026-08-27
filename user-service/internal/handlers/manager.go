@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
@@ -606,14 +607,22 @@ func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	err = s.Repos.Paths.Enroll(ctx, body.UserID, slug)
+	detail, detailErr := s.fetchPathDetail(request, slug)
+	if detailErr != nil {
+		zap.L().Warn("could not fetch path detail for enrollment", zap.String("slug", slug), zap.Error(detailErr))
+	}
+
+	var courseSlugs []string
+	if detail != nil {
+		courseSlugs = detail.Courses
+	}
+
+	err = s.Repos.Paths.EnrollWithCourses(ctx, body.UserID, slug, courseSlugs)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
 		return
 	}
-
-	s.enrollPathCourses(request, body.UserID, slug)
 
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: adminMsgUserEnrolled})
 }

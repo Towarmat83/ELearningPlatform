@@ -37,6 +37,9 @@ type PathEnrollmentRepository interface {
 	// path slugs.
 	EnrolledInAny(ctx context.Context, userID string, pathSlugs []string) (bool, error)
 	Enroll(ctx context.Context, userID, pathSlug string) error
+	// EnrollWithCourses atomically enrolls userID in pathSlug and in each of
+	// courseSlugs, rolling back all inserts on any error.
+	EnrollWithCourses(ctx context.Context, userID, pathSlug string, courseSlugs []string) error
 	Unenroll(ctx context.Context, userID, pathSlug string) error
 }
 
@@ -124,6 +127,42 @@ func (r *gormPathEnrollmentRepository) Enroll(ctx context.Context, userID, pathS
 	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&enrollment).Error
 	if err != nil {
 		return fmt.Errorf("enroll in path: %w", err)
+	}
+
+	return nil
+}
+
+// EnrollWithCourses atomically enrolls userID in pathSlug and in each of
+// courseSlugs within a single DB transaction, rolling back on any failure.
+func (r *gormPathEnrollmentRepository) EnrollWithCourses(
+	ctx context.Context, userID, pathSlug string, courseSlugs []string,
+) error {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("parse user id: %w", err)
+	}
+
+	txErr := r.db.WithContext(ctx).Transaction(func(dbTx *gorm.DB) error {
+		pathEnrollment := models.PathEnrollment{UserID: uid, PathSlug: pathSlug}
+
+		txErr := dbTx.Clauses(clause.OnConflict{DoNothing: true}).Create(&pathEnrollment).Error
+		if txErr != nil {
+			return fmt.Errorf("enroll in path: %w", txErr)
+		}
+
+		for _, courseSlug := range courseSlugs {
+			courseEnrollment := models.Enrollment{UserID: userID, CourseSlug: courseSlug}
+
+			txErr = dbTx.Clauses(clause.OnConflict{DoNothing: true}).Create(&courseEnrollment).Error
+			if txErr != nil {
+				return fmt.Errorf("enroll in course %s: %w", courseSlug, txErr)
+			}
+		}
+
+		return nil
+	})
+	if txErr != nil {
+		return fmt.Errorf("enroll with courses: %w", txErr)
 	}
 
 	return nil

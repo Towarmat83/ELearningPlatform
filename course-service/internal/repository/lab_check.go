@@ -5,6 +5,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,6 +27,10 @@ type LabCheckRepository interface {
 	// ListExport returns filtered rows and their total count for export.
 	// Pass limit=0 to fetch all rows (used for CSV download).
 	ListExport(ctx context.Context, filter LabCheckFilter, limit int) ([]models.LabCheck, int64, error)
+	// StreamExport calls rowFn for each filtered row in checkedat DESC
+	// order. Rows are scanned one at a time; the full result set is never
+	// held in memory.
+	StreamExport(ctx context.Context, filter LabCheckFilter, rowFn func(*models.LabCheck) error) error
 }
 
 // LabCheckFilter holds optional filter criteria for ListExport.
@@ -97,6 +102,41 @@ func (r *gormLabCheckRepository) ListExport(ctx context.Context, filter LabCheck
 	}
 
 	return rows, total, nil
+}
+
+// StreamExport calls rowFn for each filtered lab check row in
+// checkedat DESC order. Rows are scanned one at a time so the full
+// result set is never held in memory.
+func (r *gormLabCheckRepository) StreamExport(ctx context.Context, filter LabCheckFilter, rowFn func(*models.LabCheck) error) error {
+	sqlRows, err := r.applyLabFilter(r.db.WithContext(ctx).Model(&models.LabCheck{}), filter).
+		Order("checkedat DESC").
+		Rows()
+	if err != nil {
+		return fmt.Errorf("open export cursor: %w", err)
+	}
+
+	defer func() { _ = sqlRows.Close() }()
+
+	for sqlRows.Next() {
+		var row models.LabCheck
+
+		scanErr := r.db.ScanRows(sqlRows, &row)
+		if scanErr != nil {
+			return fmt.Errorf("scan export row: %w", scanErr)
+		}
+
+		fnErr := rowFn(&row)
+		if fnErr != nil {
+			return fnErr
+		}
+	}
+
+	rowsErr := sqlRows.Err()
+	if rowsErr != nil {
+		return fmt.Errorf("export cursor error: %w", rowsErr)
+	}
+
+	return nil
 }
 
 // applyLabFilter adds WHERE clauses for each non-nil filter field.

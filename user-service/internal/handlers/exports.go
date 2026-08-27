@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -272,8 +273,15 @@ func removeHelperFields(rows []map[string]string, helperFields map[string]bool) 
 		return rows
 	}
 
+	// Collect keys first so neither the rows slice nor helperFields is
+	// modified while being iterated.
+	toDelete := make([]string, 0, len(helperFields))
+	for fieldID := range helperFields {
+		toDelete = append(toDelete, fieldID)
+	}
+
 	for _, rowData := range rows {
-		for fieldID := range helperFields {
+		for _, fieldID := range toDelete {
 			delete(rowData, fieldID)
 		}
 	}
@@ -328,10 +336,14 @@ func (s *State) fetchPathTitles(ctx context.Context) (map[string]string, error) 
 	return s.fetchTitleMap(ctx, "/api/paths", "paths")
 }
 
-// fetchTitleMap calls course-service at endpointPath, decodes the JSON array
-// stored under payloadKey, and returns a slug→title map.
+// fetchTitleMap calls the internal course-service at the given path constant
+// and returns a slug→title map. endpointPath must be a hardcoded constant —
+// it is never derived from user input.
 func (s *State) fetchTitleMap(ctx context.Context, endpointPath, payloadKey string) (map[string]string, error) {
-	rawURL := s.Config.CourseServiceURL + endpointPath
+	rawURL, joinErr := url.JoinPath(s.Config.CourseServiceURL, endpointPath)
+	if joinErr != nil {
+		return nil, fmt.Errorf("build URL for %s: %w", endpointPath, joinErr)
+	}
 
 	httpReq, buildErr := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if buildErr != nil {

@@ -184,6 +184,8 @@ func (s *State) ExportLabPreview(writer http.ResponseWriter, req *http.Request) 
 }
 
 // ExportLabDownload streams all lab check rows matching the filters as CSV.
+// Rows are written to the response one at a time — the full result set is
+// never loaded into memory.
 func (s *State) ExportLabDownload(writer http.ResponseWriter, req *http.Request) {
 	if s.LabChecks == nil {
 		s.Error(writer, http.StatusServiceUnavailable, "database not configured")
@@ -203,14 +205,6 @@ func (s *State) ExportLabDownload(writer http.ResponseWriter, req *http.Request)
 	fields := resolvedFields(body.Fields)
 	labFilter := parseLabFilter(body.Filters)
 
-	rows, _, err := s.LabChecks.ListExport(req.Context(), labFilter, 0)
-	if err != nil {
-		zap.L().Error("lab export download failed", zap.Error(err))
-		s.Error(writer, http.StatusInternalServerError, "Erreur lors de l'export")
-
-		return
-	}
-
 	filename := fmt.Sprintf("lab_checks-export-%s.csv", time.Now().Format(time.DateOnly))
 
 	writer.Header().Set("Content-Type", "text/csv; charset=utf-8")
@@ -218,11 +212,6 @@ func (s *State) ExportLabDownload(writer http.ResponseWriter, req *http.Request)
 
 	_, _ = writer.Write([]byte{0xEF, 0xBB, 0xBF})
 
-	writeLabCSV(writer, fields, rows)
-}
-
-// writeLabCSV writes a CSV of the given rows to w.
-func writeLabCSV(writer http.ResponseWriter, fields []string, rows []models.LabCheck) {
 	csvWriter := csv.NewWriter(writer)
 	csvWriter.Comma = ';'
 
@@ -244,15 +233,11 @@ func writeLabCSV(writer http.ResponseWriter, fields []string, rows []models.LabC
 		return
 	}
 
-	for rowIdx := range rows {
-		record := labCheckToRecord(&rows[rowIdx], fields)
-
-		rowErr := csvWriter.Write(record)
-		if rowErr != nil {
-			zap.L().Error("lab export write row", zap.Error(rowErr))
-
-			return
-		}
+	streamErr := s.LabChecks.StreamExport(req.Context(), labFilter, func(row *models.LabCheck) error {
+		return csvWriter.Write(labCheckToRecord(row, fields))
+	})
+	if streamErr != nil {
+		zap.L().Error("lab export download failed", zap.Error(streamErr))
 	}
 }
 

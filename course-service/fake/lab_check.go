@@ -78,6 +78,25 @@ func (f *LabCheckRepository) ListExport(_ context.Context, filter repository.Lab
 	return results, total, nil
 }
 
+// StreamExport calls rowFn for each filtered check in reverse-insertion order.
+func (f *LabCheckRepository) StreamExport(_ context.Context, filter repository.LabCheckFilter, rowFn func(*models.LabCheck) error) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	for _, check := range slices.Backward(f.checks) {
+		if !matchesLabFilter(check, filter) {
+			continue
+		}
+
+		err := rowFn(&check)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // matchesLabFilter returns true when check satisfies all non-nil filter fields.
 func matchesLabFilter(check models.LabCheck, filter repository.LabCheckFilter) bool {
 	if filter.CourseSlug != "" && check.CourseSlug != filter.CourseSlug {

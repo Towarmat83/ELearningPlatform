@@ -982,22 +982,16 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Find the module's position in the full course.Modules slice (visible modules
-	// may be a subset; isLastMeaningfulModule operates on the full list).
-	fullIdx := slices.IndexFunc(course.Modules, func(m content.Module) bool {
-		return m.Slug() == mod.Slug()
-	})
-
-	s.finalizeSubmission(writer, req, course, mod, fullIdx, questions, passingScore, cooldownSpec, userID, courseSlug, idx)
+	s.finalizeSubmission(writer, req, course, mod, modules, questions, passingScore, cooldownSpec, userID, courseSlug, idx)
 }
 
 // finalizeSubmission decodes a quiz submission body, rejects it if any of
 // the resolved questions is still under a cooldown, then scores it, records
 // per-question cooldowns and overall module progress, and writes the
-// resulting submitResponse to the client. When the passed quiz is the last
-// meaningful module of the course, it also notifies user-service that the
-// course is complete.
-func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, course *content.Course, mod content.Module, fullIdx int, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
+// resulting submitResponse to the client. When passing this quiz was the
+// last thing the course was waiting for, it also notifies user-service that
+// the course is complete.
+func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, course *content.Course, mod content.Module, modules []content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
 	submission, accepted := s.acceptSubmission(writer, req, questions, userID, courseSlug, idx)
 	if !accepted {
 		return
@@ -1016,8 +1010,7 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 
 	s.recordModuleProgress(courseSlug, userID, mod.Slug(), mod.Type, idx, result.TotalScore, result.MaxScore, result.Passed) //nolint:contextcheck // fire-and-forget async POST detached from the request context by design
 
-	if result.Passed && isLastMeaningfulModule(course.Modules, fullIdx) &&
-		s.allQuizModulesPassed(req.Context(), course, userID, courseSlug, mod.Slug()) {
+	if result.Passed && s.courseCompleted(req, modules, userID, courseSlug, mod.Slug(), "") {
 		s.notifyCourseComplete(req, course, userID)
 	}
 
@@ -1187,33 +1180,48 @@ func (s *State) recordQuestionCooldowns(
 	return respCooldowns
 }
 
-// allQuizModulesPassed returns true when every quiz-bearing module in the
-// course has been passed by userID. currentSlug names the quiz module that
-// just passed in the current request; because recordModuleProgress is
-// fire-and-forget, it may not yet be persisted in the user-service DB, so it
-// is credited without a round-trip. Pass an empty string when calling from a
-// lesson-completion context (no module just passed in the current request).
-func (s *State) allQuizModulesPassed(ctx context.Context, course *content.Course, userID, courseSlug, currentSlug string) bool {
-	var quizSlugs []string
+// courseCompleted returns true when userID has finished every module of the
+// course: quiz modules have to be passed, all others viewed. Hidden modules
+// are ignored — learners never see them, so they cannot hold a course back.
+//
+// A course is only complete once the trailing quiz is passed, and passing it
+// completes the course whatever order the modules were taken in: neither the
+// last lesson nor the quiz is special-cased.
+//
+// justPassedQuiz and justViewedLesson name the module completed by the
+// current request. Its progress write is either fire-and-forget
+// (recordModuleProgress) or racing this read, so it is credited here without
+// a round-trip. Pass an empty string for the kind the request did not touch.
+func (s *State) courseCompleted(
+	req *http.Request, modules []content.Module, userID, courseSlug, justPassedQuiz, justViewedLesson string,
+) bool {
+	var summary coursePrereqSummary
 
-	for _, m := range course.Modules {
-		if m.HasQuestions() {
-			quizSlugs = append(quizSlugs, m.Slug())
-		}
+	hasQuiz := slices.ContainsFunc(modules, func(m content.Module) bool {
+		return !m.Hidden && m.Type == moduleTypeQuiz
+	})
+	if hasQuiz {
+		summary = s.fetchCoursePrereqSummary(req.Context(), userID, courseSlug)
 	}
 
-	if len(quizSlugs) == 0 {
-		return true
-	}
+	viewed := s.viewedLessons(req, courseSlug, userID)
 
-	summary := s.fetchCoursePrereqSummary(ctx, userID, courseSlug)
-
-	for _, slug := range quizSlugs {
-		if slug == currentSlug {
-			continue // just passed in this request, not yet in user-service DB
+	for _, mod := range modules {
+		if mod.Hidden {
+			continue
 		}
 
-		if !summary.PassedModules[slug] {
+		slug := mod.Slug()
+
+		if mod.Type == moduleTypeQuiz {
+			if slug != justPassedQuiz && !summary.PassedModules[slug] {
+				return false
+			}
+
+			continue
+		}
+
+		if slug != justViewedLesson && !viewed[slug] {
 			return false
 		}
 	}

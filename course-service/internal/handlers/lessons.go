@@ -263,35 +263,6 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 	}})
 }
 
-// lessonModuleIndex returns the index of the module identified by
-// lessonSlug within the course, and whether it was found at all.
-func lessonModuleIndex(course *content.Course, lessonSlug string) (int, bool) {
-	for idx, mod := range course.Modules {
-		if mod.Slug() == lessonSlug {
-			return idx, true
-		}
-	}
-
-	return -1, false
-}
-
-// isLastMeaningfulModule reports whether moduleIndex is the last module in
-// modules, ignoring trailing inline quiz modules.
-func isLastMeaningfulModule(modules []content.Module, moduleIndex int) bool {
-	if len(modules) == 0 {
-		zap.L().Error("isLastMeaningfulModule: modules slice is empty")
-
-		return false
-	}
-
-	lastMeaningful := len(modules) - 1
-	for lastMeaningful > 0 && modules[lastMeaningful].Inline && modules[lastMeaningful].Type == moduleTypeQuiz {
-		lastMeaningful--
-	}
-
-	return moduleIndex >= 0 && moduleIndex == lastMeaningful
-}
-
 // postLessonComplete notifies the user-service that lessonSlug was
 // completed by userID, writing an HTTP error and returning false on any
 // failure.
@@ -431,7 +402,9 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	moduleIndex, found := lessonModuleIndex(course, lessonSlug)
+	modules := s.visibleModules(course, req)
+
+	_, _, found := findModuleLesson(modules, lessonSlug)
 	if !found {
 		s.Error(writer, http.StatusNotFound, "Lesson not found")
 
@@ -442,8 +415,7 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if isLastMeaningfulModule(course.Modules, moduleIndex) &&
-		s.allQuizModulesPassed(req.Context(), course, claims.Subject, courseSlug, "") {
+	if s.courseCompleted(req, modules, claims.Subject, courseSlug, "", lessonSlug) {
 		s.notifyCourseComplete(req, course, claims.Subject)
 	}
 

@@ -110,7 +110,7 @@ import App from '../../../layouts/App.astro';
       return null;
     }
 
-    function moduleStatusBadges(m: any): string {
+    function moduleStatusBadges(m: any, inlineQuiz?: any): string {
       const parts: string[] = [];
       const typeLabel: Record<string, string> = { quiz: 'Quiz', video: 'Vidéo', image: 'Image', lab: 'Lab', lesson: 'Lecture' };
       const typeStr = typeLabel[m.type];
@@ -124,6 +124,13 @@ import App from '../../../layouts/App.astro';
       } else {
         if (m.viewed) parts.push(`<span class="badge badge-green text-[.7rem]">✓ Vu</span>`);
       }
+      // The quiz embedded at the end of this lesson has no row of its own,
+      // so its state is reported here.
+      if (inlineQuiz && !m.locked) {
+        parts.push(inlineQuiz.passed
+          ? `<span class="badge badge-green text-[.7rem]">✓ Quiz</span>`
+          : `<span class="badge badge-orange text-[.7rem]">🧩 Quiz à valider</span>`);
+      }
       return parts.join('');
     }
 
@@ -133,7 +140,7 @@ import App from '../../../layouts/App.astro';
       ).join('');
     }
 
-    function renderModules(modules: any[]) {
+    function renderModules(modules: any[], inlineQuizByHost: Map<number, any>) {
       return modules.map(m => {
         const href = moduleHref(m);
         const tag = href ? 'a' : 'div';
@@ -145,7 +152,7 @@ import App from '../../../layouts/App.astro';
           <${tag} ${hrefAttr} class="mod-row${m.locked ? ' locked' : ''}">
             ${icon ? `<div class="mod-icon${iconCls}">${icon}</div>` : ''}
             <div class="mod-name flex-1">${m.name}${skillBadges ? `<span class="mod-skill-badges">${skillBadges}</span>` : ''}</div>
-            <div class="mod-badges">${moduleStatusBadges(m)}</div>
+            <div class="mod-badges">${moduleStatusBadges(m, inlineQuizByHost.get(m.index))}</div>
             ${href ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>` : ''}
           </${tag}>
         `;
@@ -234,13 +241,29 @@ import App from '../../../layouts/App.astro';
           badgeArea.appendChild(iconEl);
         }
 
-        // Inline quizzes are embedded in previous modules — exclude from standalone list and counts
-        const visibleModules = modules.filter((m: any) => !m.inline);
+        // Inline quizzes are embedded in the previous lesson, so they get no row
+        // of their own — but they are still work to do, and progress counts them.
+        const listModules = modules.filter((m: any) => !m.inline);
+        const isDone = (m: any) => m.type === 'quiz' ? m.passed : m.viewed;
+
+        // An inline quiz lives at the bottom of the lesson preceding it: that
+        // lesson is both the page it is reached through and the row its state
+        // is reported on.
+        const hostOf = (m: any) => modules.filter((x: any) => x.index < m.index && !x.inline).at(-1);
+        const inlineQuizByHost = new Map<number, any>();
+        for (const quiz of modules.filter((m: any) => m.inline)) {
+          const host = hostOf(quiz);
+          if (host) inlineQuizByHost.set(host.index, quiz);
+        }
+
+        function moduleEntryHref(m: any): string | null {
+          return moduleHref(m.inline ? (hostOf(m) ?? m) : m);
+        }
 
         // Enroll area
         const enrollArea = document.getElementById('enroll-area')!;
-        const completedCount = visibleModules.filter((m: any) => m.type === 'quiz' ? m.passed : m.viewed).length;
-        const totalCount = visibleModules.length;
+        const completedCount = modules.filter(isDone).length;
+        const totalCount = modules.length;
         const pct = totalCount > 0 ? Math.round(completedCount / totalCount * 100) : 0;
 
         if (!enrolled) {
@@ -262,16 +285,16 @@ import App from '../../../layouts/App.astro';
           }
         } else if (totalCount > 0) {
           // Find first incomplete module for CTA
-          const nextMod = visibleModules.find((m: any) => !(m.type === 'quiz' ? m.passed : m.viewed) && !m.locked);
-          const ctaHref = (nextMod ? moduleHref(nextMod) : null)
-            ?? (visibleModules[0] ? moduleHref(visibleModules[0]) : null)
+          const nextMod = modules.find((m: any) => !isDone(m) && !m.locked);
+          const ctaHref = (nextMod ? moduleEntryHref(nextMod) : null)
+            ?? (listModules[0] ? moduleHref(listModules[0]) : null)
             ?? '#';
 
           const xpEarned = Math.round(pct / 100 * 200);
           enrollArea.innerHTML = `
             <div class="course-enroll-progress">
               <div class="course-enroll-progress-header">
-                <span>${completedCount}/${totalCount} modules</span>
+                <span>${completedCount}/${totalCount} complétés</span>
                 <span class="course-enroll-pct">${pct}%</span>
               </div>
               <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
@@ -290,14 +313,14 @@ import App from '../../../layouts/App.astro';
         }
 
         // Module count
-        document.getElementById('module-count')!.textContent = visibleModules.length > 0 ? `${visibleModules.length} module${visibleModules.length !== 1 ? 's' : ''}` : '';
+        document.getElementById('module-count')!.textContent = listModules.length > 0 ? `${listModules.length} module${listModules.length !== 1 ? 's' : ''}` : '';
 
         // Render modules (inline quizzes excluded — they appear embedded in the previous lesson)
         if (prereqBlocked) {
           document.getElementById('prereq-blocked')!.style.display = 'block';
-        } else if (enrolled && visibleModules.length > 0) {
+        } else if (enrolled && listModules.length > 0) {
           const list = document.getElementById('modules-list')!;
-          list.innerHTML = renderModules(visibleModules);
+          list.innerHTML = renderModules(listModules, inlineQuizByHost);
           // Opening a lab counts as completing it (link opens in a new tab,
           // so we can record progress without blocking navigation)
           list.querySelectorAll('a[data-lab-slug]').forEach(el => {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
@@ -75,7 +76,7 @@ func TestFinalizeSubmission_InvalidBody(t *testing.T) {
 	)
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, req, course, mod, 0,
+	s.finalizeSubmission(rec, req, course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	if rec.Code != http.StatusBadRequest {
@@ -102,7 +103,7 @@ func TestFinalizeSubmission_Pass(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, 0,
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	if rec.Code != http.StatusOK {
@@ -142,7 +143,7 @@ func TestFinalizeSubmission_Fail(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, 0,
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	if rec.Code != http.StatusOK {
@@ -183,7 +184,7 @@ func submitAnswer(t *testing.T, s *State, course *content.Course, answerID strin
 	}
 
 	rec := httptest.NewRecorder()
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, 0,
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	return rec
@@ -304,5 +305,150 @@ func TestFinalizeSubmission_LocksOnMaxAttempts(t *testing.T) {
 
 	if !resp.Cooldowns["q1"].Locked {
 		t.Errorf("want q1 locked at the attempt cap, got %+v", resp.Cooldowns["q1"])
+	}
+}
+
+// ── Course completion is gated on the trailing quiz ───────────────────────────
+
+// lessonAndQuizCourse returns a course shaped like the seeded ones: a text
+// lesson closed by a quiz embedded at the end of it.
+func lessonAndQuizCourse() *content.Course {
+	return &content.Course{
+		Slug:       "guarded-course",
+		Title:      "Guarded Course",
+		Difficulty: "beginner",
+		IsPublic:   true,
+		Modules: []content.Module{
+			{Name: "Lesson One", Type: "text", InlineContent: "content"},
+			{
+				Name:         "Final Quiz",
+				Type:         "quiz",
+				Inline:       true,
+				PassingScore: 1,
+				Questions: []content.Question{
+					{
+						ID:     "q1",
+						Type:   "single",
+						Points: 1,
+						Answers: []content.Answer{
+							{ID: "a-correct", Text: "Right answer", Correct: true},
+							{ID: "a-wrong", Text: "Wrong answer", Correct: false},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// courseCompleteWatcher returns a user-service mock recording whether the
+// course-complete endpoint was called, with the given progress overrides
+// applied on top of the defaults.
+func courseCompleteWatcher(
+	viewed []string, passedModules []string,
+) (*httptest.Server, *atomic.Bool) {
+	var completed atomic.Bool
+
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-complete": func(w http.ResponseWriter, _ *http.Request) {
+			completed.Store(true)
+
+			_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		},
+		"/internal/progress/viewed": func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"viewed": viewed})
+		},
+		"/internal/progress/course-summary": func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"totalScore":    0,
+				"passedModules": passedModules,
+			})
+		},
+	})
+
+	return mock, &completed
+}
+
+// TestMarkLessonComplete_WaitsForTrailingQuiz verifies that reading the last
+// lesson does not complete a course whose closing quiz is unanswered.
+func TestMarkLessonComplete_WaitsForTrailingQuiz(t *testing.T) {
+	t.Parallel()
+
+	mock, completed := courseCompleteWatcher(nil, nil)
+	defer mock.Close()
+
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
+	router := BuildRouter(newStateWith(cfg, lessonAndQuizCourse()), cfg, false)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/courses/guarded-course/lessons/lesson-one/complete", http.NoBody)
+	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if completed.Load() {
+		t.Error("course reported complete while its closing quiz is unanswered")
+	}
+}
+
+// TestMarkLessonComplete_AfterQuizPassed verifies that the last lesson does
+// complete the course once its closing quiz has been passed.
+func TestMarkLessonComplete_AfterQuizPassed(t *testing.T) {
+	t.Parallel()
+
+	mock, completed := courseCompleteWatcher(nil, []string{"final-quiz"})
+	defer mock.Close()
+
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
+	router := BuildRouter(newStateWith(cfg, lessonAndQuizCourse()), cfg, false)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/courses/guarded-course/lessons/lesson-one/complete", http.NoBody)
+	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !completed.Load() {
+		t.Error("want the course complete once every lesson is read and the quiz passed")
+	}
+}
+
+// TestSubmitModule_PassingTrailingQuizCompletesCourse verifies that passing
+// the closing quiz completes the course, which is the order a learner
+// naturally takes it in: lessons first, quiz last.
+func TestSubmitModule_PassingTrailingQuizCompletesCourse(t *testing.T) {
+	t.Parallel()
+
+	mock, completed := courseCompleteWatcher([]string{"lesson-one"}, nil)
+	defer mock.Close()
+
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
+	router := BuildRouter(newStateWith(cfg, lessonAndQuizCourse()), cfg, false)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/courses/guarded-course/modules/1/submit",
+		strings.NewReader(`{"answers":{"q1":{"single":"a-correct"}}}`))
+	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !completed.Load() {
+		t.Error("want the course complete once its closing quiz is passed")
 	}
 }

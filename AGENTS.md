@@ -35,7 +35,8 @@ go build -o /dev/null .
 |---|---|
 | `internal/content/` | Domain types, quiz scoring, git module resolution |
 | `internal/models/` + `internal/repository/` | GORM models and data access (courses, modules, paths, quiz attempts, lab checks) |
-| `internal/db/` | PG connection + AutoMigrate |
+| `internal/db/` | PG connection + AutoMigrate + dev course seed |
+| `internal/definition/` | Wire shape of a course/path definition, shared by the admin API and the seeder |
 | `internal/handlers/` | HTTP handlers (chi router) — courses, modules, lessons |
 | `internal/middleware/` | JWT auth middleware (validates only) |
 | `internal/config/` | Env-based config (port, JWT, DATABASE_URL, UserServiceURL) |
@@ -96,3 +97,4 @@ spec:
 - Course Service: chi, JWT, Prometheus, GORM/pgx, go-git
 - User Service: chi, pgx, JWT, Prometheus, godotenv, crypto
 - `DATABASE_URL` is required by both services; course-service refuses to start without it
+- `SEED_DEV_COURSES=true` seeds the embedded demo catalogue (`course-service/internal/db/seed/courses/`); `overwrite` replaces it. Unset in production.

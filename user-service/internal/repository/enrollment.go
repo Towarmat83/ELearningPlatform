@@ -93,26 +93,55 @@ func (r *gormEnrollmentRepository) Exists(ctx context.Context, userID, courseSlu
 
 // MyEnrollments returns userID's enrollments with aggregate lesson/module
 // progress, most recently enrolled first.
+//
+// Counting completed modules has two traps, both of which used to inflate
+// the /my-courses progress bar past 100%:
+//
+//   - lesson_progress and module_progress overlap. A graded module that was
+//     opened and then passed has a row in each, so the two are UNIONed on
+//     the module slug rather than counted separately and added.
+//   - lesson_progress also holds the course-level lessonSlugComplete
+//     sentinel, which is not a module and must not be counted as one.
+//
+// Every aggregate is computed in its own subquery keyed by course slug, so
+// the outer query needs no GROUP BY and joining one progress table cannot
+// fan out the rows of another.
 func (r *gormEnrollmentRepository) MyEnrollments(ctx context.Context, userID string) ([]EnrollmentRow, error) {
 	var rows []EnrollmentRow
 
 	err := r.db.WithContext(ctx).Table("enrollments AS e").
 		Select(`e.courseslug AS slug,
-			COUNT(DISTINCT lp.lessonslug) + COALESCE(mp.passedmodules, 0) AS completed_labs,
+			COALESCE(done.completed, 0) AS completed_labs,
 			COALESCE(mp.totalscore, 0) AS total_score,
-			GREATEST(MAX(lp.viewed_at), mp.lastactivity)::text AS last_activity`).
-		Joins("LEFT JOIN lesson_progress lp ON lp.userid = e.userid AND lp.courseslug = e.courseslug").
+			GREATEST(lp.lastviewed, mp.lastactivity)::text AS last_activity`).
+		Joins(`LEFT JOIN (
+			SELECT courseslug, COUNT(*) AS completed
+			FROM (
+				SELECT courseslug, lessonslug AS moduleslug
+				FROM lesson_progress
+				WHERE userid = ?::uuid AND lessonslug <> ?
+				UNION
+				SELECT courseslug, COALESCE(moduleslug, 'idx:' || moduleindex)
+				FROM module_progress
+				WHERE userid = ?::uuid AND passed
+			) completed_modules
+			GROUP BY courseslug
+		) done ON done.courseslug = e.courseslug`, userID, lessonSlugComplete, userID).
+		Joins(`LEFT JOIN (
+			SELECT courseslug, MAX(viewed_at) AS lastviewed
+			FROM lesson_progress
+			WHERE userid = ?::uuid
+			GROUP BY courseslug
+		) lp ON lp.courseslug = e.courseslug`, userID).
 		Joins(`LEFT JOIN (
 			SELECT courseslug,
 			       SUM(bestscore) AS totalscore,
-			       COUNT(*) FILTER (WHERE passed) AS passedmodules,
 			       MAX(updatedat) AS lastactivity
 			FROM module_progress
 			WHERE userid = ?::uuid
 			GROUP BY courseslug
 		) mp ON mp.courseslug = e.courseslug`, userID).
 		Where("e.userid = ?::uuid", userID).
-		Group("e.courseslug, mp.totalscore, mp.passedmodules, mp.lastactivity, e.enrolledat").
 		Order("e.enrolledat DESC").
 		Scan(&rows).Error
 	if err != nil {

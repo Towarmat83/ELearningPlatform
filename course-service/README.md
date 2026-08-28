@@ -59,6 +59,7 @@ All config via environment variables:
 | `DATABASE_URL` | (required) | PostgreSQL connection string; see [Database](#database) |
 | `DB_MAX_OPEN_CONNS` | `10` | Maximum open database connections in the pool |
 | `DB_MAX_IDLE_CONNS` | `10` | Maximum idle database connections in the pool |
+| `SEED_DEV_COURSES` | (unset) | `true` seeds the demo catalogue's missing courses on startup, `overwrite` replaces them; anything else disables seeding. See [Dev seed](#dev-seed) |
 
 ## Database
 
@@ -80,6 +81,37 @@ split as User Service — see `internal/db/db.go`.
 | `paths`, `path_courses`, `path_skills` | Learning paths and their ordered members |
 | `quiz_question_attempts` | Per-question attempt count and cooldown deadline; persisted so retry backoff survives restarts and holds across replicas |
 | `lab_checks` | Recorded outcome of a lab module check (server-verified or client-reported) |
+
+## Dev seed
+
+A demo catalogue of 17 courses lives in `internal/db/seed/courses/` and is
+embedded in the binary, so seeding works identically in a KinD cluster and on
+a laptop. It is loaded on startup only when `SEED_DEV_COURSES` is set:
+
+| Value | Behaviour |
+|---|---|
+| `true` | Creates only the courses that do not exist yet, so local edits survive a restart |
+| `overwrite` | Replaces every seed course — use after editing the seed files |
+| anything else (default) | No seeding |
+
+Each file is a course definition in the same shape the admin API accepts,
+with the slug at the top level:
+
+```yaml
+slug: linux-intro
+spec:
+  title: "Introduction à Linux"
+  category: linux
+  difficulty: beginner
+  public: true
+  modules:
+    - name: "Navigation et système de fichiers"
+      type: text
+      content: |
+        ## Navigation …
+```
+
+Seeding never touches a course that is not part of the seed set.
 
 ## Git Credentials
 

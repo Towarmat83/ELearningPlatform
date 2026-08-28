@@ -91,27 +91,46 @@ You should see 4 pods running:
 > kubectl apply -f infra/manifests/postgresql.yaml
 > ```
 
-### 6. Create a course
+### 6. Courses
 
-Courses live in the database. Create one through the admin UI
-(<http://localhost:3000/admin/courses> once the port-forwards are up), or
-call the API directly:
+The KinD values files set `SEED_DEV_COURSES=true`, so course-service seeds a
+demo catalogue of 17 courses on startup and the app is browsable immediately —
+nothing to apply by hand.
+
+The seed definitions live in `course-service/internal/db/seed/courses/` and are
+embedded in the binary. After editing one, rebuild the image and re-seed:
+
+```bash
+make rebuild-course
+make seed-courses      # re-runs the seed in overwrite mode
+```
+
+`SEED_DEV_COURSES` takes two values:
+
+| Value | Behaviour |
+|---|---|
+| `true` | Creates only the courses that do not exist yet — local edits made through the admin UI survive a restart |
+| `overwrite` | Replaces every seed course, discarding local edits to them |
+
+Anything else (including unset) disables seeding entirely, so a production
+deployment cannot pick up demo content by accident.
+
+To create your own course, use the admin UI at `/admin/courses` or POST a
+definition:
 
 ```bash
 curl -X POST http://localhost:8082/api/admin/courses \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-        "slug": "kubernetes-basics",
+        "slug": "my-course",
         "spec": {
-          "title": "Kubernetes Basics",
+          "title": "My Course",
           "public": true,
-          "category": "kubernetes",
+          "category": "linux",
           "difficulty": "beginner",
           "modules": [
-            { "name": "Introduction", "type": "text",
-              "src": "https://github.com/user/repo", "ref": "main",
-              "path": "lessons/intro.md" }
+            { "name": "Introduction", "type": "text", "content": "# Hello" }
           ]
         }
       }'
@@ -138,7 +157,12 @@ make port-forward
 
 Open <http://localhost:3000> in your browser.
 
-Default admin login: `admin@pupitre.local` / `Admin@1234`
+Default admin login: `admin@pupitre.local`. The password is generated at
+install time — retrieve it with:
+
+```bash
+kubectl get secret pupitre-secrets -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d
+```
 
 ---
 
@@ -148,7 +172,7 @@ Default admin login: `admin@pupitre.local` / `Admin@1234`
 make dev
 ```
 
-This deletes the old cluster, creates a new one, builds images, loads them, and runs Helm install.
+This deletes the old cluster, creates a new one, builds images, loads them, runs Helm install, and seeds the demo courses.
 
 ---
 

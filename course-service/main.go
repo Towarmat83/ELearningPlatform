@@ -109,10 +109,19 @@ func run() error {
 
 	zap.L().Info("database connected and schema migrated")
 
+	// ── Dev seed ──────────────────────────────────────────────────────────────
+	// No-op unless SEED_DEV_COURSES is set; see internal/db/seed_dev.go.
+	repos := repository.NewGormRepositories(gdb)
+
+	err = coursedb.SeedDevCourses(ctx, repos.Courses, os.Getenv("SEED_DEV_COURSES"))
+	if err != nil {
+		return fmt.Errorf("seed dev courses: %w", err)
+	}
+
 	// ── HTTP router ───────────────────────────────────────────────────────────
 	zap.L().Info("building HTTP router")
 
-	state := handlers.NewState(cfg, repository.NewGormRepositories(gdb))
+	state := handlers.NewState(cfg, repos)
 	router := handlers.BuildRouter(state, cfg, true)
 
 	srv := &http.Server{

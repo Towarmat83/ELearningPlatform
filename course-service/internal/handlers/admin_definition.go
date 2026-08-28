@@ -68,7 +68,7 @@ type definitionMessages struct {
 func createDefinition[T any, R any](
 	state *State, writer http.ResponseWriter, req *http.Request,
 	messages definitionMessages,
-	build func(slug string, spec T) R,
+	build func(spec T, slug string) R,
 	create func(ctx context.Context, resource R) error,
 ) {
 	slug, spec, err := decodeDefinition[T](req, messages.Kind)
@@ -85,7 +85,7 @@ func createDefinition[T any, R any](
 		return
 	}
 
-	err = create(req.Context(), build(slug, spec))
+	err = create(req.Context(), build(spec, slug))
 
 	switch {
 	case errors.Is(err, repository.ErrConflict):
@@ -106,7 +106,7 @@ func createDefinition[T any, R any](
 func updateDefinition[T any, R any](
 	state *State, writer http.ResponseWriter, req *http.Request,
 	messages definitionMessages,
-	build func(slug string, spec T) R,
+	build func(spec T, slug string) R,
 	exists func(ctx context.Context, slug string) error,
 	update func(ctx context.Context, resource R) error,
 ) {
@@ -127,7 +127,7 @@ func updateDefinition[T any, R any](
 		return
 	}
 
-	err = update(req.Context(), build(slug, spec))
+	err = update(req.Context(), build(spec, slug))
 	if err != nil {
 		zap.L().Error("update "+messages.Kind+" failed", zap.String("slug", slug), zap.Error(err))
 		state.Error(writer, http.StatusInternalServerError, messages.UpdateFailed)

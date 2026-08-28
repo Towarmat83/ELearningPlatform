@@ -1,0 +1,131 @@
+# Dev seed course — loaded by SEED_DEV_COURSES.
+slug: distrobox
+spec:
+  title: "Distrobox Creation and Application Export"
+  description: Crée une Distrobox, installe xcowfortune et exporte l'application vers ton menu d'applications.
+  category: devops
+  difficulty: beginner
+  public: true
+  badge:
+    name: "Maître Distrobox"
+    icon: "📦"
+  modules:
+    - name: "Distrobox Creation and Application Export"
+      type: lab
+      checkProvider: local
+      steps:
+        - title: "Distrobox 'lab' créé"
+          checkType: distrobox_lab3_container
+          checkParams:
+            container_name: lab
+        - title: "xcowfortune installé dans la Distrobox"
+          checkType: distrobox_lab3_install
+          checkParams:
+            container_name: lab
+            app: xcowfortune
+        - title: "Application xcowfortune exportée"
+          checkType: distrobox_lab3_export
+          checkParams:
+            container_name: lab
+            app: xcowfortune
+      content: |
+        ## Objectifs
+
+        Apprendre à :
+
+        - Créer un Distrobox à partir d'une image par défaut
+        - Installer une application (`xcowfortune`) à l'intérieur du Distrobox
+        - Exécuter l'application et voir un affichage graphique en dehors du terminal
+        - Exporter l'application pour la rendre directement accessible depuis le menu des applications de votre workstation
+
+        ---
+
+        ## Contexte
+
+        Distrobox est un outil qui permet d'exécuter une distribution Linux complète au sein de votre environnement de bureau actuel, sans avoir besoin de virtualisation ou de dual-boot. C'est particulièrement utile pour tester des applications dans un autre environnement Linux ou pour isoler des dépendances logicielles.
+
+        Dans ce lab, vous allez créer une Distrobox, installer une application simple, l'exécuter et l'exporter pour qu'elle soit utilisable directement depuis le menu d'applications de votre workstation.
+
+        ---
+
+        ## Étapes détaillées
+
+        ### 1. Créer un Distrobox
+
+        Créez une Distrobox à partir de l'image par défaut.
+
+        ```bash
+        distrobox create --name lab
+        ```
+
+        Cette commande créera un Distrobox nommé `lab` à partir de l'image Fedora la plus récente.
+
+        <!-- check:0 -->
+
+        ### 2. Installer xcowfortune
+
+        Une fois la Distrobox créé, démarrez-le et installez le paquet `xcowfortune` à l'aide du gestionnaire de paquets `dnf`.
+
+        ```bash
+        distrobox enter lab
+        ```
+
+        Ensuite, installez l'application :
+
+        ```bash
+        sudo dnf install xcowfortune
+        ```
+
+        <!-- check:1 -->
+
+        ### 3. Exécuter l'application
+
+        Depuis la Distrobox, lancez l'application `xcowfortune` :
+
+        ```bash
+        xcowfortune
+        ```
+
+        Une fenêtre graphique doit apparaître avec un message aléatoire et une vache.
+
+        Cela montre comment vous pouvez exécuter des applications graphiques depuis une Distrobox et les voir directement sur votre bureau.
+
+        ### 4. Exporter l'application
+
+        Maintenant, exportez l'application `xcowfortune` pour qu'elle devienne accessible directement depuis le menu des applications de votre workstation.
+
+        ```bash
+        distrobox-export -a xcowfortune
+        ```
+
+        Cette commande exporte l'application, la rendant accessible depuis votre environnement de bureau comme si elle était installée nativement.
+
+        <!-- check:2 -->
+
+        ### Nettoyage *(optionnel)*
+
+        Pour supprimer l'application exportée ultérieurement :
+
+        ```bash
+        distrobox-export --delete -a xcowfortune
+        ```
+
+        ---
+
+        ## Félicitations !
+
+        Vous avez :
+
+        - Créé une Distrobox
+        - Installé une application à l'intérieur
+        - Exécuté une application graphique depuis la Distrobox
+        - Exporté l'application vers votre environnement de bureau
+
+        ---
+
+        ## Ressources
+
+        | Ressource | Lien |
+        |---|---|
+        | Documentation Distrobox | distrobox.it |
+        | GitHub Distrobox | github.com/89luca89/distrobox |

@@ -5,21 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/definition"
 )
 
 // pathNotFoundMessage is returned when a slug matches no learning path.
 const pathNotFoundMessage = "Path not found"
-
-// pathSpecBody is the wire representation of a learning path definition.
-type pathSpecBody struct {
-	Title       string   `json:"title,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Kind        string   `json:"kind,omitempty"`
-	Level       string   `json:"level,omitempty"`
-	Courses     []string `json:"courses,omitempty"`
-	Skills      []string `json:"skills,omitempty"`
-}
 
 // pathMessages is the client-facing wording for path definitions.
 //
@@ -33,27 +23,13 @@ var pathMessages = definitionMessages{
 	UpdateFailed: "Failed to update path",
 }
 
-// pathFromSpec converts a wire definition into the domain path the
-// repository persists.
-func pathFromSpec(slug string, spec pathSpecBody) *content.Path {
-	return &content.Path{
-		Slug:        slug,
-		Title:       spec.Title,
-		Description: spec.Description,
-		Kind:        spec.Kind,
-		Level:       spec.Level,
-		Courses:     spec.Courses,
-		Skills:      spec.Skills,
-	}
-}
-
 // CreatePath godoc
 // @Summary  Create a learning path (admin)
 // @Tags     Admin - Paths
 // @Security BearerAuth
 // @Router   /api/admin/courses/paths [post].
 func (s *State) CreatePath(writer http.ResponseWriter, req *http.Request) {
-	createDefinition(s, writer, req, pathMessages, pathFromSpec, s.Repos.Paths.Create)
+	createDefinition(s, writer, req, pathMessages, definition.Path.ToPath, s.Repos.Paths.Create)
 }
 
 // UpdatePath godoc
@@ -62,7 +38,7 @@ func (s *State) CreatePath(writer http.ResponseWriter, req *http.Request) {
 // @Security BearerAuth
 // @Router   /api/admin/courses/paths/{slug}/definition [put].
 func (s *State) UpdatePath(writer http.ResponseWriter, req *http.Request) {
-	updateDefinition(s, writer, req, pathMessages, pathFromSpec, s.pathExists, s.Repos.Paths.Upsert)
+	updateDefinition(s, writer, req, pathMessages, definition.Path.ToPath, s.pathExists, s.Repos.Paths.Upsert)
 }
 
 // DeletePath godoc

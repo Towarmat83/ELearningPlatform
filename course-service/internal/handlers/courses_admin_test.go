@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
+	"github.com/genesary/pupitre/course-service/internal/definition"
 )
 
 // newAdminState builds a State with an empty catalogue, for the admin
@@ -86,8 +87,8 @@ func TestAdminCourse_CreateReadUpdateDelete(t *testing.T) {
 	}
 
 	var read struct {
-		Slug string         `json:"slug"`
-		Spec courseSpecBody `json:"spec"`
+		Slug string            `json:"slug"`
+		Spec definition.Course `json:"spec"`
 	}
 
 	err := json.NewDecoder(rec.Body).Decode(&read)

@@ -100,6 +100,20 @@ helm-install:
 helm-delete:
 	-helm uninstall $(HELM_RELEASE)
 
+# ── Dev courses ──────────────────────────────────────────────────────────────
+#
+# The demo catalogue lives in course-service/internal/db/seed/courses/ and is
+# embedded in the binary. course-service seeds it on startup when
+# SEED_DEV_COURSES is set, which the KinD values files already do.
+
+.PHONY: seed-courses
+seed-courses:
+	@echo "Re-seeding dev courses (overwrite mode)..."
+	kubectl set env deploy/$(HELM_RELEASE)-course-service SEED_DEV_COURSES=overwrite
+	kubectl rollout status deploy/$(HELM_RELEASE)-course-service --timeout=120s
+	kubectl set env deploy/$(HELM_RELEASE)-course-service SEED_DEV_COURSES=true
+	@echo "Dev courses re-seeded from the embedded definitions."
+
 # ── Git secret ───────────────────────────────────────────────────────────────
 
 .PHONY: create-git-secret
@@ -141,7 +155,10 @@ dev: kind-delete kind-create docker-build kind-load helm-install
 	@echo "=== Deployment ready ==="
 	@echo "Run 'make port-forward' to expose services locally."
 	@echo ""
-	@echo "  Admin login: admin@pupitre.local / Admin@1234"
+	@echo "  Admin login: admin@pupitre.local"
+	@echo "  Password:    kubectl get secret $(HELM_RELEASE)-secrets \\"
+	@echo "                 -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d"
+	@echo "  Courses:     17 demo courses seeded (SEED_DEV_COURSES=true)"
 	@echo "  Frontend:    http://localhost:3000"
 	@echo "  Course API:  http://localhost:18082"
 	@echo "  User API:    http://localhost:18081"

@@ -35,6 +35,7 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(cfg.JWTSecret)
 	managerMW := apimiddleware.Manager(cfg.JWTSecret)
+	exportMW := apimiddleware.ManagerOrAdmin(cfg.JWTSecret)
 	internalMW := apimiddleware.InternalAuth(cfg.InternalSecret)
 
 	router := chi.NewRouter()
@@ -53,6 +54,7 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	registerAuthenticatedRoutes(router, state, authMW)
 	registerAdminRoutes(router, state, adminMW)
 	registerManagerRoutes(router, state, managerMW)
+	registerExportRoutes(router, state, exportMW)
 	registerPatternRoutes(router, state, authMW, adminMW)
 	registerInternalRoutes(router, state, internalMW)
 
@@ -196,6 +198,16 @@ func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.
 		group.Delete("/api/manager/paths/{slug}/enrollments/{userId}", state.ManagerUnenrollUserPath)
 		group.Get("/api/manager/courses/{slug}/sessions/{sessionId}/bookings", state.ListSessionBookings)
 		group.Patch("/api/manager/courses/{slug}/sessions/{sessionId}/bookings/{userId}/presence", state.MarkSessionPresence)
+	})
+}
+
+// registerExportRoutes wires CSV export routes for managers and admins.
+func registerExportRoutes(router chi.Router, state *State, exportMW func(http.Handler) http.Handler) {
+	router.Group(func(group chi.Router) {
+		group.Use(exportMW)
+		group.Get("/api/admin/exports/categories", state.ExportCategories)
+		group.Post("/api/admin/exports/preview", state.ExportPreview)
+		group.Post("/api/admin/exports/download", state.ExportDownload)
 	})
 }
 

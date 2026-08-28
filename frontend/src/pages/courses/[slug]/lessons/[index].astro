@@ -398,6 +398,7 @@ import App from '../../../../layouts/App.astro';
           <div id="check-result" class="check-result"></div>` : '';
 
         contentBody.innerHTML = mdHtml + successBanner + checkBar;
+        contentBody.querySelector('h1, h2')?.remove();
         addCopyButtons(contentBody);
 
         const showResult = (resultDiv: HTMLElement, result: {allow: boolean; violations?: string[]}) => {
@@ -492,6 +493,7 @@ import App from '../../../../layouts/App.astro';
       } else if (mod.content) {
         try {
           contentBody.innerHTML = await renderMarkdown(mod.content);
+          contentBody.querySelector('h1, h2')?.remove();
           addCopyButtons(contentBody);
         } catch {
           contentBody.textContent = mod.content;

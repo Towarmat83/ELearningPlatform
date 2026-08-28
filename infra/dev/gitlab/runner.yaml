@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab-runner
+  namespace: gitlab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitlab-runner
+  template:
+    metadata:
+      labels:
+        app: gitlab-runner
+    spec:
+      hostAliases:
+      - ip: "10.96.26.59"
+        hostnames:
+        - "gitlab.local"
+      containers:
+      - name: gitlab-runner
+        image: gitlab/gitlab-runner:latest
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          gitlab-runner register \
+            --non-interactive \
+            --url "http://gitlab.local" \
+            --token "glrt-D9DVUxitj4Q6H54CoouCHW86MQpwOjEKdDozCnU6MQ8.01.170d3f3kc" \
+            --executor "shell" \
+            --name "pupitre-runner" && \
+          gitlab-runner run --working-directory /home/gitlab-runner
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

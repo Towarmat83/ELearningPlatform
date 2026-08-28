@@ -1,0 +1,16 @@
+apiVersion: elearning.pupitre.io/v1
+kind: Path
+metadata:
+  name: parcours-securite
+spec:
+  title: "Parcours Sécurité"
+  description: "De la cybersécurité fondamentale au pentest en passant par la sécurité des conteneurs et des pipelines CI/CD."
+  kind: course
+  level: intermediate
+  courses:
+    - cybersecurity-intro
+    - networking-basics
+    - container-security
+    - secrets-management
+    - pentesting-basics
+    - devsecops

@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:4321",
+      "localStorage": [
+        {
+          "name": "token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ1c2VyLXNlcnZpY2UiLCJzdWIiOiJlNzIzN2ZmZi0yMTM3LTQzOGYtYmRhNy0wODljNTRlMDYxYjAiLCJhdWQiOlsicHVwaXRyZS1hcGkiXSwiZXhwIjoxNzg3NDA3NTU2LCJpYXQiOjE3ODczMjExNTYsImVtYWlsIjoiYWRtaW5AcHVwaXRyZS5sb2NhbCIsInJvbGUiOiJhZG1pbiIsInByZWZlcnJlZF91c2VybmFtZSI6ImFkbWluIn0.p00ylLClSN5m5NPbP4i0f7yhMSnu9rPGcefbFU-7MHo"
+        },
+        {
+          "name": "user",
+          "value": "{\"id\":\"e7237fff-2137-438f-bda7-089c54e061b0\",\"username\":\"admin\",\"email\":\"admin@pupitre.local\",\"role\":\"admin\",\"avatarUrl\":null,\"bio\":null,\"isActive\":true,\"authProvider\":\"local\",\"createdAt\":\"2026-08-13T12:50:32Z\"}"
+        }
+      ]
+    }
+  ]
+}

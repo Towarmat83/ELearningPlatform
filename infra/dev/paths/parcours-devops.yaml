@@ -1,0 +1,17 @@
+apiVersion: elearning.pupitre.io/v1
+kind: Path
+metadata:
+  name: parcours-devops
+spec:
+  title: "Parcours DevOps"
+  description: "Du Linux aux pipelines CI/CD, en passant par Docker, Git, Kubernetes et l'Infrastructure as Code."
+  kind: course
+  level: intermediate
+  courses:
+    - linux-intro
+    - docker-fundamentals
+    - git-advanced
+    - gitlab-cicd
+    - kubernetes-basics
+    - infrastructure-as-code
+    - monitoring-observability

@@ -54,10 +54,8 @@ func (s *State) CheckModule(writer http.ResponseWriter, req *http.Request) {
 	indexStr := param(req, "index")
 	claims := s.claims(req)
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 
@@ -119,7 +117,7 @@ func (s *State) resolveLabModule(
 
 	idx, err := strconv.Atoi(indexStr)
 	if err != nil || idx < 0 || idx >= len(modules) {
-		s.Error(writer, http.StatusNotFound, "Module not found")
+		s.Error(writer, http.StatusNotFound, moduleNotFoundMessage)
 
 		return content.Module{}, 0, false
 	}
@@ -179,7 +177,7 @@ func (s *State) callChecker(writer http.ResponseWriter, req *http.Request, body 
 func (s *State) storeLabCheck(
 	ctx context.Context, username, courseSlug string, moduleIndex int, moduleName string, result CheckResponse, verified bool,
 ) {
-	if s.LabChecks == nil {
+	if s.Repos.LabChecks == nil {
 		return
 	}
 
@@ -188,7 +186,7 @@ func (s *State) storeLabCheck(
 		violations = []string{}
 	}
 
-	err := s.LabChecks.Create(ctx, &models.LabCheck{
+	err := s.Repos.LabChecks.Create(ctx, &models.LabCheck{
 		Username:    username,
 		CourseSlug:  courseSlug,
 		ModuleIndex: moduleIndex,
@@ -218,10 +216,8 @@ func (s *State) CheckModuleStep(writer http.ResponseWriter, req *http.Request) {
 	stepIndexStr := param(req, "stepIndex")
 	claims := s.claims(req)
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 
@@ -355,10 +351,8 @@ func (s *State) RecordLocalCheck(writer http.ResponseWriter, req *http.Request) 
 	indexStr := param(req, "index")
 	claims := s.claims(req)
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 

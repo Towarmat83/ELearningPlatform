@@ -11,28 +11,6 @@ import (
 	"github.com/genesary/pupitre/course-service/internal/models"
 )
 
-// TestGetLabResults_NilRepo_ServiceUnavailable verifies that GetLabResults
-// reports 503 when no LabCheckRepository is configured (DB disabled).
-func TestGetLabResults_NilRepo_ServiceUnavailable(t *testing.T) {
-	t.Parallel()
-
-	mock := newUserServiceMock()
-	defer mock.Close()
-
-	s := newTestState(t, mock)
-	r := BuildRouter(s, s.Config, false)
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/admin/lab-checks", http.NoBody)
-	req.Header.Set("Authorization", adminAuthHeader(t, s.Config.JWTSecret))
-
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 // TestGetLabResults_Filter verifies GetLabResults filters by course slug and
 // omits checks belonging to other courses.
 func TestGetLabResults_Filter(t *testing.T) {
@@ -42,7 +20,7 @@ func TestGetLabResults_Filter(t *testing.T) {
 	defer mock.Close()
 
 	s := newTestState(t, mock)
-	s.LabChecks = fake.NewLabCheckRepository(
+	s.Repos.LabChecks = fake.NewLabCheckRepository(
 		models.LabCheck{
 			Username:    "alice",
 			CourseSlug:  "kubernetes-basics",
@@ -104,7 +82,7 @@ func TestGetLabResults_Unfiltered(t *testing.T) {
 	defer mock.Close()
 
 	s := newTestState(t, mock)
-	s.LabChecks = fake.NewLabCheckRepository(
+	s.Repos.LabChecks = fake.NewLabCheckRepository(
 		models.LabCheck{Username: "alice", CourseSlug: "kubernetes-basics", CheckedAt: time.Now()},
 		models.LabCheck{Username: "bob", CourseSlug: "docker-fundamentals", CheckedAt: time.Now()},
 	)

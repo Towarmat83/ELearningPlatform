@@ -1,15 +1,15 @@
-Un module est un élément d'un cours. Il est composé d'un nom, d'une source, d'une référence, d'un type et d'un chemin (définis dans la CRD du cours). Il représente une ressource qui compose un cours : texte (markdown), vidéo, image, quiz ou liste de modules.
+Un module est un élément d'un cours. Il est composé d'un nom, d'une source, d'une référence, d'un type et d'un chemin (définis dans la définition du cours). Il représente une ressource qui compose un cours : texte (markdown), vidéo, image, quiz ou liste de modules.
 
 - **video / image** : l'URL de la ressource hébergée sur le serveur est renvoyée directement
 - **text** : le contenu est fetché depuis un dépôt git (si `src`, `ref` et `path` sont renseignés)
-- **quiz** : questions inline dans la CRD ou fichier YAML fetché depuis git
+- **quiz** : questions inline dans la définition du cours ou fichier YAML fetché depuis git
 - **modules** : entrée spéciale qui pointe vers un fichier YAML d'index dans git — expansée en place en une liste plate de modules au moment de la requête (voir ci-dessous)
 
 ### Type `modules` — index file
 
-Permet de regrouper plusieurs modules dans un fichier YAML externe plutôt que de les déclarer un par un dans la CRD. Le course-service fetche et parse l'index au moment de la requête, via le `GitCache` existant.
+Permet de regrouper plusieurs modules dans un fichier YAML externe plutôt que de les déclarer un par un dans la définition du cours. Le course-service fetche et parse l'index au moment de la requête, via le `GitCache` existant.
 
-**Entrée CRD :**
+**Entrée dans `spec.modules` :**
 
 ```yaml
 - name: "Linux Introduction"
@@ -46,13 +46,13 @@ Champs disponibles dans une entrée d'index :
 | `name` | oui | Nom du module |
 | `type` | non | Type de module (`text`, `quiz`, `video`, `image`). Défaut : `text` |
 | `path` | oui | Chemin du fichier dans le dépôt |
-| `src` | non | URL du dépôt git — hérité de l'entrée CRD parente si absent |
-| `ref` | non | Branche git — hérité de l'entrée CRD parente si absent |
+| `src` | non | URL du dépôt git — hérité de l'entrée parente si absent |
+| `ref` | non | Branche git — hérité de l'entrée parente si absent |
 | `hidden` | non | Cache le module aux utilisateurs non-admin |
 | `prerequisites` | non | Liste de slugs de modules à compléter avant d'accéder à celui-ci |
 
 **Comportement :**
-- Si `src` ou `ref` sont absents d'une entrée index, ils sont hérités de l'entrée CRD parente
+- Si `src` ou `ref` sont absents d'une entrée index, ils sont hérités de l'entrée parente
 - Si le fichier index est introuvable ou invalide, l'entrée est ignorée et un warning est loggué
 - L'expansion est transparente : les handlers `ListModules`, `GetModule`, `SubmitModule` voient une liste plate de modules normaux
 

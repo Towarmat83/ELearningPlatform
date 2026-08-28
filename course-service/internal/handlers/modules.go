@@ -11,8 +11,11 @@ import (
 	"strconv"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/genesary/pupitre/course-service/internal/content"
 	"github.com/genesary/pupitre/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
 
 // publicAnswer is the client-facing representation of a quiz answer option;
@@ -476,10 +479,8 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 
 	isAdmin := claims.Role == roleAdmin
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 
@@ -627,10 +628,8 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 
 	isAdmin := claims.Role == roleAdmin
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 
@@ -642,7 +641,7 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 
 	idx, ok := resolveModuleIndex(indexStr, len(modules))
 	if !ok {
-		s.Error(writer, http.StatusNotFound, "Module not found")
+		s.Error(writer, http.StatusNotFound, moduleNotFoundMessage)
 
 		return
 	}
@@ -789,7 +788,7 @@ func (s *State) populateQuizContent(ctx context.Context, writer http.ResponseWri
 
 	// Include current cooldown state so frontend persists it across refreshes.
 	if len(quizQuestions) > 0 {
-		if cooldowns := s.moduleCooldowns(quizQuestions, userID, courseSlug, idx); len(cooldowns) > 0 {
+		if cooldowns := s.moduleCooldowns(ctx, quizQuestions, userID, courseSlug, idx); len(cooldowns) > 0 {
 			resp.Cooldowns = cooldowns
 		}
 	}
@@ -797,19 +796,48 @@ func (s *State) populateQuizContent(ctx context.Context, writer http.ResponseWri
 	return true
 }
 
-// moduleCooldowns returns the current cooldown/attempt state for each
-// question in quizQuestions that has an active cooldown or recorded attempts.
-func (s *State) moduleCooldowns(quizQuestions []content.Question, userID, courseSlug string, idx int) map[string]cooldownState {
-	cooldowns := make(map[string]cooldownState)
+// attemptKey builds the persisted-attempt key identifying one learner's
+// state on one quiz module.
+func attemptKey(userID, courseSlug string, idx int) repository.AttemptKey {
+	return repository.AttemptKey{Username: userID, CourseSlug: courseSlug, ModuleIndex: idx}
+}
 
-	for _, qq := range quizQuestions {
-		remaining, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, qq.ID)
-		if remaining > 0 || attempts > 0 {
-			cooldowns[qq.ID] = cooldownState{
-				RemainingSeconds: int(remaining.Seconds()),
-				Attempts:         attempts,
-				Locked:           false,
-			}
+// questionIDs extracts the IDs of the given questions, so attempt state
+// for a whole quiz can be read or written in one statement.
+func questionIDs(questions []content.Question) []string {
+	ids := make([]string, 0, len(questions))
+	for _, question := range questions {
+		ids = append(ids, question.ID)
+	}
+
+	return ids
+}
+
+// moduleCooldowns returns the current cooldown/attempt state for each
+// question in quizQuestions that has an active cooldown or recorded
+// attempts, reading the whole quiz's state in a single query.
+func (s *State) moduleCooldowns(ctx context.Context, quizQuestions []content.Question, userID, courseSlug string, idx int) map[string]cooldownState {
+	key := attemptKey(userID, courseSlug, idx)
+
+	states, err := s.Repos.QuizAttempts.States(ctx, key, questionIDs(quizQuestions))
+	if err != nil {
+		zap.L().Error("load quiz cooldowns failed",
+			zap.String("courseSlug", courseSlug), zap.Int("moduleIndex", idx), zap.Error(err))
+
+		return nil
+	}
+
+	cooldowns := make(map[string]cooldownState, len(states))
+
+	for id, state := range states {
+		if state.Remaining <= 0 && state.Attempts == 0 {
+			continue
+		}
+
+		cooldowns[id] = cooldownState{
+			RemainingSeconds: int(state.Remaining.Seconds()),
+			Attempts:         state.Attempts,
+			Locked:           false,
 		}
 	}
 
@@ -921,10 +949,8 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 	userID := claims.Subject
 	isAdmin := claims.Role == roleAdmin
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 
@@ -938,7 +964,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 
 	idx, indexValid := resolveModuleIndex(indexStr, len(modules))
 	if !indexValid {
-		s.Error(writer, http.StatusNotFound, "Module not found")
+		s.Error(writer, http.StatusNotFound, moduleNotFoundMessage)
 
 		return
 	}
@@ -956,38 +982,18 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Find the module's position in the full course.Modules slice (visible modules
-	// may be a subset; isLastMeaningfulModule operates on the full list).
-	fullIdx := slices.IndexFunc(course.Modules, func(m content.Module) bool {
-		return m.Slug() == mod.Slug()
-	})
-
-	s.finalizeSubmission(writer, req, course, mod, fullIdx, questions, passingScore, cooldownSpec, userID, courseSlug, idx)
+	s.finalizeSubmission(writer, req, course, mod, modules, questions, passingScore, cooldownSpec, userID, courseSlug, idx)
 }
 
 // finalizeSubmission decodes a quiz submission body, rejects it if any of
 // the resolved questions is still under a cooldown, then scores it, records
 // per-question cooldowns and overall module progress, and writes the
-// resulting submitResponse to the client. When the passed quiz is the last
-// meaningful module of the course, it also notifies user-service that the
-// course is complete.
-func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, course *content.Course, mod content.Module, fullIdx int, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
-	var submission content.SubmitRequest
-
-	err := json.NewDecoder(req.Body).Decode(&submission)
-	if err != nil {
-		s.Error(writer, http.StatusBadRequest, "Invalid request body")
-
-		return
-	}
-
-	// Check cooldowns for each question before scoring.
-	if cooldowns := s.pendingCooldowns(userID, courseSlug, idx, questions); len(cooldowns) > 0 {
-		s.JSON(writer, http.StatusTooEarly, map[string]any{
-			"error":     "Cooldown active for some questions",
-			"cooldowns": cooldowns,
-		})
-
+// resulting submitResponse to the client. When passing this quiz was the
+// last thing the course was waiting for, it also notifies user-service that
+// the course is complete.
+func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, course *content.Course, mod content.Module, modules []content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
+	submission, accepted := s.acceptSubmission(writer, req, questions, userID, courseSlug, idx)
+	if !accepted {
 		return
 	}
 
@@ -999,18 +1005,67 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 	result := content.ScoreQuiz(effectiveQuiz, submission.Answers)
 
 	// Record cooldowns for wrong answers.
-	respCooldowns := s.recordQuestionCooldowns(userID, courseSlug, idx, result.QuestionResults, cooldownSpec, mod.MaxAttemptsPerQuestion, mod.LockOnMaxAttempts)
+	respCooldowns := s.recordQuestionCooldowns(req.Context(), userID, courseSlug, idx,
+		result.QuestionResults, cooldownSpec, mod.MaxAttemptsPerQuestion, mod.LockOnMaxAttempts)
 
 	s.recordModuleProgress(courseSlug, userID, mod.Slug(), mod.Type, idx, result.TotalScore, result.MaxScore, result.Passed) //nolint:contextcheck // fire-and-forget async POST detached from the request context by design
 
-	if result.Passed && isLastMeaningfulModule(course.Modules, fullIdx) &&
-		s.allQuizModulesPassed(req.Context(), course, userID, courseSlug, mod.Slug()) {
-		s.notifyCourseComplete(req, userID, courseSlug)
+	if result.Passed && s.courseCompleted(req, modules, userID, courseSlug, mod.Slug(), "") {
+		s.notifyCourseComplete(req, course, userID)
 	}
 
-	apiResults := make([]questionResultAPI, len(result.QuestionResults))
-	for i, questionResult := range result.QuestionResults {
-		apiResults[i] = questionResultAPI{
+	s.JSON(writer, http.StatusOK, submitResponse{
+		TotalScore:      result.TotalScore,
+		MaxScore:        result.MaxScore,
+		Passed:          result.Passed,
+		QuestionResults: toQuestionResultsAPI(result.QuestionResults),
+		Cooldowns:       respCooldowns,
+	})
+}
+
+// acceptSubmission decodes a quiz submission and rejects it when any of the
+// questions is still under a cooldown. It writes the error response itself
+// and reports ok=false when the submission must not be scored.
+func (s *State) acceptSubmission(
+	writer http.ResponseWriter, req *http.Request,
+	questions []content.Question, userID, courseSlug string, idx int,
+) (content.SubmitRequest, bool) {
+	var submission content.SubmitRequest
+
+	err := json.NewDecoder(req.Body).Decode(&submission)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid request body")
+
+		return submission, false
+	}
+
+	cooldowns, err := s.pendingCooldowns(req.Context(), userID, courseSlug, idx, questions)
+	if err != nil {
+		zap.L().Error("load quiz cooldowns failed",
+			zap.String("courseSlug", courseSlug), zap.Int("moduleIndex", idx), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
+
+		return submission, false
+	}
+
+	if len(cooldowns) > 0 {
+		s.JSON(writer, http.StatusTooEarly, map[string]any{
+			"error":     "Cooldown active for some questions",
+			"cooldowns": cooldowns,
+		})
+
+		return submission, false
+	}
+
+	return submission, true
+}
+
+// toQuestionResultsAPI converts scored question results into their
+// client-facing form.
+func toQuestionResultsAPI(results []content.QuestionResult) []questionResultAPI {
+	out := make([]questionResultAPI, len(results))
+	for index, questionResult := range results {
+		out[index] = questionResultAPI{
 			QuestionID:    questionResult.QuestionID,
 			Type:          questionResult.Type,
 			IsCorrect:     questionResult.IsCorrect,
@@ -1022,13 +1077,7 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 		}
 	}
 
-	s.JSON(writer, http.StatusOK, submitResponse{
-		TotalScore:      result.TotalScore,
-		MaxScore:        result.MaxScore,
-		Passed:          result.Passed,
-		QuestionResults: apiResults,
-		Cooldowns:       respCooldowns,
-	})
+	return out
 }
 
 // resolveSubmitQuiz resolves the questions, passing score, and cooldown spec
@@ -1056,75 +1105,123 @@ func (s *State) resolveSubmitQuiz(ctx context.Context, writer http.ResponseWrite
 }
 
 // pendingCooldowns returns any active per-question cooldowns for userID on
-// this quiz module, which should block a resubmission attempt.
-func (s *State) pendingCooldowns(userID, courseSlug string, idx int, questions []content.Question) map[string]cooldownState {
+// this quiz module, which should block a resubmission attempt. The whole
+// quiz's state is read in one query.
+//
+// It reports an error rather than an empty map when the lookup fails, so a
+// database problem cannot silently wave a submission past its cooldown.
+func (s *State) pendingCooldowns(ctx context.Context, userID, courseSlug string, idx int, questions []content.Question) (map[string]cooldownState, error) {
+	key := attemptKey(userID, courseSlug, idx)
+
+	states, err := s.Repos.QuizAttempts.States(ctx, key, questionIDs(questions))
+	if err != nil {
+		return nil, fmt.Errorf("load quiz attempts: %w", err)
+	}
+
 	cooldowns := make(map[string]cooldownState)
 
-	for _, qq := range questions {
-		remaining, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, qq.ID)
-		if remaining > 0 {
-			cooldowns[qq.ID] = cooldownState{
-				RemainingSeconds: int(remaining.Seconds()),
-				Attempts:         attempts,
+	for id, state := range states {
+		if state.Remaining > 0 {
+			cooldowns[id] = cooldownState{
+				RemainingSeconds: int(state.Remaining.Seconds()),
+				Attempts:         state.Attempts,
 			}
 		}
 	}
 
-	return cooldowns
+	return cooldowns, nil
 }
 
 // recordQuestionCooldowns records a cooldown for every incorrectly answered
-// question (clearing any existing cooldown for correct ones) and returns the
-// resulting per-question cooldown state to report back to the client.
-func (s *State) recordQuestionCooldowns(userID, courseSlug string, idx int, results []content.QuestionResult, spec content.CooldownSpec, maxAttempts *int, lockOnMax bool) map[string]cooldownState {
-	respCooldowns := make(map[string]cooldownState)
+// question, clears any existing cooldown for the correct ones, and returns
+// the resulting per-question cooldown state to report back to the client.
+//
+// Both halves are batched: one delete for the correct answers and one
+// upsert for the wrong ones, however many questions the quiz has.
+func (s *State) recordQuestionCooldowns(
+	ctx context.Context, userID, courseSlug string, idx int,
+	results []content.QuestionResult, spec content.CooldownSpec, maxAttempts *int, lockOnMax bool,
+) map[string]cooldownState {
+	key := attemptKey(userID, courseSlug, idx)
+
+	var passed, failed []string
 
 	for _, questionResult := range results {
 		if questionResult.IsCorrect {
-			s.CooldownTracker.ClearModule(userID, courseSlug, idx, questionResult.QuestionID)
-
-			continue
+			passed = append(passed, questionResult.QuestionID)
+		} else {
+			failed = append(failed, questionResult.QuestionID)
 		}
+	}
 
-		remaining, locked := s.CooldownTracker.RecordModule(userID, courseSlug, idx, questionResult.QuestionID, spec, maxAttempts, lockOnMax)
-		_, attempts := s.CooldownTracker.CheckModule(userID, courseSlug, idx, questionResult.QuestionID)
-		respCooldowns[questionResult.QuestionID] = cooldownState{
-			RemainingSeconds: int(remaining.Seconds()),
-			Attempts:         attempts,
-			Locked:           locked,
+	err := s.Repos.QuizAttempts.Clear(ctx, key, passed)
+	if err != nil {
+		zap.L().Error("clear quiz cooldowns failed",
+			zap.String("courseSlug", courseSlug), zap.Int("moduleIndex", idx), zap.Error(err))
+	}
+
+	recorded, err := s.Repos.QuizAttempts.RecordFailures(ctx, key, failed, spec, maxAttempts, lockOnMax)
+	if err != nil {
+		zap.L().Error("record quiz cooldowns failed",
+			zap.String("courseSlug", courseSlug), zap.Int("moduleIndex", idx), zap.Error(err))
+
+		return nil
+	}
+
+	respCooldowns := make(map[string]cooldownState, len(recorded))
+	for id, result := range recorded {
+		respCooldowns[id] = cooldownState{
+			RemainingSeconds: int(result.Remaining.Seconds()),
+			Attempts:         result.Attempts,
+			Locked:           result.Locked,
 		}
 	}
 
 	return respCooldowns
 }
 
-// allQuizModulesPassed returns true when every quiz-bearing module in the
-// course has been passed by userID. currentSlug names the quiz module that
-// just passed in the current request; because recordModuleProgress is
-// fire-and-forget, it may not yet be persisted in the user-service DB, so it
-// is credited without a round-trip. Pass an empty string when calling from a
-// lesson-completion context (no module just passed in the current request).
-func (s *State) allQuizModulesPassed(ctx context.Context, course *content.Course, userID, courseSlug, currentSlug string) bool {
-	var quizSlugs []string
+// courseCompleted returns true when userID has finished every module of the
+// course: quiz modules have to be passed, all others viewed. Hidden modules
+// are ignored — learners never see them, so they cannot hold a course back.
+//
+// A course is only complete once the trailing quiz is passed, and passing it
+// completes the course whatever order the modules were taken in: neither the
+// last lesson nor the quiz is special-cased.
+//
+// justPassedQuiz and justViewedLesson name the module completed by the
+// current request. Its progress write is either fire-and-forget
+// (recordModuleProgress) or racing this read, so it is credited here without
+// a round-trip. Pass an empty string for the kind the request did not touch.
+func (s *State) courseCompleted(
+	req *http.Request, modules []content.Module, userID, courseSlug, justPassedQuiz, justViewedLesson string,
+) bool {
+	var summary coursePrereqSummary
 
-	for _, m := range course.Modules {
-		if m.HasQuestions() {
-			quizSlugs = append(quizSlugs, m.Slug())
-		}
+	hasQuiz := slices.ContainsFunc(modules, func(m content.Module) bool {
+		return !m.Hidden && m.Type == moduleTypeQuiz
+	})
+	if hasQuiz {
+		summary = s.fetchCoursePrereqSummary(req.Context(), userID, courseSlug)
 	}
 
-	if len(quizSlugs) == 0 {
-		return true
-	}
+	viewed := s.viewedLessons(req, courseSlug, userID)
 
-	summary := s.fetchCoursePrereqSummary(ctx, userID, courseSlug)
-
-	for _, slug := range quizSlugs {
-		if slug == currentSlug {
-			continue // just passed in this request, not yet in user-service DB
+	for _, mod := range modules {
+		if mod.Hidden {
+			continue
 		}
 
-		if !summary.PassedModules[slug] {
+		slug := mod.Slug()
+
+		if mod.Type == moduleTypeQuiz {
+			if slug != justPassedQuiz && !summary.PassedModules[slug] {
+				return false
+			}
+
+			continue
+		}
+
+		if slug != justViewedLesson && !viewed[slug] {
 			return false
 		}
 	}

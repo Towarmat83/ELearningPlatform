@@ -1,0 +1,138 @@
+# Dev seed course — loaded by SEED_DEV_COURSES.
+slug: gitlab-cicd
+spec:
+  title: "GitLab Branching & CI/CD"
+  description: Réalise ta première Merge Request GitLab avec un pipeline CI/CD et des commits conventionnels.
+  category: devops
+  difficulty: beginner
+  public: true
+  badge:
+    name: "Maître CI/CD"
+    icon: "🚀"
+  modules:
+    - name: Introduction au CI/CD avec GitLab
+      type: text
+      content: |
+        ## Qu'est-ce que le CI/CD ?
+
+        Le **CI/CD** (Intégration Continue / Déploiement Continu) est une pratique DevOps qui automatise la vérification et la livraison du code à chaque modification.
+
+        - **CI — Intégration Continue** : à chaque push, une pipeline s'exécute automatiquement pour compiler, tester et valider le code.
+        - **CD — Déploiement Continu** : si la CI passe, le code est automatiquement livré en production (ou en staging).
+
+        L'objectif est de détecter les problèmes **le plus tôt possible**, avant qu'ils n'atteignent la production.
+
+        ---
+
+        ## Le workflow GitLab
+
+        GitLab organise le travail autour de trois concepts clés :
+
+        ### 1. Les branches
+        On ne travaille jamais directement sur `main`. Chaque fonctionnalité ou correction se développe sur une **branche dédiée**, isolée du reste.
+
+        ```
+        main
+        └── feature/add-greeting   ← ta branche de travail
+        ```
+
+        ### 2. Les Merge Requests (MR)
+        Une fois le travail terminé, on ouvre une **Merge Request** : une demande de fusion de ta branche vers `main`. C'est là que l'équipe peut relire le code et que la pipeline CI/CD se déclenche automatiquement.
+
+        ### 3. La pipeline `.gitlab-ci.yml`
+        Ce fichier à la racine du projet définit les étapes automatiques qui s'exécutent à chaque push :
+
+        ```yaml
+        stages:
+          - test
+
+        run-tests:
+          stage: test
+          script:
+            - python lab.py
+        ```
+
+        Si la pipeline passe (✅), la MR est prête à être fusionnée.
+
+        ---
+
+        ## Les Conventional Commits
+
+        Pour garder un historique lisible, on utilise une convention de nommage pour les commits et les branches.
+
+        ### Format d'un commit conventionnel
+        ```
+        feat: add user greeting function
+        fix: correct output format
+        docs: update README
+        ```
+
+        Les types courants : `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`.
+
+        ### Format d'une branche conventionnelle
+        ```
+        feature/add-greeting
+        fix/wrong-output
+        ```
+
+        ---
+
+        ## Pourquoi c'est important ?
+
+        | Sans CI/CD | Avec CI/CD |
+        |---|---|
+        | Les bugs sont découverts en production | Les bugs sont détectés au push |
+        | Le code est intégré rarement (conflits) | Le code est intégré en continu |
+        | Les déploiements sont manuels et risqués | Les déploiements sont automatisés et fiables |
+        | L'historique git est illisible | L'historique est structuré et exploitable |
+
+        ---
+
+        Prêt ? 🚀
+
+    - name: "GitLab Branching & CI/CD with Conventional Commits"
+      type: lab
+      src: http://10.89.0.1:8880/e-learning/devops-course.git
+      ref: main
+      path: modules/lab1/content.md
+      labUrl: http://localhost:8880/e-learning/devops-course/-/blob/main/modules/lab1/content.md
+      checkProvider: gitlab
+      steps:
+        - title: "Commit conventionnel effectué"
+          checkType: gitlab_conventional_commit_on_branch
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+            pattern: "feature/"
+        - title: "Modifications poussées"
+          checkType: gitlab_commit_on_branch
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+            pattern: "feature/"
+        - title: "Merge Request ouverte"
+          checkType: gitlab_mr_open
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+        - title: "Pipeline CI/CD passée"
+          checkType: gitlab_pipeline_passed
+          checkParams:
+            project: "e-learning/{{ .Username }}"
+
+    - name: Quiz de validation
+      type: quiz
+      inline: false
+      passingScore: 70
+      questions:
+        - id: q1
+          type: single
+          points: 1
+          question: "Qu'est-ce qu'une Merge Request dans GitLab ?"
+          answers:
+            - id: a
+              text: Une demande de fusion de branches
+              correct: true
+            - id: b
+              text: Un type de pipeline
+              correct: false
+            - id: c
+              text: Un outil de monitoring
+              correct: false

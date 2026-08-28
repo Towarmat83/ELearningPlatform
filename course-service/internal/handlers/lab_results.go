@@ -29,15 +29,9 @@ type labCheckRow struct {
 // @Failure   503  {object}  map[string]string
 // @Router    /api/admin/lab-checks [get].
 func (s *State) GetLabResults(writer http.ResponseWriter, req *http.Request) {
-	if s.LabChecks == nil {
-		s.Error(writer, http.StatusServiceUnavailable, "database not configured")
-
-		return
-	}
-
 	courseSlug := req.URL.Query().Get("course")
 
-	checks, err := s.LabChecks.List(req.Context(), courseSlug)
+	checks, err := s.Repos.LabChecks.List(req.Context(), courseSlug)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "db query failed")
 

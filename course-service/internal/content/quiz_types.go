@@ -286,7 +286,7 @@ func convertQuestion(rawQuestion QuestionYAML) Question {
 	}
 
 	if question.Difficulty == "" {
-		question.Difficulty = difficultyMedium
+		question.Difficulty = DifficultyMedium
 	}
 
 	return question

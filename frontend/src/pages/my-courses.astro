@@ -65,8 +65,11 @@ import App from '../layouts/App.astro';
     let allCourses: any[] = [];
     let searchTimer: ReturnType<typeof setTimeout>;
 
+    // Clamped at 100: a course can lose modules after a learner has already
+    // completed them, which would otherwise render a progress bar past full.
     function pct(c: any) {
-      return c.labCount > 0 ? Math.round(c.completedLabs / c.labCount * 100) : 0;
+      if (!c.labCount || c.labCount <= 0) return 0;
+      return Math.min(100, Math.round(c.completedLabs / c.labCount * 100));
     }
 
     function courseStatus(c: any): 'not-started' | 'in-progress' | 'completed' {
@@ -101,7 +104,7 @@ import App from '../layouts/App.astro';
               <div class="progress-bar flex-1"><div class="progress-bar-fill" style="width:${p}%"></div></div>
               <span class="text-[.75rem] font-semibold text-blue shrink-0 min-w-[32px] text-right">${p}%</span>
             </div>
-            <div class="text-[.78rem] text-ink-soft">${c.completedLabs ?? 0}/${c.labCount ?? 0} modules terminés</div>
+            <div class="text-[.78rem] text-ink-soft">${Math.min(c.completedLabs ?? 0, c.labCount ?? 0)}/${c.labCount ?? 0} modules terminés</div>
             <div class="mt-auto flex gap-2">
               <a href="/courses/${c.slug || c.id}" class="btn btn-primary btn-sm flex-1 justify-center">${ctaLabel}</a>
               <a href="/courses/${c.slug || c.id}" class="btn btn-secondary btn-sm">Détails</a>
@@ -149,13 +152,14 @@ import App from '../layouts/App.astro';
         }
 
         const totalModules = allCourses.reduce((s: number, c: any) => s + (c.labCount || 0), 0);
-        const doneModules = allCourses.reduce((s: number, c: any) => s + (c.completedLabs || 0), 0);
+        const doneModules = allCourses.reduce(
+          (s: number, c: any) => s + Math.min(c.completedLabs || 0, c.labCount || 0), 0);
         const completedCourses = allCourses.filter(c => courseStatus(c) === 'completed').length;
         document.getElementById('mc-stats')!.innerHTML = `
           <div class="stat-card"><span class="stat-val">${allCourses.length}</span><span class="stat-label">cours inscrits</span></div>
           <div class="stat-card"><span class="stat-val">${completedCourses}</span><span class="stat-label">cours terminés</span></div>
           <div class="stat-card"><span class="stat-val">${doneModules}</span><span class="stat-label">modules terminés</span></div>
-          <div class="stat-card"><span class="stat-val">${totalModules > 0 ? Math.round(doneModules / totalModules * 100) : 0}%</span><span class="stat-label">progression globale</span></div>
+          <div class="stat-card"><span class="stat-val">${totalModules > 0 ? Math.min(100, Math.round(doneModules / totalModules * 100)) : 0}%</span><span class="stat-label">progression globale</span></div>
         `;
 
         applyFilters();

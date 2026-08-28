@@ -31,7 +31,7 @@ const maxReplicateExtLength = 5
 // Src unchanged. The downloaded file is cached on disk; subsequent calls
 // skip the download.
 func ReplicatedPath(ctx context.Context, mod Module, uploadsDir string) string {
-	if !mod.Replication || mod.Type == moduleTypeText {
+	if !mod.Replication || mod.Type == ModuleTypeText {
 		return mod.Src
 	}
 

@@ -125,8 +125,6 @@ type Config struct {
 	// calls on /internal/* routes (X-Internal-Secret header).
 	InternalSecret string `yaml:"-"`
 
-	K8sNamespace string `yaml:"k8sNamespace"`
-	Kubeconfig   string `yaml:"kubeconfig"`
 	// AdminPassword is the password (or pre-computed bcrypt hash) for the
 	// bootstrapped admin account.
 	// Resolution order:
@@ -184,8 +182,6 @@ func Load() (cfg *Config, warnings []string) { //nolint:nonamedreturns // gocrit
 	cfg.OAuthRedirectBase = stringFromEnv("OAUTH_REDIRECT_BASE", cfg.OAuthRedirectBase)
 	cfg.CourseServiceURL = stringFromEnv("COURSE_SERVICE_URL", cfg.CourseServiceURL)
 	cfg.InternalSecret = stringFromEnv("INTERNAL_SERVICE_SECRET", cfg.InternalSecret)
-	cfg.K8sNamespace = stringFromEnv("K8S_NAMESPACE", cfg.K8sNamespace)
-	cfg.Kubeconfig = stringFromEnv("KUBECONFIG", cfg.Kubeconfig)
 	cfg.AuthRateLimitRequests = intFromEnv("AUTH_RATE_LIMIT_REQUESTS", cfg.AuthRateLimitRequests)
 	cfg.AuthRateLimitWindowSeconds = intFromEnv("AUTH_RATE_LIMIT_WINDOW_SECONDS", cfg.AuthRateLimitWindowSeconds)
 	cfg.LeaderboardMaxEntries = positiveIntFromEnv("LEADERBOARD_MAX_ENTRIES", cfg.LeaderboardMaxEntries)

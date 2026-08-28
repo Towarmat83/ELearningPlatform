@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
@@ -64,10 +66,8 @@ func TestFinalizeSubmission_InvalidBody(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	s := newTestState(t, mock)
-
 	course := singleChoiceCourse()
-	s.Content.Put(course)
+	s := newStateWith(&config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}, course)
 
 	mod := course.Modules[0]
 
@@ -76,7 +76,7 @@ func TestFinalizeSubmission_InvalidBody(t *testing.T) {
 	)
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, req, course, mod, 0,
+	s.finalizeSubmission(rec, req, course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	if rec.Code != http.StatusBadRequest {
@@ -92,10 +92,8 @@ func TestFinalizeSubmission_Pass(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	s := newTestState(t, mock)
-
 	course := singleChoiceCourse()
-	s.Content.Put(course)
+	s := newStateWith(&config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}, course)
 
 	mod := course.Modules[0]
 	answer := "a-correct"
@@ -105,7 +103,7 @@ func TestFinalizeSubmission_Pass(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, 0,
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	if rec.Code != http.StatusOK {
@@ -134,10 +132,8 @@ func TestFinalizeSubmission_Fail(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	s := newTestState(t, mock)
-
 	course := singleChoiceCourse()
-	s.Content.Put(course)
+	s := newStateWith(&config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}, course)
 
 	mod := course.Modules[0]
 	answer := "a-wrong"
@@ -147,7 +143,7 @@ func TestFinalizeSubmission_Fail(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, 0,
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
 		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
 
 	if rec.Code != http.StatusOK {
@@ -165,5 +161,294 @@ func TestFinalizeSubmission_Fail(t *testing.T) {
 
 	if resp.Passed {
 		t.Error("want passed=false for wrong answer")
+	}
+}
+
+// cooldownQuizCourse returns a course whose quiz applies a fixed 60-second
+// cooldown after a wrong answer.
+func cooldownQuizCourse() *content.Course {
+	course := singleChoiceCourse()
+	course.Modules[0].Cooldown = content.CooldownSpec{Strategy: "fixed", BaseSeconds: 60}
+
+	return course
+}
+
+// submitAnswer runs one submission of answerID against the course's quiz
+// module and returns the recorder.
+func submitAnswer(t *testing.T, s *State, course *content.Course, answerID string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	mod := course.Modules[0]
+	submission := content.SubmitRequest{
+		Answers: map[string]content.UserAnswer{"q1": {Single: &answerID}},
+	}
+
+	rec := httptest.NewRecorder()
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
+		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
+
+	return rec
+}
+
+// TestFinalizeSubmission_CooldownPersistedAndBlocks verifies that a wrong
+// answer records a cooldown and that the next submission is rejected with
+// 425 until it expires. The state lives in the quiz-attempt repository
+// rather than in the handler, so it survives a restart and holds across
+// replicas.
+func TestFinalizeSubmission_CooldownPersistedAndBlocks(t *testing.T) {
+	t.Parallel()
+
+	mock := newUserServiceMock()
+	defer mock.Close()
+
+	course := cooldownQuizCourse()
+	s := newStateWith(&config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}, course)
+
+	rec := submitAnswer(t, s, course, "a-wrong")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first submission: want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var first submitResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&first)
+	if err != nil {
+		t.Fatalf("decode first response: %v", err)
+	}
+
+	state, ok := first.Cooldowns["q1"]
+	if !ok {
+		t.Fatalf("want a cooldown reported for q1, got %+v", first.Cooldowns)
+	}
+
+	if state.Attempts != 1 || state.RemainingSeconds <= 0 {
+		t.Errorf("want 1 attempt with a pending cooldown, got %+v", state)
+	}
+
+	// The recorded cooldown must now block a retry.
+	rec = submitAnswer(t, s, course, "a-correct")
+	if rec.Code != http.StatusTooEarly {
+		t.Fatalf("second submission: want 425, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestFinalizeSubmission_CorrectAnswerClearsCooldown verifies that answering
+// correctly forgets the recorded attempts, so the learner is not left behind
+// a cooldown they have already cleared.
+func TestFinalizeSubmission_CorrectAnswerClearsCooldown(t *testing.T) {
+	t.Parallel()
+
+	mock := newUserServiceMock()
+	defer mock.Close()
+
+	// A zero-second cooldown records the attempt without blocking the retry.
+	course := singleChoiceCourse()
+	s := newStateWith(&config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}, course)
+
+	if rec := submitAnswer(t, s, course, "a-wrong"); rec.Code != http.StatusOK {
+		t.Fatalf("first submission: want 200, got %d", rec.Code)
+	}
+
+	key := attemptKey("user-1", course.Slug, 0)
+
+	states, err := s.Repos.QuizAttempts.States(t.Context(), key, []string{"q1"})
+	if err != nil {
+		t.Fatalf("States after wrong answer: %v", err)
+	}
+
+	if states["q1"].Attempts != 1 {
+		t.Fatalf("want 1 recorded attempt, got %+v", states["q1"])
+	}
+
+	if rec := submitAnswer(t, s, course, "a-correct"); rec.Code != http.StatusOK {
+		t.Fatalf("second submission: want 200, got %d", rec.Code)
+	}
+
+	states, err = s.Repos.QuizAttempts.States(t.Context(), key, []string{"q1"})
+	if err != nil {
+		t.Fatalf("States after correct answer: %v", err)
+	}
+
+	if _, still := states["q1"]; still {
+		t.Errorf("want the attempt forgotten after a correct answer, got %+v", states["q1"])
+	}
+}
+
+// TestFinalizeSubmission_LocksOnMaxAttempts verifies that a module
+// configured to lock reports locked=true once the attempt cap is reached,
+// instead of handing out another cooldown.
+func TestFinalizeSubmission_LocksOnMaxAttempts(t *testing.T) {
+	t.Parallel()
+
+	mock := newUserServiceMock()
+	defer mock.Close()
+
+	maxAttempts := 1
+
+	course := singleChoiceCourse()
+	course.Modules[0].MaxAttemptsPerQuestion = &maxAttempts
+	course.Modules[0].LockOnMaxAttempts = true
+
+	s := newStateWith(&config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}, course)
+
+	rec := submitAnswer(t, s, course, "a-wrong")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp submitResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Cooldowns["q1"].Locked {
+		t.Errorf("want q1 locked at the attempt cap, got %+v", resp.Cooldowns["q1"])
+	}
+}
+
+// ── Course completion is gated on the trailing quiz ───────────────────────────
+
+// lessonAndQuizCourse returns a course shaped like the seeded ones: a text
+// lesson closed by a quiz embedded at the end of it.
+func lessonAndQuizCourse() *content.Course {
+	return &content.Course{
+		Slug:       "guarded-course",
+		Title:      "Guarded Course",
+		Difficulty: "beginner",
+		IsPublic:   true,
+		Modules: []content.Module{
+			{Name: "Lesson One", Type: "text", InlineContent: "content"},
+			{
+				Name:         "Final Quiz",
+				Type:         "quiz",
+				Inline:       true,
+				PassingScore: 1,
+				Questions: []content.Question{
+					{
+						ID:     "q1",
+						Type:   "single",
+						Points: 1,
+						Answers: []content.Answer{
+							{ID: "a-correct", Text: "Right answer", Correct: true},
+							{ID: "a-wrong", Text: "Wrong answer", Correct: false},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// courseCompleteWatcher returns a user-service mock recording whether the
+// course-complete endpoint was called, with the given progress overrides
+// applied on top of the defaults.
+func courseCompleteWatcher(
+	viewed []string, passedModules []string,
+) (*httptest.Server, *atomic.Bool) {
+	var completed atomic.Bool
+
+	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
+		"/internal/progress/course-complete": func(w http.ResponseWriter, _ *http.Request) {
+			completed.Store(true)
+
+			_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		},
+		"/internal/progress/viewed": func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"viewed": viewed})
+		},
+		"/internal/progress/course-summary": func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"totalScore":    0,
+				"passedModules": passedModules,
+			})
+		},
+	})
+
+	return mock, &completed
+}
+
+// TestMarkLessonComplete_WaitsForTrailingQuiz verifies that reading the last
+// lesson does not complete a course whose closing quiz is unanswered.
+func TestMarkLessonComplete_WaitsForTrailingQuiz(t *testing.T) {
+	t.Parallel()
+
+	mock, completed := courseCompleteWatcher(nil, nil)
+	defer mock.Close()
+
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
+	router := BuildRouter(newStateWith(cfg, lessonAndQuizCourse()), cfg, false)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/courses/guarded-course/lessons/lesson-one/complete", http.NoBody)
+	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if completed.Load() {
+		t.Error("course reported complete while its closing quiz is unanswered")
+	}
+}
+
+// TestMarkLessonComplete_AfterQuizPassed verifies that the last lesson does
+// complete the course once its closing quiz has been passed.
+func TestMarkLessonComplete_AfterQuizPassed(t *testing.T) {
+	t.Parallel()
+
+	mock, completed := courseCompleteWatcher(nil, []string{"final-quiz"})
+	defer mock.Close()
+
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
+	router := BuildRouter(newStateWith(cfg, lessonAndQuizCourse()), cfg, false)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/courses/guarded-course/lessons/lesson-one/complete", http.NoBody)
+	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !completed.Load() {
+		t.Error("want the course complete once every lesson is read and the quiz passed")
+	}
+}
+
+// TestSubmitModule_PassingTrailingQuizCompletesCourse verifies that passing
+// the closing quiz completes the course, which is the order a learner
+// naturally takes it in: lessons first, quiz last.
+func TestSubmitModule_PassingTrailingQuizCompletesCourse(t *testing.T) {
+	t.Parallel()
+
+	mock, completed := courseCompleteWatcher([]string{"lesson-one"}, nil)
+	defer mock.Close()
+
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
+	router := BuildRouter(newStateWith(cfg, lessonAndQuizCourse()), cfg, false)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/courses/guarded-course/modules/1/submit",
+		strings.NewReader(`{"answers":{"q1":{"single":"a-correct"}}}`))
+	req.Header.Set("Authorization", authHeader(t, cfg.JWTSecret))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !completed.Load() {
+		t.Error("want the course complete once its closing quiz is passed")
 	}
 }

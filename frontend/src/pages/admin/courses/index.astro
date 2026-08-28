@@ -69,7 +69,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="modal-overlay" id="yaml-modal">
     <div class="modal-box">
       <div class="modal-head">
-        <h3 id="yaml-title">CRD</h3>
+        <h3 id="yaml-title">Définition</h3>
         <button class="btn btn-ghost btn-sm" id="yaml-close">✕</button>
       </div>
       <div class="modal-body"><pre class="yaml" id="yaml-content"></pre></div>
@@ -473,12 +473,12 @@ import Admin from '../../../layouts/Admin.astro';
       render();
 
       try {
-        const crd = await api(`/admin/courses/${courseId}/crd`);
-        const spec = crd.spec as any;
-        const crdMods = [...(spec.modules || [])];
-        const [movedCrd] = crdMods.splice(srcIdx, 1);
-        crdMods.splice(tgtIdx, 0, movedCrd);
-        await api(`/admin/courses/${courseId}/crd`, { method: 'PUT', body: { spec: { ...spec, modules: crdMods } } });
+        const definition = await api(`/admin/courses/${courseId}/definition`);
+        const spec = definition.spec as any;
+        const reorderedMods = [...(spec.modules || [])];
+        const [movedMod] = reorderedMods.splice(srcIdx, 1);
+        reorderedMods.splice(tgtIdx, 0, movedMod);
+        await api(`/admin/courses/${courseId}/definition`, { method: 'PUT', body: { spec: { ...spec, modules: reorderedMods } } });
         const res = await api(`/courses/${courseId}/modules`);
         panelModules = res.modules || [];
         render();
@@ -609,13 +609,13 @@ import Admin from '../../../layouts/Admin.astro';
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Enregistrement…'; }
 
       try {
-        const crd = await api(`/admin/courses/${courseId}/crd`);
-        const spec = crd.spec as any;
+        const definition = await api(`/admin/courses/${courseId}/definition`);
+        const spec = definition.spec as any;
         const mods: any[] = spec.modules ? [...spec.modules] : [];
 
         const isUpdate = moduleDraftIdx !== null;
         if (isUpdate) {
-          // Preserve existing CRD fields not shown in the form (passingScore, cooldown, prerequisites, etc.)
+          // Preserve existing definition fields not shown in the form (passingScore, cooldown, prerequisites, etc.)
           const existing = mods[moduleDraftIdx!] ?? {};
           const modSpec: any = { ...existing, name, type };
           if (src) modSpec.src = src; else delete modSpec.src;
@@ -635,7 +635,7 @@ import Admin from '../../../layouts/Admin.astro';
           if (quizRef && type === 'quiz') modSpec.quizRef = quizRef;
           mods.push(modSpec);
         }
-        await api(`/admin/courses/${courseId}/crd`, { method: 'PUT', body: { spec: { ...spec, modules: mods } } });
+        await api(`/admin/courses/${courseId}/definition`, { method: 'PUT', body: { spec: { ...spec, modules: mods } } });
         (window as any).showToast?.(isUpdate ? 'Module mis à jour' : 'Module ajouté', 'success');
         // Optimistic update: immediately reflect the saved values in panelModules
         if (isUpdate && panelModules) {
@@ -662,10 +662,10 @@ import Admin from '../../../layouts/Admin.astro';
     async function deleteModule(courseId: string, idx: number, name: string) {
       if (!confirm(`Supprimer le module "${name}" ?`)) return;
       try {
-        const crd = await api(`/admin/courses/${courseId}/crd`);
-        const spec = crd.spec as any;
+        const definition = await api(`/admin/courses/${courseId}/definition`);
+        const spec = definition.spec as any;
         const mods = (spec.modules || []).filter((_: any, i: number) => i !== idx);
-        await api(`/admin/courses/${courseId}/crd`, { method: 'PUT', body: { spec: { ...spec, modules: mods } } });
+        await api(`/admin/courses/${courseId}/definition`, { method: 'PUT', body: { spec: { ...spec, modules: mods } } });
         (window as any).showToast?.(`Module "${name}" supprimé`, 'success');
         const res = await api(`/courses/${courseId}/modules`);
         panelModules = res.modules || [];
@@ -792,12 +792,14 @@ import Admin from '../../../layouts/Admin.astro';
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
     });
 
-    // ── Course CRD ──
+    // ── Course definition ──
+    // Renders the course definition as the JSON body accepted by
+    // PUT /api/admin/courses/{slug}/definition.
     async function openCourseYAML(courseId: string, title: string) {
       try {
-        const res = await api(`/admin/courses/${courseId}/crd`);
-        const yaml = `# kubectl apply -f course.yaml\napiVersion: elearning.pupitre.io/v1\nkind: Course\nmetadata:\n  name: ${courseId}\n  namespace: default\nspec:\n${JSON.stringify(res.spec, null, 2).split('\n').map((l: string) => '  ' + l).join('\n')}`;
-        (document.getElementById('yaml-title') as HTMLElement).textContent = `CRD — ${courseId}`;
+        const res = await api(`/admin/courses/${courseId}/definition`);
+        const yaml = JSON.stringify({ slug: courseId, spec: res.spec }, null, 2);
+        (document.getElementById('yaml-title') as HTMLElement).textContent = `Définition — ${courseId}`;
         (document.getElementById('yaml-content') as HTMLElement).textContent = yaml;
         document.getElementById('yaml-modal')!.classList.add('open');
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
@@ -805,7 +807,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function startEditCourse(courseId: string) {
       try {
-        const res = await api(`/admin/courses/${courseId}/crd`);
+        const res = await api(`/admin/courses/${courseId}/definition`);
         editingCourseId = courseId;
         editingCourseSpec = res.spec as any;
         render();
@@ -826,13 +828,13 @@ import Admin from '../../../layouts/Admin.astro';
       const pub  = (document.getElementById('ce-public') as HTMLInputElement)?.checked || false;
 
       try {
-        const crd = await api(`/admin/courses/${courseId}/crd`);
-        const existingSpec = crd.spec as any;
+        const definition = await api(`/admin/courses/${courseId}/definition`);
+        const existingSpec = definition.spec as any;
         const newSpec: any = { ...existingSpec, title, difficulty: diff, public: pub };
         if (desc) newSpec.description = desc; else delete newSpec.description;
         if (cat)  newSpec.category = cat;     else delete newSpec.category;
 
-        await api(`/admin/courses/${courseId}/crd`, { method: 'PUT', body: { spec: newSpec } });
+        await api(`/admin/courses/${courseId}/definition`, { method: 'PUT', body: { spec: newSpec } });
         (window as any).showToast?.(`Cours "${courseId}" mis à jour`, 'success');
         editingCourseId = null;
         editingCourseSpec = null;
@@ -844,9 +846,9 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function deleteCourse(courseId: string, title: string) {
-      if (!confirm(`Supprimer le cours "${title}" (${courseId}) ? Cela supprime le CRD du cluster.`)) return;
+      if (!confirm(`Supprimer le cours "${title}" (${courseId}) ? Cette action est irréversible.`)) return;
       try {
-        await api(`/admin/courses/${courseId}/crd`, { method: 'DELETE' });
+        await api(`/admin/courses/${courseId}/definition`, { method: 'DELETE' });
         allCourses = allCourses.filter(c => c.id !== courseId);
         if (openId === courseId) { openId = null; panelModules = null; panelEnrollments = null; panelGroupEnrollments = null; }
         (window as any).showToast?.(`Cours "${title}" supprimé`, 'success');
@@ -900,7 +902,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       try {
         if (editingSlug) {
-          await api(`/admin/courses/${editingSlug}/crd`, { method: 'PUT', body: { spec } });
+          await api(`/admin/courses/${editingSlug}/definition`, { method: 'PUT', body: { spec } });
           (window as any).showToast?.(`Cours "${editingSlug}" mis à jour`, 'success');
         } else {
           await api('/admin/courses', { method: 'POST', body: { slug, spec } });

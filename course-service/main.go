@@ -1,10 +1,10 @@
 // Package main is the entry point for the course-service HTTP API, which
-// serves course and module content backed by Kubernetes CRD-managed Git
-// repositories.
+// serves course and module content backed by PostgreSQL and Git.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,12 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
-	ctrl "sigs.k8s.io/controller-runtime"
+
+	"gorm.io/gorm"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
-	"github.com/genesary/pupitre/course-service/internal/content"
 	coursedb "github.com/genesary/pupitre/course-service/internal/db"
 	"github.com/genesary/pupitre/course-service/internal/handlers"
 	"github.com/genesary/pupitre/course-service/internal/repository"
@@ -32,6 +31,11 @@ const (
 	idleTimeout = 120 * time.Second
 	// shutdownTimeout bounds how long graceful shutdown waits for requests.
 	shutdownTimeout = 15 * time.Second
+	// dbConnectAttempts is how many times startup retries the initial
+	// database connection before giving up.
+	dbConnectAttempts = 10
+	// dbConnectRetryDelay is the wait between initial connection attempts.
+	dbConnectRetryDelay = 3 * time.Second
 )
 
 // main starts the course-service HTTP API server.
@@ -47,8 +51,24 @@ const (
 func main() {
 	logger := initLogger()
 	zap.ReplaceGlobals(logger)
-	ctrl.SetLogger(zapr.NewLogger(logger))
 
+	err := run()
+	if err != nil {
+		zap.L().Error("fatal startup error", zap.Error(err))
+
+		_ = logger.Sync()
+
+		os.Exit(1)
+	}
+
+	_ = logger.Sync()
+}
+
+// run wires up the database and HTTP server, then blocks until a shutdown
+// signal is received. Keeping this separate from main lets deferred
+// cleanup run to completion instead of being skipped by a direct
+// [os.Exit] call.
+func run() error {
 	zap.L().Info("starting course-service")
 
 	// ── Configuration ────────────────────────────────────────────────────────
@@ -62,63 +82,114 @@ func main() {
 
 	logConfig(cfg)
 
+	if cfg.DatabaseURL == "" {
+		return errors.New("DATABASE_URL is required: course content is served from the database")
+	}
+
 	ctx := context.Background()
-
-	// ── Stores & state ───────────────────────────────────────────────────────
-	zap.L().Info("initializing in-memory stores")
-
-	store := content.NewStore()
-	pathStore := content.NewPathStore()
-	state := handlers.NewState(cfg, store, pathStore)
 
 	// ── Database ──────────────────────────────────────────────────────────────
 	zap.L().Info("connecting to database")
 
-	connectDatabase(ctx, cfg, state)
+	gdb, err := connectWithRetry(ctx, cfg)
+	if err != nil {
+		return err
+	}
 
-	// ── K8s watchers ──────────────────────────────────────────────────────────
-	zap.L().Info("starting Kubernetes watchers", zap.String("namespace", cfg.K8sNamespace))
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		return fmt.Errorf("unwrap sql.DB: %w", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
 
-	startWatchers(ctx, cfg, store, pathStore)
+	err = coursedb.RunMigrations(ctx, gdb)
+	if err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
 
-	zap.L().Info("Kubernetes watchers started")
+	zap.L().Info("database connected and schema migrated")
+
+	// ── Dev seed ──────────────────────────────────────────────────────────────
+	// No-op unless SEED_DEV_COURSES is set; see internal/db/seed_dev.go.
+	repos := repository.NewGormRepositories(gdb)
+
+	err = coursedb.SeedDevCourses(ctx, repos.Courses, os.Getenv("SEED_DEV_COURSES"))
+	if err != nil {
+		return fmt.Errorf("seed dev courses: %w", err)
+	}
 
 	// ── HTTP router ───────────────────────────────────────────────────────────
 	zap.L().Info("building HTTP router")
 
-	r := handlers.BuildRouter(state, cfg, true)
+	state := handlers.NewState(cfg, repos)
+	router := handlers.BuildRouter(state, cfg, true)
 
-	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      r,
+		Addr:         fmt.Sprintf(":%d", cfg.Port),
+		Handler:      router,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,
 	}
 
-	serveAndWait(srv)
-
-	_ = logger.Sync()
+	return serve(srv)
 }
 
-// serveAndWait starts the HTTP server in a goroutine, blocks until SIGINT or
-// SIGTERM is received, then performs a graceful shutdown.
-func serveAndWait(srv *http.Server) {
+// connectWithRetry opens the database connection, retrying a bounded
+// number of times so that starting alongside a Postgres pod that is not
+// ready yet is a slow start rather than a crash loop.
+func connectWithRetry(ctx context.Context, cfg *config.Config) (*gorm.DB, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= dbConnectAttempts; attempt++ {
+		gdb, err := coursedb.Connect(ctx, cfg.DatabaseURL, cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
+		if err == nil {
+			return gdb, nil
+		}
+
+		lastErr = err
+
+		zap.L().Warn("database not ready, retrying",
+			zap.Int("attempt", attempt), zap.Int("of", dbConnectAttempts), zap.Error(err))
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("connect to database: %w", ctx.Err())
+		case <-time.After(dbConnectRetryDelay):
+		}
+	}
+
+	return nil, fmt.Errorf("connect to database after %d attempts: %w", dbConnectAttempts, lastErr)
+}
+
+// serve starts srv in the background, blocks until an interrupt/terminate
+// signal is received or the server exits unexpectedly, then gracefully
+// shuts srv down.
+func serve(srv *http.Server) error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	serveErr := make(chan error, 1)
 
 	go func() {
 		zap.L().Info("API listening", zap.String("addr", srv.Addr))
 
 		err := srv.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			zap.L().Error("server error", zap.Error(err))
-			os.Exit(1)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- fmt.Errorf("server error: %w", err)
+
+			return
 		}
+
+		serveErr <- nil
 	}()
 
-	<-quit
+	select {
+	case err := <-serveErr:
+		return err
+	case <-quit:
+	}
+
 	zap.L().Info("shutting down")
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -126,95 +197,27 @@ func serveAndWait(srv *http.Server) {
 
 	err := srv.Shutdown(shutCtx)
 	if err != nil {
-		zap.L().Error("forced shutdown", zap.Error(err))
+		return fmt.Errorf("forced shutdown: %w", err)
 	}
 
 	zap.L().Info("server stopped")
+
+	return nil
 }
 
 // logConfig logs the effective (post-override) configuration values,
 // omitting secrets and connection strings.
 func logConfig(cfg *config.Config) {
-	kubeMode := "in-cluster"
-	if cfg.Kubeconfig != "" {
-		kubeMode = cfg.Kubeconfig
-	}
-
 	zap.L().Info("configuration loaded",
 		zap.Int("port", cfg.Port),
-		zap.String("k8sNamespace", cfg.K8sNamespace),
-		zap.String("kubeconfig", kubeMode),
 		zap.Bool("databaseConfigured", cfg.DatabaseURL != ""),
+		zap.Int("dbMaxOpenConns", cfg.DBMaxOpenConns),
+		zap.Int("dbMaxIdleConns", cfg.DBMaxIdleConns),
 		zap.String("userServiceURL", cfg.UserServiceURL),
 		zap.String("checkerServiceURL", cfg.CheckerServiceURL),
 		zap.Int("gitCacheTTLMin", cfg.GitCacheTTL),
 		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
 	)
-}
-
-// connectDatabase connects to the database configured via cfg.DatabaseURL,
-// runs pending migrations, and wires the resulting pool into state. It logs
-// and continues without a database (disabling lab result tracking) if any
-// step fails, since the database is optional for course-service.
-//
-// TODO: this only attempts the connection once, at startup. If Postgres
-// isn't ready yet at that moment (e.g. its pod is still starting up
-// alongside this one), lab result tracking stays disabled for the rest of
-// this pod's lifetime instead of retrying/reconnecting later.
-//
-//nolint:godox // tracked follow-up, not a lint-worthy code smell: see the TODO body below
-func connectDatabase(ctx context.Context, cfg *config.Config, state *handlers.State) {
-	if cfg.DatabaseURL == "" {
-		return
-	}
-
-	pool, err := coursedb.Connect(ctx, cfg.DatabaseURL, cfg.DBMaxOpenConns, cfg.DBMaxIdleConns)
-	if err != nil {
-		zap.L().Warn("database unavailable, lab result tracking disabled", zap.Error(err))
-
-		return
-	}
-
-	err = coursedb.RunMigrations(ctx, pool)
-	if err != nil {
-		zap.L().Warn("db migration failed", zap.Error(err))
-
-		return
-	}
-
-	state.LabChecks = repository.NewGormLabCheckRepository(pool)
-
-	zap.L().Info("database connected, lab tracking enabled")
-}
-
-// startWatchers starts the Kubernetes CRD watchers that keep store and
-// pathStore up to date. It exits the process if the required module watcher
-// cannot be created or started; the optional path watcher only logs a
-// warning on failure.
-func startWatchers(ctx context.Context, cfg *config.Config, store *content.Store, pathStore *content.PathStore) {
-	watcher, err := content.NewK8sWatcher(store, cfg.Kubeconfig, cfg.K8sNamespace)
-	if err != nil {
-		zap.L().Error("failed to create K8s watcher", zap.Error(err))
-		os.Exit(1)
-	}
-
-	err = watcher.Start(ctx)
-	if err != nil {
-		zap.L().Error("failed to start K8s watcher", zap.Error(err))
-		os.Exit(1)
-	}
-
-	pathWatcher, err := content.NewPathWatcher(pathStore, cfg.Kubeconfig, cfg.K8sNamespace)
-	if err != nil {
-		zap.L().Warn("failed to create Path watcher, paths disabled", zap.Error(err))
-
-		return
-	}
-
-	err = pathWatcher.Start(ctx)
-	if err != nil {
-		zap.L().Warn("failed to start Path watcher", zap.Error(err))
-	}
 }
 
 // initLogger builds a zap logger driven by two environment variables:

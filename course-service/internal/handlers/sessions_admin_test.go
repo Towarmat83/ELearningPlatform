@@ -91,7 +91,7 @@ func TestCreateSession_RequiresAuth(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions", http.NoBody)
+		"/api/admin/courses/kubernetes-basics/sessions", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -112,7 +112,7 @@ func TestCreateSession_StudentForbidden(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions", http.NoBody)
+		"/api/admin/courses/kubernetes-basics/sessions", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
 
 	rec := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestCreateSession_StudentForbidden(t *testing.T) {
 }
 
 // TestCreateSession_AdminPassesMiddleware verifies that an admin is not blocked
-// by the middleware (K8s failure expected beyond that point).
+// by the middleware, and that the session is actually created.
 func TestCreateSession_AdminPassesMiddleware(t *testing.T) {
 	t.Parallel()
 
@@ -136,16 +136,15 @@ func TestCreateSession_AdminPassesMiddleware(t *testing.T) {
 
 	body := `{"title":"Test","date":"2026-09-01T10:00:00Z","location":"Room A","capacity":10}`
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions", strings.NewReader(body))
+		"/api/admin/courses/kubernetes-basics/sessions", strings.NewReader(body))
 	req.Header.Set("Authorization", adminAuthHeader(t, "test-secret"))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	// K8s not available in tests — 500 is expected, not 401/403
-	if rec.Code == http.StatusUnauthorized || rec.Code == http.StatusForbidden {
-		t.Errorf("admin should not be blocked by middleware, got %d", rec.Code)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("admin should be able to create a session, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -162,15 +161,15 @@ func TestCreateSession_ManagerPassesMiddleware(t *testing.T) {
 
 	body := `{"title":"Test","date":"2026-09-01T10:00:00Z","location":"Room A","capacity":10}`
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions", strings.NewReader(body))
+		"/api/admin/courses/kubernetes-basics/sessions", strings.NewReader(body))
 	req.Header.Set("Authorization", managerAuthHeader(t, "test-secret"))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code == http.StatusUnauthorized || rec.Code == http.StatusForbidden {
-		t.Errorf("manager should not be blocked by middleware, got %d", rec.Code)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("manager should be able to create a session, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -187,7 +186,7 @@ func TestCreateSession_BadJSON(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions", strings.NewReader(`{bad json`))
+		"/api/admin/courses/kubernetes-basics/sessions", strings.NewReader(`{bad json`))
 	req.Header.Set("Authorization", adminAuthHeader(t, "test-secret"))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -210,7 +209,7 @@ func TestCreateSession_MissingTitle(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions",
+		"/api/admin/courses/kubernetes-basics/sessions",
 		strings.NewReader(`{"date":"2026-09-01T10:00:00Z","location":"Room A","capacity":10}`))
 	req.Header.Set("Authorization", adminAuthHeader(t, "test-secret"))
 	req.Header.Set("Content-Type", "application/json")
@@ -234,7 +233,7 @@ func TestCreateSession_MissingDate(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
-		"/api/admin/courses/devops-lab-demo/sessions",
+		"/api/admin/courses/kubernetes-basics/sessions",
 		strings.NewReader(`{"title":"Session","location":"Room A","capacity":10}`))
 	req.Header.Set("Authorization", adminAuthHeader(t, "test-secret"))
 	req.Header.Set("Content-Type", "application/json")
@@ -259,7 +258,7 @@ func TestUpdateSession_RequiresAuth(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPut,
-		"/api/admin/courses/devops-lab-demo/sessions/sess-abc", http.NoBody)
+		"/api/admin/courses/kubernetes-basics/sessions/sess-abc", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -280,7 +279,7 @@ func TestUpdateSession_StudentForbidden(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPut,
-		"/api/admin/courses/devops-lab-demo/sessions/sess-abc", http.NoBody)
+		"/api/admin/courses/kubernetes-basics/sessions/sess-abc", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
 
 	rec := httptest.NewRecorder()
@@ -303,7 +302,7 @@ func TestDeleteSession_RequiresAuth(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete,
-		"/api/admin/courses/devops-lab-demo/sessions/sess-abc", http.NoBody)
+		"/api/admin/courses/kubernetes-basics/sessions/sess-abc", http.NoBody)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -324,7 +323,7 @@ func TestDeleteSession_StudentForbidden(t *testing.T) {
 	r := BuildRouter(s, &config.Config{JWTSecret: "test-secret"}, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete,
-		"/api/admin/courses/devops-lab-demo/sessions/sess-abc", http.NoBody)
+		"/api/admin/courses/kubernetes-basics/sessions/sess-abc", http.NoBody)
 	req.Header.Set("Authorization", authHeader(t, "test-secret"))
 
 	rec := httptest.NewRecorder()

@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-Les labs sont des modules de type `lab` dans un cours CRD. L'apprenant lit l'énoncé directement dans la plateforme, réalise le travail dans GitLab, puis clique **Vérifier mon travail**. Le checker évalue automatiquement le travail via une policy OPA/Rego.
+Les labs sont des modules de type `lab` d'un cours. L'apprenant lit l'énoncé directement dans la plateforme, réalise le travail dans GitLab, puis clique **Vérifier mon travail**. Le checker évalue automatiquement le travail via une policy OPA/Rego.
 
 ```
 Apprenant                    Plateforme                  Checker Service
@@ -102,7 +102,7 @@ mr_has_conventional_commit(mr) if {
 }
 ```
 
-## Configuration du module dans le CRD cours
+## Configuration du module dans la définition du cours
 
 ```yaml
 modules:

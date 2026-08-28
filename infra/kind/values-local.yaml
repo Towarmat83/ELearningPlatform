@@ -15,6 +15,12 @@ courseService:
     type: NodePort
     port: 8082
     nodePort: 30082
+  extraEnv:
+    # Seeds the demo catalogue on startup so a fresh cluster is browsable.
+    # "true" only creates the courses that are missing; use "overwrite" to
+    # replace them after editing course-service/internal/db/seed/courses/.
+    - name: SEED_DEV_COURSES
+      value: "true"
   env:
     JWT_EXPIRY_HOURS: "72"
     GIT_CACHE_TTL: "1" # Short TTL in dev for quick iteration

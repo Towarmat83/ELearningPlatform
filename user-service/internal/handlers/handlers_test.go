@@ -16,8 +16,6 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	patternv1 "github.com/genesary/pupitre/user-service/api/v1"
-
 	"github.com/genesary/pupitre/user-service/fake"
 	"github.com/genesary/pupitre/user-service/internal/config"
 	apimiddleware "github.com/genesary/pupitre/user-service/internal/middleware"
@@ -4484,101 +4482,6 @@ func TestLDAPLogin_LDAPDisabled(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400 (LDAP disabled), got %d: %s", rec.Code, rec.Body.String())
 	}
-}
-
-// ── buildRestConfig (pattern_watcher.go) ─────────────────────────────────────
-
-// TestBuildRestConfig_InvalidKubeconfig verifies build rest config invalid
-// kubeconfig behavior.
-func TestBuildRestConfig_InvalidKubeconfig(t *testing.T) {
-	t.Parallel()
-
-	_, err := buildRestConfig("/nonexistent/kubeconfig.yaml")
-	if err == nil {
-		t.Error("expected error for nonexistent kubeconfig")
-	}
-}
-
-// TestBuildRestConfig_NoKubeconfig verifies build rest config no kubeconfig
-// behavior.
-func TestBuildRestConfig_NoKubeconfig(t *testing.T) {
-	t.Parallel()
-
-	_, err := buildRestConfig("")
-	if err == nil {
-		t.Error("expected error when not in k8s cluster")
-	}
-}
-
-// ── PatternWatcher (pattern_watcher.go) ──────────────────────────────────────
-
-// TestPatternWatcher_Upsert_NoSpec verifies pattern watcher upsert no spec
-// behavior.
-func TestPatternWatcher_Upsert_NoSpec(t *testing.T) {
-	t.Parallel()
-
-	w := &PatternWatcher{patterns: fake.NewPatternRepository()}
-	cr := &patternv1.MarkdownPattern{}
-	cr.SetName("test-pattern")
-	w.upsert(context.Background(), cr)
-}
-
-// TestPatternWatcher_Upsert_WithSpec verifies pattern watcher upsert with
-// spec behavior.
-func TestPatternWatcher_Upsert_WithSpec(t *testing.T) {
-	t.Parallel()
-
-	w := &PatternWatcher{patterns: fake.NewPatternRepository()}
-	cr := &patternv1.MarkdownPattern{
-		Spec: patternv1.MarkdownPatternSpec{
-			Name:  "my-pattern",
-			Label: "My Pattern",
-			HTML:  "<div>{{content}}</div>",
-			Scope: "global",
-		},
-	}
-	w.upsert(context.Background(), cr)
-}
-
-// TestPatternWatcher_Upsert_DefaultsApplied verifies pattern watcher upsert
-// defaults applied behavior.
-func TestPatternWatcher_Upsert_DefaultsApplied(t *testing.T) {
-	t.Parallel()
-
-	w := &PatternWatcher{patterns: fake.NewPatternRepository()}
-	cr := &patternv1.MarkdownPattern{
-		Spec: patternv1.MarkdownPatternSpec{
-			HTML: "<div>test</div>",
-		},
-	}
-	cr.SetName("fallback-name")
-	w.upsert(context.Background(), cr)
-}
-
-// TestPatternWatcher_Delete_WithSpec verifies pattern watcher delete with
-// spec behavior.
-func TestPatternWatcher_Delete_WithSpec(t *testing.T) {
-	t.Parallel()
-
-	w := &PatternWatcher{patterns: fake.NewPatternRepository()}
-	cr := &patternv1.MarkdownPattern{
-		Spec: patternv1.MarkdownPatternSpec{
-			Name:  "my-pattern",
-			Scope: "course",
-		},
-	}
-	w.delete(context.Background(), cr)
-}
-
-// TestPatternWatcher_Delete_NoSpec verifies pattern watcher delete no spec
-// behavior.
-func TestPatternWatcher_Delete_NoSpec(t *testing.T) {
-	t.Parallel()
-
-	w := &PatternWatcher{patterns: fake.NewPatternRepository()}
-	cr := &patternv1.MarkdownPattern{}
-	cr.SetName("fallback-pattern")
-	w.delete(context.Background(), cr)
 }
 
 // ── InternalCourseSummary additional coverage ─────────────────────────────────

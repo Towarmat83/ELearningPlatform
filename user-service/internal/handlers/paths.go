@@ -245,34 +245,27 @@ func (s *State) buildSkillStatuses(req *http.Request, userID string, skills []st
 
 // completedCoursesCtx returns the set of course slugs (from slugs) that
 // userID has completed. Completion is not path-scoped: a course finished
-// in any path counts. Two sources are checked — passed quiz modules
-// (module_progress) and the __complete__ sentinel in lesson_progress.
+// in any path counts.
+//
+// The __complete__ sentinel in lesson_progress is the only source: it is
+// written by course-service once every module of the course is done. Passed
+// quiz modules used to count as well, which reported a course as finished
+// on its first passed quiz — with the rest of its lessons and quizzes still
+// untouched.
 func (s *State) completedCoursesCtx(request *http.Request, userID string, slugs []string) map[string]struct{} {
 	if len(slugs) == 0 {
 		return nil
 	}
 
-	result := make(map[string]struct{})
-
-	moduleCompleted, err := s.Repos.ModuleProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
+	completed, err := s.Repos.LessonProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
 	if err != nil {
-		zap.L().Error("failed to query completed courses via module progress", zap.String("userID", userID), zap.Error(err))
+		zap.L().Error("failed to query completed courses", zap.String("userID", userID), zap.Error(err))
 
 		return nil
 	}
 
-	for _, slug := range moduleCompleted {
-		result[slug] = struct{}{}
-	}
-
-	lessonCompleted, err := s.Repos.LessonProgress.CompletedCourseSlugs(request.Context(), userID, slugs)
-	if err != nil {
-		zap.L().Error("failed to query completed courses via lesson progress", zap.String("userID", userID), zap.Error(err))
-
-		return nil
-	}
-
-	for _, slug := range lessonCompleted {
+	result := make(map[string]struct{}, len(completed))
+	for _, slug := range completed {
 		result[slug] = struct{}{}
 	}
 

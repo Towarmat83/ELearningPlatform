@@ -20,7 +20,7 @@ func TestRecordLocalCheck_InsertThenList(t *testing.T) {
 	defer mock.Close()
 
 	s := newTestState(t, mock)
-	s.LabChecks = fake.NewLabCheckRepository()
+	s.Repos.LabChecks = fake.NewLabCheckRepository()
 
 	r := BuildRouter(s, s.Config, false)
 
@@ -99,7 +99,7 @@ func TestRecordLocalCheck_NilRepo_NoError(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	s := newTestState(t, mock) // s.LabChecks left nil
+	s := newTestState(t, mock) // s.Repos.LabChecks left nil
 	r := BuildRouter(s, s.Config, false)
 
 	body, err := json.Marshal(CheckResponse{Allow: false, Violations: []string{"boom"}})

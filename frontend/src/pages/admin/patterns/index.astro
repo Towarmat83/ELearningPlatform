@@ -5,7 +5,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl">Markdown Patterns</h1>
-      <p class="text-soft text-sm mt-1">Gérés comme des CRDs <code>MarkdownPattern</code>. Utiliser <code>kubectl apply</code> pour les ajouter.</p>
+      <p class="text-soft text-sm mt-1">Stockés en base et gérés depuis cette page.</p>
     </div>
     <button class="btn btn-primary btn-sm" id="new-btn">+ Nouveau pattern</button>
   </div>
@@ -74,7 +74,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="patterns-list" style="display:none">
     <div id="patterns-body" class="flex flex-col gap-2"></div>
     <div id="empty-state" class="card text-center p-10" style="display:none">
-      <p class="text-soft">Aucun pattern. Appliquez un CRD <code>MarkdownPattern</code> ou cliquez <strong>+ Nouveau pattern</strong>.</p>
+      <p class="text-soft">Aucun pattern. Cliquez <strong>+ Nouveau pattern</strong>.</p>
     </div>
   </div>
 
@@ -82,7 +82,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="modal-overlay" id="yaml-modal">
     <div class="modal-box">
       <div class="modal-head">
-        <h3 id="yaml-title">CRD — pattern</h3>
+        <h3 id="yaml-title">Définition — pattern</h3>
         <button class="btn btn-ghost btn-sm" id="yaml-close">✕</button>
       </div>
       <div class="modal-body">
@@ -233,33 +233,23 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
-    // ── YAML generation ──
-    function generateCRD(p: { name: string; label?: string; scope?: string; html: string; css?: string; js?: string }) {
-      function esc(s: string) {
-        if (!s) return '""';
-        if (s.includes('\n')) return '|\n' + s.split('\n').map((l: string) => '    ' + l).join('\n');
-        return JSON.stringify(s);
-      }
-      const lines = [
-        `apiVersion: elearning.pupitre.io/v1`,
-        `kind: MarkdownPattern`,
-        `metadata:`,
-        `  name: ${p.name}`,
-        `  namespace: default`,
-        `spec:`,
-        `  name: ${p.name}`,
-        p.label ? `  label: ${JSON.stringify(p.label)}` : null,
-        `  scope: ${p.scope || 'global'}`,
-        `  html: ${esc(p.html)}`,
-        p.css ? `  css: ${esc(p.css)}` : null,
-        p.js  ? `  js: ${esc(p.js)}`  : null,
-      ];
-      return lines.filter(Boolean).join('\n');
+    // ── Definition export ──
+    // Renders the pattern as the JSON body accepted by
+    // POST /api/admin/patterns.
+    function generateDefinition(p: { name: string; label?: string; scope?: string; html: string; css?: string; js?: string }) {
+      return JSON.stringify({
+        name:  p.name,
+        label: p.label || p.name,
+        scope: p.scope || 'global',
+        html:  p.html,
+        css:   p.css || '',
+        js:    p.js  || '',
+      }, null, 2);
     }
 
     function showYAML(p: { name: string; label?: string; scope?: string; html: string; css?: string; js?: string }) {
-      const yaml = generateCRD(p);
-      (document.getElementById('yaml-title') as HTMLElement).textContent = `CRD — ${p.name}`;
+      const yaml = generateDefinition(p);
+      (document.getElementById('yaml-title') as HTMLElement).textContent = `Définition — ${p.name}`;
       (document.getElementById('yaml-content') as HTMLElement).textContent = yaml;
       document.getElementById('yaml-modal')!.classList.add('open');
     }
@@ -369,7 +359,6 @@ import Admin from '../../../layouts/Admin.astro';
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="pat-name">|||${p.name}</span>
                   ${p.label ? `<span class="text-soft text-sm">${p.label}</span>` : ''}
-                  <span class="badge badge-violet text-[.7rem]">CRD</span>
                   ${p.scope && p.scope !== 'global'
                     ? `<span class="badge badge-amber text-[.7rem]">${p.scope}</span>`
                     : `<span class="badge badge-gray text-[.7rem]">global</span>`}
@@ -450,7 +439,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function deletePattern(p: any) {
-      if (!confirm(`Supprimer le pattern "${p.name}" ? Cela supprime le CRD du cluster.`)) return;
+      if (!confirm(`Supprimer le pattern "${p.name}" ? Cette action est irréversible.`)) return;
       try {
         await api(`/admin/patterns/${p.name}`, { method: 'DELETE' });
         (window as any).showToast?.(`Pattern "${p.name}" supprimé`, 'success');

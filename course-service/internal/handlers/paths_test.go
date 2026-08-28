@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/genesary/pupitre/course-service/fake"
 	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
 
 // newPathTestState builds a State pre-populated with two fixture learning
@@ -15,23 +17,28 @@ import (
 func newPathTestState(t *testing.T) *State {
 	t.Helper()
 
-	store := content.NewStore()
-	paths := content.NewPathStore()
-	paths.Put(&content.Path{
-		Slug:        "devops-path",
-		Title:       "DevOps Path",
-		Description: "From Linux to Kubernetes",
-		Courses:     []string{"linux-intro", "docker-fundamentals", "kubernetes-basics"},
-	})
-	paths.Put(&content.Path{
-		Slug:    "python-path",
-		Title:   "Python Path",
-		Courses: []string{"python-basics", "python-advanced"},
-	})
+	paths := fake.NewPathRepository(
+		&content.Path{
+			Slug:        "devops-path",
+			Title:       "DevOps Path",
+			Description: "From Linux to Kubernetes",
+			Courses:     []string{"linux-intro", "docker-fundamentals", "kubernetes-basics"},
+		},
+		&content.Path{
+			Slug:    "python-path",
+			Title:   "Python Path",
+			Courses: []string{"python-basics", "python-advanced"},
+		},
+	)
 
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
 
-	return NewState(cfg, store, paths)
+	return NewState(cfg, &repository.Repositories{
+		Courses:      fake.NewCourseRepository(),
+		Paths:        paths,
+		QuizAttempts: fake.NewQuizAttemptRepository(),
+		LabChecks:    fake.NewLabCheckRepository(),
+	})
 }
 
 // TestListPaths verifies the paths list endpoint returns all known paths.

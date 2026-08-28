@@ -1,6 +1,6 @@
 # E-Learning Platform
 
-Micro-services e-learning platform with Kubernetes CRD-based course definitions and automated lab validation.
+Micro-services e-learning platform with database-backed course definitions and automated lab validation.
 
 ## Architecture
 
@@ -22,7 +22,6 @@ graph LR
 
         subgraph Data["Data"]
             PostgreSQL[("PostgreSQL")]
-            K8sCRD[["K8s CRD\nCourse definitions"]]
             GitRepos[["Git repos\nLab content"]]
         end
     end
@@ -45,7 +44,6 @@ graph LR
 
     UserService --> PostgreSQL
     CourseService --> PostgreSQL
-    CourseService --> K8sCRD
     CourseService --> GitRepos
     CheckerService --> GitRepos
     CheckerService --> GitLab
@@ -54,14 +52,14 @@ graph LR
 
 | Service | Role | Tech |
 |---------|------|------|
-| **Course Service** | Course content, media, quiz, inline lab rendering, checker proxy, lab_checks persistence | Go + chi + client-go + GORM |
+| **Course Service** | Course catalogue and content, media, quiz, inline lab rendering, checker proxy, lab_checks persistence | Go + chi + GORM |
 | **User Service** | Auth (local · OAuth2/OIDC), enrollments, progress, admin | Go + chi + GORM |
 | **Checker Service** | Fetch live GitLab state, evaluate OPA/Rego policy, return violations | Go + chi + go-gitlab + OPA |
 | **Frontend** | Astro SSR, API proxy, markdown lab rendering, admin Labs page | Astro |
 
 ## Source of truth
 
-Courses are defined as **Kubernetes CRDs** (`elearning.pupitre.io/v1`, kind `Course`). See [`docs/Course.md`](docs/Course.md) for the full spec.
+Courses live in **PostgreSQL** and are created and edited through the course-service admin API (`/api/admin/courses`) or the admin UI. Nothing is cached in memory: each request reads what it needs from the database, so any replica serves the same catalogue and a restart loses nothing. See [`docs/Course.md`](docs/Course.md) for the full spec.
 
 ## Interactive Labs — Lab Checker
 
@@ -106,7 +104,7 @@ Student clicks "Vérifier" (inside Pupitre)
   → {allow, violations} returned to frontend
 ```
 
-Lab modules with `checkProvider: local` in the CRD use this flow. Labs with `checkProvider: gitlab` (or no provider) use the remote checker-service as before.
+Lab modules with `checkProvider: local` use this flow. Labs with `checkProvider: gitlab` (or no provider) use the remote checker-service as before.
 
 ### Build Pupitre
 
@@ -131,7 +129,7 @@ See `CONTRIBUTING.md` for the full step-by-step guide, troubleshooting, and depl
 │       └── config/       # Env config
 ├── course-service/       # Go service (port 8082)
 │   └── internal/
-│       ├── content/      # Store, K8s watcher, git fetch, quiz scoring
+│       ├── content/      # Domain types, git fetch, quiz scoring
 │       ├── db/           # GORM connect + schema management (AutoMigrate)
 │       ├── models/       # GORM-mapped structs
 │       ├── repository/   # Repository interfaces + GORM implementations
@@ -149,9 +147,9 @@ See `CONTRIBUTING.md` for the full step-by-step guide, troubleshooting, and depl
 │       └── config/       # Env config
 ├── frontend/             # Astro
 ├── helm/                 # Helm chart (submodule: pupitre-helm)
-├── infra/                # Kind config + manifests + course CRDs
+├── infra/                # Kind config + example manifests
 ├── docs/                 # Architecture, Course spec, Labs, SSO
-└── examples/             # Sample Course CRD manifests
+└── examples/             # Sample deployment manifests + quiz files
 ```
 
 ## Configuration

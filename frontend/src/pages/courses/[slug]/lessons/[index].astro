@@ -301,16 +301,22 @@ import App from '../../../../layouts/App.astro';
       const prevMod = allModules.slice(0, currentIdx).filter((m: any) => !m.inline).at(-1) ?? null;
       (document.getElementById('back-to-course') as HTMLAnchorElement).href = `/courses/${slug}`;
 
-      // Inline quizzes are embedded — exclude from sidebar and progress counts
+      // Inline quizzes are embedded in the lesson before them — no sidebar entry
+      // of their own, but they still count as work to do in the progress totals.
       const navModules = allModules.filter((m: any) => !m.inline);
 
       // Progress
-      const completed = navModules.filter((m: any) => m.type === 'quiz' ? m.passed : m.viewed).length;
-      const pct = navModules.length > 0 ? Math.round(completed / navModules.length * 100) : 0;
-      (document.getElementById('sidebar-progress') as HTMLElement).style.width = pct + '%';
-      document.getElementById('sidebar-progress-text')!.textContent = `${completed}/${navModules.length} complétés`;
-      (document.getElementById('floating-prog-fill') as HTMLElement).style.width = pct + '%';
-      document.getElementById('floating-prog-text')!.textContent = `${completed}/${navModules.length}`;
+      let completed = allModules.filter((m: any) => m.type === 'quiz' ? m.passed : m.viewed).length;
+      const total = allModules.length;
+
+      function renderProgress() {
+        const pct = total > 0 ? Math.round(completed / total * 100) : 0;
+        (document.getElementById('sidebar-progress') as HTMLElement).style.width = pct + '%';
+        document.getElementById('sidebar-progress-text')!.textContent = `${completed}/${total} complétés`;
+        (document.getElementById('floating-prog-fill') as HTMLElement).style.width = pct + '%';
+        document.getElementById('floating-prog-text')!.textContent = `${completed}/${total}`;
+      }
+      renderProgress();
 
       // Module tree
       const tree = document.getElementById('module-tree')!;
@@ -525,57 +531,81 @@ import App from '../../../../layouts/App.astro';
 
       const nextLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : 'Suivant ▸';
 
-      let rightBtn = '';
-      if (!mod.viewed || !nextMod) {
-        // Use a button (not a link) so the click handler fires the complete API.
-        // For the last module this is critical even when already viewed, to write the course-complete sentinel.
-        const btnLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸' : nextMod ? 'Suivant ▸' : 'Terminer le cours ▸';
-        rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">${btnLabel}</button>`;
-      } else {
-        rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`;
+      // The quiz embedded at the bottom of this lesson is part of the course:
+      // as long as it is unanswered, this lesson cannot finish the course.
+      let quizPending = mod.inlineQuiz?.questions?.length > 0 && !mod.inlineQuiz.passed;
+
+      function renderNav() {
+        const isLast = !nextMod;
+        let rightBtn = '';
+        if (!mod.viewed || isLast) {
+          // Use a button (not a link) so the click handler fires the complete API.
+          // For the last module this is critical even when already viewed, to write the course-complete sentinel.
+          const btnLabel = nextMod?.type === 'lab' ? 'Passer au Lab ▸'
+            : nextMod ? 'Suivant ▸'
+            : quizPending ? 'Terminer la leçon ▸' : 'Terminer le cours ▸';
+          rightBtn = `<button class="btn btn-primary" id="mark-complete-btn">${btnLabel}</button>`;
+        } else {
+          rightBtn = `<a href="${modHref(nextMod)}" class="btn btn-primary">${nextLabel}</a>`;
+        }
+
+        const hint = isLast && quizPending
+          ? `<span class="lesson-nav-hint">Validez le quiz ci-dessous pour terminer le cours.</span>`
+          : '';
+
+        navDiv.innerHTML = `${prevBtn}${hint}${rightBtn}`;
+        bindMarkComplete();
       }
 
-      navDiv.innerHTML = `${prevBtn}${rightBtn}`;
+      function bindMarkComplete() {
+        document.getElementById('mark-complete-btn')?.addEventListener('click', async () => {
+          try {
+            await apiFetch(`/courses/${slug}/lessons/${mod.slug}/complete`, { method: 'POST', body: {}, token: token! });
+            const btn = document.getElementById('mark-complete-btn')!;
+            btn.textContent = '✓ Terminé';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-secondary');
+            (btn as HTMLButtonElement).disabled = true;
 
-      document.getElementById('mark-complete-btn')?.addEventListener('click', async () => {
-        try {
-          await apiFetch(`/courses/${slug}/lessons/${mod.slug}/complete`, { method: 'POST', body: {}, token: token! });
-          const btn = document.getElementById('mark-complete-btn')!;
-          btn.textContent = '✓ Terminé';
-          btn.classList.remove('btn-primary');
-          btn.classList.add('btn-secondary');
-          (btn as HTMLButtonElement).disabled = true;
+            const link = tree.querySelector<HTMLElement>(`a[href="/courses/${slug}/lessons/${moduleIndex}"]`);
+            if (link && !link.querySelector('.sidebar-done-check')) {
+              const check = document.createElement('span');
+              check.className = 'sidebar-done-check';
+              check.textContent = '✓';
+              link.appendChild(check);
+            }
 
-          const link = tree.querySelector<HTMLElement>(`a[href="/courses/${slug}/lessons/${moduleIndex}"]`);
-          if (link && !link.querySelector('.sidebar-done-check')) {
-            const check = document.createElement('span');
-            check.className = 'sidebar-done-check';
-            check.textContent = '✓';
-            link.appendChild(check);
+            if (nextMod) {
+              window.location.href = modHref(nextMod);
+            } else {
+              const returnTo = localStorage.getItem('courseReturnTo');
+              localStorage.removeItem('courseReturnTo');
+              window.location.href = returnTo ?? `/courses/${slug}`;
+            }
+          } catch {
+            (window as any).showToast?.('Erreur lors de la mise à jour', 'error');
           }
+        });
+      }
 
-          if (nextMod) {
-            window.location.href = modHref(nextMod);
-          } else {
-            const returnTo = localStorage.getItem('courseReturnTo');
-            localStorage.removeItem('courseReturnTo');
-            window.location.href = returnTo ?? `/courses/${slug}`;
-          }
-        } catch {
-          (window as any).showToast?.('Erreur lors de la mise à jour', 'error');
-        }
-      });
+      renderNav();
 
       // Mini-quiz: use inlineQuiz data already embedded in the module response
       if (mod.inlineQuiz?.questions?.length > 0) {
-        renderMiniQuiz(mod.inlineQuiz, mod.inlineQuiz.index);
+        // Passing it unblocks the end of the course, so the nav is redrawn.
+        renderMiniQuiz(mod.inlineQuiz, mod.inlineQuiz.index, () => {
+          quizPending = false;
+          completed += 1;
+          renderProgress();
+          renderNav();
+        });
       }
 
       document.getElementById('loading')!.style.display = 'none';
       document.getElementById('lesson-layout')!.style.display = 'grid';
     }
 
-    function renderMiniQuiz(quizMod: any, quizIndex: number) {
+    function renderMiniQuiz(quizMod: any, quizIndex: number, onPassed?: () => void) {
       const container = document.getElementById('mini-quiz')!;
       container.style.display = 'block';
       const questions = quizMod.questions;
@@ -585,6 +615,8 @@ import App from '../../../../layouts/App.astro';
       let result: any = null;
       let cooldowns: Record<string, { remaining: number; locked: boolean }> = {};
       let cooldownTimer: ReturnType<typeof setInterval> | null = null;
+      // Already counted as done on load — a second pass must not notify again.
+      let passNotified = quizMod.passed === true;
 
       function initAnswers() {
         answers = {};
@@ -912,6 +944,10 @@ import App from '../../../../layouts/App.astro';
           submitted = true;
           startCooldowns(result.cooldowns || {});
           showResult();
+          if (result.passed && !passNotified) {
+            passNotified = true;
+            onPassed?.();
+          }
         } catch (e: any) {
           if (e.status === 425 && e.body?.cooldowns) startCooldowns(e.body.cooldowns);
           if (btn) { btn.disabled = false; btn.textContent = 'Valider le quiz ▸'; }

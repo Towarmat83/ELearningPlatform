@@ -8,9 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	coursev1 "github.com/genesary/pupitre/course-service/api/v1"
 	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
@@ -19,6 +17,10 @@ const (
 	// 8 bytes = 16 hex chars; collision probability is negligible even at scale.
 	sessionIDBytes = 8
 )
+
+// sessionNotFoundMessage is returned when a session ID matches no session
+// of the course.
+const sessionNotFoundMessage = "Session not found"
 
 // sessionBody is the request payload for creating or updating a session.
 type sessionBody struct {
@@ -56,7 +58,7 @@ func sessionFromBody(id string, body sessionBody) content.Session {
 // @Tags     Admin - Sessions
 // @Security BearerAuth
 // @Router   /api/admin/courses/{slug}/sessions [post].
-func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { //nolint:funlen // multiple guard clauses required
+func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) {
 	slug := chi.URLParam(req, "slug")
 
 	var body sessionBody
@@ -74,14 +76,6 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 		return
 	}
 
-	kubeClient, err := k8sClient(s.Config.Kubeconfig)
-	if err != nil {
-		zap.L().Error("k8s client init failed", zap.Error(err))
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
-
-		return
-	}
-
 	sessionID, err := generateSessionID()
 	if err != nil {
 		zap.L().Error("generate session id failed", zap.Error(err))
@@ -90,36 +84,13 @@ func (s *State) CreateSession(writer http.ResponseWriter, req *http.Request) { /
 		return
 	}
 
-	ctx := req.Context()
-	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
-
-	var course coursev1.Course
-
-	getErr := kubeClient.Get(ctx, key, &course)
-	if getErr != nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
-		return
-	}
-
-	if course.Spec.Sessions == nil {
-		course.Spec.Sessions = make(map[string]coursev1.CourseSession)
-	}
-
-	course.Spec.Sessions[sessionID] = coursev1.CourseSession{
-		Title:    body.Title,
-		Date:     body.Date,
-		Location: body.Location,
-		Capacity: body.Capacity,
-	}
-
-	rollback := s.Content.AddSession(slug, sessionFromBody(sessionID, body))
-
-	updateErr := kubeClient.Update(ctx, &course)
-	if updateErr != nil {
-		zap.L().Error("update course sessions failed", zap.String("slug", slug), zap.Error(updateErr))
-		rollback()
-		s.Error(writer, http.StatusInternalServerError, "Failed to create session")
+	// One row insert, rather than a read-modify-write of the whole course
+	// definition — two managers adding a session at the same time can no
+	// longer clobber each other.
+	err = s.Repos.Courses.PutSession(req.Context(), slug, sessionFromBody(sessionID, body))
+	if err != nil {
+		s.writeRepoError(writer, err, courseNotFoundMessage, "create session",
+			zap.String("slug", slug), zap.String("sessionId", sessionID))
 
 		return
 	}
@@ -145,46 +116,24 @@ func (s *State) UpdateSession(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	kubeClient, err := k8sClient(s.Config.Kubeconfig)
+	exists, err := s.Repos.Courses.SessionExists(req.Context(), slug, sessionID)
 	if err != nil {
-		zap.L().Error("k8s client init failed", zap.Error(err))
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
+		zap.L().Error("check session failed", zap.String("slug", slug), zap.String("sessionId", sessionID), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
 
 		return
 	}
 
-	ctx := req.Context()
-	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
-
-	var course coursev1.Course
-
-	getErr := kubeClient.Get(ctx, key, &course)
-	if getErr != nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
+	if !exists {
+		s.Error(writer, http.StatusNotFound, sessionNotFoundMessage)
 
 		return
 	}
 
-	if _, ok := course.Spec.Sessions[sessionID]; !ok {
-		s.Error(writer, http.StatusNotFound, "Session not found")
-
-		return
-	}
-
-	course.Spec.Sessions[sessionID] = coursev1.CourseSession{
-		Title:    body.Title,
-		Date:     body.Date,
-		Location: body.Location,
-		Capacity: body.Capacity,
-	}
-
-	rollback := s.Content.ReplaceSession(slug, sessionFromBody(sessionID, body))
-
-	updateErr := kubeClient.Update(ctx, &course)
-	if updateErr != nil {
-		zap.L().Error("update course sessions failed", zap.String("slug", slug), zap.Error(updateErr))
-		rollback()
-		s.Error(writer, http.StatusInternalServerError, "Failed to update session")
+	err = s.Repos.Courses.PutSession(req.Context(), slug, sessionFromBody(sessionID, body))
+	if err != nil {
+		s.writeRepoError(writer, err, courseNotFoundMessage, "update session",
+			zap.String("slug", slug), zap.String("sessionId", sessionID))
 
 		return
 	}
@@ -201,41 +150,10 @@ func (s *State) DeleteSession(writer http.ResponseWriter, req *http.Request) {
 	slug := chi.URLParam(req, "slug")
 	sessionID := chi.URLParam(req, "sessionId")
 
-	kubeClient, err := k8sClient(s.Config.Kubeconfig)
+	err := s.Repos.Courses.DeleteSession(req.Context(), slug, sessionID)
 	if err != nil {
-		zap.L().Error("k8s client init failed", zap.Error(err))
-		s.Error(writer, http.StatusInternalServerError, "Internal error")
-
-		return
-	}
-
-	ctx := req.Context()
-	key := client.ObjectKey{Name: slug, Namespace: s.Config.K8sNamespace}
-
-	var course coursev1.Course
-
-	getErr := kubeClient.Get(ctx, key, &course)
-	if getErr != nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
-		return
-	}
-
-	if _, ok := course.Spec.Sessions[sessionID]; !ok {
-		s.Error(writer, http.StatusNotFound, "Session not found")
-
-		return
-	}
-
-	delete(course.Spec.Sessions, sessionID)
-
-	rollback := s.Content.RemoveSession(slug, sessionID)
-
-	updateErr := kubeClient.Update(ctx, &course)
-	if updateErr != nil {
-		zap.L().Error("delete course session failed", zap.String("slug", slug), zap.Error(updateErr))
-		rollback()
-		s.Error(writer, http.StatusInternalServerError, "Failed to delete session")
+		s.writeRepoError(writer, err, sessionNotFoundMessage, "delete session",
+			zap.String("slug", slug), zap.String("sessionId", sessionID))
 
 		return
 	}

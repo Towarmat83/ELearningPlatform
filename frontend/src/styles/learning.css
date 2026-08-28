@@ -1562,6 +1562,13 @@
     padding-top: 24px;
     border-top: 1px solid var(--line);
   }
+  .lesson-nav-hint {
+    flex: 1;
+    padding: 0 16px;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    text-align: center;
+  }
   .lesson-title {
     margin-bottom: 20px;
     font-size: 1.5rem;

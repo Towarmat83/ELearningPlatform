@@ -24,8 +24,6 @@ spec:
         env:
         - name: CONFIG_PATH
           value: /etc/course-service/config.yaml
-        - name: KUBECONFIG
-          value: /var/run/secrets/kubernetes.io/serviceaccount/token
         volumeMounts:
         - name: config
           mountPath: /etc/course-service

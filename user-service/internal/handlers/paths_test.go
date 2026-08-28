@@ -242,8 +242,8 @@ func TestMyPaths_WithCourseService(t *testing.T) {
 	repos.Paths = fake.NewPathEnrollmentRepository(models.PathEnrollment{
 		UserID: userID, PathSlug: "devops-path", EnrolledAt: time.Now(),
 	})
-	repos.ModuleProgress = fake.NewModuleProgressRepository(models.ModuleProgress{
-		UserID: userID.String(), CourseSlug: "lab1", Passed: true,
+	repos.LessonProgress = fake.NewLessonProgressRepository(models.LessonProgress{
+		UserID: userID.String(), CourseSlug: "lab1", LessonSlug: fake.LessonSlugComplete,
 	})
 
 	s := &State{
@@ -566,15 +566,54 @@ func TestCompletedCoursesCtx_EmptySlugs(t *testing.T) {
 func TestCompletedCoursesCtx_DBError(t *testing.T) {
 	t.Parallel()
 
-	moduleProgress := fake.NewModuleProgressRepository()
-	moduleProgress.Err = errors.New("db down")
+	lessonProgress := fake.NewLessonProgressRepository()
+	lessonProgress.Err = errors.New("db down")
 	repos := fake.NewRepositories()
-	repos.ModuleProgress = moduleProgress
+	repos.LessonProgress = lessonProgress
 	s := &State{Repos: repos}
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	if result := s.completedCoursesCtx(req, "user-uuid-1", []string{"course-a"}); result != nil {
 		t.Errorf("expected nil on DB error, got %v", result)
+	}
+}
+
+// TestCompletedCoursesCtx_PassedModuleIsNotCompletion verifies that passing
+// one module of a course does not report the whole course as completed.
+func TestCompletedCoursesCtx_PassedModuleIsNotCompletion(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.ModuleProgress = fake.NewModuleProgressRepository(models.ModuleProgress{
+		UserID: "user-uuid-1", CourseSlug: "course-a", Passed: true,
+	})
+	s := &State{Repos: repos}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+
+	result := s.completedCoursesCtx(req, "user-uuid-1", []string{"course-a"})
+	if _, done := result["course-a"]; done {
+		t.Error("want course-a incomplete: one passed module is not a finished course")
+	}
+}
+
+// TestCompletedCoursesCtx_SentinelCompletes verifies that the __complete__
+// sentinel — written once every module of a course is done — is what marks a
+// course as completed.
+func TestCompletedCoursesCtx_SentinelCompletes(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	repos.LessonProgress = fake.NewLessonProgressRepository(models.LessonProgress{
+		UserID: "user-uuid-1", CourseSlug: "course-a", LessonSlug: fake.LessonSlugComplete,
+	})
+	s := &State{Repos: repos}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+
+	result := s.completedCoursesCtx(req, "user-uuid-1", []string{"course-a"})
+	if _, done := result["course-a"]; !done {
+		t.Errorf("want course-a completed via the sentinel, got %v", result)
 	}
 }
 
@@ -604,8 +643,8 @@ func TestAdminListPathEnrollments_WithDetail(t *testing.T) {
 	repos := fake.NewRepositories()
 	repos.Users = users
 	repos.Paths = paths
-	repos.ModuleProgress = fake.NewModuleProgressRepository(models.ModuleProgress{
-		UserID: userID.String(), CourseSlug: "linux-intro", Passed: true,
+	repos.LessonProgress = fake.NewLessonProgressRepository(models.LessonProgress{
+		UserID: userID.String(), CourseSlug: "linux-intro", LessonSlug: fake.LessonSlugComplete,
 	})
 
 	s := &State{

@@ -154,10 +154,8 @@ func (s *State) ListLessons(writer http.ResponseWriter, req *http.Request) {
 	courseSlug := param(req, "slug")
 	claims := s.claims(req)
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
 		return
 	}
 
@@ -168,22 +166,6 @@ func (s *State) ListLessons(writer http.ResponseWriter, req *http.Request) {
 	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
 
 	modules := s.visibleModules(course, req)
-
-	if len(course.Lessons) > 0 {
-		out := make([]lessonSummary, 0, len(course.Lessons))
-		for _, lesson := range course.Lessons {
-			out = append(out, lessonSummary{
-				Slug:   lesson.Slug,
-				Title:  lesson.Title,
-				Order:  lesson.Order,
-				Viewed: viewed[lesson.Slug],
-			})
-		}
-
-		s.JSON(writer, http.StatusOK, map[string]any{lessonsJSONKey: out})
-
-		return
-	}
 
 	out := make([]lessonSummary, 0, len(modules))
 	for pos, mod := range modules {
@@ -196,23 +178,6 @@ func (s *State) ListLessons(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{lessonsJSONKey: out})
-}
-
-// findStoredLesson looks up a course-defined (non-module) lesson by slug.
-func findStoredLesson(course *content.Course, lessonSlug string, viewed map[string]bool) (lessonDetail, bool) {
-	for idx := range course.Lessons {
-		if course.Lessons[idx].Slug == lessonSlug {
-			return lessonDetail{
-				Slug:    course.Lessons[idx].Slug,
-				Title:   course.Lessons[idx].Title,
-				Order:   course.Lessons[idx].Order,
-				Content: course.Lessons[idx].Content,
-				Viewed:  viewed[course.Lessons[idx].Slug],
-			}, true
-		}
-	}
-
-	return lessonDetail{}, false
 }
 
 // moduleLessonBody resolves the display body for a module-backed lesson,
@@ -263,10 +228,8 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 	lessonSlug := param(req, "lessonSlug")
 	claims := s.claims(req)
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, exists := s.course(writer, req, courseSlug)
+	if !exists {
 		return
 	}
 
@@ -276,12 +239,6 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 
 	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
 	modules := s.visibleModules(course, req)
-
-	if detail, found := findStoredLesson(course, lessonSlug, viewed); found {
-		s.JSON(writer, http.StatusOK, map[string]any{lessonJSONKey: detail})
-
-		return
-	}
 
 	mod, pos, found := findModuleLesson(modules, lessonSlug)
 	if !found {
@@ -304,42 +261,6 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 		Content: s.moduleLessonBody(req.Context(), mod),
 		Viewed:  viewed[mod.Slug()],
 	}})
-}
-
-// lessonModuleIndex reports whether lessonSlug identifies a course-defined
-// lesson (moduleIndex -1) or a module (its index), and whether it was
-// found at all.
-func lessonModuleIndex(course *content.Course, lessonSlug string) (int, bool) {
-	for _, lesson := range course.Lessons {
-		if lesson.Slug == lessonSlug {
-			return -1, true
-		}
-	}
-
-	for idx, mod := range course.Modules {
-		if mod.Slug() == lessonSlug {
-			return idx, true
-		}
-	}
-
-	return -1, false
-}
-
-// isLastMeaningfulModule reports whether moduleIndex is the last module in
-// modules, ignoring trailing inline quiz modules.
-func isLastMeaningfulModule(modules []content.Module, moduleIndex int) bool {
-	if len(modules) == 0 {
-		zap.L().Error("isLastMeaningfulModule: modules slice is empty")
-
-		return false
-	}
-
-	lastMeaningful := len(modules) - 1
-	for lastMeaningful > 0 && modules[lastMeaningful].Inline && modules[lastMeaningful].Type == moduleTypeQuiz {
-		lastMeaningful--
-	}
-
-	return moduleIndex >= 0 && moduleIndex == lastMeaningful
 }
 
 // postLessonComplete notifies the user-service that lessonSlug was
@@ -392,40 +313,30 @@ func (s *State) postLessonComplete(
 	return true
 }
 
-// buildSkillTotals counts how many courses in the catalog teach each of the
-// given skills.
-func (s *State) buildSkillTotals(skills map[string]struct{}) map[string]int {
-	totals := make(map[string]int, len(skills))
-
-	for _, crs := range s.Content.All() {
-		for _, sk := range crs.Skills {
-			if _, ok := skills[sk]; ok {
-				totals[sk]++
-			}
-		}
-	}
-
-	return totals
-}
-
 // notifyCourseComplete notifies the user-service that userID completed
-// courseSlug. Failures are only logged: the lesson itself was already
+// course. Failures are only logged: the lesson itself was already
 // recorded as complete, so they must not affect the HTTP response.
-func (s *State) notifyCourseComplete(req *http.Request, userID, courseSlug string) {
+func (s *State) notifyCourseComplete(req *http.Request, course *content.Course, userID string) {
+	courseSlug := course.Slug
 	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
 
-	if course := s.Content.Get(courseSlug); course != nil {
-		skillMap := make(map[string]struct{}, len(course.Skills))
-		for _, sk := range course.Skills {
-			skillMap[sk] = struct{}{}
-		}
-
-		payload.Skills = skillMap
-		payload.Difficulty = course.Difficulty
+	skillMap := make(map[string]struct{}, len(course.Skills))
+	for _, sk := range course.Skills {
+		skillMap[sk] = struct{}{}
 	}
 
+	payload.Skills = skillMap
+	payload.Difficulty = course.Difficulty
+
 	if len(payload.Skills) > 0 {
-		payload.SkillTotalCourses = s.buildSkillTotals(payload.Skills)
+		// One grouped query over the denormalized course skills replaces
+		// scanning the whole catalog to count who teaches what.
+		totals, err := s.Repos.Courses.SkillTotals(req.Context(), course.Skills)
+		if err != nil {
+			zap.L().Error("count skill totals failed", zap.String("courseSlug", courseSlug), zap.Error(err))
+		} else {
+			payload.SkillTotalCourses = totals
+		}
 	}
 
 	var buf bytes.Buffer
@@ -482,10 +393,8 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 	lessonSlug := param(req, "lessonSlug")
 	claims := s.claims(req)
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, exists := s.course(writer, req, courseSlug)
+	if !exists {
 		return
 	}
 
@@ -493,7 +402,9 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	moduleIndex, found := lessonModuleIndex(course, lessonSlug)
+	modules := s.visibleModules(course, req)
+
+	_, _, found := findModuleLesson(modules, lessonSlug)
 	if !found {
 		s.Error(writer, http.StatusNotFound, "Lesson not found")
 
@@ -504,9 +415,8 @@ func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if isLastMeaningfulModule(course.Modules, moduleIndex) &&
-		s.allQuizModulesPassed(req.Context(), course, claims.Subject, courseSlug, "") {
-		s.notifyCourseComplete(req, claims.Subject, courseSlug)
+	if s.courseCompleted(req, modules, claims.Subject, courseSlug, "", lessonSlug) {
+		s.notifyCourseComplete(req, course, claims.Subject)
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]string{messageJSONKey: lessonCompleteMessage})

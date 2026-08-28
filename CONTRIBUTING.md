@@ -55,7 +55,7 @@ make kind-load
 make helm-install
 ```
 
-This installs all services, PostgreSQL, and the CRD watcher.
+This installs all services and PostgreSQL.
 
 ### 5. Wait for pods to be ready
 
@@ -91,12 +91,49 @@ You should see 4 pods running:
 > kubectl apply -f infra/manifests/postgresql.yaml
 > ```
 
-### 6. Apply a course
+### 6. Courses
 
-The CRD is already applied by `make helm-install`. Now add a course:
+The KinD values files set `SEED_DEV_COURSES=true`, so course-service seeds a
+demo catalogue of 17 courses on startup and the app is browsable immediately —
+nothing to apply by hand.
+
+The seed definitions live in `course-service/internal/db/seed/courses/` and are
+embedded in the binary. After editing one, rebuild the image and re-seed:
 
 ```bash
-kubectl apply -f examples/kubernetes-basics/course.yaml
+make rebuild-course
+make seed-courses      # re-runs the seed in overwrite mode
+```
+
+`SEED_DEV_COURSES` takes two values:
+
+| Value | Behaviour |
+|---|---|
+| `true` | Creates only the courses that do not exist yet — local edits made through the admin UI survive a restart |
+| `overwrite` | Replaces every seed course, discarding local edits to them |
+
+Anything else (including unset) disables seeding entirely, so a production
+deployment cannot pick up demo content by accident.
+
+To create your own course, use the admin UI at `/admin/courses` or POST a
+definition:
+
+```bash
+curl -X POST http://localhost:8082/api/admin/courses \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "slug": "my-course",
+        "spec": {
+          "title": "My Course",
+          "public": true,
+          "category": "linux",
+          "difficulty": "beginner",
+          "modules": [
+            { "name": "Introduction", "type": "text", "content": "# Hello" }
+          ]
+        }
+      }'
 ```
 
 ### 7. Set up git credentials (for private course repos)
@@ -120,7 +157,12 @@ make port-forward
 
 Open <http://localhost:3000> in your browser.
 
-Default admin login: `admin@pupitre.local` / `Admin@1234`
+Default admin login: `admin@pupitre.local`. The password is generated at
+install time — retrieve it with:
+
+```bash
+kubectl get secret pupitre-secrets -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d
+```
 
 ---
 
@@ -130,7 +172,7 @@ Default admin login: `admin@pupitre.local` / `Admin@1234`
 make dev
 ```
 
-This deletes the old cluster, creates a new one, builds images, loads them, runs Helm install, and applies the CRD + course.
+This deletes the old cluster, creates a new one, builds images, loads them, runs Helm install, and seeds the demo courses.
 
 ---
 
@@ -177,28 +219,32 @@ Same pattern for `user-service` and `frontend`.
 
 ## Adding a new course
 
-Courses are Kubernetes CRDs. Create a YAML file and apply it:
+Courses are stored in PostgreSQL. Create one from the admin UI, or POST the
+definition to the course-service:
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: elearning.pupitre.io/v1
-kind: Course
-metadata:
-  name: my-new-course
-spec:
-  title: "My New Course"
-  description: "Description here"
-  hidden: false
-  category: "linux"
-  difficulty: "beginner"
-  modules:
-    - name: "Introduction"
-      type: "text"
-      src: "https://github.com/user/repo"
-      ref: "main"
-      path: "lessons/intro.md"
-EOF
+curl -X POST http://localhost:8082/api/admin/courses \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "slug": "my-new-course",
+        "spec": {
+          "title": "My New Course",
+          "description": "Description here",
+          "hidden": false,
+          "category": "linux",
+          "difficulty": "beginner",
+          "modules": [
+            { "name": "Introduction", "type": "text",
+              "src": "https://github.com/user/repo", "ref": "main",
+              "path": "lessons/intro.md" }
+          ]
+        }
+      }'
 ```
+
+`GET /api/admin/courses/{slug}/definition` returns the stored definition in the
+same shape, so it can be fetched, edited, and sent back with `PUT`.
 
 ---
 
@@ -213,10 +259,11 @@ make port-forward
 
 **Enrollment fails with "Session expired"**: the admin JWT token references a stale user UUID. Log out and log back in.
 
-**Course not found after deployment**: the K8s CRD watcher syncs within a few seconds. Verify:
+**Course not found after deployment**: courses are read from the database on
+each request, so a missing course means it was never created. Verify:
 
 ```bash
-kubectl get courses
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8082/api/admin/courses
 ```
 
 **Blank page / JS errors**: hard refresh the browser (Ctrl+Shift+R) to clear the SvelteKit cache.

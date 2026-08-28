@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
 	"github.com/genesary/pupitre/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
 
 // pathCheckResponse is the JSON body returned by user-service
@@ -38,7 +41,6 @@ type courseResponse struct {
 	LabCount        int                    `json:"labCount"`
 	EnrollmentCount int                    `json:"enrollmentCount"`
 	Scope           string                 `json:"scope,omitempty"`
-	Source          string                 `json:"source,omitempty"`
 	Prerequisites   []prerequisiteResponse `json:"prerequisites,omitempty"`
 	Skills          []string               `json:"skills,omitempty"`
 	Badge           *content.Badge         `json:"badge,omitempty"`
@@ -68,11 +70,10 @@ func toCourseResponse(course *content.Course) courseResponse {
 		Category:        course.Category,
 		Difficulty:      course.Difficulty,
 		IsPublic:        course.IsPublic,
-		ModuleCount:     len(course.Modules),
-		LabCount:        len(course.Modules),
+		ModuleCount:     course.ModuleCount,
+		LabCount:        course.ModuleCount,
 		EnrollmentCount: 0,
 		Scope:           course.Scope,
-		Source:          course.Source,
 		Prerequisites:   prereqs,
 		Skills:          course.Skills,
 		Badge:           course.Badge,
@@ -93,57 +94,19 @@ func toCourseResponse(course *content.Course) courseResponse {
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/courses [get].
 func (s *State) ListCourses(writer http.ResponseWriter, req *http.Request) {
-	q := req.URL.Query()
-	filters := courseFilters{
-		category:   strings.ToLower(q.Get("category")),
-		difficulty: strings.ToLower(q.Get("difficulty")),
-		search:     strings.ToLower(q.Get("search")),
-		skill:      strings.ToLower(q.Get("skill")),
+	query := req.URL.Query()
+
+	// Filtering happens in the query rather than over an in-memory copy of
+	// the catalog, so a narrow filter reads only the rows it matches.
+	filter := repository.CourseFilter{
+		PublicOnly: true,
+		Category:   strings.TrimSpace(query.Get("category")),
+		Difficulty: strings.TrimSpace(query.Get("difficulty")),
+		Search:     strings.TrimSpace(query.Get("search")),
+		Skill:      strings.TrimSpace(query.Get("skill")),
 	}
 
-	all := s.Content.List()
-
-	out := make([]courseResponse, 0, len(all))
-	for _, course := range all {
-		if filters.matches(course) {
-			out = append(out, toCourseResponse(course))
-		}
-	}
-
-	s.JSON(writer, http.StatusOK, map[string]any{coursesJSONKey: out, totalJSONKey: len(out)})
-}
-
-// courseFilters holds the parsed query parameters for ListCourses.
-type courseFilters struct {
-	category, difficulty, search, skill string
-}
-
-// matches reports whether course passes all active filters.
-func (f courseFilters) matches(course *content.Course) bool {
-	if f.category != "" && !strings.EqualFold(course.Category, f.category) {
-		return false
-	}
-
-	if f.difficulty != "" && !strings.EqualFold(course.Difficulty, f.difficulty) {
-		return false
-	}
-
-	if f.search != "" {
-		title := strings.ToLower(course.Title)
-		desc := strings.ToLower(course.Description)
-
-		if !strings.Contains(title, f.search) && !strings.Contains(desc, f.search) {
-			return false
-		}
-	}
-
-	if f.skill != "" && !slices.ContainsFunc(course.Skills, func(s string) bool {
-		return strings.EqualFold(s, f.skill)
-	}) {
-		return false
-	}
-
-	return true
+	s.respondCourseList(writer, req, filter)
 }
 
 // ListAdminCourses godoc
@@ -154,10 +117,21 @@ func (f courseFilters) matches(course *content.Course) bool {
 // @Success   200  {object}  map[string]interface{}
 // @Router    /api/admin/courses [get].
 func (s *State) ListAdminCourses(writer http.ResponseWriter, req *http.Request) {
-	all := s.Content.All()
+	s.respondCourseList(writer, req, repository.CourseFilter{})
+}
 
-	out := make([]courseResponse, 0, len(all))
-	for _, course := range all {
+// respondCourseList runs a catalog query and writes its result.
+func (s *State) respondCourseList(writer http.ResponseWriter, req *http.Request, filter repository.CourseFilter) {
+	courses, err := s.Repos.Courses.List(req.Context(), filter)
+	if err != nil {
+		zap.L().Error("list courses failed", zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
+
+		return
+	}
+
+	out := make([]courseResponse, 0, len(courses))
+	for _, course := range courses {
 		out = append(out, toCourseResponse(course))
 	}
 
@@ -206,10 +180,8 @@ func (s *State) GetLab(writer http.ResponseWriter, req *http.Request) {
 	courseSlug := param(req, "slug")
 	labID := param(req, "lab_id")
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, ok := s.course(writer, req, courseSlug)
+	if !ok {
 		return
 	}
 
@@ -244,16 +216,14 @@ func (s *State) GetLab(writer http.ResponseWriter, req *http.Request) {
 // @Security  BearerAuth
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
-// @Success   200  {object}  map[string]interface{}
-// @Failure   404  {object}  map[string]string
+// @Success   200   {object}  map[string]interface{}
+// @Failure   404   {object}  map[string]string
 // @Router    /api/courses/{slug}/labs [get].
 func (s *State) ListLabs(writer http.ResponseWriter, req *http.Request) {
 	courseSlug := param(req, "slug")
 
-	course := s.Content.Get(courseSlug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, ok := s.course(writer, req, courseSlug)
+	if !ok {
 		return
 	}
 
@@ -284,15 +254,26 @@ func (s *State) ListLabs(writer http.ResponseWriter, req *http.Request) {
 // @Security  BearerAuth
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
-// @Success   200  {object}  map[string]interface{}
+// @Success   200   {object}  map[string]interface{}
 // @Router    /api/courses/{slug}/progress [get].
 func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request) {
 	courseSlug := param(req, "slug")
-	course := s.Content.Get(courseSlug)
 
+	// An unknown course reports an empty summary rather than 404, which is
+	// what the frontend expects; a storage failure is still an error.
 	total := 0
-	if course != nil {
+
+	course, err := s.Repos.Courses.Get(req.Context(), courseSlug)
+
+	switch {
+	case err == nil:
 		total = len(s.visibleModules(course, req))
+	case errors.Is(err, repository.ErrNotFound):
+	default:
+		zap.L().Error("load course failed", zap.String("slug", courseSlug), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
+
+		return
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{
@@ -307,16 +288,17 @@ func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request)
 	})
 }
 
-// pathsContainingCourse returns the slugs of all paths that include courseSlug,
-// using the PathStore reverse index for O(1) lookup.
-func (s *State) pathsContainingCourse(courseSlug string) []string {
-	return s.Paths.PathsForCourse(courseSlug)
-}
-
 // isEnrolledViaPath returns true if userID is enrolled in any learning path
 // that contains courseSlug.
 func (s *State) isEnrolledViaPath(req *http.Request, courseSlug, userID string) bool {
-	pathSlugs := s.pathsContainingCourse(courseSlug)
+	pathSlugs, err := s.Repos.Paths.SlugsContainingCourse(req.Context(), courseSlug)
+	if err != nil {
+		zap.L().Error("list paths containing course failed",
+			zap.String("courseSlug", courseSlug), zap.Error(err))
+
+		return false
+	}
+
 	if len(pathSlugs) == 0 {
 		return false
 	}
@@ -393,15 +375,13 @@ func (s *State) canViewPrivateCourse(req *http.Request, slug string) bool {
 func (s *State) GetCourse(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 
-	course := s.Content.Get(slug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, ok := s.course(writer, req, slug)
+	if !ok {
 		return
 	}
 
 	if !course.IsPublic && !s.canViewPrivateCourse(req, slug) {
-		s.Error(writer, http.StatusNotFound, "Course not found")
+		s.Error(writer, http.StatusNotFound, courseNotFoundMessage)
 
 		return
 	}

@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -99,38 +102,41 @@ const lessonCompleteMessage = "Lesson marked as complete"
 // totalJSONKey is the JSON key used for total-count response fields.
 const totalJSONKey = "total"
 
-// specKeyDescription is the CRD spec field name for a resource description.
-const specKeyDescription = "description"
-
-// specKeyTitle is the CRD spec field name for a resource title.
-const specKeyTitle = "title"
-
 // moduleTypeVideo identifies a module whose content is a video.
 const moduleTypeVideo = "video"
 
+// courseNotFoundMessage is returned when a course slug matches no course.
+const courseNotFoundMessage = "Course not found"
+
+// moduleNotFoundMessage is returned when a module index is out of range.
+const moduleNotFoundMessage = "Module not found"
+
+// internalErrorMessage is returned when a storage read or write fails.
+const internalErrorMessage = "Internal error"
+
 // State holds the shared dependencies used by the course-service HTTP
-// handlers, such as content stores, git caches, and the database pool.
+// handlers: the persistence repositories, the git content cache, and
+// application config.
+//
+// It holds no course or path data of its own: every request reads what it
+// needs from the database, so a replica that has just started serves the
+// same content as one that has been up for a week.
 type State struct {
-	Config          *config.Config
-	Content         *content.Store
-	Paths           *content.PathStore
-	GitCreds        *content.GitCredentialStore
-	CooldownTracker *content.CooldownTracker
-	GitCache        *content.GitCache
-	LabChecks       repository.LabCheckRepository
+	Config   *config.Config
+	Repos    *repository.Repositories
+	GitCreds *content.GitCredentialStore
+	GitCache *content.GitCache
 }
 
-// NewState builds a State from the given config and content stores,
-// wiring up the git cache and optional git credentials.
-func NewState(cfg *config.Config, store *content.Store, paths *content.PathStore) *State {
+// NewState builds a State from the given config and repositories, wiring
+// up the git cache and optional git credentials.
+func NewState(cfg *config.Config, repos *repository.Repositories) *State {
 	gitCache := content.NewGitCache("/tmp/pupitre-git-cache", time.Duration(cfg.GitCacheTTL)*time.Minute)
 
 	state := &State{
-		Config:          cfg,
-		Content:         store,
-		Paths:           paths,
-		CooldownTracker: content.NewCooldownTracker(),
-		GitCache:        gitCache,
+		Config:   cfg,
+		Repos:    repos,
+		GitCache: gitCache,
 	}
 
 	switch {
@@ -187,22 +193,16 @@ func decode(r *http.Request, v any) error {
 	return nil
 }
 
-// nullStr converts a potentially empty string to *string (nil if empty).
-func nullStr(s string) *string {
-	if s == "" {
-		return nil
+// readAllBody reads the whole request body, which the admin write
+// endpoints need in order to try more than one payload shape against it.
+// The size is already bounded by the router's RequestSize middleware.
+func readAllBody(r *http.Request) ([]byte, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read request body: %w", err)
 	}
 
-	return &s
-}
-
-// derefStr returns "" if s is nil.
-func derefStr(s *string) string {
-	if s == nil {
-		return ""
-	}
-
-	return *s
+	return body, nil
 }
 
 // ClearCache godoc
@@ -230,9 +230,9 @@ func (s *State) ClearCache(w http.ResponseWriter, r *http.Request) {
 func (s *State) ClearCourseCache(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 
-	course := s.Content.Get(slug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
+	modules, err := s.Repos.Courses.Modules(req.Context(), slug)
+	if err != nil {
+		s.writeRepoError(writer, err, courseNotFoundMessage, "load modules", zap.String("slug", slug))
 
 		return
 	}
@@ -240,7 +240,7 @@ func (s *State) ClearCourseCache(writer http.ResponseWriter, req *http.Request) 
 	cleared := 0
 	seen := make(map[string]bool)
 
-	for _, mod := range course.Modules {
+	for _, mod := range modules {
 		if mod.Src == "" || mod.Ref == "" {
 			continue
 		}
@@ -272,10 +272,8 @@ func (s *State) ClearCourseCache(writer http.ResponseWriter, req *http.Request) 
 func (s *State) ClearModuleCache(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 
-	course := s.Content.Get(slug)
-	if course == nil {
-		s.Error(writer, http.StatusNotFound, "Course not found")
-
+	course, ok := s.course(writer, req, slug)
+	if !ok {
 		return
 	}
 
@@ -283,7 +281,7 @@ func (s *State) ClearModuleCache(writer http.ResponseWriter, req *http.Request) 
 
 	idx, err := strconv.Atoi(param(req, "index"))
 	if err != nil || idx < 0 || idx >= len(modules) {
-		s.Error(writer, http.StatusNotFound, "Module not found")
+		s.Error(writer, http.StatusNotFound, moduleNotFoundMessage)
 
 		return
 	}
@@ -315,25 +313,40 @@ func (s *State) ServeUpload(writer http.ResponseWriter, req *http.Request) {
 	http.ServeFile(writer, req, path) //nolint:gosec // filename validated above to reject path traversal ('..' or '/')
 }
 
+// course loads a course with its modules, writing the appropriate error
+// response and returning ok=false when it is missing or unreadable.
+//
+// A missing course and an unreachable database are reported differently on
+// purpose: the in-memory store could only ever say "not found" for both,
+// which turned an outage into a catalog that silently looked empty.
+func (s *State) course(writer http.ResponseWriter, req *http.Request, slug string) (*content.Course, bool) {
+	course, err := s.Repos.Courses.Get(req.Context(), slug)
+	if err != nil {
+		s.writeRepoError(writer, err, courseNotFoundMessage, "load course", zap.String("slug", slug))
+
+		return nil, false
+	}
+
+	return course, true
+}
+
+// writeRepoError maps a repository error onto an HTTP response: ErrNotFound
+// becomes a 404 carrying notFoundMsg, anything else a logged 500.
+func (s *State) writeRepoError(writer http.ResponseWriter, err error, notFoundMsg, operation string, fields ...zap.Field) {
+	if errors.Is(err, repository.ErrNotFound) {
+		s.Error(writer, http.StatusNotFound, notFoundMsg)
+
+		return
+	}
+
+	zap.L().Error(operation+" failed", append(fields, zap.Error(err))...)
+	s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
+}
+
 // visibleModules expands type:modules index entries, then returns all
 // modules for admins or only non-hidden modules for regular users.
 func (s *State) visibleModules(c *content.Course, req *http.Request) []content.Module {
-	expanded := make([]content.Module, 0, len(c.Modules))
-
-	for _, mod := range c.Modules {
-		if mod.Type == modulesTypeValue {
-			subs, err := content.FetchModuleIndex(req.Context(), s.GitCache, mod, s.tokenForRepo(mod.Src))
-			if err != nil {
-				zap.L().Warn("failed to expand module index, skipping", zap.String("module", mod.Name), zap.Error(err))
-
-				continue
-			}
-
-			expanded = append(expanded, subs...)
-		} else {
-			expanded = append(expanded, mod)
-		}
-	}
+	expanded := s.expandModuleIndexes(req.Context(), c.Modules)
 
 	claims := s.claims(req)
 	if claims != nil && claims.Role == roleAdmin {
@@ -349,6 +362,33 @@ func (s *State) visibleModules(c *content.Course, req *http.Request) []content.M
 	}
 
 	return out
+}
+
+// expandModuleIndexes replaces every type:modules entry with the modules
+// its git-hosted index file lists, leaving other modules untouched. An
+// index that cannot be fetched is skipped with a warning, matching how a
+// module with unreachable content behaves elsewhere.
+func (s *State) expandModuleIndexes(ctx context.Context, modules []content.Module) []content.Module {
+	expanded := make([]content.Module, 0, len(modules))
+
+	for _, mod := range modules {
+		if mod.Type != modulesTypeValue {
+			expanded = append(expanded, mod)
+
+			continue
+		}
+
+		subs, err := content.FetchModuleIndex(ctx, s.GitCache, mod, s.tokenForRepo(mod.Src))
+		if err != nil {
+			zap.L().Warn("failed to expand module index, skipping", zap.String("module", mod.Name), zap.Error(err))
+
+			continue
+		}
+
+		expanded = append(expanded, subs...)
+	}
+
+	return expanded
 }
 
 // tokenForRepo returns the git token to use for the given repo URL, falling

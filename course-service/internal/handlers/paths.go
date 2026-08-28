@@ -1,9 +1,10 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
+
+	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
 )
@@ -15,6 +16,9 @@ const pathKindSkill = "skill"
 // paginated via the limit/offset query params. A zero, negative, or
 // omitted limit means unlimited — callers can pass e.g. limit=-1 to
 // explicitly request everything.
+//
+// Pagination is applied by the query, so asking for one page does not read
+// every path out of the database.
 // @Summary  List all learning paths
 // @Tags     Paths
 // @Produce  json
@@ -23,20 +27,15 @@ const pathKindSkill = "skill"
 // @Success  200  {object}  map[string]interface{}
 // @Router   /api/paths [get].
 func (s *State) ListPaths(writer http.ResponseWriter, req *http.Request) {
-	paths := s.Paths.List()
+	limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(req.URL.Query().Get("offset"))
 
-	offset, err := strconv.Atoi(req.URL.Query().Get("offset"))
-	if err == nil && offset > 0 {
-		if offset > len(paths) {
-			offset = len(paths)
-		}
+	paths, err := s.Repos.Paths.List(req.Context(), limit, offset)
+	if err != nil {
+		zap.L().Error("list paths failed", zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
 
-		paths = paths[offset:]
-	}
-
-	limit, err := strconv.Atoi(req.URL.Query().Get("limit"))
-	if err == nil && limit > 0 && limit < len(paths) {
-		paths = paths[:limit]
+		return
 	}
 
 	s.JSON(writer, http.StatusOK, map[string][]*content.Path{"paths": paths})
@@ -53,39 +52,22 @@ func (s *State) ListPaths(writer http.ResponseWriter, req *http.Request) {
 func (s *State) GetPath(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 
-	path := s.Paths.Get(slug)
-	if path == nil {
-		s.Error(writer, http.StatusNotFound, fmt.Sprintf("Path %s not found", slug))
+	path, err := s.Repos.Paths.Get(req.Context(), slug)
+	if err != nil {
+		s.writeRepoError(writer, err, pathNotFoundMessage, "load path", zap.String("slug", slug))
 
 		return
 	}
 
-	// For course-kind paths aggregate skills from member courses.
+	// For course-kind paths, aggregate the skills of the member courses.
+	// One query over the denormalized course skills replaces walking the
+	// whole in-memory catalog.
 	if path.Kind != pathKindSkill && len(path.Courses) > 0 {
-		seen := map[string]struct{}{}
-
-		var skills []string
-
-		for _, courseSlug := range path.Courses {
-			c := s.Content.Get(courseSlug)
-			if c == nil {
-				continue
-			}
-
-			for _, sk := range c.Skills {
-				if _, ok := seen[sk]; !ok {
-					seen[sk] = struct{}{}
-					skills = append(skills, sk)
-				}
-			}
-		}
-
-		if len(skills) > 0 {
-			pathCopy := *path
-			pathCopy.Skills = skills
-			s.JSON(writer, http.StatusOK, &pathCopy)
-
-			return
+		skills, skillErr := s.Repos.Paths.SkillsOfCourses(req.Context(), path.Courses)
+		if skillErr != nil {
+			zap.L().Error("aggregate path skills failed", zap.String("slug", slug), zap.Error(skillErr))
+		} else if len(skills) > 0 {
+			path.Skills = skills
 		}
 	}
 

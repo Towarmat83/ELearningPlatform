@@ -12,8 +12,8 @@ func TestLoad_Defaults(t *testing.T) { //nolint:paralleltest // t.Setenv is call
 	// os.Unsetenv) keeps this test's env mutation properly scoped and
 	// automatically restored, matching the other tests in this file.
 	for _, k := range []string{"JWT_SECRET", "PORT", "CORS_ORIGINS", "GIT_CACHE_TTL",
-		"UPLOADS_DIR", "K8S_NAMESPACE", "USER_SERVICE_URL", "GIT_TOKEN",
-		"GIT_CREDENTIALS_PATH", "JWT_EXPIRY_HOURS", "KUBECONFIG", "CONFIG_PATH"} {
+		"UPLOADS_DIR", "USER_SERVICE_URL", "GIT_TOKEN",
+		"GIT_CREDENTIALS_PATH", "JWT_EXPIRY_HOURS", "CONFIG_PATH"} {
 		t.Setenv(k, "")
 	}
 
@@ -35,10 +35,6 @@ func TestLoad_Defaults(t *testing.T) { //nolint:paralleltest // t.Setenv is call
 		t.Errorf("unexpected default UploadsDir: %q", c.UploadsDir)
 	}
 
-	if c.K8sNamespace != defaultK8sNamespace {
-		t.Errorf("unexpected default K8sNamespace: %q", c.K8sNamespace)
-	}
-
 	if c.GitCacheTTL != defaultGitCacheTTLMinutes {
 		t.Errorf("unexpected default GitCacheTTL: %d", c.GitCacheTTL)
 	}
@@ -56,7 +52,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("JWT_EXPIRY_HOURS", "48")
 	t.Setenv("CORS_ORIGINS", "http://a.com,http://b.com")
 	t.Setenv("UPLOADS_DIR", "/tmp/uploads")
-	t.Setenv("K8S_NAMESPACE", "prod")
 	t.Setenv("USER_SERVICE_URL", "http://user:9000")
 	t.Setenv("GIT_TOKEN", "tok123")
 	t.Setenv("GIT_CREDENTIALS_PATH", "/etc/creds.yaml")
@@ -82,10 +77,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 
 	if c.UploadsDir != "/tmp/uploads" {
 		t.Errorf("expected UploadsDir=/tmp/uploads, got %q", c.UploadsDir)
-	}
-
-	if c.K8sNamespace != "prod" {
-		t.Errorf("expected K8sNamespace=prod, got %q", c.K8sNamespace)
 	}
 
 	if c.UserServiceURL != "http://user:9000" {
@@ -159,16 +150,5 @@ corsOrigins:
 
 	if c.Port != 7777 {
 		t.Errorf("expected Port=7777, got %d", c.Port)
-	}
-}
-
-// TestLoad_Kubeconfig verifies that Load applies the KUBECONFIG environment
-// variable override.
-func TestLoad_Kubeconfig(t *testing.T) {
-	t.Setenv("KUBECONFIG", "/home/user/.kube/config")
-
-	c, _ := Load()
-	if c.Kubeconfig != "/home/user/.kube/config" {
-		t.Errorf("expected Kubeconfig set, got %q", c.Kubeconfig)
 	}
 }

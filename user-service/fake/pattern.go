@@ -228,59 +228,6 @@ func (f *PatternRepository) UpsertFromConfig(
 	return nil
 }
 
-// UpsertFromCRD inserts or updates a pattern sourced from a CRD.
-func (f *PatternRepository) UpsertFromCRD(
-	_ context.Context, name, label, description, html, css, jsCode, scope string,
-) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.Err != nil {
-		return f.Err
-	}
-
-	now := time.Now()
-
-	idx := f.findIndexByNameScope(name, scope)
-	if idx >= 0 {
-		f.patterns[idx].Label = label
-		f.patterns[idx].Description = description
-		f.patterns[idx].HTML = html
-		f.patterns[idx].CSS = css
-		f.patterns[idx].JS = jsCode
-		f.patterns[idx].FromConfig = true
-		f.patterns[idx].UpdatedAt = now
-
-		return nil
-	}
-
-	f.patterns = append(f.patterns, models.MarkdownPattern{
-		ID: uuid.New(), Name: name, Label: label, Description: description,
-		HTML: html, CSS: css, JS: jsCode, Scope: scope, FromConfig: true, CreatedAt: now, UpdatedAt: now,
-	})
-
-	return nil
-}
-
-// DeleteFromCRD removes a pattern previously created from a CRD.
-func (f *PatternRepository) DeleteFromCRD(_ context.Context, name, scope string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.Err != nil {
-		return f.Err
-	}
-
-	i := f.findIndexByNameScope(name, scope)
-	if i < 0 || !f.patterns[i].FromConfig {
-		return nil
-	}
-
-	f.patterns = append(f.patterns[:i], f.patterns[i+1:]...)
-
-	return nil
-}
-
 // findIndexByID returns the index of the pattern with the given id, or -1.
 func (f *PatternRepository) findIndexByID(id uuid.UUID) int {
 	for i := range f.patterns {

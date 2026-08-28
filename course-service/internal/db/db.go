@@ -47,6 +47,14 @@ func Connect(ctx context.Context, connURL string, maxOpenConns, maxIdleConns int
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
 var allModels = []any{
+	&models.Course{},
+	&models.CourseModule{},
+	&models.CoursePrerequisite{},
+	&models.CourseSession{},
+	&models.Path{},
+	&models.PathCourse{},
+	&models.PathSkill{},
+	&models.QuizQuestionAttempt{},
 	&models.LabCheck{},
 }
 

@@ -1117,6 +1117,7 @@
    so these overrides must live in `utilities` too or they're silently dropped. */
 @layer utilities {
   .prose {
+    max-width: none;
     font-size: 0.9rem;
     line-height: 1.7;
     --tw-prose-body: var(--color-ink);

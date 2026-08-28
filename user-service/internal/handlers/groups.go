@@ -101,11 +101,38 @@ func (s *State) CreateGroup(writer http.ResponseWriter, req *http.Request) {
 // @Param     groupId  path  string  true  "Group UUID"
 // @Success   200  {object}  map[string]string
 // @Failure   404  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
 // @Router    /api/admin/groups/{groupId} [delete].
-func (s *State) DeleteGroup(writer http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "groupId")
+func (s *State) DeleteGroup(writer http.ResponseWriter, req *http.Request) {
+	groupID := chi.URLParam(req, "groupId")
 
-	deleted, err := s.Repos.Groups.Delete(r.Context(), id)
+	hasChildren, err := s.Repos.Groups.HasChildren(req.Context(), groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if hasChildren {
+		s.Error(writer, http.StatusConflict, "Cannot delete a group that has subgroups")
+
+		return
+	}
+
+	hasMembers, err := s.Repos.Groups.HasMembers(req.Context(), groupID)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	if hasMembers {
+		s.Error(writer, http.StatusConflict, "Cannot delete a group that has members")
+
+		return
+	}
+
+	deleted, err := s.Repos.Groups.Delete(req.Context(), groupID)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -119,6 +146,183 @@ func (s *State) DeleteGroup(writer http.ResponseWriter, r *http.Request) {
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: groupsMsgDeleted})
+}
+
+// UpdateGroup godoc
+// @Summary   Update a local group's name
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Group UUID"
+// @Param     body     object  true    "name"
+// @Success   200  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   404  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
+// @Router    /api/admin/groups/{groupId} [put].
+func (s *State) UpdateGroup(writer http.ResponseWriter, req *http.Request) {
+	groupID := chi.URLParam(req, "groupId")
+
+	var body struct {
+		Name string `json:"name"`
+	}
+
+	decodeErr := decode(req, &body)
+	if decodeErr != nil || body.Name == "" {
+		s.Error(writer, http.StatusBadRequest, "name required")
+
+		return
+	}
+
+	err := s.Repos.Groups.UpdateGroup(req.Context(), groupID, body.Name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			s.Error(writer, http.StatusNotFound, "Group not found or not a local group")
+
+			return
+		}
+
+		s.Error(writer, http.StatusConflict, "A group with this name already exists")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Group updated"})
+}
+
+// CreateSubgroup godoc
+// @Summary   Create a subgroup under an existing group
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Parent group UUID"
+// @Param     body     object  true    "name"
+// @Success   201  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Failure   409  {object}  map[string]string
+// @Router    /api/admin/groups/{groupId}/subgroups [post].
+func (s *State) CreateSubgroup(writer http.ResponseWriter, req *http.Request) {
+	parentID := chi.URLParam(req, "groupId")
+
+	var body struct {
+		Name string `json:"name"`
+	}
+
+	decodeErr := decode(req, &body)
+	if decodeErr != nil || body.Name == "" {
+		s.Error(writer, http.StatusBadRequest, "name required")
+
+		return
+	}
+
+	newID, err := s.Repos.Groups.CreateSubgroup(req.Context(), body.Name, parentID)
+	if err != nil {
+		s.Error(writer, http.StatusConflict, err.Error())
+
+		return
+	}
+
+	s.JSON(writer, http.StatusCreated, map[string]string{"id": newID, groupsRespKeyMessage: groupsMsgCreated})
+}
+
+// ListSubgroups godoc
+// @Summary   List direct subgroups of a group
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/groups/{groupId}/subgroups [get].
+func (s *State) ListSubgroups(writer http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "groupId")
+
+	rows, err := s.Repos.Groups.GetSubgroups(r.Context(), id)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{groupsRespKeyGroups: rows})
+}
+
+// ListAncestors godoc
+// @Summary   List all ancestor groups (root → parent) of a group
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/groups/{groupId}/ancestors [get].
+func (s *State) ListAncestors(writer http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "groupId")
+
+	rows, err := s.Repos.Groups.GetAncestors(r.Context(), id)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{"ancestors": rows})
+}
+
+// ListDescendants godoc
+// @Summary   List all descendant groups (subtree) of a group
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Produce   json
+// @Param     groupId  path  string  true  "Group UUID"
+// @Success   200  {object}  map[string]interface{}
+// @Router    /api/admin/groups/{groupId}/descendants [get].
+func (s *State) ListDescendants(writer http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "groupId")
+
+	rows, err := s.Repos.Groups.GetDescendants(r.Context(), id)
+	if err != nil {
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{"descendants": rows})
+}
+
+// MoveGroup godoc
+// @Summary   Move a group under a new parent (null parentId = root)
+// @Tags      Admin - Groups
+// @Security  BearerAuth
+// @Accept    json
+// @Produce   json
+// @Param     groupId  path    string  true  "Group UUID to move"
+// @Param     body     object  true    "parentId (UUID or null)"
+// @Success   200  {object}  map[string]string
+// @Failure   400  {object}  map[string]string
+// @Router    /api/admin/groups/{groupId}/parent [patch].
+func (s *State) MoveGroup(writer http.ResponseWriter, req *http.Request) {
+	groupID := chi.URLParam(req, "groupId")
+
+	var body struct {
+		ParentID *string `json:"parentId"`
+	}
+
+	decodeErr := decode(req, &body)
+	if decodeErr != nil {
+		s.Error(writer, http.StatusBadRequest, "Invalid JSON")
+
+		return
+	}
+
+	err := s.Repos.Groups.MoveGroup(req.Context(), groupID, body.ParentID)
+	if err != nil {
+		s.Error(writer, http.StatusBadRequest, err.Error())
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Group moved"})
 }
 
 // ListGroups godoc
@@ -140,6 +344,8 @@ func (s *State) ListGroups(writer http.ResponseWriter, r *http.Request) {
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Source      string `json:"source"`
+		ParentID    string `json:"parentId"`
+		Depth       int    `json:"depth"`
 		CreatedAt   string `json:"createdAt"`
 		MemberCount int64  `json:"memberCount"`
 		MappedRole  string `json:"mappedRole"`
@@ -148,8 +354,9 @@ func (s *State) ListGroups(writer http.ResponseWriter, r *http.Request) {
 	groups := make([]groupRow, 0, len(rows))
 	for _, row := range rows {
 		groups = append(groups, groupRow{
-			ID: row.ID, Name: row.Name, Source: row.Source, CreatedAt: row.CreatedAt,
-			MemberCount: row.MemberCount, MappedRole: row.MappedRole,
+			ID: row.ID, Name: row.Name, Source: row.Source,
+			ParentID: row.ParentID, Depth: row.Depth,
+			CreatedAt: row.CreatedAt, MemberCount: row.MemberCount, MappedRole: row.MappedRole,
 		})
 	}
 

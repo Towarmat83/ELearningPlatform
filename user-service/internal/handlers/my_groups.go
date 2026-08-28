@@ -11,6 +11,8 @@ type groupRow struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Source      string   `json:"source"`
+	ParentID    string   `json:"parentId"`
+	Depth       int      `json:"depth"`
 	MappedRole  string   `json:"mappedRole,omitempty"`
 	CourseSlugs []string `json:"courseSlugs"`
 }
@@ -49,6 +51,8 @@ func (s *State) MyGroups(writer http.ResponseWriter, request *http.Request) {
 			ID:          row.ID,
 			Name:        row.Name,
 			Source:      row.Source,
+			ParentID:    row.ParentID,
+			Depth:       row.Depth,
 			MappedRole:  row.MappedRole,
 			CourseSlugs: slugs,
 		})

@@ -40,22 +40,31 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	}
 
 	router.Use(chiMiddleware.Recoverer)
-	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsOptions.Handler)
 
-	registerPublicRoutes(router, state)
+	// The body cap is per group rather than global: an admin importing a
+	// whole course as one markdown document sends far more than any
+	// learner request ever should, and a single limit would have to be
+	// the loose one everywhere.
+	router.Group(func(group chi.Router) {
+		group.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
+		registerPublicRoutes(group, state)
+	})
 
 	router.Group(func(group chi.Router) {
+		group.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 		group.Use(authMW)
 		registerAuthRoutes(group, state)
 	})
 
 	router.Group(func(group chi.Router) {
+		group.Use(chiMiddleware.RequestSize(maxAdminRequestBodyBytes))
 		group.Use(adminMW)
 		registerAdminRoutes(group, state)
 	})
 
 	router.Group(func(group chi.Router) {
+		group.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 		group.Use(trainerMW)
 		registerTrainerRoutes(group, state)
 	})
@@ -110,6 +119,9 @@ func registerTrainerRoutes(router chi.Router, state *State) {
 func registerAdminRoutes(router chi.Router, state *State) {
 	router.Get("/api/admin/courses", state.ListAdminCourses)
 	router.Post("/api/admin/courses", state.CreateCourse)
+	router.Post("/api/admin/courses/import", state.ImportCourseMarkdown)
+	router.Post("/api/admin/courses/import/preview", state.PreviewCourseMarkdownImport)
+	router.Get("/api/admin/courses/{slug}/export/markdown", state.ExportCourseMarkdown)
 	router.Get("/api/admin/courses/{slug}/definition", state.GetCourseDefinition)
 	router.Put("/api/admin/courses/{slug}/definition", state.UpdateCourse)
 	router.Delete("/api/admin/courses/{slug}/definition", state.DeleteCourse)

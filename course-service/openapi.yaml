@@ -369,6 +369,125 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/admin/courses/import:
+    post:
+      summary: Create or update a course from a markdown document (admin)
+      operationId: importCourseMarkdown
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseImportRequest"
+      responses:
+        "200":
+          description: Course updated (replace or append)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseImportResult"
+        "201":
+          description: Course created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseImportResult"
+        "400":
+          description: The document could not be parsed, or the options are invalid
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: replace/append named a course that does not exist
+        "409":
+          description: create named a slug that is already taken
+
+  /api/admin/courses/import/preview:
+    post:
+      summary: Preview what a markdown document would import (admin)
+      description: >
+        Resolves the document exactly as the import endpoint would — including
+        the conflict and not-found checks — but writes nothing.
+      operationId: previewCourseMarkdownImport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseImportRequest"
+      responses:
+        "200":
+          description: What the document would produce
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  mode:
+                    type: string
+                  course:
+                    type: object
+                    description: The course's own fields, without its modules
+                  modules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportModuleSummary"
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          description: The document could not be parsed, or the options are invalid
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: replace/append named a course that does not exist
+        "409":
+          description: create named a slug that is already taken
+
+  /api/admin/courses/{slug}/export/markdown:
+    get:
+      summary: Export a course as a markdown document (admin)
+      description: >
+        Renders the stored course as the document the import endpoint reads
+        back into the same definition.
+      operationId: exportCourseMarkdown
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: split
+          in: query
+          required: false
+          description: >
+            Heading level to write each module under. Omitted, the exporter
+            picks a level no module body already uses.
+          schema:
+            type: string
+            enum: [h1, h2, h3, h4, h5, h6]
+      responses:
+        "200":
+          description: The course as markdown
+          content:
+            text/markdown:
+              schema:
+                type: string
+        "400":
+          description: Invalid split level
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /uploads/{filename}:
     get:
       summary: Serve an uploaded media file
@@ -398,6 +517,77 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CourseImportRequest:
+      type: object
+      required: [markdown]
+      properties:
+        markdown:
+          type: string
+          description: The whole document, frontmatter included.
+          example: |
+            ---
+            title: Introduction to Linux
+            category: linux
+            ---
+
+            ## What is Linux
+
+            A kernel.
+        slug:
+          type: string
+          description: Overrides the slug the document's frontmatter declares.
+        split:
+          type: string
+          description: >
+            Heading level that starts a new module. Omitted, the document's
+            own `split` key is used, then `none`.
+          enum: [none, h1, h2, h3, h4, h5, h6]
+        mode:
+          type: string
+          description: >
+            create refuses an existing slug; replace swaps the course's
+            modules for the document's; append adds them after the existing
+            ones. Defaults to create.
+          enum: [create, replace, append]
+          default: create
+
+    CourseImportResult:
+      type: object
+      properties:
+        slug:
+          type: string
+        mode:
+          type: string
+        moduleCount:
+          type: integer
+        warnings:
+          type: array
+          items:
+            type: string
+          description: What the importer chose to ignore, if anything.
+
+    ImportModuleSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        type:
+          type: string
+        bytes:
+          type: integer
+          description: Length of the module's inline markdown body.
+        hidden:
+          type: boolean
+        src:
+          type: string
+        path:
+          type: string
+        existing:
+          type: boolean
+          description: The module was already stored and is being kept (append).
+
     Course:
       type: object
       properties:

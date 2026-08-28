@@ -36,6 +36,9 @@ Micro-service that serves course/module content for the e-learning platform.
 | GET | `/api/admin/courses/{slug}/definition` | JWT+Admin | Get a course's full definition |
 | PUT | `/api/admin/courses/{slug}/definition` | JWT+Admin | Replace a course's definition |
 | DELETE | `/api/admin/courses/{slug}/definition` | JWT+Admin | Delete a course |
+| POST | `/api/admin/courses/import` | JWT+Admin | Create or update a course from a markdown document |
+| POST | `/api/admin/courses/import/preview` | JWT+Admin | Resolve a markdown document without storing it |
+| GET | `/api/admin/courses/{slug}/export/markdown` | JWT+Admin | Export a course as a markdown document |
 | POST | `/api/admin/courses/paths` | JWT+Admin | Create a learning path from `{slug, spec}` |
 | PUT | `/api/admin/courses/paths/{slug}/definition` | JWT+Admin | Replace a path's definition |
 | DELETE | `/api/admin/courses/paths/{slug}/definition` | JWT+Admin | Delete a learning path |

@@ -151,30 +151,66 @@ type File struct {
 	Spec Course `json:"spec"`
 }
 
-// ParseCourseFile decodes a course definition file.
+// DecodeYAML decodes YAML into target through JSON, so the `json` tags on
+// the types above stay the single description of the wire shape.
 //
-// The file is YAML for authoring comfort — course modules carry long
-// markdown bodies that are far more readable as block scalars — but it is
-// decoded through JSON so that the `json` tags above are the single
-// definition of the wire shape, shared with the admin API.
-func ParseCourseFile(data []byte) (File, error) {
+// YAML is the authoring format wherever a human writes a definition by
+// hand — seed files, markdown frontmatter, the per-module directives of an
+// imported document — because long markdown bodies read far better as
+// block scalars than as escaped JSON strings. Routing the decode through
+// JSON keeps those files and the admin API from drifting apart.
+func DecodeYAML(data []byte, target any) error {
 	var intermediate any
 
 	err := yaml.Unmarshal(data, &intermediate)
 	if err != nil {
-		return File{}, fmt.Errorf("parse course YAML: %w", err)
+		return fmt.Errorf("parse YAML: %w", err)
 	}
 
 	encoded, err := json.Marshal(intermediate)
 	if err != nil {
-		return File{}, fmt.Errorf("re-encode course definition: %w", err)
+		return fmt.Errorf("re-encode definition: %w", err)
 	}
 
+	err = json.Unmarshal(encoded, target)
+	if err != nil {
+		return fmt.Errorf("decode definition: %w", err)
+	}
+
+	return nil
+}
+
+// EncodeYAML renders a definition value as YAML keyed by its `json` tags,
+// the inverse of DecodeYAML. Mapping keys come out sorted, so the same
+// value always produces the same bytes.
+func EncodeYAML(source any) ([]byte, error) {
+	encoded, err := json.Marshal(source)
+	if err != nil {
+		return nil, fmt.Errorf("encode definition: %w", err)
+	}
+
+	var intermediate any
+
+	err = json.Unmarshal(encoded, &intermediate)
+	if err != nil {
+		return nil, fmt.Errorf("re-decode definition: %w", err)
+	}
+
+	out, err := yaml.Marshal(intermediate)
+	if err != nil {
+		return nil, fmt.Errorf("render YAML: %w", err)
+	}
+
+	return out, nil
+}
+
+// ParseCourseFile decodes a course definition file.
+func ParseCourseFile(data []byte) (File, error) {
 	var file File
 
-	err = json.Unmarshal(encoded, &file)
+	err := DecodeYAML(data, &file)
 	if err != nil {
-		return File{}, fmt.Errorf("decode course definition: %w", err)
+		return File{}, fmt.Errorf("parse course file: %w", err)
 	}
 
 	if file.Slug == "" {

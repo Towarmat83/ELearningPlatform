@@ -1,7 +1,9 @@
-Un module est un élément d'un cours. Il est composé d'un nom, d'une source, d'une référence, d'un type et d'un chemin (définis dans la définition du cours). Il représente une ressource qui compose un cours : texte (markdown), vidéo, image, quiz ou liste de modules.
+Un module est un élément d'un cours. Il est composé d'un nom, d'un type et de son contenu — soit du markdown stocké directement sur le module (`content`), soit une source externe (`src`, `ref`, `path`). Il représente une ressource qui compose un cours : texte (markdown), vidéo, image, quiz ou liste de modules.
+
+Le markdown inline est la voie d'édition par défaut : un module se crée en collant du markdown dans l'interface d'administration, ou en important un document entier (voir `docs/Course.md`, « Import / export markdown »). La source git reste disponible pour du contenu qui vit déjà dans un dépôt.
 
 - **video / image** : l'URL de la ressource hébergée sur le serveur est renvoyée directement
-- **text** : le contenu est fetché depuis un dépôt git (si `src`, `ref` et `path` sont renseignés)
+- **text** : le markdown stocké sur le module (`content`), ou fetché depuis un dépôt git si `src`, `ref` et `path` sont renseignés — la source git l'emporte quand les deux sont présents
 - **quiz** : questions inline dans la définition du cours ou fichier YAML fetché depuis git
 - **modules** : entrée spéciale qui pointe vers un fichier YAML d'index dans git — expansée en place en une liste plate de modules au moment de la requête (voir ci-dessous)
 

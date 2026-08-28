@@ -631,6 +631,93 @@
     color: var(--ink-soft);
     margin-bottom: 8px;
   }
+  /* ── Markdown import ─────────────────────────────────────────────────── */
+  .modal-box-wide {
+    max-width: 900px;
+  }
+  .import-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 720px) {
+    .import-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .import-editor {
+    font-family: monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    min-height: 260px;
+    resize: vertical;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+  }
+  .import-editor.dragging {
+    border-color: var(--blue);
+    background: var(--fill);
+  }
+  .import-preview {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    background: var(--fill);
+  }
+  .import-mod {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 0.82rem;
+  }
+  .import-mod:last-child {
+    border-bottom: none;
+  }
+  .import-mod.existing {
+    opacity: 0.55;
+  }
+  .import-mod .import-mod-idx {
+    min-width: 1.6rem;
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+  }
+  .import-mod .import-mod-name {
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .import-warn {
+    font-size: 0.76rem;
+    color: #92400e;
+    background: #fef3c7;
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    margin-top: 10px;
+  }
+  .mod-git-source {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .mod-git-source > summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    list-style: revert;
+  }
+  .mod-git-source[open] > summary {
+    margin-bottom: 10px;
+  }
+
   .draft-panel {
     background: var(--paper);
     border: 1px solid var(--line);

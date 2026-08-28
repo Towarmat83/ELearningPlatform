@@ -8,6 +8,9 @@ Un cours est stocké en base de données et se crée ou se modifie via l'API d'a
 - `GET    /api/admin/courses/{slug}/definition` — définition complète
 - `PUT    /api/admin/courses/{slug}/definition` — remplacement de la définition
 - `DELETE /api/admin/courses/{slug}/definition` — suppression
+- `POST   /api/admin/courses/import` — création / mise à jour depuis un document markdown
+- `POST   /api/admin/courses/import/preview` — même résolution, sans rien écrire
+- `GET    /api/admin/courses/{slug}/export/markdown` — export du cours en markdown
 
 Le champ `spec` a la forme suivante (présenté ici en YAML pour la lisibilité ; l'API attend du JSON) :
 
@@ -21,6 +24,10 @@ spec:
   difficulty: "beginner"
   modules:
     - name: "What is Kubernetes"
+      type: "text"
+      content: |
+        Kubernetes est un orchestrateur de conteneurs.
+    - name: "Depuis un dépôt"
       type: "text"
       src: "https://github.com/user/repo"
       ref: "main"
@@ -82,6 +89,7 @@ modules:
 - `spec.modules[].src` : URL du dépôt git ou de la ressource média
 - `spec.modules[].ref` : branche git
 - `spec.modules[].path` : chemin du fichier dans le dépôt
+- `spec.modules[].content` : le markdown du module, stocké en base — alternative à `src`/`ref`/`path`. Si les deux sont renseignés, la source git l'emporte.
 - `spec.modules[].replication` : boolean (optionnel) — si `true`, le serveur télécharge la ressource distante (video/image) et la sert localement via `/uploads/`
 
 #### Type `modules` — inclusion par index file
@@ -98,6 +106,93 @@ modules:
 ```
 
 Le fichier `index.yaml` liste les modules dans l'ordre d'affichage. Les champs `src` et `ref` sont hérités de l'entrée parente si absents. Voir `docs/Module.md` pour le format complet de l'index.
+
+### Import / export markdown
+
+Un cours entier s'écrit et se relit comme **un seul document markdown**. C'est la
+voie d'édition mise en avant dans l'interface d'administration : elle ne demande
+aucun dépôt git.
+
+```markdown
+---
+slug: introduction-linux
+title: Introduction à Linux
+category: linux
+difficulty: beginner
+public: true
+split: h2
+---
+
+## Qu'est-ce que Linux ?
+
+Linux est un **noyau**.
+
+## Quiz
+
+<!--pupitre
+type: quiz
+passingScore: 80
+questions:
+  - id: q1
+    type: single
+    points: 1
+    question: "Que fait chmod ?"
+    answers:
+      - {id: a, text: "Change les permissions", correct: true}
+      - {id: b, text: "Change le propriétaire", correct: false}
+-->
+```
+
+**En-tête (`---`)** — optionnel. C'est la définition du cours, avec exactement les
+mêmes clés que le `spec` de l'API, plus :
+
+| Clé | Description |
+|---|---|
+| `slug` | Slug du cours. À défaut : le `slug` de la requête, sinon dérivé du `title` (accents repliés, `[a-z0-9-]`). |
+| `split` | Niveau de titre qui commence un nouveau module : `none`, `h1`…`h6`. La requête peut l'outrepasser. |
+
+**Découpage** — `split: none` fait du document entier un seul module. Sinon, chaque
+titre du niveau choisi commence un module, nommé d'après ce titre. Le texte situé
+avant le premier titre devient un module de tête ; s'il ne contient que le titre du
+document, il est ignoré. Les titres à l'intérieur d'un bloc de code (``` ou ~~~)
+ne découpent rien.
+
+**Directive `<!--pupitre …-->`** — bloc YAML optionnel placé juste sous un titre,
+qui porte tout ce que le markdown ne sait pas exprimer : `type`, `src`/`ref`/`path`,
+`questions`, `skills`, `prerequisites`, `hidden`, `passingScore`, `steps`… Les clés
+sont celles du module dans le `spec`. Aucun moteur de rendu ne l'affiche, donc le
+document reste lisible tel quel. Un module texte avec du contenu inline n'en a pas
+besoin.
+
+Quand un module tire son contenu d'ailleurs (source git, `questions` inline, `video`,
+`image`, `modules`), le markdown écrit sous son titre est ignoré et un avertissement
+est renvoyé dans `warnings`.
+
+#### Modes d'import
+
+| Mode | Effet |
+|---|---|
+| `create` (défaut) | Crée le cours. `409` si le slug est déjà pris. |
+| `replace` | Remplace les modules du cours. Si le document a un en-tête, il remplace aussi les champs du cours ; sinon les métadonnées stockées sont conservées. |
+| `append` | Ajoute les modules du document à la suite des modules existants. L'en-tête est ignoré. |
+
+`replace` et `append` renvoient `404` si le slug ne correspond à aucun cours.
+
+`POST /api/admin/courses/import/preview` résout le document exactement comme
+l'import (conflits et 404 compris) mais n'écrit rien : il renvoie le slug visé, les
+champs du cours, la liste des modules (avec la taille du corps de chacun et un
+marqueur `existing` pour ceux déjà en place) et les `warnings`.
+
+#### Export
+
+`GET /api/admin/courses/{slug}/export/markdown` rend le cours stocké sous la forme
+du document que l'import relit à l'identique. Le niveau de titre est choisi parmi
+ceux qu'aucun corps de module n'utilise déjà — puis inscrit dans `split` — pour que
+le cycle export → import ne recoupe pas un module en deux. Le paramètre `?split=h2`
+force un niveau.
+
+Les corps de requête admin sont plafonnés à 10 Mo (contre 1 Mo ailleurs), un cours
+entier tenant dans un seul document.
 
 ### Endpoints
 

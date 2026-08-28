@@ -54,6 +54,7 @@ func New(cfg *config.Config) *Handler {
 func (h *Handler) BuildRouter() *chi.Mux {
 	router := chi.NewRouter()
 	router.Use(chiMiddleware.RequestID)
+	//nolint:staticcheck // SA1019: RealIP deprecation acknowledged — service runs behind a trusted reverse proxy that sets X-Forwarded-For; the value is used for logging/rate-limiting only.
 	router.Use(chiMiddleware.RealIP)
 	router.Use(chiMiddleware.Logger)
 	router.Use(chiMiddleware.Recoverer)

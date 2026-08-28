@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM docker.io/library/golang:1.26-alpine AS builder
+FROM docker.io/library/golang:1.26.7-alpine AS builder
 
 WORKDIR /app
 

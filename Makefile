@@ -269,3 +269,65 @@ status:
 	@kubectl get pods
 	@echo ""
 	@kubectl get svc
+
+# ── Renovate ────────────────────────────────────────────────────────────────
+#
+#   make renovate/validate   # lint renovate.json (Renovate container)
+#   make renovate            # apply dep upgrades to the working tree
+#   make renovate/preview     # show what Renovate itself would do (no writes)
+#
+# `make renovate` upgrades Go module + npm deps in place with native tooling so
+# you get a real `git diff` to review — Renovate's own `local` platform only
+# reports, it never edits a checkout. Not covered by native updaters (take these
+# from the Renovate PR): container base images, GitHub Actions versions, the
+# go.mod `go` directive, and Go major bumps (import-path changes).
+#
+#   git diff                          # review
+#   git checkout -- . && git clean -fd  # discard
+#
+# $GITHUB_TOKEN / $GH_TOKEN (or a logged-in `gh`) lifts the GitHub API rate
+# limit for renovate-preview.
+
+RENOVATE_VERSION ?= 44
+RENOVATE_IMAGE   ?= ghcr.io/renovatebot/renovate:$(RENOVATE_VERSION)
+LOG_LEVEL        ?= info
+GO_MODULES       ?= course-service user-service checker-service e2e
+
+# keep-id + label=disable let the rootless container read the bind-mounted repo
+# (SELinux / non-1000 uid). Docker users can override: RENOVATE_RUN_OPTS=
+RENOVATE_RUN_OPTS ?= --userns=keep-id --security-opt label=disable
+RENOVATE_DOCKER = $(DOCKER) run --rm $(RENOVATE_RUN_OPTS) \
+	-v "$(CURDIR)":/repo -w /repo \
+	-e GIT_CONFIG_COUNT=1 \
+	-e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo \
+	-e LOG_LEVEL=$(LOG_LEVEL)
+
+.PHONY: renovate renovate/validate renovate/preview
+
+renovate/validate:
+	@echo "=== Validating renovate.json ==="
+	@$(RENOVATE_DOCKER) $(RENOVATE_IMAGE) renovate-config-validator --strict
+
+renovate: renovate/go renovate/npm
+	@echo
+	@echo "=== Done. Review: git diff  |  Discard: git checkout -- . && git clean -fd ==="
+
+renovate/go:
+	@for m in $(GO_MODULES); do \
+		echo "=== $$m: go get -u ./... && go mod tidy ==="; \
+		( cd "$$m" && go get -u ./... && go mod tidy ) || exit 1; \
+	done
+
+renovate/npm:
+	@echo "=== frontend: npm-check-updates -u && npm install ==="
+	@cd frontend && npx --yes npm-check-updates -u && npm install
+
+renovate/preview:
+	@echo "=== Renovate preview (local platform, no changes written) ==="
+	@$(RENOVATE_DOCKER) \
+		-e RENOVATE_PLATFORM=local \
+		-e RENOVATE_ONBOARDING=false \
+		-e RENOVATE_REQUIRE_CONFIG=optional \
+		-e RENOVATE_CONFIG_FILE=/repo/renovate.json \
+		-e GITHUB_COM_TOKEN="$${GITHUB_TOKEN:-$${GH_TOKEN:-$$(gh auth token 2>/dev/null)}}" \
+		$(RENOVATE_IMAGE)

@@ -16,7 +16,7 @@ data:
       - "http://localhost:3000"
       - "http://localhost:5173"
     uploadsDir: "/data/uploads"
-    k8sNamespace: "default"
+    databaseUrl: "postgres://pupitre:pupitre@postgres:5432/pupitre"
     userServiceUrl: "http://user-service:8081"
     gitCacheTtlMinutes: 10
     gitCredentialsPath: "/etc/git-credentials/git-credentials.yaml"

@@ -21,8 +21,6 @@ const (
 	defaultPort = 8082
 	// defaultUploadsDir is the default directory for uploaded files.
 	defaultUploadsDir = "./uploads"
-	// defaultK8sNamespace is the default Kubernetes namespace to watch.
-	defaultK8sNamespace = "default"
 	// defaultGitCacheTTLMinutes is the default git cache TTL, in minutes.
 	defaultGitCacheTTLMinutes = 10
 	// defaultDBMaxOpenConns is the default maximum number of open database
@@ -43,9 +41,6 @@ type Config struct {
 	CORSOrigins []string `yaml:"corsOrigins"`
 
 	UploadsDir string `yaml:"uploadsDir"`
-	Kubeconfig string `yaml:"kubeconfig"`
-
-	K8sNamespace string `yaml:"k8sNamespace"`
 
 	UserServiceURL string `yaml:"userServiceUrl"`
 
@@ -82,8 +77,6 @@ func Load() (cfg *Config, warnings []string) { //nolint:nonamedreturns // gocrit
 	cfg.Port = intFromEnv("PORT", cfg.Port)
 	cfg.CORSOrigins = sliceFromEnv("CORS_ORIGINS", cfg.CORSOrigins)
 	cfg.UploadsDir = stringFromEnv("UPLOADS_DIR", cfg.UploadsDir)
-	cfg.Kubeconfig = stringFromEnv("KUBECONFIG", cfg.Kubeconfig)
-	cfg.K8sNamespace = stringFromEnv("K8S_NAMESPACE", cfg.K8sNamespace)
 	cfg.UserServiceURL = stringFromEnv("USER_SERVICE_URL", cfg.UserServiceURL)
 	cfg.GitToken = stringFromEnv("GIT_TOKEN", cfg.GitToken)
 	cfg.GitCredentialsPath = stringFromEnv("GIT_CREDENTIALS_PATH", cfg.GitCredentialsPath)
@@ -105,8 +98,6 @@ func defaultConfig() *Config {
 		Port:               defaultPort,
 		CORSOrigins:        []string{"http://localhost:3000", "http://localhost:5173"},
 		UploadsDir:         defaultUploadsDir,
-		Kubeconfig:         "",
-		K8sNamespace:       defaultK8sNamespace,
 		UserServiceURL:     "http://user-service:8081",
 		GitCredentialsPath: "/etc/course-service/git-credentials.yaml",
 		GitCacheTTL:        defaultGitCacheTTLMinutes,

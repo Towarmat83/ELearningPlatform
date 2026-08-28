@@ -259,22 +259,6 @@ func TestResolveClientSecret_Empty(t *testing.T) {
 	}
 }
 
-// TestLoad_K8sNamespaceAndKubeconfig verifies that Load reads the
-// Kubernetes namespace and kubeconfig path from their env vars.
-func TestLoad_K8sNamespaceAndKubeconfig(t *testing.T) {
-	t.Setenv("K8S_NAMESPACE", "my-ns")
-	t.Setenv("KUBECONFIG", "/tmp/kube.conf")
-
-	c, _ := Load()
-	if c.K8sNamespace != "my-ns" {
-		t.Errorf("K8S_NAMESPACE: want my-ns, got %q", c.K8sNamespace)
-	}
-
-	if c.Kubeconfig != "/tmp/kube.conf" {
-		t.Errorf("KUBECONFIG: want /tmp/kube.conf, got %q", c.Kubeconfig)
-	}
-}
-
 // TestLoad_AdminPasswordFileMissing_FallsBackToEnv verifies that Load
 // falls back to ADMIN_PASSWORD when ADMIN_PASSWORD_FILE points to a
 // nonexistent file, while still preserving the configured file path.

@@ -3,77 +3,90 @@ package handlers
 import (
 	"testing"
 
+	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
 )
 
-// newTestStateWithCourseSkills returns a State seeded with courses that carry
-// skill tags, so buildSkillTotals has something to count.
-func newTestStateWithCourseSkills(t *testing.T) *State {
+// newSkillCatalogState returns a State seeded with courses that carry skill
+// tags, so the skill-total query has something to count.
+func newSkillCatalogState(t *testing.T) *State {
 	t.Helper()
 
 	mock := newUserServiceMock()
 	t.Cleanup(mock.Close)
 
-	s := newTestState(t, mock)
+	cfg := &config.Config{JWTSecret: "test-secret", UserServiceURL: mock.URL}
 
-	s.Content.Put(&content.Course{
-		Slug:       "go-basics",
-		Title:      "Go Basics",
-		Difficulty: "beginner",
-		IsPublic:   true,
-		Skills:     []string{"golang", "backend"},
-	})
-	s.Content.Put(&content.Course{
-		Slug:       "go-advanced",
-		Title:      "Go Advanced",
-		Difficulty: "advanced",
-		IsPublic:   true,
-		Skills:     []string{"golang"},
-	})
-	s.Content.Put(&content.Course{
-		Slug:       "docker-intro",
-		Title:      "Docker Intro",
-		Difficulty: "beginner",
-		IsPublic:   true,
-		Skills:     []string{"docker", "backend"},
-	})
-
-	return s
+	return newStateWith(cfg,
+		&content.Course{
+			Slug:       "go-basics",
+			Title:      "Go Basics",
+			Difficulty: "beginner",
+			IsPublic:   true,
+			Skills:     []string{"golang", "backend"},
+		},
+		&content.Course{
+			Slug:       "go-advanced",
+			Title:      "Go Advanced",
+			Difficulty: "advanced",
+			IsPublic:   true,
+			Skills:     []string{"golang"},
+		},
+		&content.Course{
+			Slug:       "docker-intro",
+			Title:      "Docker Intro",
+			Difficulty: "beginner",
+			IsPublic:   true,
+			Skills:     []string{"docker", "backend"},
+		},
+	)
 }
 
-// TestBuildSkillTotals_NoMatch verifies zero is returned for a skill that
-// no course in the catalog covers.
-func TestBuildSkillTotals_NoMatch(t *testing.T) {
+// TestSkillTotals_NoMatch verifies zero is returned for a skill that no
+// course in the catalog covers.
+func TestSkillTotals_NoMatch(t *testing.T) {
 	t.Parallel()
 
-	s := newTestStateWithCourseSkills(t)
-	totals := s.buildSkillTotals(map[string]struct{}{"kubernetes": {}})
+	s := newSkillCatalogState(t)
+
+	totals, err := s.Repos.Courses.SkillTotals(t.Context(), []string{"kubernetes"})
+	if err != nil {
+		t.Fatalf("SkillTotals: %v", err)
+	}
 
 	if totals["kubernetes"] != 0 {
 		t.Errorf("want 0 for unmatched skill, got %d", totals["kubernetes"])
 	}
 }
 
-// TestBuildSkillTotals_SingleSkill verifies the count is 1 for a skill
-// covered by exactly one course.
-func TestBuildSkillTotals_SingleSkill(t *testing.T) {
+// TestSkillTotals_SingleSkill verifies the count is 1 for a skill covered
+// by exactly one course.
+func TestSkillTotals_SingleSkill(t *testing.T) {
 	t.Parallel()
 
-	s := newTestStateWithCourseSkills(t)
-	totals := s.buildSkillTotals(map[string]struct{}{"docker": {}})
+	s := newSkillCatalogState(t)
+
+	totals, err := s.Repos.Courses.SkillTotals(t.Context(), []string{"docker"})
+	if err != nil {
+		t.Fatalf("SkillTotals: %v", err)
+	}
 
 	if totals["docker"] != 1 {
 		t.Errorf("want 1 course for docker, got %d", totals["docker"])
 	}
 }
 
-// TestBuildSkillTotals_MultiSkill verifies each skill is counted independently
+// TestSkillTotals_MultiSkill verifies each skill is counted independently
 // when multiple skills are requested at once.
-func TestBuildSkillTotals_MultiSkill(t *testing.T) {
+func TestSkillTotals_MultiSkill(t *testing.T) {
 	t.Parallel()
 
-	s := newTestStateWithCourseSkills(t)
-	totals := s.buildSkillTotals(map[string]struct{}{"golang": {}, "backend": {}})
+	s := newSkillCatalogState(t)
+
+	totals, err := s.Repos.Courses.SkillTotals(t.Context(), []string{"golang", "backend"})
+	if err != nil {
+		t.Fatalf("SkillTotals: %v", err)
+	}
 
 	if totals["golang"] != 2 {
 		t.Errorf("want 2 courses for golang, got %d", totals["golang"])
@@ -84,13 +97,17 @@ func TestBuildSkillTotals_MultiSkill(t *testing.T) {
 	}
 }
 
-// TestBuildSkillTotals_EmptyInput verifies an empty skill set returns an
-// empty map without panicking.
-func TestBuildSkillTotals_EmptyInput(t *testing.T) {
+// TestSkillTotals_EmptyInput verifies an empty skill set returns an empty
+// map without panicking.
+func TestSkillTotals_EmptyInput(t *testing.T) {
 	t.Parallel()
 
-	s := newTestStateWithCourseSkills(t)
-	totals := s.buildSkillTotals(map[string]struct{}{})
+	s := newSkillCatalogState(t)
+
+	totals, err := s.Repos.Courses.SkillTotals(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("SkillTotals: %v", err)
+	}
 
 	if len(totals) != 0 {
 		t.Errorf("want empty totals, got %v", totals)

@@ -12,9 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	"gorm.io/gorm"
 
@@ -55,7 +53,6 @@ const (
 func main() {
 	logger := initLogger()
 	zap.ReplaceGlobals(logger)
-	ctrl.SetLogger(zapr.NewLogger(logger))
 
 	err := run()
 	if err != nil {
@@ -73,33 +70,11 @@ func main() {
 // blocks until a shutdown signal is received. Keeping this logic separate
 // from main lets deferred cleanup (e.g. closing the database pool) run to
 // completion instead of being skipped by a direct [os.Exit] call.
-func run() error { //nolint:funlen // multiple boot phases each require their own guard clauses
+func run() error {
 	zap.L().Info("starting user-service")
 
 	// ── Configuration ────────────────────────────────────────────────────────
-	zap.L().Info("loading configuration")
-
-	cfg, warnings := config.Load()
-
-	for _, w := range warnings {
-		zap.L().Warn("configuration warning", zap.String("detail", w))
-	}
-
-	kubeMode := "in-cluster"
-	if cfg.Kubeconfig != "" {
-		kubeMode = cfg.Kubeconfig
-	}
-
-	zap.L().Info("configuration loaded",
-		zap.Int("port", cfg.Port),
-		zap.String("k8sNamespace", cfg.K8sNamespace),
-		zap.String("kubeconfig", kubeMode),
-		zap.Bool("databaseConfigured", cfg.DatabaseURL != ""),
-		zap.String("courseServiceURL", cfg.CourseServiceURL),
-		zap.Bool("oidcEnabled", cfg.OIDC.Enabled),
-		zap.Int("providersCount", len(cfg.Providers)),
-		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
-	)
+	cfg := loadConfig()
 
 	ctx := context.Background()
 
@@ -138,12 +113,6 @@ func run() error { //nolint:funlen // multiple boot phases each require their ow
 		go db.WatchAdminPassword(watchCtx, repos.Users, cfg.AdminPasswordFile)
 	}
 
-	// MarkdownPattern CRD watcher — syncs CRDs into the markdown_patterns
-	// table. Disabled when K8sNamespace is empty (local dev without cluster).
-	zap.L().Info("starting pattern CRD watcher")
-
-	defer startPatternWatcher(ctx, cfg, repos.Patterns)()
-
 	// ── HTTP router ───────────────────────────────────────────────────────────
 	zap.L().Info("building HTTP router")
 
@@ -164,6 +133,29 @@ func run() error { //nolint:funlen // multiple boot phases each require their ow
 	}
 
 	return serve(srv)
+}
+
+// loadConfig loads the application configuration and logs the effective
+// values, omitting secrets and connection strings.
+func loadConfig() *config.Config {
+	zap.L().Info("loading configuration")
+
+	cfg, warnings := config.Load()
+
+	for _, w := range warnings {
+		zap.L().Warn("configuration warning", zap.String("detail", w))
+	}
+
+	zap.L().Info("configuration loaded",
+		zap.Int("port", cfg.Port),
+		zap.Bool("databaseConfigured", cfg.DatabaseURL != ""),
+		zap.String("courseServiceURL", cfg.CourseServiceURL),
+		zap.Bool("oidcEnabled", cfg.OIDC.Enabled),
+		zap.Int("providersCount", len(cfg.Providers)),
+		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
+	)
+
+	return cfg
 }
 
 // seedDatabase runs migrations and seeds the default admin user, OIDC
@@ -197,36 +189,6 @@ func seedDatabase(ctx context.Context, gdb *gorm.DB, repos *repository.Repositor
 	}
 
 	return nil
-}
-
-// startPatternWatcher starts the MarkdownPattern CRD watcher when
-// cfg.K8sNamespace is configured. It returns a cancel function that the
-// caller must defer to stop the watcher on shutdown; when the watcher is
-// disabled or fails to start, the returned function is still safe to call.
-func startPatternWatcher(ctx context.Context, cfg *config.Config, patterns repository.PatternRepository) context.CancelFunc {
-	if cfg.K8sNamespace == "" {
-		return func() {}
-	}
-
-	watchCtx, cancel := context.WithCancel(ctx)
-
-	patternWatcher, err := handlers.NewPatternWatcher(patterns, cfg.Kubeconfig, cfg.K8sNamespace)
-	if err != nil {
-		zap.L().Warn("pattern CRD watcher disabled", zap.NamedError("reason", err))
-
-		return cancel
-	}
-
-	err = patternWatcher.Start(watchCtx)
-	if err != nil {
-		zap.L().Warn("pattern CRD watcher failed to start", zap.Error(err))
-
-		return cancel
-	}
-
-	zap.L().Info("pattern CRD watcher started", zap.String("namespace", cfg.K8sNamespace))
-
-	return cancel
 }
 
 // serve starts srv in the background, blocks until an interrupt/terminate

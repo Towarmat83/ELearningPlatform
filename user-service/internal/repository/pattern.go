@@ -42,13 +42,9 @@ type PatternRepository interface {
 	DeleteByName(ctx context.Context, name string) (bool, error)
 	DeleteByIDAndScope(ctx context.Context, id uuid.UUID, scope string) (bool, error)
 
-	// UpsertFromConfig and UpsertFromCRD are ON CONFLICT (name, scope) DO
-	// UPDATE upserts. They intentionally differ: config upserts also
-	// refresh `parameter`, matching each caller's original semantics
-	// (patterns.go's LoadPatternsFromConfig vs. pattern_watcher.go's CRD sync).
+	// UpsertFromConfig is an ON CONFLICT (name, scope) DO UPDATE upsert,
+	// used by patterns.go's LoadPatternsFromConfig.
 	UpsertFromConfig(ctx context.Context, name, label, description, parameter, html, css, js, scope string) error
-	UpsertFromCRD(ctx context.Context, name, label, description, html, css, js, scope string) error
-	DeleteFromCRD(ctx context.Context, name, scope string) error
 }
 
 // gormPatternRepository is the GORM-backed PatternRepository implementation.
@@ -212,46 +208,6 @@ func (r *gormPatternRepository) UpsertFromConfig(
 	}).Create(&pattern).Error
 	if err != nil {
 		return fmt.Errorf("upsert pattern %q: %w", name, err)
-	}
-
-	return nil
-}
-
-// UpsertFromCRD inserts or updates a pattern synced from a Kubernetes CRD,
-// leaving parameter untouched.
-func (r *gormPatternRepository) UpsertFromCRD(
-	ctx context.Context, name, label, description, html, css, jsCode, scope string,
-) error {
-	pattern := models.MarkdownPattern{
-		Name:        name,
-		Label:       label,
-		Description: description,
-		HTML:        html,
-		CSS:         css,
-		JS:          jsCode,
-		Scope:       scope,
-		FromConfig:  true,
-	}
-
-	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: colName}, {Name: colScope}},
-		DoUpdates: clause.AssignmentColumns(
-			[]string{colLabel, colDescription, colHTML, colCSS, "js", colFromConfig, colUpdatedAt}),
-	}).Create(&pattern).Error
-	if err != nil {
-		return fmt.Errorf("upsert pattern from CRD %q: %w", name, err)
-	}
-
-	return nil
-}
-
-// DeleteFromCRD removes a CRD-sourced pattern by name and scope.
-func (r *gormPatternRepository) DeleteFromCRD(ctx context.Context, name, scope string) error {
-	err := r.db.WithContext(ctx).
-		Where("name = ? AND scope = ? AND from_config = TRUE", name, scope).
-		Delete(&models.MarkdownPattern{}).Error
-	if err != nil {
-		return fmt.Errorf("delete pattern from CRD %q: %w", name, err)
 	}
 
 	return nil

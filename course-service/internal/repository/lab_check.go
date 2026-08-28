@@ -1,6 +1,3 @@
-// Package repository defines data-access interfaces for course-service's
-// persisted entities, decoupling handlers from the underlying storage
-// technology (GORM/Postgres in production, in-memory fakes in tests).
 package repository
 
 import (

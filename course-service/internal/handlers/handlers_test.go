@@ -8,60 +8,71 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/genesary/pupitre/course-service/fake"
 	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
 	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
+
+// newStateWith builds a State backed by in-memory repository fakes seeded
+// with the given courses, so handler tests exercise the same code paths as
+// production without needing a database.
+func newStateWith(cfg *config.Config, courses ...*content.Course) *State {
+	return NewState(cfg, &repository.Repositories{
+		Courses:      fake.NewCourseRepository(courses...),
+		Paths:        fake.NewPathRepository(),
+		QuizAttempts: fake.NewQuizAttemptRepository(),
+		LabChecks:    fake.NewLabCheckRepository(),
+	})
+}
 
 // newTestState builds a State seeded with published and unpublished test
 // courses, backed by userSrv for auth calls.
 func newTestState(t *testing.T, userSrv *httptest.Server) *State {
 	t.Helper()
 
-	store := content.NewStore()
-
-	store.Put(&content.Course{
-		Slug:        "kubernetes-basics",
-		Title:       "Kubernetes Basics",
-		Description: "Intro to Kubernetes",
-		Category:    "kubernetes",
-		Difficulty:  "beginner",
-		IsPublic:    true,
-		Modules: []content.Module{
-			{Name: "What is K8s", Type: "text"},
-			{Name: "Architecture", Type: "video", Src: "/uploads/arch.mp4"},
-			{Name: "Pods Explained", Type: "image", Src: "/uploads/pods.png"},
+	seed := []*content.Course{
+		{
+			Slug:        "kubernetes-basics",
+			Title:       "Kubernetes Basics",
+			Description: "Intro to Kubernetes",
+			Category:    "kubernetes",
+			Difficulty:  "beginner",
+			IsPublic:    true,
+			Modules: []content.Module{
+				{Name: "What is K8s", Type: "text"},
+				{Name: "Architecture", Type: "video", Src: "/uploads/arch.mp4"},
+				{Name: "Pods Explained", Type: "image", Src: "/uploads/pods.png"},
+			},
 		},
-	})
-
-	store.Put(&content.Course{
-		Slug:        "docker-fundamentals",
-		Title:       "Docker Fundamentals",
-		Description: "Learn Docker from scratch",
-		Category:    "docker",
-		Difficulty:  "beginner",
-		IsPublic:    false,
-	})
-
-	store.Put(&content.Course{
-		Slug:        "advanced-kubernetes",
-		Title:       "Advanced Kubernetes",
-		Description: "Deep dive into K8s networking and scheduling",
-		Category:    "kubernetes",
-		Difficulty:  "advanced",
-		IsPublic:    true,
-	})
+		{
+			Slug:        "docker-fundamentals",
+			Title:       "Docker Fundamentals",
+			Description: "Learn Docker from scratch",
+			Category:    "docker",
+			Difficulty:  "beginner",
+			IsPublic:    false,
+		},
+		{
+			Slug:        "advanced-kubernetes",
+			Title:       "Advanced Kubernetes",
+			Description: "Deep dive into K8s networking and scheduling",
+			Category:    "kubernetes",
+			Difficulty:  "advanced",
+			IsPublic:    true,
+		},
+	}
 
 	cfg := &config.Config{
 		JWTSecret:          "test-secret",
 		JWTExpiryH:         24,
 		UploadsDir:         "./testdata",
-		K8sNamespace:       "default",
 		UserServiceURL:     userSrv.URL,
 		GitCredentialsPath: "",
 	}
 
-	return NewState(cfg, store, content.NewPathStore())
+	return newStateWith(cfg, seed...)
 }
 
 // newUserServiceMock returns a test server with sensible defaults for all
@@ -650,62 +661,59 @@ func courseSummaryHandler(totalScore int, passedModules []string) http.HandlerFu
 func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 	t.Helper()
 
-	store := content.NewStore()
-
-	store.Put(&content.Course{
-		Slug:     "linux-intro",
-		Title:    "Intro Linux",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "What is Linux", Type: "text"},
-			{
-				Name: "Quiz Bases Linux",
-				Type: "quiz",
-				Questions: []content.Question{
-					{ID: "q1", Type: "single", Points: 1,
-						Question: "Q?",
-						Answers:  []content.Answer{{ID: "a", Text: "A", Correct: true}}},
+	seed := []*content.Course{
+		{
+			Slug:     "linux-intro",
+			Title:    "Intro Linux",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "What is Linux", Type: "text"},
+				{
+					Name: "Quiz Bases Linux",
+					Type: "quiz",
+					Questions: []content.Question{
+						{ID: "q1", Type: "single", Points: 1,
+							Question: "Q?",
+							Answers:  []content.Answer{{ID: "a", Text: "A", Correct: true}}},
+					},
+					PassingScore: 1,
 				},
-				PassingScore: 1,
 			},
 		},
-	})
-
-	store.Put(&content.Course{
-		Slug:     "kubernetes-adv",
-		Title:    "Advanced Kubernetes",
-		IsPublic: true,
-		Prerequisites: []content.CoursePrerequisite{
-			{Course: "linux-intro", MinScore: 30, Modules: []string{"quiz-bases-linux"}},
+		{
+			Slug:     "kubernetes-adv",
+			Title:    "Advanced Kubernetes",
+			IsPublic: true,
+			Prerequisites: []content.CoursePrerequisite{
+				{Course: "linux-intro", MinScore: 30, Modules: []string{"quiz-bases-linux"}},
+			},
+			Modules: []content.Module{
+				{Name: "K8s Networking", Type: "text"},
+			},
 		},
-		Modules: []content.Module{
-			{Name: "K8s Networking", Type: "text"},
+		{
+			Slug:     "network-basics",
+			Title:    "Network Basics",
+			IsPublic: true,
+			Prerequisites: []content.CoursePrerequisite{
+				{Course: "linux-intro", MinScore: 50},
+			},
+			Modules: []content.Module{
+				{Name: "OSI Model", Type: "text"},
+			},
 		},
-	})
-
-	store.Put(&content.Course{
-		Slug:     "network-basics",
-		Title:    "Network Basics",
-		IsPublic: true,
-		Prerequisites: []content.CoursePrerequisite{
-			{Course: "linux-intro", MinScore: 50},
+		{
+			Slug:     "free-course",
+			Title:    "Free Course (any linux-intro progress)",
+			IsPublic: true,
+			Prerequisites: []content.CoursePrerequisite{
+				{Course: "linux-intro"},
+			},
+			Modules: []content.Module{
+				{Name: "Intro", Type: "text"},
+			},
 		},
-		Modules: []content.Module{
-			{Name: "OSI Model", Type: "text"},
-		},
-	})
-
-	store.Put(&content.Course{
-		Slug:     "free-course",
-		Title:    "Free Course (any linux-intro progress)",
-		IsPublic: true,
-		Prerequisites: []content.CoursePrerequisite{
-			{Course: "linux-intro"},
-		},
-		Modules: []content.Module{
-			{Name: "Intro", Type: "text"},
-		},
-	})
+	}
 
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
@@ -713,7 +721,7 @@ func newCrossCourseLockState(t *testing.T, userSrv *httptest.Server) *State {
 		UserServiceURL: userSrv.URL,
 	}
 
-	return NewState(cfg, store, content.NewPathStore())
+	return newStateWith(cfg, seed...)
 }
 
 // ── Cross-course lock: ListModules ────────────────────────────────────────────
@@ -1926,33 +1934,34 @@ func TestMarkLessonComplete_UserServiceError(t *testing.T) {
 	}
 }
 
-// ── ListLessons from c.Lessons ────────────────────────────────────────────────
+// ── ListLessons over a course's modules ──────────────────────────────────────
 
-// TestListLessons_FromLessonsList verifies list lessons in the from lessons
-// list scenario.
-func TestListLessons_FromLessonsList(t *testing.T) {
+// TestListLessons_FromModules verifies that a course's lessons are derived
+// from its modules, in display order.
+func TestListLessons_FromModules(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "lesson-course",
-		Title:    "Lesson Course",
-		IsPublic: true,
-		Lessons: []content.Lesson{
-			{Slug: "intro", Title: "Introduction", Order: 1},
-			{Slug: "advanced", Title: "Advanced", Order: 2},
+	seed := []*content.Course{
+		{
+			Slug:     "lesson-course",
+			Title:    "Lesson Course",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Introduction", Type: "text"},
+				{Name: "Advanced", Type: "text"},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/lesson-course/lessons", http.NoBody)
@@ -2000,30 +2009,31 @@ func TestGetLesson_QuizModule(t *testing.T) {
 	}
 }
 
-// TestGetLesson_FromLessonList verifies get lesson in the from lesson list
-// scenario.
-func TestGetLesson_FromLessonList(t *testing.T) {
+// TestGetLesson_FromModule verifies that a module-backed lesson is served
+// by its derived slug.
+func TestGetLesson_FromModule(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "lesson-course2",
-		Title:    "Lesson Course 2",
-		IsPublic: true,
-		Lessons: []content.Lesson{
-			{Slug: "intro", Title: "Introduction", Order: 1, Content: "## Intro\n\nHello"},
+	seed := []*content.Course{
+		{
+			Slug:     "lesson-course2",
+			Title:    "Lesson Course 2",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Intro", Type: "text", InlineContent: "## Intro\n\nHello"},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/lesson-course2/lessons/intro", http.NoBody)
@@ -2044,13 +2054,13 @@ func TestGetLesson_FromLessonList(t *testing.T) {
 func TestNewState_InvalidCredentialsPath(t *testing.T) {
 	t.Parallel()
 
-	store := content.NewStore()
+	seed := []*content.Course{}
 	cfg := &config.Config{
 		JWTSecret:          "test-secret",
 		GitCredentialsPath: "/nonexistent/git-creds.json",
 	}
 	// Should not panic even when credentials file doesn't exist
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	if s == nil {
 		t.Error("expected non-nil State")
 	}
@@ -2074,21 +2084,22 @@ func TestGetModule_PrerequisitesNotMet(t *testing.T) {
 	})
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "prereq-course",
-		Title:    "Prereq Course",
-		IsPublic: true,
-		Prerequisites: []content.CoursePrerequisite{
-			{Course: "basic-course", MinScore: 100},
+	seed := []*content.Course{
+		{
+			Slug:     "prereq-course",
+			Title:    "Prereq Course",
+			IsPublic: true,
+			Prerequisites: []content.CoursePrerequisite{
+				{Course: "basic-course", MinScore: 100},
+			},
+			Modules: []content.Module{
+				{Name: "Advanced Lesson", Type: "text"},
+			},
 		},
-		Modules: []content.Module{
-			{Name: "Advanced Lesson", Type: "text"},
-		},
-	})
+	}
 
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24, UserServiceURL: mock.URL}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/prereq-course/modules/0", http.NoBody)
@@ -2164,44 +2175,6 @@ func TestDecode_InvalidJSON(t *testing.T) {
 	err := decode(req, &body)
 	if err == nil {
 		t.Error("expected error for invalid JSON")
-	}
-}
-
-// TestNullStr_Empty verifies null str in the empty scenario.
-func TestNullStr_Empty(t *testing.T) {
-	t.Parallel()
-
-	if nullStr("") != nil {
-		t.Error("expected nil for empty string")
-	}
-}
-
-// TestNullStr_NonEmpty verifies null str in the non empty scenario.
-func TestNullStr_NonEmpty(t *testing.T) {
-	t.Parallel()
-
-	s := nullStr("hello")
-	if s == nil || *s != "hello" {
-		t.Errorf("expected pointer to 'hello', got %v", s)
-	}
-}
-
-// TestDerefStr_Nil verifies deref str in the nil scenario.
-func TestDerefStr_Nil(t *testing.T) {
-	t.Parallel()
-
-	if derefStr(nil) != "" {
-		t.Error("expected empty string for nil pointer")
-	}
-}
-
-// TestDerefStr_NonNil verifies deref str in the non nil scenario.
-func TestDerefStr_NonNil(t *testing.T) {
-	t.Parallel()
-
-	s := "world"
-	if derefStr(&s) != "world" {
-		t.Errorf("expected 'world', got %q", derefStr(&s))
 	}
 }
 
@@ -2375,37 +2348,38 @@ func TestIsLocked_EmptyPrereqs(t *testing.T) {
 func newTestStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 	t.Helper()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "quiz-course",
-		Title:    "Quiz Course",
-		IsPublic: true,
-		Modules: []content.Module{
-			{
-				Name: "Inline Quiz", Type: "quiz",
-				PassingScore: 50,
-				Questions: []content.Question{
-					{
-						ID: "q1", Type: "single", Points: 1,
-						Answers: []content.Answer{
-							{ID: "a1", Text: "Right", Correct: true},
-							{ID: "a2", Text: "Wrong", Correct: false},
+	seed := []*content.Course{
+		{
+			Slug:     "quiz-course",
+			Title:    "Quiz Course",
+			IsPublic: true,
+			Modules: []content.Module{
+				{
+					Name: "Inline Quiz", Type: "quiz",
+					PassingScore: 50,
+					Questions: []content.Question{
+						{
+							ID: "q1", Type: "single", Points: 1,
+							Answers: []content.Answer{
+								{ID: "a1", Text: "Right", Correct: true},
+								{ID: "a2", Text: "Wrong", Correct: false},
+							},
 						},
 					},
 				},
+				{Name: "Text Module", Type: "text"}, // no git content → returns empty string
+				{Name: "Lab Module", Type: "lab", Src: "https://labs.example.com/lab1"},
 			},
-			{Name: "Text Module", Type: "text"}, // no git content → returns empty string
-			{Name: "Lab Module", Type: "lab", Src: "https://labs.example.com/lab1"},
 		},
-	})
-	store.Put(&content.Course{
-		Slug:     "quiz-course-no-questions",
-		Title:    "Empty Quiz",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "Empty Quiz", Type: "quiz"}, // no questions, no git
+		{
+			Slug:     "quiz-course-no-questions",
+			Title:    "Empty Quiz",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Empty Quiz", Type: "quiz"}, // no questions, no git
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
@@ -2414,7 +2388,7 @@ func newTestStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 		UserServiceURL: mock.URL,
 	}
 
-	return NewState(cfg, store, content.NewPathStore())
+	return newStateWith(cfg, seed...)
 }
 
 // TestGetModule_TextInline verifies get module in the text inline scenario.
@@ -2665,18 +2639,19 @@ func TestGetCourse_WithPrerequisites(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "advanced-course",
-		Title:    "Advanced Course",
-		IsPublic: true,
-		Prerequisites: []content.CoursePrerequisite{
-			{Course: "basic-course", MinScore: 80, Modules: []string{"intro", "basics"}},
+	seed := []*content.Course{
+		{
+			Slug:     "advanced-course",
+			Title:    "Advanced Course",
+			IsPublic: true,
+			Prerequisites: []content.CoursePrerequisite{
+				{Course: "basic-course", MinScore: 80, Modules: []string{"intro", "basics"}},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/advanced-course", http.NoBody)
@@ -2864,19 +2839,20 @@ func TestClearCourseCache_WithGitModules(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "git-course",
-		Title:    "Git Course",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "Lesson 1", Type: "text", Src: "https://github.com/org/repo", Ref: "main", Path: "lesson1.md"},
-			{Name: "Lesson 2", Type: "text", Src: "https://github.com/org/repo", Ref: "main", Path: "lesson2.md"},
+	seed := []*content.Course{
+		{
+			Slug:     "git-course",
+			Title:    "Git Course",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Lesson 1", Type: "text", Src: "https://github.com/org/repo", Ref: "main", Path: "lesson1.md"},
+				{Name: "Lesson 2", Type: "text", Src: "https://github.com/org/repo", Ref: "main", Path: "lesson2.md"},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/admin/courses/git-course/cache/clear", http.NoBody)
@@ -2907,18 +2883,19 @@ func TestClearModuleCache_WithGitModule(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "git-course2",
-		Title:    "Git Course 2",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "Lesson 1", Type: "text", Src: "https://github.com/org/repo2", Ref: "main", Path: "l1.md"},
+	seed := []*content.Course{
+		{
+			Slug:     "git-course2",
+			Title:    "Git Course 2",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Lesson 1", Type: "text", Src: "https://github.com/org/repo2", Ref: "main", Path: "l1.md"},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/admin/courses/git-course2/modules/0/cache/clear", http.NoBody)
@@ -2948,18 +2925,19 @@ func TestGetLab_LabModuleType(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "lab-type-course",
-		Title:    "Lab Type Course",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "Hands-on Lab", Type: "lab", Src: "http://lab.example.com"},
+	seed := []*content.Course{
+		{
+			Slug:     "lab-type-course",
+			Title:    "Lab Type Course",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Hands-on Lab", Type: "lab", Src: "http://lab.example.com"},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{JWTSecret: "test-secret", JWTExpiryH: 24, UserServiceURL: mock.URL}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/courses/lab-type-course/labs/hands-on-lab", http.NoBody)
@@ -2994,23 +2972,24 @@ func TestListModules_AdminSeesHidden(t *testing.T) {
 	mock := newUserServiceMock()
 	defer mock.Close()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "hidden-course",
-		Title:    "Hidden Course",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "Visible Module", Type: "text"},
-			{Name: "Hidden Module", Type: "text", Hidden: true},
+	seed := []*content.Course{
+		{
+			Slug:     "hidden-course",
+			Title:    "Hidden Course",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Visible Module", Type: "text"},
+				{Name: "Hidden Module", Type: "text", Hidden: true},
+			},
 		},
-	})
+	}
 
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
 		JWTExpiryH:     24,
 		UserServiceURL: mock.URL,
 	}
-	s := NewState(cfg, store, content.NewPathStore())
+	s := newStateWith(cfg, seed...)
 	r := BuildRouter(s, cfg, false)
 
 	// Admin sees hidden modules
@@ -3179,46 +3158,47 @@ func TestTokenForRepo_WithMatchingCredentials(t *testing.T) {
 func newStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 	t.Helper()
 
-	store := content.NewStore()
-	store.Put(&content.Course{
-		Slug:     "quiz-course",
-		Title:    "Quiz Course",
-		IsPublic: true,
-		Modules: []content.Module{
-			{Name: "Intro", Type: "text"},
-			{
-				Name:         "Knowledge Check",
-				Type:         "quiz",
-				PassingScore: 50,
-				Questions: []content.Question{
-					{
-						ID:     "q1",
-						Type:   "single",
-						Points: 10,
-						Answers: []content.Answer{
-							{ID: "a", Text: "Right", Correct: true},
-							{ID: "b", Text: "Wrong", Correct: false},
+	seed := []*content.Course{
+		{
+			Slug:     "quiz-course",
+			Title:    "Quiz Course",
+			IsPublic: true,
+			Modules: []content.Module{
+				{Name: "Intro", Type: "text"},
+				{
+					Name:         "Knowledge Check",
+					Type:         "quiz",
+					PassingScore: 50,
+					Questions: []content.Question{
+						{
+							ID:     "q1",
+							Type:   "single",
+							Points: 10,
+							Answers: []content.Answer{
+								{ID: "a", Text: "Right", Correct: true},
+								{ID: "b", Text: "Wrong", Correct: false},
+							},
+							Feedback: content.Feedback{Correct: "yes", Wrong: "no"},
 						},
-						Feedback: content.Feedback{Correct: "yes", Wrong: "no"},
 					},
 				},
-			},
-			{
-				Name:         "Inline Check",
-				Type:         "quiz",
-				Inline:       true,
-				PassingScore: 50,
-				Questions: []content.Question{
-					{
-						ID:       "iq1",
-						Type:     "boolean",
-						Points:   5,
-						Feedback: content.Feedback{Correct: "yes", Wrong: "no"},
+				{
+					Name:         "Inline Check",
+					Type:         "quiz",
+					Inline:       true,
+					PassingScore: 50,
+					Questions: []content.Question{
+						{
+							ID:       "iq1",
+							Type:     "boolean",
+							Points:   5,
+							Feedback: content.Feedback{Correct: "yes", Wrong: "no"},
+						},
 					},
 				},
 			},
 		},
-	})
+	}
 
 	cfg := &config.Config{
 		JWTSecret:      "test-secret",
@@ -3226,7 +3206,7 @@ func newStateWithQuiz(t *testing.T, mock *httptest.Server) *State {
 		UserServiceURL: mock.URL,
 	}
 
-	return NewState(cfg, store, content.NewPathStore())
+	return newStateWith(cfg, seed...)
 }
 
 // TestGetModule_InlineQuiz verifies get module in the inline quiz scenario.
@@ -3294,27 +3274,5 @@ func TestGetModule_QuizModuleCount(t *testing.T) {
 
 	if resp.Type != "text" {
 		t.Errorf("expected type=text, got %q", resp.Type)
-	}
-}
-
-// ── CooldownTracker.CheckModule when entry expired ───────────────────────────
-
-// TestCooldownTracker_CheckModule_Expired verifies cooldown tracker in the
-// check module / expired scenario.
-func TestCooldownTracker_CheckModule_Expired(t *testing.T) {
-	t.Parallel()
-
-	ct := content.NewCooldownTracker()
-	// Record with 0-second cooldown → immediately expired
-	spec := content.CooldownSpec{Strategy: "fixed", BaseSeconds: 0}
-	ct.RecordModule("user1", "course1", 0, "q1", spec, nil, false)
-
-	remaining, attempts := ct.CheckModule("user1", "course1", 0, "q1")
-	if remaining != 0 {
-		t.Errorf("expected 0 remaining for expired cooldown, got %v", remaining)
-	}
-
-	if attempts != 1 {
-		t.Errorf("expected 1 attempt, got %d", attempts)
 	}
 }

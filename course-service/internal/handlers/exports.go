@@ -145,12 +145,6 @@ func (s *State) ExportLabCategories(writer http.ResponseWriter, req *http.Reques
 
 // ExportLabPreview returns the first 10 lab check rows matching the filters.
 func (s *State) ExportLabPreview(writer http.ResponseWriter, req *http.Request) {
-	if s.LabChecks == nil {
-		s.Error(writer, http.StatusServiceUnavailable, "database not configured")
-
-		return
-	}
-
 	var body labExportRequest
 
 	decodeErr := decode(req, &body)
@@ -163,7 +157,7 @@ func (s *State) ExportLabPreview(writer http.ResponseWriter, req *http.Request) 
 	fields := resolvedFields(body.Fields)
 	labFilter := parseLabFilter(body.Filters)
 
-	rows, total, err := s.LabChecks.ListExport(req.Context(), labFilter, exportPreviewLimit)
+	rows, total, err := s.Repos.LabChecks.ListExport(req.Context(), labFilter, exportPreviewLimit)
 	if err != nil {
 		zap.L().Error("lab export preview failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Erreur lors de la génération de l'aperçu")
@@ -187,12 +181,6 @@ func (s *State) ExportLabPreview(writer http.ResponseWriter, req *http.Request) 
 // Rows are written to the response one at a time — the full result set is
 // never loaded into memory.
 func (s *State) ExportLabDownload(writer http.ResponseWriter, req *http.Request) {
-	if s.LabChecks == nil {
-		s.Error(writer, http.StatusServiceUnavailable, "database not configured")
-
-		return
-	}
-
 	var body labExportRequest
 
 	decodeErr := decode(req, &body)
@@ -233,7 +221,7 @@ func (s *State) ExportLabDownload(writer http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	streamErr := s.LabChecks.StreamExport(req.Context(), labFilter, func(row *models.LabCheck) error {
+	streamErr := s.Repos.LabChecks.StreamExport(req.Context(), labFilter, func(row *models.LabCheck) error {
 		return csvWriter.Write(labCheckToRecord(row, fields))
 	})
 	if streamErr != nil {

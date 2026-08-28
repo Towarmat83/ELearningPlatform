@@ -2,13 +2,17 @@ Un cours est un objet constitué d'une liste de modules, d'une description, d'un
 
 ### Définition
 
-Un cours est défini dans une CRD Kubernetes (`elearning.pupitre.io/v1`, kind `Course`) :
+Un cours est stocké en base de données et se crée ou se modifie via l'API d'administration du course-service :
+
+- `POST   /api/admin/courses` — création, corps `{ "slug": "...", "spec": { ... } }`
+- `GET    /api/admin/courses/{slug}/definition` — définition complète
+- `PUT    /api/admin/courses/{slug}/definition` — remplacement de la définition
+- `DELETE /api/admin/courses/{slug}/definition` — suppression
+
+Le champ `spec` a la forme suivante (présenté ici en YAML pour la lisibilité ; l'API attend du JSON) :
 
 ```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Course
-metadata:
-  name: kubernetes-basics
+slug: kubernetes-basics
 spec:
   title: "Kubernetes Basics"
   description: "Learn the fundamentals of Kubernetes"
@@ -82,7 +86,7 @@ modules:
 
 #### Type `modules` — inclusion par index file
 
-Pour les cours à nombreux modules hébergés dans git, le type `modules` évite de déclarer chaque module individuellement dans la CRD. Une seule entrée pointe vers un fichier YAML d'index dans git ; le course-service l'expand en place à chaque requête.
+Pour les cours à nombreux modules hébergés dans git, le type `modules` évite de déclarer chaque module individuellement dans la définition du cours. Une seule entrée pointe vers un fichier YAML d'index dans git ; le course-service l'expand en place à chaque requête.
 
 ```yaml
 modules:
@@ -93,7 +97,7 @@ modules:
     path: "courses/linux-intro/index.yaml"
 ```
 
-Le fichier `index.yaml` liste les modules dans l'ordre d'affichage. Les champs `src` et `ref` sont hérités de l'entrée CRD si absents. Voir `docs/Module.md` pour le format complet de l'index.
+Le fichier `index.yaml` liste les modules dans l'ordre d'affichage. Les champs `src` et `ref` sont hérités de l'entrée parente si absents. Voir `docs/Module.md` pour le format complet de l'index.
 
 ### Endpoints
 

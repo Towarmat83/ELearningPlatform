@@ -4,13 +4,10 @@ Les compétences sont des tags associés aux modules d'un cours. Elles permetten
 
 ## Définition des compétences
 
-Les compétences se déclarent dans la CRD du cours, au niveau de chaque module :
+Les compétences se déclarent dans la définition du cours, au niveau de chaque module. L'union des compétences de tous les modules est dénormalisée sur la ligne du cours, ce qui permet au catalogue de filtrer par compétence sans lire les modules.
 
 ```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Course
-metadata:
-  name: docker-basics
+slug: docker-basics
 spec:
   title: "Les fondamentaux de Docker"
   difficulty: "beginner"
@@ -82,13 +79,10 @@ Les cours sont filtrés côté client depuis `/api/courses` sur le champ `skills
 
 ## Parcours de type skill (`kind: skill`)
 
-Un parcours (`Path` CRD) peut être de type `skill` pour suivre l'acquisition séquentielle de compétences :
+Un parcours peut être de type `skill` pour suivre l'acquisition séquentielle de compétences :
 
 ```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Path
-metadata:
-  name: devops-path
+slug: devops-path
 spec:
   title: "Parcours DevOps"
   kind: skill
@@ -112,13 +106,14 @@ spec:
 
 Le niveau est affiché comme badge sur la page `/my-paths`.
 
-## CRD Path
+## Définition d'un parcours
+
+Créé via `POST /api/admin/courses/paths`, remplacé via
+`PUT /api/admin/courses/paths/{slug}/definition`, supprimé via
+`DELETE /api/admin/courses/paths/{slug}/definition`.
 
 ```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Path
-metadata:
-  name: security-path
+slug: security-path
 spec:
   title: "Parcours Sécurité"
   description: "Maîtrisez les bases de la sécurité informatique"

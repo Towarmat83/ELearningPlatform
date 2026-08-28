@@ -6,7 +6,7 @@ You are strictly forbidden from running `git commit`, `git add`, `git push`, or 
 
 ## Domain model (source of truth: `docs/`)
 
-- **Course** — has a title, description, hidden (boolean publication state), category, difficulty, and a list of modules. Defined as a Kubernetes CRD (`elearning.pupitre.io/v1`, kind `Course`). Modules reference external content by type (`video`, `text`, `image`) and optionally a git repo (`src`, `ref`, `path`).
+- **Course** — has a title, description, hidden (boolean publication state), category, difficulty, and a list of modules. Stored in PostgreSQL and managed through the course-service admin API. Modules reference external content by type (`video`, `text`, `image`) and optionally a git repo (`src`, `ref`, `path`).
 - **Module** — a course element. Video/image: server-hosted URL. Text: markdown file from a git repo.
 - **User management** — database-backed (no further detail yet).
 
@@ -19,7 +19,7 @@ You are strictly forbidden from running `git commit`, `git add`, `git push`, or 
 
 Two micro-services (see `docs/ARCHITECTURE.md`):
 
-- **Course Service** (stateless, Port 8082) — K8s CRD watcher, course content, media serving, calls User Service for enrollment/progress
+- **Course Service** (PG, Port 8082) — course catalogue and content, media serving, calls User Service for enrollment/progress
 - **User Service** (PG, Port 8081) — auth, users, enrollments, progress, settings, OAuth, exposes internal API for Course Service
 
 ## Codebase
@@ -33,10 +33,12 @@ go build -o /dev/null .
 
 | Package | Role |
 |---|---|
-| `internal/content/` | Store + K8s CRD watcher + module git resolution |
+| `internal/content/` | Domain types, quiz scoring, git module resolution |
+| `internal/models/` + `internal/repository/` | GORM models and data access (courses, modules, paths, quiz attempts, lab checks) |
+| `internal/db/` | PG connection + AutoMigrate |
 | `internal/handlers/` | HTTP handlers (chi router) — courses, modules, lessons |
 | `internal/middleware/` | JWT auth middleware (validates only) |
-| `internal/config/` | Env-based config (port, JWT, KUBECONFIG, UserServiceURL) |
+| `internal/config/` | Env-based config (port, JWT, DATABASE_URL, UserServiceURL) |
 | `internal/metrics/` | Prometheus metrics |
 
 **Routes:** Public: `/health`, `/metrics`, `/api/courses`, `/api/courses/{slug}`, `/uploads/{filename}` — Authenticated: `/api/courses/{slug}/modules`, `/api/courses/{slug}/lessons`, `/api/courses/{slug}/lessons/{lesson}/complete`
@@ -61,13 +63,19 @@ go build -o /dev/null .
 
 ## Course source of truth
 
-Courses are **Kubernetes CRDs** (`elearning.pupitre.io/v1`, kind `Course`). The Course Service watches the K8s API and populates the in-memory store. No filesystem loading. No admin course CRUD.
+Courses live in **PostgreSQL** and are managed through the admin API. There is no in-memory store, no filesystem loading, and no Kubernetes controller: every request reads what it needs from the database.
+
+```
+POST   /api/admin/courses                      # create  {slug, spec}
+GET    /api/admin/courses/{slug}/definition    # read
+PUT    /api/admin/courses/{slug}/definition    # replace {spec}
+DELETE /api/admin/courses/{slug}/definition    # delete
+```
+
+The `spec` body (shown as YAML for readability; the API takes JSON):
 
 ```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Course
-metadata:
-  name: kubernetes-basics
+slug: kubernetes-basics
 spec:
   title: "Kubernetes Basics"
   description: "..."
@@ -85,6 +93,6 @@ spec:
 ## Build notes
 
 - Go 1.26
-- Course Service: chi, JWT, Prometheus, client-go, apimachinery
+- Course Service: chi, JWT, Prometheus, GORM/pgx, go-git
 - User Service: chi, pgx, JWT, Prometheus, godotenv, crypto
-- `KUBECONFIG` env var for out-of-cluster Course Service dev; in-cluster config when running inside K8s
+- `DATABASE_URL` is required by both services; course-service refuses to start without it

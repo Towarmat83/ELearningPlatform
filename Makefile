@@ -10,7 +10,6 @@ HELM_RELEASE   ?= pupitre
 -include local.mk
 HELM_VALUES    := infra/kind/kind-values.yaml
 PORT_FWDS_LOG  := /tmp/pupitre-port-forwards.log
-COURSE_DIR     := examples/courses
 DOCKER         ?= podman
 
 REGISTRY        := ghcr.io/genesary
@@ -101,15 +100,6 @@ helm-install:
 helm-delete:
 	-helm uninstall $(HELM_RELEASE)
 
-# ── Courses ──────────────────────────────────────────────────────────────────
-
-.PHONY: apply-courses
-apply-courses:
-	@for f in $(COURSE_DIR)/*/course.yaml; do \
-		echo "Applying $$f..."; \
-		kubectl apply -f "$$f"; \
-	done
-
 # ── Git secret ───────────────────────────────────────────────────────────────
 
 .PHONY: create-git-secret
@@ -139,7 +129,7 @@ port-forward-stop:
 # ── Full lifecycle ────────────────────────────────────────────────────────────
 
 .PHONY: dev
-dev: kind-delete kind-create docker-build kind-load helm-install apply-courses
+dev: kind-delete kind-create docker-build kind-load helm-install
 	@echo ""
 	@echo "Waiting for deployments to be ready..."
 	@kubectl rollout status deploy/$(HELM_RELEASE)-course-service  --timeout=120s
@@ -201,35 +191,6 @@ openapi-gen-user-service:
 	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
 	@echo "Generating user-service/openapi.json from code..."
 	@cd user-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
-
-# ── CRDs ─────────────────────────────────────────────────────────────────────
-#
-# Prerequisites:
-#   go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
-
-.PHONY: crd-gen crd-gen-course-service crd-gen-user-service crd-merge
-
-crd-gen: crd-gen-course-service crd-gen-user-service crd-merge
-	@echo "CRD manifests regenerated from code and merged into helm/crds/crd.yaml."
-
-crd-gen-course-service:
-	@which controller-gen > /dev/null 2>&1 || (echo "controller-gen not found — run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest" && exit 1)
-	@echo "Generating course-service deepcopy + CRD manifest from api/v1..."
-	@rm -rf course-service/config/crd/bases
-	@cd course-service && controller-gen object:headerFile="" paths="./api/..." \
-		&& controller-gen crd:allowDangerousTypes=true paths="./api/..." output:crd:artifacts:config=config/crd/bases
-
-crd-gen-user-service:
-	@which controller-gen > /dev/null 2>&1 || (echo "controller-gen not found — run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest" && exit 1)
-	@echo "Generating user-service deepcopy + CRD manifest from api/v1..."
-	@rm -rf user-service/config/crd/bases
-	@cd user-service && controller-gen object:headerFile="" paths="./api/..." \
-		&& controller-gen crd paths="./api/..." output:crd:artifacts:config=config/crd/bases
-
-crd-merge:
-	@echo "Merging generated CRDs into helm/crds/"
-	@rm -rf helm/crds/*
-	@cp user-service/config/crd/bases/*.yaml course-service/config/crd/bases/*.yaml helm/crds/
 
 # ── Go Tests ────────────────────────────────────────────────────────────────
 

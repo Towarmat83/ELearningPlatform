@@ -4,33 +4,47 @@
 
 Séparation en **User Service** (PostgreSQL) et **Course Service** (stateless).
 
-## Source de vérité des cours : CRD Kubernetes
+## Source de vérité des cours : PostgreSQL
 
-Les cours ne sont plus définis dans des fichiers YAML sur disque ni via l'API backend. La seule source de vérité est le **CRD Kubernetes** `elearning.pupitre.io/v1` (kind `Course`).
+La seule source de vérité est la **base de données**. Les cours sont créés et modifiés via l'API d'administration du course-service ; il n'y a ni fichier YAML sur disque, ni ressource Kubernetes, ni cache en mémoire.
 
-Le backend **watche** la K8s API via client-go pour maintenir son store en mémoire.
+Chaque requête lit ce dont elle a besoin :
 
-```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Course
-metadata:
-  name: kubernetes-basics
-spec:
-  title: "Kubernetes Basics"
-  description: "Apprenez les bases de Kubernetes"
-  public: true
-  category: "kubernetes"
-  difficulty: "beginner"
-  modules:
-    - name: "Introduction"
-      type: "text"
-      src: "https://github.com/org/courses"
-      ref: "main"
-      path: "intro.md"
-    - name: "Démo vidéo"
-      type: "video"
-      src: "/uploads/demo.mp4"
+- le catalogue (`GET /api/courses`) filtre en SQL et ne charge aucune ligne de module ;
+- l'affichage d'un cours charge ses modules en une requête indexée sur `(course_slug, position)`.
+
+Aucune réplique ne conserve de contenu en mémoire : une réplique qui vient de démarrer sert exactement le même catalogue qu'une réplique en place depuis une semaine, et un redéploiement ne perd rien.
+
+```jsonc
+// POST /api/admin/courses
+{
+  "slug": "kubernetes-basics",
+  "spec": {
+    "title": "Kubernetes Basics",
+    "description": "Apprenez les bases de Kubernetes",
+    "public": true,
+    "category": "kubernetes",
+    "difficulty": "beginner",
+    "modules": [
+      { "name": "Introduction", "type": "text",
+        "src": "https://github.com/org/courses", "ref": "main", "path": "intro.md" },
+      { "name": "Démo vidéo", "type": "video", "src": "/uploads/demo.mp4" }
+    ]
+  }
+}
 ```
+
+### Schéma
+
+| Table | Rôle |
+|---|---|
+| `courses` | Métadonnées du cours ; colonnes indexées pour le filtrage catalogue (`category`, `difficulty`, `public`, `title`) et `skills` dénormalisé |
+| `course_modules` | Un module = une ligne, ordonnée par `position` ; charges utiles opaques (`questions`, `steps`, `check_params`) en `jsonb` |
+| `course_prerequisites` | Conditions d'inscription |
+| `course_sessions` | Sessions présentielles, clé `(course_slug, session_id)` — une écriture rejouée écrase la même ligne |
+| `paths`, `path_courses`, `path_skills` | Parcours et leurs membres ordonnés |
+| `quiz_question_attempts` | Compteur de tentatives et fin de cooldown par question |
+| `lab_checks` | Historique des vérifications de labs |
 
 ## Architecture
 
@@ -46,7 +60,7 @@ spec:
           │   User Service    │  │   Course Service          │
           │   (PostgreSQL)    │  │   (PostgreSQL)            │
           │                   │  │                           │
-          │  - register       │  │  - K8s CRD watcher        │
+          │  - register       │  │  - catalogue (SQL)        │
           │  - login / JWT    │  │  - liste cours/modules    │
           │  - OAuth          │  │  - git per module         │
           │  - profile        │  │  - upload media           │
@@ -69,20 +83,21 @@ spec:
                                             └──────────────────┘
 ```
 
-## CRD Path
+## Parcours (Paths)
 
-En plus des cours, le course-service watche les CRD `elearning.pupitre.io/v1` kind `Path`. Un parcours est une séquence ordonnée de cours (`kind: course`) ou de compétences (`kind: skill`). Voir `docs/Skills.md` pour le détail.
+Un parcours est une séquence ordonnée de cours (`kind: course`) ou de compétences (`kind: skill`), stockée dans `paths` + `path_courses` / `path_skills`. Voir `docs/Skills.md` pour le détail.
 
-```yaml
-apiVersion: elearning.pupitre.io/v1
-kind: Path
-metadata:
-  name: devops-path
-spec:
-  title: "Parcours DevOps"
-  kind: skill
-  level: 2
-  skills: [linux, docker, kubernetes, ci-cd]
+```jsonc
+// POST /api/admin/courses/paths
+{
+  "slug": "devops-path",
+  "spec": {
+    "title": "Parcours DevOps",
+    "kind": "skill",
+    "level": "intermediate",
+    "skills": ["linux", "docker", "kubernetes", "ci-cd"]
+  }
+}
 ```
 
 ## Contrat API interne (Course → User)
@@ -119,12 +134,12 @@ Tout ce qui est DB + auth + relations user↔course.
 
 ### Course Service
 
-- Watche les CRD `Course` depuis l'API Kubernetes
+- Lit les cours et modules depuis PostgreSQL, à la demande
 - Résout le contenu des modules :
   - `type: video/image` → sert l'URL
   - `type: text` avec `src` git → clone et lit le fichier
   - `type: quiz` → questions inline ou YAML depuis git, avec score
-  - `type: modules` → fetche un fichier YAML d'index depuis git et expand les entrées en place (héritage `src`/`ref` depuis le parent CRD)
+  - `type: modules` → fetche un fichier YAML d'index depuis git et expand les entrées en place (héritage `src`/`ref` depuis le module parent)
 - Upload et serve de médias (vidéo, image)
 - Appels HTTP vers User Service pour enrollments et progress
 
@@ -144,7 +159,7 @@ Chaque service charge sa configuration depuis une **ConfigMap montée en fichier
 
 | Service | Fichier ConfigMap monté | Env vars en override |
 |---|---|---|
-| **course-service** | `/etc/course-service/config.yaml` | PORT, CORS_ORIGINS, USER_SERVICE_URL, JWT_SECRET (Secret) |
+| **course-service** | `/etc/course-service/config.yaml` | PORT, CORS_ORIGINS, USER_SERVICE_URL, JWT_SECRET (Secret), DATABASE_URL (Secret) |
 | **user-service** | `/etc/user-service/config.yaml` | CORS_ORIGINS, JWT_SECRET (Secret), DATABASE_URL (Secret) |
 | **frontend** | `/etc/frontend/config.env` (format `KEY=VALUE`) | PORT, NODE_ENV, ORIGIN, PUBLIC_API_URL, INTERNAL_API_URL, COURSE_API, USER_API |
 
@@ -185,23 +200,3 @@ kubectl create secret generic course-repo-secret \
 La variable d'environnement `GIT_CREDENTIALS_PATH` (ConfigMap ou valeur par défaut) indique l'emplacement. Si le secret n'existe pas, le pod démarre mais le clone de repos privés échouera avec une erreur 403.
 
 Voir `infra/examples/course-service/course-secret.yaml` pour un exemple complet.
-
-## CRD
-
-```yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: courses.elearning.pupitre.io
-spec:
-  group: elearning.pupitre.io
-  names:
-    kind: Course
-    plural: courses
-    singular: course
-  scope: Namespaced
-  versions:
-    - name: v1
-      served: true
-      storage: true
-```

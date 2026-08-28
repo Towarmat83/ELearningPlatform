@@ -175,35 +175,6 @@ func (f *ModuleProgressRepository) PassedKeys(_ context.Context, userID string) 
 	return out, nil
 }
 
-// CompletedCourseSlugs returns the subset of slugs the user has passed at
-// least one module in.
-func (f *ModuleProgressRepository) CompletedCourseSlugs(_ context.Context, userID string, slugs []string) ([]string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.Err != nil {
-		return nil, f.Err
-	}
-
-	wanted := make(map[string]bool, len(slugs))
-	for _, s := range slugs {
-		wanted[s] = true
-	}
-
-	seen := make(map[string]bool)
-	completed := make([]string, 0)
-
-	for _, p := range f.progress {
-		if p.UserID == userID && p.Passed && wanted[p.CourseSlug] && !seen[p.CourseSlug] {
-			seen[p.CourseSlug] = true
-
-			completed = append(completed, p.CourseSlug)
-		}
-	}
-
-	return completed, nil
-}
-
 // findIndex returns the index of the matching progress row, or -1.
 func (f *ModuleProgressRepository) findIndex(userID, courseSlug string, moduleIndex int) int {
 	for i := range f.progress {

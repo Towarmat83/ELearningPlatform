@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -21,14 +20,6 @@ type ModuleProgressRepository interface {
 	TotalScore(ctx context.Context, userID, courseSlug string) (int64, error)
 	PassedModuleSlugs(ctx context.Context, userID, courseSlug string) ([]string, error)
 	ListByUserCourse(ctx context.Context, userID, courseSlug string) ([]models.ModuleProgress, error)
-
-	// CompletedCourseSlugs returns the subset of slugs the user has passed
-	// at least one module in. Paired with LessonProgressRepository's method
-	// of the same name and unioned in the handler layer — see paths.go's
-	// completedCoursesCtx — instead of one cross-aggregate repository
-	// method, so each repository (and its fake) only ever touches its own
-	// table.
-	CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error)
 
 	// PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
 	// all quiz and lab modules the user has passed, across all courses.
@@ -167,19 +158,4 @@ func (r *gormModuleProgressRepository) PassedKeys(ctx context.Context, userID st
 	}
 
 	return out, nil
-}
-
-// CompletedCourseSlugs returns the subset of slugs userID has passed at
-// least one module in.
-func (r *gormModuleProgressRepository) CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error) {
-	var completed []string
-
-	err := r.db.WithContext(ctx).Model(&models.ModuleProgress{}).
-		Where("userid = ?::uuid AND passed = true AND courseslug = ANY(?)", userID, pq.StringArray(slugs)).
-		Distinct().Pluck(colCourseSlug, &completed).Error
-	if err != nil {
-		return nil, fmt.Errorf("list completed course slugs: %w", err)
-	}
-
-	return completed, nil
 }

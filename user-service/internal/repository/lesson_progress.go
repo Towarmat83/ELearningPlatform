@@ -23,9 +23,9 @@ type LessonProgressRepository interface {
 	CountViewed(ctx context.Context, userID, courseSlug string) (int64, error)
 
 	// CompletedCourseSlugs returns the subset of slugs the user has marked
-	// complete via the __complete__ sentinel. Paired with
-	// ModuleProgressRepository's method of the same name — see the doc
-	// comment there for why this isn't one cross-aggregate method.
+	// complete via the __complete__ sentinel, which course-service writes
+	// once every module of a course is done. It is the sole source of truth
+	// for course completion.
 	CompletedCourseSlugs(ctx context.Context, userID string, slugs []string) ([]string, error)
 
 	// ViewedKeys returns the set of "courseSlug/lessonSlug" composite keys for

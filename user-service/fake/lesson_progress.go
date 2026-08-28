@@ -10,9 +10,9 @@ import (
 	"github.com/genesary/pupitre/user-service/internal/models"
 )
 
-// lessonSlugComplete is the sentinel lesson slug value that marks a course as
+// LessonSlugComplete is the sentinel lesson slug value that marks a course as
 // fully completed.
-const lessonSlugComplete = "__complete__"
+const LessonSlugComplete = "__complete__"
 
 // LessonProgressRepository is an in-memory repository.LessonProgressRepository
 // for tests.
@@ -105,7 +105,7 @@ func (f *LessonProgressRepository) ViewedKeys(_ context.Context, userID string) 
 	out := make(map[string]struct{})
 
 	for _, p := range f.progress {
-		if p.UserID == userID && p.LessonSlug != "" && p.LessonSlug != lessonSlugComplete {
+		if p.UserID == userID && p.LessonSlug != "" && p.LessonSlug != LessonSlugComplete {
 			out[p.CourseSlug+"/"+p.LessonSlug] = struct{}{}
 		}
 	}
@@ -132,7 +132,7 @@ func (f *LessonProgressRepository) CompletedCourseSlugs(_ context.Context, userI
 	completed := make([]string, 0)
 
 	for _, p := range f.progress {
-		if p.UserID == userID && p.LessonSlug == lessonSlugComplete && wanted[p.CourseSlug] && !seen[p.CourseSlug] {
+		if p.UserID == userID && p.LessonSlug == LessonSlugComplete && wanted[p.CourseSlug] && !seen[p.CourseSlug] {
 			seen[p.CourseSlug] = true
 
 			completed = append(completed, p.CourseSlug)

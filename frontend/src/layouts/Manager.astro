@@ -11,6 +11,7 @@ const path = Astro.url.pathname.replace(/\/$/, '') || '/manager';
 const navItems = [
   { href: '/manager/users',  label: '👥 Mes membres' },
   { href: '/manager/groups', label: '🏷️ Mes groupes' },
+  { href: '/manager/paths',  label: '🗺️ Parcours'    },
 ];
 
 function isActive(href: string) {
@@ -18,33 +19,30 @@ function isActive(href: string) {
 }
 ---
 <App title={`${title} — Manager`}>
-  <div id="manager-forbidden" style="display:none;min-height:calc(100vh - 56px);align-items:center;justify-content:center">
-    <div style="text-align:center;padding:48px">
-      <div style="font-size:3rem;margin-bottom:16px">🔒</div>
-      <h2 style="margin-bottom:8px">Accès refusé</h2>
-      <p class="text-soft text-sm" style="margin-bottom:20px">Réservé aux managers de groupe.</p>
+  <div id="manager-forbidden" class="shell-forbidden">
+    <div class="shell-forbidden-inner">
+      <div class="shell-forbidden-icon">🔒</div>
+      <h2 class="mb-2">Accès refusé</h2>
+      <p class="text-soft text-sm mb-5">Réservé aux managers de groupe.</p>
       <a href="/courses" class="btn btn-primary">Retour au catalogue</a>
     </div>
   </div>
 
-  <div id="manager-shell" style="display:none;min-height:calc(100vh - 56px)">
-    <div style="display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 56px)">
-
-      <!-- Sidebar -->
-      <aside style="border-right:1px solid var(--line);background:var(--paper);padding:20px 12px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);padding:0 10px;margin-bottom:10px">Mon espace</div>
-        <nav style="display:flex;flex-direction:column;gap:2px">
+  <div id="manager-shell" class="shell-hidden">
+    <div class="shell-layout">
+      <aside class="shell-sidebar">
+        <div class="shell-sidebar-label">Mon espace</div>
+        <nav class="shell-sidebar-nav">
           {navItems.map(item => (
             <a href={item.href} class={`sidebar-link${isActive(item.href) ? ' active' : ''}`}>{item.label}</a>
           ))}
         </nav>
-        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
-          <a href="/courses" class="sidebar-link" style="color:var(--ink-soft);font-size:.82rem">← Retour au catalogue</a>
+        <div class="shell-sidebar-bottom">
+          <a href="/courses" class="sidebar-link text-ink-soft text-[.82rem]">← Retour au catalogue</a>
         </div>
       </aside>
 
-      <!-- Main content -->
-      <main style="padding:32px 36px;min-width:0;background:linear-gradient(160deg,#f0f4ff 0%,#faf5ff 50%,#f0fdf4 100%);min-height:calc(100vh - 56px)">
+      <main class="shell-main">
         <slot />
       </main>
     </div>

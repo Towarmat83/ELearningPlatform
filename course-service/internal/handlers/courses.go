@@ -1,13 +1,21 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
 	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
+
+// pathCheckResponse is the JSON body returned by user-service
+// /internal/paths/check.
+type pathCheckResponse struct {
+	Enrolled bool `json:"enrolled"`
+}
 
 // prerequisiteResponse describes a single course prerequisite in API
 // responses.
@@ -299,8 +307,56 @@ func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request)
 	})
 }
 
+// pathsContainingCourse returns the slugs of all paths that include courseSlug,
+// using the PathStore reverse index for O(1) lookup.
+func (s *State) pathsContainingCourse(courseSlug string) []string {
+	return s.Paths.PathsForCourse(courseSlug)
+}
+
+// isEnrolledViaPath returns true if userID is enrolled in any learning path
+// that contains courseSlug.
+func (s *State) isEnrolledViaPath(req *http.Request, courseSlug, userID string) bool {
+	pathSlugs := s.pathsContainingCourse(courseSlug)
+	if len(pathSlugs) == 0 {
+		return false
+	}
+
+	target, err := url.Parse(s.Config.UserServiceURL + "/internal/paths/check")
+	if err != nil {
+		return false
+	}
+
+	q := target.Query()
+	q.Set(userIDJSONKey, userID)
+	q.Set("pathSlugs", strings.Join(pathSlugs, ","))
+	target.RawQuery = q.Encode()
+
+	httpReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, target.String(), http.NoBody)
+	if err != nil {
+		return false
+	}
+
+	s.setInternalHeader(httpReq)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close() //nolint:errcheck // best-effort close in read-only helper
+
+	var result pathCheckResponse
+
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		return false
+	}
+
+	return result.Enrolled
+}
+
 // canViewPrivateCourse reports whether the requester is authorized to view
-// a course that is not public: an admin, or a user enrolled in it.
+// a course that is not public: an admin, a user enrolled in the course, or
+// a user enrolled in any path that contains the course.
 func (s *State) canViewPrivateCourse(req *http.Request, slug string) bool {
 	claims := s.claims(req)
 	if claims == nil {
@@ -315,7 +371,15 @@ func (s *State) canViewPrivateCourse(req *http.Request, slug string) bool {
 		}
 	}
 
-	return claims != nil && (claims.Role == roleAdmin || s.isEnrolled(req, slug, claims.Subject))
+	if claims == nil {
+		return false
+	}
+
+	if claims.Role == roleAdmin {
+		return true
+	}
+
+	return s.isEnrolled(req, slug, claims.Subject) || s.isEnrolledViaPath(req, slug, claims.Subject)
 }
 
 // GetCourse godoc

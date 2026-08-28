@@ -2,13 +2,13 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 <Admin title="Labs — Suivi apprenant">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+  <div class="admin-page-header">
     <div>
-      <h1 style="font-size:1.5rem">Suivi des Labs</h1>
-      <p class="text-soft text-sm" style="margin-top:4px" id="result-count">Chargement…</p>
+      <h1 class="text-2xl">Suivi des Labs</h1>
+      <p class="text-soft text-sm mt-1" id="result-count">Chargement…</p>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <select id="course-filter" class="input" style="height:auto;padding:8px 12px;min-width:200px">
+    <div class="flex gap-2 items-center flex-wrap">
+      <select id="course-filter" class="input select-sm min-w-[200px]">
         <option value="">Tous les cours</option>
       </select>
       <button id="refresh-btn" class="btn btn-secondary">Actualiser</button>
@@ -16,23 +16,23 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 
   <!-- Stats rapides -->
-  <div id="stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px"></div>
+  <div id="stats-row" class="auto-grid-160"></div>
 
   <!-- Table -->
-  <div class="card" style="padding:0;overflow:hidden">
-    <table style="width:100%;border-collapse:collapse;font-size:.875rem" id="lab-table">
+  <div class="card !p-0 overflow-x-auto">
+    <table class="admin-table" id="lab-table">
       <thead>
-        <tr style="border-bottom:1px solid var(--line);background:var(--fill)">
-          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Apprenant</th>
-          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Cours</th>
-          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Lab</th>
-          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Statut</th>
-          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Violations</th>
-          <th style="padding:12px 16px;text-align:left;font-weight:600;color:var(--ink-soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">Vérifié le</th>
+        <tr class="admin-tr-head">
+          <th class="admin-th">Apprenant</th>
+          <th class="admin-th">Cours</th>
+          <th class="admin-th">Lab</th>
+          <th class="admin-th">Statut</th>
+          <th class="admin-th">Violations</th>
+          <th class="admin-th">Vérifié le</th>
         </tr>
       </thead>
       <tbody id="lab-body">
-        <tr><td colspan="6" style="padding:32px;text-align:center"><div class="loading-state" style="padding:0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div></td></tr>
+        <tr><td colspan="6" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div></td></tr>
       </tbody>
     </table>
   </div>
@@ -54,8 +54,8 @@ import Admin from '../../../layouts/Admin.astro';
 
     function statusBadge(allow: boolean) {
       return allow
-        ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:600">✓ Validé</span>`
-        : `<span style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:600">✗ Échec</span>`;
+        ? `<span class="labs-status-ok">✓ Validé</span>`
+        : `<span class="labs-status-fail">✗ Échec</span>`;
     }
 
     let allRows: any[] = [];
@@ -73,7 +73,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function load(course = '') {
       const body = document.getElementById('lab-body')!;
-      body.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center"><div class="loading-state" style="padding:0"><div class="spinner"></div></div></td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div></div></td></tr>`;
 
       const qs = course ? `?course=${encodeURIComponent(course)}` : '';
       allRows = await api(`/admin/lab-checks${qs}`);
@@ -95,39 +95,39 @@ import Admin from '../../../layouts/Admin.astro';
       count.textContent = `${total} vérification${total > 1 ? 's' : ''} — ${unique} apprenant${unique > 1 ? 's' : ''}`;
 
       stats.innerHTML = [
-        { label: 'Total vérifications', value: total, color: 'var(--blue)' },
-        { label: 'Labs validés', value: passed, color: '#065f46' },
-        { label: 'Labs échoués', value: failed, color: '#991b1b' },
-        { label: 'Apprenants actifs', value: unique, color: 'var(--ink)' },
+        { label: 'Total vérifications', value: total,  cls: 'text-blue'  },
+        { label: 'Labs validés',        value: passed, cls: 'text-good'  },
+        { label: 'Labs échoués',        value: failed, cls: 'text-bad'   },
+        { label: 'Apprenants actifs',   value: unique, cls: 'text-ink'   },
       ].map(s => `
-        <div class="card" style="padding:16px 20px">
-          <div style="font-size:1.75rem;font-weight:700;color:${s.color}">${s.value}</div>
-          <div class="text-soft text-sm" style="margin-top:2px">${s.label}</div>
+        <div class="card stat-card">
+          <div class="stat-card-value ${s.cls}">${s.value}</div>
+          <div class="stat-card-label">${s.label}</div>
         </div>
       `).join('');
 
       if (rows.length === 0) {
-        body.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:var(--ink-soft)">Aucune vérification enregistrée.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-soft">Aucune vérification enregistrée.</td></tr>`;
         return;
       }
 
       body.innerHTML = rows.map((r: any) => `
-        <tr style="border-bottom:1px solid var(--line)">
-          <td style="padding:12px 16px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="width:30px;height:30px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:600;color:var(--blue);flex-shrink:0">${r.username[0].toUpperCase()}</div>
-              <span style="font-weight:500">${r.username}</span>
+        <tr class="admin-tr">
+          <td class="admin-td">
+            <div class="flex-row-gap2">
+              <div class="user-avatar-sm">${r.username[0].toUpperCase()}</div>
+              <span class="font-medium">${r.username}</span>
             </div>
           </td>
-          <td style="padding:12px 16px;color:var(--ink-soft);font-size:.85rem">${r.courseSlug}</td>
-          <td style="padding:12px 16px;font-size:.85rem">${r.moduleName}</td>
-          <td style="padding:12px 16px">${statusBadge(r.allow)}</td>
-          <td style="padding:12px 16px;max-width:340px">
+          <td class="admin-td text-soft text-sm">${r.courseSlug}</td>
+          <td class="admin-td text-sm">${r.moduleName}</td>
+          <td class="admin-td">${statusBadge(r.allow)}</td>
+          <td class="admin-td max-w-[340px]">
             ${r.violations && r.violations.length
-              ? r.violations.map((v: string) => `<div style="font-size:.8rem;color:#991b1b;margin-bottom:2px">• ${v}</div>`).join('')
-              : `<span style="color:var(--ink-soft);font-size:.82rem">—</span>`}
+              ? r.violations.map((v: string) => `<div class="violation-item">• ${v}</div>`).join('')
+              : `<span class="text-soft text-sm">—</span>`}
           </td>
-          <td style="padding:12px 16px;color:var(--ink-soft);font-size:.82rem;white-space:nowrap">${fmt(r.checkedAt)}</td>
+          <td class="admin-td text-soft text-sm whitespace-nowrap">${fmt(r.checkedAt)}</td>
         </tr>
       `).join('');
     }

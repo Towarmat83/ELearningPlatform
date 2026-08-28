@@ -194,14 +194,19 @@ func (s *Store) DeleteBySource(source string) {
 }
 
 // PathStore holds all learning paths in memory, safe for concurrent access.
+// It maintains a reverse index (course slug → path slugs) for O(1) lookup.
 type PathStore struct {
-	mu    sync.RWMutex
-	paths map[string]*Path
+	mu          sync.RWMutex
+	paths       map[string]*Path
+	courseIndex map[string][]string // course slug → path slugs containing it
 }
 
 // NewPathStore returns an empty, ready-to-use in-memory path store.
 func NewPathStore() *PathStore {
-	return &PathStore{paths: make(map[string]*Path)}
+	return &PathStore{
+		paths:       make(map[string]*Path),
+		courseIndex: make(map[string][]string),
+	}
 }
 
 // Get returns the path with the given slug, or nil if not found.
@@ -226,15 +231,34 @@ func (s *PathStore) List() []*Path {
 	return out
 }
 
-// Put adds or replaces a path in the store.
-func (s *PathStore) Put(p *Path) {
+// PathsForCourse returns the slugs of all paths that include courseSlug.
+func (s *PathStore) PathsForCourse(courseSlug string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return append([]string{}, s.courseIndex[courseSlug]...)
+}
+
+// Put adds or replaces a path in the store, keeping the course index in sync.
+func (s *PathStore) Put(path *Path) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.paths[p.Slug] = p
+	if old, ok := s.paths[path.Slug]; ok {
+		for _, c := range old.Courses {
+			s.removeCourseIndex(c, path.Slug)
+		}
+	}
+
+	s.paths[path.Slug] = path
+
+	for _, c := range path.Courses {
+		s.courseIndex[c] = append(s.courseIndex[c], path.Slug)
+	}
 }
 
-// DeleteBySource removes all paths whose Source field equals source.
+// DeleteBySource removes all paths whose Source field equals source, keeping
+// the course index in sync.
 func (s *PathStore) DeleteBySource(source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -248,7 +272,29 @@ func (s *PathStore) DeleteBySource(source string) {
 	}
 
 	for _, slug := range toDelete {
+		for _, c := range s.paths[slug].Courses {
+			s.removeCourseIndex(c, slug)
+		}
+
 		delete(s.paths, slug)
+	}
+}
+
+// removeCourseIndex removes pathSlug from the courseIndex entry for courseSlug.
+// Must be called with mu held.
+func (s *PathStore) removeCourseIndex(courseSlug, pathSlug string) {
+	slugs := s.courseIndex[courseSlug]
+
+	for i, ps := range slugs {
+		if ps == pathSlug {
+			s.courseIndex[courseSlug] = append(slugs[:i], slugs[i+1:]...)
+
+			break
+		}
+	}
+
+	if len(s.courseIndex[courseSlug]) == 0 {
+		delete(s.courseIndex, courseSlug)
 	}
 }
 

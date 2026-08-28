@@ -130,6 +130,66 @@ func (f *PathEnrollmentRepository) Enroll(_ context.Context, userID, pathSlug st
 	return nil
 }
 
+// EnrolledInAny returns true if userID is enrolled in any of the given
+// path slugs.
+func (f *PathEnrollmentRepository) EnrolledInAny(_ context.Context, userID string, pathSlugs []string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return false, f.Err
+	}
+
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return false, fmt.Errorf("parse user id: %w", err)
+	}
+
+	set := make(map[string]struct{}, len(pathSlugs))
+	for _, s := range pathSlugs {
+		set[s] = struct{}{}
+	}
+
+	for _, e := range f.enrollments {
+		if e.UserID == parsedID {
+			if _, ok := set[e.PathSlug]; ok {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// EnrollWithCourses enrolls userID in pathSlug and records each course slug,
+// doing nothing on conflict. In the fake, course enrollments are not tracked
+// separately — this is a no-op beyond the path enrollment.
+func (f *PathEnrollmentRepository) EnrollWithCourses(_ context.Context, userID, pathSlug string, _ []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
+
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("parse user id: %w", err)
+	}
+
+	for _, e := range f.enrollments {
+		if e.UserID == parsedID && e.PathSlug == pathSlug {
+			return nil
+		}
+	}
+
+	f.enrollments = append(
+		f.enrollments, models.PathEnrollment{UserID: parsedID, PathSlug: pathSlug, EnrolledAt: time.Now()},
+	)
+
+	return nil
+}
+
 // Unenroll removes userID's enrollment in pathSlug.
 func (f *PathEnrollmentRepository) Unenroll(_ context.Context, userID, pathSlug string) error {
 	f.mu.Lock()

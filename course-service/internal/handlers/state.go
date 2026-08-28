@@ -99,6 +99,12 @@ const lessonCompleteMessage = "Lesson marked as complete"
 // totalJSONKey is the JSON key used for total-count response fields.
 const totalJSONKey = "total"
 
+// specKeyDescription is the CRD spec field name for a resource description.
+const specKeyDescription = "description"
+
+// specKeyTitle is the CRD spec field name for a resource title.
+const specKeyTitle = "title"
+
 // moduleTypeVideo identifies a module whose content is a video.
 const moduleTypeVideo = "video"
 

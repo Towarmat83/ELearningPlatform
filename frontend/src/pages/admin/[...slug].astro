@@ -5,11 +5,11 @@ import App from '../../layouts/App.astro';
   <div id="loading" class="loading-state"><div class="spinner"></div><span>Vérification…</span></div>
   <div id="admin-content" style="display:none">
     <div class="page-content">
-      <div style="display:grid;grid-template-columns:230px 1fr;gap:28px;align-items:start">
+      <div class="admin-layout">
         <!-- Sidebar -->
         <aside class="sidebar">
-          <div class="card-sm" style="margin-bottom:12px;padding:14px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:10px">Administration</div>
+          <div class="card-sm admin-sidebar-card">
+            <div class="admin-sidebar-label">Administration</div>
             <nav class="sidebar-nav">
               <a href="/admin" class="sidebar-link active">📊 Tableau de bord</a>
               <a href="/admin/users" class="sidebar-link">👥 Utilisateurs</a>
@@ -21,40 +21,40 @@ import App from '../../layouts/App.astro';
               <a href="/admin/monitoring" class="sidebar-link">📈 Monitoring</a>
             </nav>
           </div>
-          <a href="/courses" class="btn btn-ghost btn-sm w-full" style="justify-content:flex-start">← Retour au catalogue</a>
+          <a href="/courses" class="btn btn-ghost btn-sm w-full justify-start">← Retour au catalogue</a>
         </aside>
 
         <!-- Main -->
         <div>
-          <div style="margin-bottom:24px">
+          <div class="mb-6">
             <h1>Administration</h1>
-            <p class="text-soft" style="margin-top:4px">Panneau d'administration de la plateforme pupitre</p>
+            <p class="text-soft mt-1">Panneau d'administration de la plateforme pupitre</p>
           </div>
 
           <!-- Stats cards -->
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px" id="stats-grid">
-            <div class="card-sm" style="text-align:center;padding:20px">
-              <div class="spinner" style="margin:0 auto"></div>
+          <div class="stats-grid mb-7" id="stats-grid">
+            <div class="card-sm text-center p-5">
+              <div class="spinner mx-auto"></div>
             </div>
-            <div class="card-sm" style="text-align:center;padding:20px">
-              <div class="spinner" style="margin:0 auto"></div>
+            <div class="card-sm text-center p-5">
+              <div class="spinner mx-auto"></div>
             </div>
-            <div class="card-sm" style="text-align:center;padding:20px">
-              <div class="spinner" style="margin:0 auto"></div>
+            <div class="card-sm text-center p-5">
+              <div class="spinner mx-auto"></div>
             </div>
           </div>
 
           <!-- Notice -->
-          <div class="card" style="background:var(--blue-soft);border-color:var(--blue)">
-            <div style="display:flex;align-items:flex-start;gap:14px">
-              <img src="/pioupitre.png" alt="pioupitre" style="width:40px;height:40px;object-fit:contain;flex-shrink:0" />
+          <div class="card notice-box">
+            <div class="notice-card">
+              <img src="/pioupitre.png" alt="pioupitre" class="w-10 h-10 object-contain flex-none" />
               <div>
-                <h3 style="color:var(--blue-deep);margin-bottom:6px">Interface d'administration pupitre</h3>
-                <p class="text-soft text-sm" style="line-height:1.6">
+                <h3 class="notice-box-title">Interface d'administration pupitre</h3>
+                <p class="text-soft text-sm leading-relaxed">
                   L'interface d'administration complète est accessible via les liens dans la barre latérale.
-                  Les cours sont définis comme des CRDs Kubernetes — utilisez <code style="background:var(--paper);padding:2px 6px;border-radius:4px">kubectl</code> pour gérer les ressources de cours directement.
+                  Les cours sont définis comme des CRDs Kubernetes — utilisez <code class="code-snippet">kubectl</code> pour gérer les ressources de cours directement.
                 </p>
-                <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+                <div class="notice-actions">
                   <a href="/admin/users" class="btn btn-primary btn-sm">Gérer les utilisateurs</a>
                   <a href="/admin/settings" class="btn btn-secondary btn-sm">Paramètres</a>
                 </div>
@@ -63,21 +63,21 @@ import App from '../../layouts/App.astro';
           </div>
 
           <!-- Recent leaderboard -->
-          <div class="card" style="margin-top:20px">
-            <h3 style="margin-bottom:16px">Classement</h3>
+          <div class="card mt-5">
+            <h3 class="mb-4">Classement</h3>
             <div id="leaderboard-list">
-              <div class="loading-state" style="padding:24px"><div class="spinner"></div></div>
+              <div class="loading-state !p-6"><div class="spinner"></div></div>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
-  <div id="forbidden" style="display:none;min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center">
-    <div style="text-align:center;padding:48px">
-      <div style="font-size:3rem;margin-bottom:16px">🔒</div>
-      <h2 style="margin-bottom:8px">Accès refusé</h2>
-      <p class="text-soft text-sm" style="margin-bottom:20px">Vous devez être administrateur pour accéder à cette page.</p>
+  <div id="forbidden" class="forbidden-page" style="display:none">
+    <div class="forbidden-content">
+      <div class="forbidden-icon">🔒</div>
+      <h2 class="forbidden-title">Accès refusé</h2>
+      <p class="text-soft text-sm forbidden-text">Vous devez être administrateur pour accéder à cette page.</p>
       <a href="/courses" class="btn btn-primary">Retour au catalogue</a>
     </div>
   </div>
@@ -111,17 +111,17 @@ import App from '../../layouts/App.astro';
         const stats = await apiFetch('/admin/stats', { token: token! }) as any;
         const grid = document.getElementById('stats-grid')!;
         grid.innerHTML = `
-          <div class="card-sm" style="text-align:center;padding:20px">
-            <div style="font-size:2rem;font-weight:700;color:var(--blue)">${stats.total_users ?? '—'}</div>
-            <div class="text-soft text-sm" style="margin-top:4px">Utilisateurs</div>
+          <div class="card-sm stat-card">
+            <div class="stat-card-value text-blue">${stats.total_users ?? '—'}</div>
+            <div class="stat-card-label">Utilisateurs</div>
           </div>
-          <div class="card-sm" style="text-align:center;padding:20px">
-            <div style="font-size:2rem;font-weight:700;color:var(--blue)">${stats.totalCourses ?? '—'}</div>
-            <div class="text-soft text-sm" style="margin-top:4px">Cours</div>
+          <div class="card-sm stat-card">
+            <div class="stat-card-value text-blue">${stats.totalCourses ?? '—'}</div>
+            <div class="stat-card-label">Cours</div>
           </div>
-          <div class="card-sm" style="text-align:center;padding:20px">
-            <div style="font-size:2rem;font-weight:700;color:var(--good)">${stats.success_rate ?? '—'}</div>
-            <div class="text-soft text-sm" style="margin-top:4px">Taux de réussite</div>
+          <div class="card-sm stat-card">
+            <div class="stat-card-value text-good">${stats.success_rate ?? '—'}</div>
+            <div class="stat-card-label">Taux de réussite</div>
           </div>
         `;
       } catch {
@@ -139,16 +139,14 @@ import App from '../../layouts/App.astro';
           return;
         }
         list.innerHTML = entries.map((e: any, i: number) => `
-          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)">
-            <span style="font-weight:700;color:${i < 3 ? 'var(--orange)' : 'var(--ink-soft)'};width:24px;text-align:center;font-size:.9rem">${i + 1}</span>
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--blue);font-size:.85rem;flex-shrink:0">
-              ${(e.username || '?')[0].toUpperCase()}
+          <div class="lb-row">
+            <span class="lb-rank ${i < 3 ? 'top' : ''}">${i + 1}</span>
+            <div class="lb-avatar">${(e.username || '?')[0].toUpperCase()}</div>
+            <div class="lb-info">
+              <div class="lb-name">${e.username}</div>
+              <div class="lb-sub">${e.passedModules} modules · ${e.enrolledCourses} cours</div>
             </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:500;font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.username}</div>
-              <div style="font-size:.75rem;color:var(--ink-soft)">${e.passedModules} modules · ${e.enrolledCourses} cours</div>
-            </div>
-            <span style="font-weight:700;color:var(--blue);flex-shrink:0">${e.totalScore} pts</span>
+            <span class="lb-score">${e.totalScore} pts</span>
           </div>
         `).join('');
       } catch {

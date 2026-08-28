@@ -2,58 +2,29 @@
 import App from '../../../../../layouts/App.astro';
 ---
 <App title="Participants — Session">
-  <style is:global>
-    .presence-outer {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 40px 32px 80px;
-    }
-    .presence-wrap { max-width: 1400px; margin: 0 auto; }
-    .presence-back { font-size:.85rem; color:var(--ink-soft); text-decoration:none; display:inline-flex; align-items:center; gap:6px; margin-bottom:20px; }
-    .presence-back:hover { color:var(--ink); }
-    .presence-title { font-size:1.4rem; font-weight:700; margin-bottom:4px; }
-    .presence-sub { font-size:.875rem; color:var(--ink-soft); margin-bottom:24px; }
-    .presence-stats { display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
-    .stat-chip {
-      background:var(--fill); border:1.5px solid var(--line); border-radius:10px;
-      padding:10px 18px; font-size:.82rem; font-weight:600;
-    }
-    .stat-chip span { font-size:1.3rem; font-weight:800; display:block; }
-    .stat-chip.green { background:#f0fdf4; border-color:#86efac; color:#16a34a; }
-    .presence-table { width:100%; border-collapse:collapse; font-size:.875rem; }
-    .presence-table th {
-      text-align:left; padding:10px 14px; font-size:.72rem; font-weight:700;
-      color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em;
-      border-bottom:2px solid var(--line);
-    }
-    .presence-table td { padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
-    .presence-table tr:last-child td { border-bottom:none; }
-    .presence-table tr:hover td { background:var(--fill); }
-    .presence-cb { width:20px; height:20px; accent-color:var(--blue); cursor:pointer; }
-    .no-participants { text-align:center; padding:60px 20px; color:var(--ink-soft); }
-  </style>
-
   <div class="presence-outer">
-  <div class="presence-wrap">
+  <div class="page-inner">
     <a href="/agenda" class="presence-back">← Retour à l'agenda</a>
     <div class="presence-title" id="page-title">Chargement…</div>
     <div class="presence-sub" id="page-sub"></div>
 
     <div class="presence-stats" id="stats-row"></div>
 
-    <table class="presence-table" id="participants-table" style="display:none">
+    <div class="overflow-x-auto">
+    <table class="presence-table hidden" id="participants-table">
       <thead>
         <tr>
           <th>Participant</th>
           <th>Email</th>
           <th>Inscrit le</th>
-          <th style="text-align:center">Présent</th>
+          <th class="text-center">Présent</th>
         </tr>
       </thead>
       <tbody id="participants-body"></tbody>
     </table>
+    </div>
 
-    <div class="no-participants" id="no-participants" style="display:none">
+    <div class="no-participants hidden" id="no-participants">
       Aucun participant inscrit pour cette session.
     </div>
   </div>
@@ -109,9 +80,9 @@ import App from '../../../../../layouts/App.astro';
         const dateStr = new Date(p.bookedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
         tr.innerHTML = `
           <td><strong>${p.username}</strong></td>
-          <td style="color:var(--ink-soft)">${p.email}</td>
-          <td style="color:var(--ink-soft)">${dateStr}</td>
-          <td style="text-align:center">
+          <td class="text-ink-soft">${p.email}</td>
+          <td class="text-ink-soft">${dateStr}</td>
+          <td class="text-center">
             <input type="checkbox" class="presence-cb" data-idx="${idx}" data-uid="${p.userId}" ${p.present ? 'checked' : ''} />
           </td>
         `;
@@ -158,9 +129,9 @@ import App from '../../../../../layouts/App.astro';
         participants = partResp.participants ?? [];
 
         if (participants.length === 0) {
-          document.getElementById('no-participants')!.style.display = 'block';
+          document.getElementById('no-participants')!.classList.remove('hidden');
         } else {
-          document.getElementById('participants-table')!.style.display = 'table';
+          document.getElementById('participants-table')!.classList.remove('hidden');
           renderTable();
         }
         renderStats();

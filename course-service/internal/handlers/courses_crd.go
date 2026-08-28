@@ -235,7 +235,7 @@ func (s *State) DeleteCourseCRD(writer http.ResponseWriter, req *http.Request) {
 func buildCourseSpec(body map[string]any) map[string]any {
 	spec := map[string]any{}
 
-	for _, k := range []string{"title", "description", "category", "difficulty"} {
+	for _, k := range []string{specKeyTitle, specKeyDescription, "category", "difficulty"} {
 		if v, ok := body[k]; ok {
 			spec[k] = v
 		}

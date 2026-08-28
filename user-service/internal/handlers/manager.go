@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
@@ -112,7 +113,7 @@ func (s *State) ManagerListUsers(writer http.ResponseWriter, request *http.Reque
 // @Failure   400   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Router    /api/manager/courses/{slug}/enrollments [post].
-func (s *State) ManagerEnrollUser(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerEnrollUserPath; different repository (Enrollments vs Paths)
+func (s *State) ManagerEnrollUser(writer http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	slug := param(request, "slug")
 	claims := s.claims(request)
@@ -468,7 +469,7 @@ func (s *State) ManagerRemoveGroupMember(writer http.ResponseWriter, request *ht
 // @Success   200     {object}  map[string]string
 // @Failure   403     {object}  map[string]string
 // @Router    /api/manager/courses/{slug}/enrollments/{userId} [delete].
-func (s *State) ManagerUnenrollUser(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerUnenrollUserPath; different repository (Enrollments vs Paths)
+func (s *State) ManagerUnenrollUser(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // scope check identical to ManagerUnenrollUserPath; different repo (Enrollments vs Paths)
 	ctx := request.Context()
 	slug := param(request, "slug")
 	userID := param(request, "userId")
@@ -568,7 +569,7 @@ func (s *State) ManagerGetUserPathEnrollments(writer http.ResponseWriter, reques
 // @Failure   400   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
 // @Router    /api/manager/paths/{slug}/enrollments [post].
-func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerEnrollUser; different repository (Paths vs Enrollments)
+func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	slug := param(request, "slug")
 	claims := s.claims(request)
@@ -606,7 +607,17 @@ func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	err = s.Repos.Paths.Enroll(ctx, body.UserID, slug)
+	detail, detailErr := s.fetchPathDetail(request, slug)
+	if detailErr != nil {
+		zap.L().Warn("could not fetch path detail for enrollment", zap.String("slug", slug), zap.Error(detailErr))
+	}
+
+	var courseSlugs []string
+	if detail != nil {
+		courseSlugs = detail.Courses
+	}
+
+	err = s.Repos.Paths.EnrollWithCourses(ctx, body.UserID, slug, courseSlugs)
 	if err != nil {
 		s.Error(writer, http.StatusInternalServerError, "Database error")
 
@@ -626,7 +637,7 @@ func (s *State) ManagerEnrollUserPath(writer http.ResponseWriter, request *http.
 // @Success   200     {object}  map[string]string
 // @Failure   403     {object}  map[string]string
 // @Router    /api/manager/paths/{slug}/enrollments/{userId} [delete].
-func (s *State) ManagerUnenrollUserPath(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // same scope check as ManagerUnenrollUser; different repository (Paths vs Enrollments)
+func (s *State) ManagerUnenrollUserPath(writer http.ResponseWriter, request *http.Request) { //nolint:dupl // scope check identical to ManagerUnenrollUser; different repo (Paths vs Enrollments)
 	ctx := request.Context()
 	slug := param(request, "slug")
 	userID := param(request, "userId")

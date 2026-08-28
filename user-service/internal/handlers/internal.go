@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -133,7 +134,44 @@ func (s *State) InternalCheckEnrollment(writer http.ResponseWriter, req *http.Re
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]bool{"enrolled": enrolled})
+	s.JSON(writer, http.StatusOK, map[string]bool{adminJSONKeyEnrolled: enrolled})
+}
+
+// InternalCheckPathEnrollment godoc
+// @Summary  Check if a user is enrolled in any of the given paths (internal)
+// @Tags     Internal
+// @Produce  json
+// @Param    userId     query  string  true  "User UUID"
+// @Param    pathSlugs  query  string  true  "Comma-separated path slugs"
+// @Success  200  {object}  map[string]bool
+// @Router   /internal/paths/check [get].
+func (s *State) InternalCheckPathEnrollment(writer http.ResponseWriter, req *http.Request) {
+	userID := req.URL.Query().Get("userId")
+	raw := req.URL.Query().Get("pathSlugs")
+
+	var slugs []string
+
+	for sl := range strings.SplitSeq(raw, ",") {
+		if sl = strings.TrimSpace(sl); sl != "" {
+			slugs = append(slugs, sl)
+		}
+	}
+
+	if userID == "" || len(slugs) == 0 {
+		s.JSON(writer, http.StatusOK, map[string]bool{adminJSONKeyEnrolled: false})
+
+		return
+	}
+
+	enrolled, err := s.Repos.Paths.EnrolledInAny(req.Context(), userID, slugs)
+	if err != nil {
+		zap.L().Error("failed to check path enrollment", zap.String("userID", userID), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "DB error")
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]bool{adminJSONKeyEnrolled: enrolled})
 }
 
 // InternalViewedLessons godoc

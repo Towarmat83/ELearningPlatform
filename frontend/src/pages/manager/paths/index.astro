@@ -1,11 +1,11 @@
 ---
-import Admin from '../../../layouts/Admin.astro';
+import Manager from '../../../layouts/Manager.astro';
 ---
-<Admin title="Parcours — Inscriptions">
+<Manager title="Parcours">
   <div class="admin-page-header">
     <div>
-      <h1 class="text-2xl">Parcours — Inscriptions</h1>
-      <p class="text-soft text-sm mt-1">Gérer les utilisateurs inscrits à chaque parcours</p>
+      <h1 class="text-2xl">Parcours</h1>
+      <p class="text-soft text-sm mt-1">Inscrire vos membres à des parcours d'apprentissage</p>
     </div>
   </div>
 
@@ -22,7 +22,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="enroll-form" class="card mb-5 !px-5 !py-4" style="display:none">
     <div class="flex-row-gap3-wrap">
       <select id="user-select" class="input flex-1 min-w-[200px]">
-        <option value="">Sélectionner un utilisateur…</option>
+        <option value="">Sélectionner un membre…</option>
       </select>
       <button id="enroll-btn" class="btn btn-primary btn-sm">Inscrire</button>
     </div>
@@ -33,7 +33,7 @@ import Admin from '../../../layouts/Admin.astro';
     <table class="admin-table" id="enrollments-table">
       <thead>
         <tr class="admin-tr-head">
-          <th class="admin-th">Utilisateur</th>
+          <th class="admin-th">Membre</th>
           <th class="admin-th">Progression</th>
           <th class="admin-th">Inscrit le</th>
           <th class="admin-th-right">Actions</th>
@@ -63,15 +63,15 @@ import Admin from '../../../layouts/Admin.astro';
       const paths = data.paths ?? [];
       const select = document.getElementById('path-select') as HTMLSelectElement;
       select.innerHTML = paths.length
-        ? `<option value="">— Choisir un parcours —</option>` + paths.map((p: any) => `<option value="${p.slug}">${p.title}</option>`).join('')
+        ? `<option value="">— Choisir un parcours —</option>` + paths.map((p: any) => `<option value="${p.slug}">${p.title ?? p.slug}</option>`).join('')
         : `<option value="">Aucun parcours disponible</option>`;
     }
 
     async function loadUsers() {
-      const data = await api('/admin/users') as { users: any[] };
+      const data = await api('/manager/users') as { users: any[] };
       allUsers = data.users ?? [];
       const sel = document.getElementById('user-select') as HTMLSelectElement;
-      sel.innerHTML = `<option value="">Sélectionner un utilisateur…</option>` +
+      sel.innerHTML = `<option value="">Sélectionner un membre…</option>` +
         allUsers.map((u: any) => `<option value="${u.id}">${u.username} (${u.email})</option>`).join('');
     }
 
@@ -79,20 +79,16 @@ import Admin from '../../../layouts/Admin.astro';
       const tbody = document.getElementById('enrollments-body')!;
       tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center"><div class="loading-state !p-0"><div class="spinner"></div></div></td></tr>`;
       try {
-        const data = await api(`/admin/paths/${slug}/enrollments`) as { users: any[] };
+        const data = await api(`/manager/paths/${slug}/enrollments`) as { users: any[] };
         const users = data.users ?? [];
-        document.getElementById('enroll-count')!.textContent = `${users.length} inscrit${users.length > 1 ? 's' : ''}`;
+        document.getElementById('enroll-count')!.textContent = `${users.length} inscrit${users.length !== 1 ? 's' : ''}`;
 
         if (users.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-soft">Aucun utilisateur inscrit à ce parcours</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-soft">Aucun membre inscrit à ce parcours</td></tr>`;
           return;
         }
 
-        const statusCls: Record<string, string> = {
-          completed: 'course-tag-completed',
-          available:  'course-tag-available',
-          locked:     'course-tag-locked',
-        };
+        const statusCls: Record<string, string> = { completed: 'course-tag-completed', available: 'course-tag-available', locked: 'course-tag-locked' };
         const statusIcon: Record<string, string> = { completed: '✓', available: '▶', locked: '🔒' };
 
         tbody.innerHTML = users.map((u: any) => {
@@ -102,9 +98,7 @@ import Admin from '../../../layouts/Admin.astro';
           ).join(' ');
           const bar = u.totalCourses > 0 ? `
             <div class="path-progress-row">
-              <div class="progress-track">
-                <div class="progress-fill ${pct === 100 ? 'complete' : 'partial'}" style="width:${pct}%"></div>
-              </div>
+              <div class="progress-track"><div class="progress-fill ${pct === 100 ? 'complete' : 'partial'}" style="width:${pct}%"></div></div>
               <span class="path-progress-pct">${u.completedCourses}/${u.totalCourses}</span>
             </div>` : '';
           return `
@@ -118,14 +112,9 @@ import Admin from '../../../layouts/Admin.astro';
                 </div>
               </div>
             </td>
-            <td class="admin-td">
-              <div class="flex flex-wrap gap-1">${courses}</div>
-              ${bar}
-            </td>
+            <td class="admin-td"><div class="flex flex-wrap gap-1">${courses}</div>${bar}</td>
             <td class="admin-td text-soft text-sm whitespace-nowrap">${new Date(u.enrolledAt).toLocaleDateString('fr-FR')}</td>
-            <td class="admin-td-right">
-              <button class="btn btn-sm btn-danger unenroll-btn" data-uid="${u.userId}">Désinscrire</button>
-            </td>
+            <td class="admin-td-right"><button class="btn btn-sm btn-danger unenroll-btn" data-uid="${u.userId}">Désinscrire</button></td>
           </tr>`;
         }).join('');
 
@@ -141,8 +130,8 @@ import Admin from '../../../layouts/Admin.astro';
       const btn = document.getElementById('enroll-btn') as HTMLButtonElement;
       btn.disabled = true; btn.textContent = 'Inscription…';
       try {
-        await api(`/admin/paths/${slug}/enrollments`, { method: 'POST', body: { userId: userId } });
-        (window as any).showToast?.('Utilisateur inscrit au parcours', 'success');
+        await api(`/manager/paths/${slug}/enrollments`, { method: 'POST', body: { userId } });
+        (window as any).showToast?.('Membre inscrit au parcours', 'success');
         (document.getElementById('user-select') as HTMLSelectElement).value = '';
         await loadEnrollments(slug);
       } catch (e: any) {
@@ -153,10 +142,10 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function unenroll(slug: string, userId: string) {
-      if (!confirm('Désinscrire cet utilisateur du parcours ?')) return;
+      if (!confirm('Désinscrire ce membre du parcours ?')) return;
       try {
-        await api(`/admin/paths/${slug}/enrollments/${userId}`, { method: 'DELETE' });
-        (window as any).showToast?.('Utilisateur désinscrit', 'success');
+        await api(`/manager/paths/${slug}/enrollments/${userId}`, { method: 'DELETE' });
+        (window as any).showToast?.('Membre désinscrit', 'success');
         await loadEnrollments(slug);
       } catch (e: any) {
         (window as any).showToast?.(e.message || 'Erreur', 'error');
@@ -178,10 +167,10 @@ import Admin from '../../../layouts/Admin.astro';
 
     document.getElementById('enroll-btn')!.addEventListener('click', () => {
       const userId = (document.getElementById('user-select') as HTMLSelectElement).value;
-      if (!userId) { (window as any).showToast?.('Sélectionnez un utilisateur', 'error'); return; }
+      if (!userId) { (window as any).showToast?.('Sélectionnez un membre', 'error'); return; }
       enroll(currentSlug, userId);
     });
 
     Promise.all([loadPaths(), loadUsers()]);
   </script>
-</Admin>
+</Manager>

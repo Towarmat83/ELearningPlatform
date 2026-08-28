@@ -2,202 +2,12 @@
 import App from '../layouts/App.astro';
 ---
 <App title="Agenda — pupitre" activePage="agenda">
-  <style is:global>
-    /* Full viewport layout */
-    .agenda-wrap {
-      display: flex;
-      height: calc(100vh - 64px);
-      background: linear-gradient(160deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
-      padding: 20px 24px;
-      gap: 18px;
-      box-sizing: border-box;
-      overflow: hidden;
-    }
-
-    /* Left calendar */
-    .cal-area {
-      flex: 1; display: flex; flex-direction: column; min-width: 0;
-      background: #ffffffee; backdrop-filter: blur(12px);
-      border-radius: 16px; border: 1.5px solid #e2e8f0;
-      box-shadow: 0 4px 24px rgba(67,97,238,.08);
-      overflow: hidden;
-    }
-    .cal-topbar {
-      display: flex; align-items: center; gap: 16px;
-      padding: 14px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
-      background: #fff;
-      border-radius: 16px 16px 0 0;
-    }
-    .cal-topbar-title {
-      font-size: 1.15rem; font-weight: 800;
-      background: linear-gradient(135deg, #4361ee, #7c3aed);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .cal-nav-group { display: flex; align-items: center; gap: 6px; }
-    .cal-nav-btn {
-      background: none; border: 1.5px solid var(--line); border-radius: 8px;
-      width: 32px; height: 32px; cursor: pointer; font-size: 1rem; color: var(--ink);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .cal-nav-btn:hover { background: var(--fill); }
-    .cal-month-lbl { font-size: 1rem; font-weight: 600; min-width: 140px; text-align: center; text-transform: capitalize; }
-    .cal-today-btn {
-      background: none; border: 1.5px solid var(--line); border-radius: 8px;
-      padding: 4px 14px; font-size: .82rem; font-weight: 600; cursor: pointer; color: var(--ink);
-    }
-    .cal-today-btn:hover { background: var(--fill); }
-
-    /* Month/year picker */
-    .cal-month-btn {
-      background: none; border: none; font-size: 1rem; font-weight: 600;
-      min-width: 140px; text-align: center; cursor: pointer; color: var(--ink);
-      border-radius: 8px; padding: 4px 8px;
-    }
-    .cal-month-btn:hover { background: var(--fill); }
-    .mp-wrap { position: relative; }
-    .mp-popup {
-      display: none; position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-      background: var(--paper); border: 1.5px solid var(--line); border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.12); padding: 14px; z-index: 100; width: 260px;
-      user-select: none;
-    }
-    .mp-popup.open { display: block; }
-    .mp-year-row {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 10px;
-    }
-    .mp-year-btn {
-      background: none; border: 1.5px solid var(--line); border-radius: 8px;
-      width: 30px; height: 30px; cursor: pointer; font-size: 1rem; color: var(--ink);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .mp-year-btn:hover { background: var(--fill); }
-    .mp-year-lbl { font-weight: 700; font-size: 1rem; }
-    .mp-months {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-    }
-    .mp-month-btn {
-      background: none; border: 1.5px solid transparent; border-radius: 8px;
-      padding: 7px 4px; font-size: .82rem; font-weight: 500; cursor: pointer;
-      color: var(--ink); text-align: center; text-transform: capitalize;
-    }
-    .mp-month-btn:hover { background: var(--fill); border-color: var(--line); }
-    .mp-month-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
-
-    /* Day-of-week header row */
-    .cal-dow-row {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      border-bottom: 1px solid #e8edf5; flex-shrink: 0;
-      background: #f8faff;
-    }
-    .cal-dow-cell {
-      text-align: center; font-size: .72rem; font-weight: 700;
-      color: var(--ink-soft); padding: 9px 0; text-transform: uppercase; letter-spacing: .06em;
-      border-right: 1px solid #e8edf5;
-    }
-    .cal-dow-cell:last-child { border-right: none; }
-
-    /* Grid body */
-    .cal-body { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; min-height: 0; overflow: hidden; }
-    .cal-cell {
-      border-right: 1px solid #e8edf5;
-      border-bottom: 1px solid #e8edf5;
-      padding: 6px 8px;
-      display: flex; flex-direction: column; gap: 3px;
-      min-height: 0; overflow: hidden;
-      cursor: default;
-    }
-    .cal-cell:nth-child(7n) { border-right: none; }
-    .cal-cell.other-month { background: #f8fafc; }
-    .cal-cell.other-month .cal-day-num { opacity: .3; }
-    .cal-cell.has-event { cursor: pointer; user-select: none; }
-    .cal-cell.has-event * { cursor: pointer; user-select: none; }
-    .cal-cell.has-event:hover { background: #f0f7ff; }
-    .cal-cell.selected { background: #e8f0fe !important; }
-    .cal-day-num {
-      font-size: .8rem; font-weight: 500; color: var(--ink-soft);
-      width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-      border-radius: 50%; flex-shrink: 0;
-    }
-    .cal-cell.today .cal-day-num {
-      background: var(--blue); color: #fff; font-weight: 700;
-    }
-    .cal-event-pill {
-      background: #1b86f2; color: #fff;
-      border-radius: 5px; font-size: .72rem; font-weight: 600;
-      padding: 2px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      flex-shrink: 0; cursor: pointer;
-    }
-    .cal-event-pill:hover { background: #1466c4; }
-    .cal-event-pill.booked { background: #16a34a; }
-
-    /* Right panel */
-    .side-panel {
-      width: 300px; flex-shrink: 0;
-      background: #ffffffee; backdrop-filter: blur(12px);
-      border-radius: 16px; border: 1.5px solid #e2e8f0;
-      box-shadow: 0 4px 24px rgba(67,97,238,.08);
-      display: flex; flex-direction: column;
-      overflow: hidden;
-    }
-    .side-header {
-      padding: 14px 18px; border-bottom: 1px solid #e2e8f0;
-      font-size: .78rem; font-weight: 700; color: var(--ink-soft);
-      text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
-      background: #fff;
-      border-radius: 16px 16px 0 0;
-    }
-    .side-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
-    .ev-card {
-      border: 1.5px solid #e2e8f0; border-radius: 14px;
-      padding: 14px 16px; margin-bottom: 10px;
-      background: #ffffffcc; backdrop-filter: blur(8px);
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .ev-card:hover { border-color: #a5b4fc; box-shadow: 0 4px 16px rgba(67,97,238,.1); }
-    .ev-card.booked { border-color: #86efac; background: #f0fdf4cc; }
-    .ev-card.booked:hover { border-color: #22c55e; box-shadow: 0 4px 16px rgba(34,197,94,.12); }
-    .ev-course { font-weight: 700; font-size: .875rem; margin-bottom: 2px; }
-    .ev-title { font-size: .82rem; color: var(--ink-soft); margin-bottom: 8px; }
-    .ev-meta { font-size: .78rem; color: var(--ink-soft); line-height: 1.8; margin-bottom: 10px; }
-    .ev-booked-badge { font-size: .78rem; font-weight: 600; color: #16a34a; margin-bottom: 8px; }
-    .no-sel { text-align: center; padding: 40px 16px; color: var(--ink-soft); font-size: .875rem; }
-
-    /* Session modal */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
-      z-index: 200; align-items: center; justify-content: center;
-    }
-    .modal-overlay.open { display: flex; }
-    .modal-box {
-      background: var(--paper); border-radius: 16px; padding: 28px 28px 24px;
-      width: 420px; max-width: calc(100vw - 32px);
-      box-shadow: 0 16px 48px rgba(0,0,0,.18);
-    }
-    .modal-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 18px; }
-    .form-group { margin-bottom: 14px; }
-    .form-label { font-size: .78rem; font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
-    .form-input {
-      width: 100%; border: 1.5px solid var(--line); border-radius: 8px;
-      padding: 8px 10px; font-size: .875rem; background: var(--paper); color: var(--ink);
-      box-sizing: border-box;
-    }
-    .form-input:focus { outline: none; border-color: var(--blue); }
-    .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-    .btn-new-session {
-      margin-left: auto; background: var(--blue); color: #fff; border: none;
-      border-radius: 8px; padding: 6px 14px; font-size: .82rem; font-weight: 600;
-      cursor: pointer; display: none;
-    }
-    .btn-new-session:hover { background: #1466c4; }
-    .ev-trainer-actions { display: flex; gap: 6px; margin-top: 6px; }
-  </style>
 
   <div class="agenda-wrap">
     <!-- Calendar area -->
     <div class="cal-area">
       <div class="cal-topbar">
-        <span style="font-size:1.3rem">📅</span>
+        <span class="text-[1.3rem]">📅</span>
         <span class="cal-topbar-title">Agenda</span>
         <button class="cal-today-btn" id="btn-today">Aujourd'hui</button>
         <div class="cal-nav-group">
@@ -215,7 +25,7 @@ import App from '../layouts/App.astro';
           </div>
           <button class="cal-nav-btn" id="btn-next">›</button>
         </div>
-        <div id="loading-inline" style="font-size:.8rem;color:var(--ink-soft)">Chargement…</div>
+        <div id="loading-inline" class="text-[.8rem] text-ink-soft">Chargement…</div>
         <button class="btn-new-session" id="btn-new-session">+ Nouvelle session</button>
       </div>
 
@@ -242,8 +52,8 @@ import App from '../layouts/App.astro';
   </div>
 
   <!-- Session create/edit modal -->
-  <div class="modal-overlay" id="session-modal">
-    <div class="modal-box">
+  <div class="agenda-modal-overlay" id="session-modal">
+    <div class="agenda-modal-box">
       <div class="modal-title" id="modal-title">Nouvelle session</div>
       <div class="form-group" id="course-group">
         <label class="form-label" for="modal-course">Cours</label>
@@ -570,7 +380,7 @@ import App from '../layouts/App.astro';
       const dateStr = s.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
       return `
         <div class="ev-card${isBooked ? ' booked' : ''}">
-          <div class="ev-course"><a href="/courses/${s.course.slug}" style="color:inherit;text-decoration:none">${s.course.title}</a></div>
+          <div class="ev-course"><a href="/courses/${s.course.slug}" class="text-inherit no-underline">${s.course.title}</a></div>
           <div class="ev-title">${s.session.title}</div>
           <div class="ev-meta">
             📅 ${dateStr} à ${time}
@@ -580,22 +390,22 @@ import App from '../layouts/App.astro';
           ${isBooked ? '<div class="ev-booked-badge">✓ Inscrit(e)</div>' : ''}
           ${token ? `
             <button data-slug="${s.course.slug}" data-sid="${s.session.id}" data-booked="${isBooked}"
-              class="btn ${isBooked ? 'btn-secondary' : 'btn-primary'} btn-sm" style="width:100%">
+              class="btn ${isBooked ? 'btn-secondary' : 'btn-primary'} btn-sm w-full">
               ${isBooked ? 'Annuler la réservation' : 'Réserver une place'}
             </button>` : ''}
           ${isTrainer ? `
             <a href="/admin/courses/sessions/${s.course.slug}/${s.session.id}"
-              class="btn btn-secondary btn-sm" style="width:100%;text-align:center;text-decoration:none;display:block;margin-top:6px">
+              class="btn btn-secondary btn-sm w-full text-center no-underline block mt-1.5">
               👥 Voir les inscrits &amp; présences
             </a>
             <div class="ev-trainer-actions">
-              <button class="btn btn-secondary btn-sm" style="flex:1"
+              <button class="btn btn-secondary btn-sm flex-1"
                 data-edit-slug="${s.course.slug}" data-edit-sid="${s.session.id}"
                 data-edit-title="${s.session.title}" data-edit-date="${s.session.date}"
                 data-edit-location="${s.session.location ?? ''}" data-edit-capacity="${s.session.capacity ?? 0}">
                 Modifier
               </button>
-              <button class="btn btn-secondary btn-sm" style="flex:1;color:#dc2626"
+              <button class="btn btn-secondary btn-sm flex-1 text-[#dc2626]"
                 data-del-slug="${s.course.slug}" data-del-sid="${s.session.id}">
                 Supprimer
               </button>

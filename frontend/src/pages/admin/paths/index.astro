@@ -183,6 +183,11 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ── Path list ──
     function renderPaths() {
+      // Every re-render rebuilds the editor from the draft, so read the
+      // live inputs back first: a redraw triggered by anything other than
+      // an explicit member mutation (searching, another path being
+      // deleted) would otherwise discard unsaved metadata edits.
+      syncDraft();
       const search = (document.getElementById('search-input') as HTMLInputElement).value.trim().toLowerCase();
       const shown = search
         ? allPaths.filter(p => `${p.title} ${p.slug} ${p.description ?? ''}`.toLowerCase().includes(search))
@@ -465,9 +470,9 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     // Switching the kind swaps which member list is being edited, so the
-    // editor has to redraw — after saving the other fields.
+    // editor has to redraw; renderPaths reads the other fields back first.
     pathsList.addEventListener('change', (e: Event) => {
-      if ((e.target as HTMLElement).id === 'pe-kind') { syncDraft(); renderPaths(); }
+      if ((e.target as HTMLElement).id === 'pe-kind') renderPaths();
     });
 
     function addMember() {
@@ -609,8 +614,15 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('view-enrollments')!.style.display = view === 'enrollments' ? 'block' : 'none';
         document.getElementById('header-actions')!.style.display = view === 'paths' ? 'flex' : 'none';
         if (view === 'enrollments' && !enrollmentsLoaded) {
-          enrollmentsLoaded = true;
-          await loadUsers().catch((e: any) => toast(e.message || 'Erreur', 'error'));
+          // Only latch the flag on success, so a failed load is retried the
+          // next time the tab is opened rather than leaving the user
+          // dropdown empty until a full page reload.
+          try {
+            await loadUsers();
+            enrollmentsLoaded = true;
+          } catch (e: any) {
+            toast(e.message || 'Erreur', 'error');
+          }
         }
       });
     });
@@ -667,7 +679,7 @@ import Admin from '../../../layouts/Admin.astro';
         tbody.innerHTML = users.map((u: any) => {
           const pct = u.totalCourses > 0 ? Math.round(u.completedCourses / u.totalCourses * 100) : 0;
           const courses = (u.courses ?? []).map((c: any) =>
-            `<span class="course-tag ${statusCls[c.status] ?? ''}">${statusIcon[c.status]} ${escHtml(c.slug)}</span>`
+            `<span class="course-tag ${statusCls[c.status] ?? ''}">${statusIcon[c.status] ?? '•'} ${escHtml(c.slug)}</span>`
           ).join(' ');
           const bar = u.totalCourses > 0 ? `
             <div class="path-progress-row">

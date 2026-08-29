@@ -18,6 +18,15 @@ import (
 // would create something no route could ever address again.
 var slugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
+// invalidSlugMessage is returned for a slug that could never appear in a
+// route, whichever endpoint the resource is being created through.
+const invalidSlugMessage = "slug must be lowercase letters, digits and dashes, starting with a letter or digit"
+
+// validSlug reports whether slug can be addressed in a URL.
+func validSlug(slug string) bool {
+	return slugRE.MatchString(slug)
+}
+
 // decodeDefinition reads a resource definition from the request body,
 // accepting either a nested "spec" object or flat top-level fields — the
 // admin UI sends the former, hand-written calls tend to send the latter.
@@ -91,9 +100,8 @@ func createDefinition[T any, R any](
 		return
 	}
 
-	if !slugRE.MatchString(slug) {
-		state.Error(writer, http.StatusBadRequest,
-			"slug must be lowercase letters, digits and dashes, starting with a letter or digit")
+	if !validSlug(slug) {
+		state.Error(writer, http.StatusBadRequest, invalidSlugMessage)
 
 		return
 	}

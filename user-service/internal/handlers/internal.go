@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 
 	"go.uber.org/zap"
 
@@ -148,15 +147,7 @@ func (s *State) InternalCheckEnrollment(writer http.ResponseWriter, req *http.Re
 // @Router   /internal/paths/check [get].
 func (s *State) InternalCheckPathEnrollment(writer http.ResponseWriter, req *http.Request) {
 	userID := req.URL.Query().Get("userId")
-	raw := req.URL.Query().Get("pathSlugs")
-
-	var slugs []string
-
-	for sl := range strings.SplitSeq(raw, ",") {
-		if sl = strings.TrimSpace(sl); sl != "" {
-			slugs = append(slugs, sl)
-		}
-	}
+	slugs := splitCommaList(req.URL.Query().Get("pathSlugs"))
 
 	if userID == "" || len(slugs) == 0 {
 		s.JSON(writer, http.StatusOK, map[string]bool{adminJSONKeyEnrolled: false})
@@ -217,6 +208,18 @@ func (s *State) InternalMarkComplete(writer http.ResponseWriter, req *http.Reque
 	}
 
 	err := s.Repos.LessonProgress.MarkComplete(req.Context(), body.UserID, body.CourseSlug, body.LessonSlug)
+
+	// Lesson XP is awarded here because this is the only endpoint a learner
+	// completing a lesson actually reaches: course-service owns
+	// /api/courses/{slug}/lessons/{slug}/complete and reports the completion
+	// inwards. user-service used to award it from a public route of its own
+	// that nothing could route to, so lesson XP was never granted at all.
+	// Award() is idempotent, so re-completing a lesson does not pay twice.
+	if err == nil {
+		_ = s.awardXP(req, body.UserID, repository.XPSourceLesson,
+			body.CourseSlug+"/"+body.LessonSlug, repository.XPAmountLesson)
+	}
+
 	internalRespondExecResult(s, writer, err, "failed to mark lesson complete",
 		zap.String("userID", body.UserID), zap.String("courseSlug", body.CourseSlug), zap.String("lessonSlug", body.LessonSlug))
 }
@@ -295,34 +298,30 @@ func (s *State) InternalRecordModuleProgress(writer http.ResponseWriter, req *ht
 // @Param    courseSlug  query  string  true  "Course slug"
 // @Success  200  {object}  map[string]interface{}
 // @Router   /internal/progress/course-summary [get].
+// It is the single-course shape of InternalCourseSummaries and shares its
+// implementation: two queries whose rows are summed in Go, rather than the
+// three aggregate queries (SUM, passed slugs, COUNT) it used to run over
+// the same two index scans.
 func (s *State) InternalCourseSummary(writer http.ResponseWriter, req *http.Request) {
 	userID := req.URL.Query().Get("userId")
 	courseSlug := req.URL.Query().Get("courseSlug")
+	slugs := []string{courseSlug}
 
-	totalScore, err := s.Repos.ModuleProgress.TotalScore(req.Context(), userID, courseSlug)
+	viewedByCourse, moduleRows, err := s.loadCourseProgress(req.Context(), userID, slugs)
 	if err != nil {
-		zap.L().Error("failed to query course score", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
+		zap.L().Error("failed to query course summary",
+			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "DB error")
 
 		return
 	}
 
-	passedModules, err := s.Repos.ModuleProgress.PassedModuleSlugs(req.Context(), userID, courseSlug)
-	if err != nil {
-		zap.L().Error("failed to query passed modules", zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
-		s.Error(writer, http.StatusInternalServerError, "DB error")
-
-		return
-	}
-
-	// Also count viewed lessons (text/video/image modules marked complete).
-	// This allows text-only courses to satisfy "any progress" prerequisites.
-	viewedCount, _ := s.Repos.LessonProgress.CountViewed(req.Context(), userID, courseSlug)
+	summary := summarizeCourseProgress(moduleRows[courseSlug], viewedByCourse[courseSlug])
 
 	s.JSON(writer, http.StatusOK, map[string]any{
-		"totalScore":    totalScore,
-		"passedModules": passedModules,
-		"viewedCount":   viewedCount,
+		"totalScore":    summary.TotalScore,
+		"passedModules": summary.PassedModules,
+		"viewedCount":   summary.ViewedCount,
 	})
 }
 

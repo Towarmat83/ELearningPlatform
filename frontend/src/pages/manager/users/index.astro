@@ -240,7 +240,7 @@ import Manager from '../../../layouts/Manager.astro';
 
     async function unenroll(slug: string) {
       try {
-        await api(`/manager/courses/${slug}/enrollments/${selectedUserId}`, { method: 'DELETE' });
+        await api(`/manager/enrollments/${slug}/users/${selectedUserId}`, { method: 'DELETE' });
         (window as any).showToast?.('Inscription retirée', 'success');
         await refreshEnrollments();
         await load();
@@ -295,7 +295,7 @@ import Manager from '../../../layouts/Manager.astro';
       const btn = document.getElementById('enroll-btn') as HTMLButtonElement;
       btn.disabled = true; btn.textContent = '…';
       try {
-        await api(`/manager/courses/${slug}/enrollments`, { method: 'POST', body: { userId: selectedUserId } });
+        await api(`/manager/enrollments/${slug}`, { method: 'POST', body: { userId: selectedUserId } });
         (document.getElementById('course-select') as HTMLSelectElement).value = '';
         (window as any).showToast?.('Inscrit avec succès', 'success');
         await refreshEnrollments();

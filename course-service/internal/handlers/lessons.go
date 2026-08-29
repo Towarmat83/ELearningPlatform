@@ -1,16 +1,12 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
-	"net/url"
 
 	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
-	"github.com/genesary/pupitre/course-service/internal/middleware"
 )
 
 // courseCompleteBody is the request body sent to the user-service when a
@@ -44,100 +40,14 @@ type lessonDetail struct {
 	Viewed  bool   `json:"viewed"`
 }
 
-// autoEnroll silently enrolls the user in a public course via the user-service
-// internal API. Errors are ignored — the course is accessible regardless.
+// autoEnroll silently enrolls the user in a public course via the
+// user-service internal API. Failures are only logged — the course is
+// accessible regardless, so they must not affect the response.
 func (s *State) autoEnroll(userID, courseSlug string) {
-	body, err := json.Marshal(map[string]string{
+	s.postInternalDetached("/internal/enrollments/auto", map[string]string{
 		userIDJSONKey:     userID,
 		courseSlugJSONKey: courseSlug,
-	})
-	if err != nil {
-		zap.L().Warn("failed to build auto-enroll request", zap.Error(err))
-
-		return
-	}
-
-	httpReq, err := http.NewRequestWithContext(
-		context.Background(), http.MethodPost, s.Config.UserServiceURL+"/internal/enrollments/auto", bytes.NewReader(body),
-	)
-	if err != nil {
-		zap.L().Warn("failed to build auto-enroll request", zap.Error(err))
-
-		return
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	s.setInternalHeader(httpReq)
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err == nil {
-		defer func() { _ = resp.Body.Close() }()
-	}
-}
-
-// isEnrolled reports whether userID is enrolled in courseSlug, according to
-// the user-service internal enrollment-check API.
-func (s *State) isEnrolled(req *http.Request, courseSlug, userID string) bool {
-	target, err := url.Parse(s.Config.UserServiceURL + "/internal/enrollments/check")
-	if err != nil {
-		return false
-	}
-
-	q := target.Query()
-	q.Set(userIDJSONKey, userID)
-	q.Set(courseSlugJSONKey, courseSlug)
-	target.RawQuery = q.Encode()
-
-	httpReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, target.String(), http.NoBody)
-	if err != nil {
-		return false
-	}
-
-	s.setInternalHeader(httpReq)
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result struct {
-		Enrolled bool `json:"enrolled"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return false
-	}
-
-	return result.Enrolled
-}
-
-// ensureLessonAccess verifies that the requester (identified by claims) may
-// access lessons of course: admins always pass, public courses trigger an
-// auto-enroll, and private courses require an existing enrollment. On
-// denial it writes deniedMsg as a 403 response and returns false.
-func (s *State) ensureLessonAccess(
-	writer http.ResponseWriter, req *http.Request, course *content.Course, courseSlug string,
-	claims *middleware.Claims, deniedMsg string,
-) bool {
-	if claims.Role == roleAdmin {
-		return true
-	}
-
-	if course.IsPublic {
-		s.autoEnroll(claims.Subject, courseSlug)
-
-		return true
-	}
-
-	if !s.isEnrolled(req, courseSlug, claims.Subject) {
-		s.Error(writer, http.StatusForbidden, deniedMsg)
-
-		return false
-	}
-
-	return true
+	}, zap.String("userID", userID), zap.String("courseSlug", courseSlug))
 }
 
 // ListLessons godoc
@@ -151,34 +61,27 @@ func (s *State) ensureLessonAccess(
 // @Failure   404   {object}  map[string]string
 // @Router    /api/courses/{slug}/lessons [get].
 func (s *State) ListLessons(writer http.ResponseWriter, req *http.Request) {
-	courseSlug := param(req, "slug")
-	claims := s.claims(req)
-
-	course, found := s.course(writer, req, courseSlug)
-	if !found {
+	view, ok := s.learnerView(writer, req, lessonAccessDeniedMessage)
+	if !ok {
 		return
 	}
 
-	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
-		return
-	}
-
-	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
-
-	modules := s.visibleModules(course, req)
-
-	out := make([]lessonSummary, 0, len(modules))
-	for pos, mod := range modules {
+	out := make([]lessonSummary, 0, len(view.modules))
+	for pos, mod := range view.modules {
 		out = append(out, lessonSummary{
 			Slug:   mod.Slug(),
 			Title:  mod.Name,
 			Order:  pos + 1,
-			Viewed: viewed[mod.Slug()],
+			Viewed: view.progress.Viewed[mod.Slug()],
 		})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{lessonsJSONKey: out})
 }
+
+// lessonAccessDeniedMessage is returned when a learner asks for the lessons
+// of a private course they are not enrolled in.
+const lessonAccessDeniedMessage = "Enroll in this course to access lessons"
 
 // moduleLessonBody resolves the display body for a module-backed lesson,
 // fetching remote git content when configured.
@@ -224,23 +127,14 @@ func findModuleLesson(modules []content.Module, lessonSlug string) (content.Modu
 // @Failure   404   {object}  map[string]string
 // @Router    /api/courses/{slug}/lessons/{lessonSlug} [get].
 func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
-	courseSlug := param(req, "slug")
 	lessonSlug := param(req, "lessonSlug")
-	claims := s.claims(req)
 
-	course, exists := s.course(writer, req, courseSlug)
-	if !exists {
+	view, ok := s.learnerView(writer, req, lessonAccessDeniedMessage)
+	if !ok {
 		return
 	}
 
-	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Enroll in this course to access lessons") { //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
-		return
-	}
-
-	viewed := s.viewedLessons(req, courseSlug, claims.Subject)
-	modules := s.visibleModules(course, req)
-
-	mod, pos, found := findModuleLesson(modules, lessonSlug)
+	mod, pos, found := findModuleLesson(view.modules, lessonSlug)
 	if !found {
 		s.Error(writer, http.StatusNotFound, "Lesson not found")
 
@@ -259,7 +153,7 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 		Order:   pos + 1,
 		Type:    mod.Type,
 		Content: s.moduleLessonBody(req.Context(), mod),
-		Viewed:  viewed[mod.Slug()],
+		Viewed:  view.progress.Viewed[mod.Slug()],
 	}})
 }
 
@@ -269,42 +163,14 @@ func (s *State) GetLesson(writer http.ResponseWriter, req *http.Request) {
 func (s *State) postLessonComplete(
 	writer http.ResponseWriter, req *http.Request, userID, courseSlug, lessonSlug string,
 ) bool {
-	body := map[string]string{
+	err := s.postInternal(req.Context(), "/internal/progress/complete", map[string]string{
 		userIDJSONKey:     userID,
 		courseSlugJSONKey: courseSlug,
 		"lessonSlug":      lessonSlug,
-	}
-
-	var buf bytes.Buffer
-
-	err := json.NewEncoder(&buf).Encode(body)
+	})
 	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
-
-		return false
-	}
-
-	httpReq, err := http.NewRequestWithContext(
-		req.Context(), http.MethodPost, s.Config.UserServiceURL+"/internal/progress/complete", &buf,
-	)
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
-
-		return false
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	s.setInternalHeader(httpReq)
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
-
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		zap.L().Error("failed to mark lesson complete",
+			zap.String("courseSlug", courseSlug), zap.String("lessonSlug", lessonSlug), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "Failed to mark lesson as complete")
 
 		return false
@@ -316,64 +182,28 @@ func (s *State) postLessonComplete(
 // notifyCourseComplete notifies the user-service that userID completed
 // course. Failures are only logged: the lesson itself was already
 // recorded as complete, so they must not affect the HTTP response.
-func (s *State) notifyCourseComplete(req *http.Request, course *content.Course, userID string) {
+func (s *State) notifyCourseComplete(ctx context.Context, course *content.Course, userID string) {
 	courseSlug := course.Slug
-	payload := courseCompleteBody{UserID: userID, CourseSlug: courseSlug}
 
 	skillMap := make(map[string]struct{}, len(course.Skills))
 	for _, sk := range course.Skills {
 		skillMap[sk] = struct{}{}
 	}
 
-	payload.Skills = skillMap
-	payload.Difficulty = course.Difficulty
-
-	if len(payload.Skills) > 0 {
+	payload := courseCompleteBody{
+		UserID:     userID,
+		CourseSlug: courseSlug,
+		Skills:     skillMap,
+		Difficulty: course.Difficulty,
 		// One grouped query over the denormalized course skills replaces
 		// scanning the whole catalog to count who teaches what.
-		totals, err := s.Repos.Courses.SkillTotals(req.Context(), course.Skills)
-		if err != nil {
-			zap.L().Error("count skill totals failed", zap.String("courseSlug", courseSlug), zap.Error(err))
-		} else {
-			payload.SkillTotalCourses = totals
-		}
+		SkillTotalCourses: s.skillTotalsFor(ctx, course),
 	}
 
-	var buf bytes.Buffer
-
-	err := json.NewEncoder(&buf).Encode(payload)
-	if err != nil {
-		zap.L().Error("failed to build course-complete request",
-			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
-
-		return
-	}
-
-	httpReq, err := http.NewRequestWithContext(
-		req.Context(), http.MethodPost, s.Config.UserServiceURL+"/internal/progress/course-complete", &buf,
-	)
-	if err != nil {
-		zap.L().Error("failed to build course-complete request",
-			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
-
-		return
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	s.setInternalHeader(httpReq)
-
-	resp, err := http.DefaultClient.Do(httpReq)
+	err := s.postInternal(ctx, "/internal/progress/course-complete", payload)
 	if err != nil {
 		zap.L().Error("failed to mark course complete",
 			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Error(err))
-
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		zap.L().Error("user-service rejected course-complete request",
-			zap.String("userID", userID), zap.String("courseSlug", courseSlug), zap.Int("status", resp.StatusCode))
 	}
 }
 
@@ -389,34 +219,29 @@ func (s *State) notifyCourseComplete(req *http.Request, course *content.Course, 
 // @Failure   404   {object}  map[string]string
 // @Router    /api/courses/{slug}/lessons/{lessonSlug}/complete [post].
 func (s *State) MarkLessonComplete(writer http.ResponseWriter, req *http.Request) {
-	courseSlug := param(req, "slug")
 	lessonSlug := param(req, "lessonSlug")
-	claims := s.claims(req)
 
-	course, exists := s.course(writer, req, courseSlug)
-	if !exists {
+	view, ok := s.learnerView(writer, req, "Not enrolled")
+	if !ok {
 		return
 	}
 
-	if !s.ensureLessonAccess(writer, req, course, courseSlug, claims, "Not enrolled") { //nolint:contextcheck // autoEnroll and friends do not accept context (pre-existing architecture)
-		return
-	}
-
-	modules := s.visibleModules(course, req)
-
-	_, _, found := findModuleLesson(modules, lessonSlug)
+	_, _, found := findModuleLesson(view.modules, lessonSlug)
 	if !found {
 		s.Error(writer, http.StatusNotFound, "Lesson not found")
 
 		return
 	}
 
-	if !s.postLessonComplete(writer, req, claims.Subject, courseSlug, lessonSlug) {
+	if !s.postLessonComplete(writer, req, view.userID, view.slug, lessonSlug) {
 		return
 	}
 
-	if s.courseCompleted(req, modules, claims.Subject, courseSlug, "", lessonSlug) {
-		s.notifyCourseComplete(req, course, claims.Subject)
+	// The progress loaded at the start of this request predates the write
+	// just made, which is exactly what the justViewedLesson argument is
+	// for — no second read is needed to credit it.
+	if courseCompleted(view, "", lessonSlug) {
+		s.notifyCourseComplete(req.Context(), view.course, view.userID)
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]string{messageJSONKey: lessonCompleteMessage})

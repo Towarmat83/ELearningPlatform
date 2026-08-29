@@ -79,6 +79,32 @@ func (f *PathRepository) List(_ context.Context, limit, offset int) ([]*content.
 	return out, nil
 }
 
+// ListBySlugs returns the named paths, ordered by title.
+func (f *PathRepository) ListBySlugs(_ context.Context, slugs []string) ([]*content.Path, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	out := make([]*content.Path, 0, len(slugs))
+
+	for _, slug := range slugs {
+		path, ok := f.paths[slug]
+		if !ok {
+			continue
+		}
+
+		copied := *path
+		out = append(out, &copied)
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
+
+	return out, nil
+}
+
 // Get returns one path, or repository.ErrNotFound.
 func (f *PathRepository) Get(_ context.Context, slug string) (*content.Path, error) {
 	f.mu.RLock()
@@ -118,6 +144,33 @@ func (f *PathRepository) SlugsContainingCourse(_ context.Context, courseSlug str
 	sort.Strings(slugs)
 
 	return slugs, nil
+}
+
+// SkillsByCourse returns the declared skills of each of the given courses,
+// keyed by course slug.
+func (f *PathRepository) SkillsByCourse(_ context.Context, courseSlugs []string) (map[string][]string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	bySlug := make(map[string][]string, len(courseSlugs))
+
+	for _, courseSlug := range courseSlugs {
+		skills := f.courseSkills[courseSlug]
+		if len(skills) == 0 {
+			continue
+		}
+
+		copied := append([]string(nil), skills...)
+		sort.Strings(copied)
+
+		bySlug[courseSlug] = copied
+	}
+
+	return bySlug, nil
 }
 
 // SkillsOfCourses returns the deduplicated union of the declared skills of

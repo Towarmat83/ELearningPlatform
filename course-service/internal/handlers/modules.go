@@ -1,15 +1,11 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
-	"slices"
 	"strconv"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -171,108 +167,12 @@ type questionResultAPI struct {
 	SourceRefs    []content.SourceRef `json:"sourceRefs,omitempty"`
 }
 
-// viewedLessons fetches the set of lesson slugs the user has marked as
-// viewed for courseSlug, keyed by slug for O(1) lookup.
-func (s *State) viewedLessons(httpReq *http.Request, courseSlug, userID string) map[string]bool {
-	reqURL, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/viewed")
-	if err != nil {
-		return nil
-	}
-
-	q := reqURL.Query()
-	q.Set("userId", userID)
-	q.Set("courseSlug", courseSlug)
-	reqURL.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(httpReq.Context(), http.MethodGet, reqURL.String(), http.NoBody)
-	if err != nil {
-		return nil
-	}
-
-	s.setInternalHeader(req)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result struct {
-		Viewed []string `json:"viewed"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return nil
-	}
-
-	viewedSet := make(map[string]bool, len(result.Viewed))
-	for _, slug := range result.Viewed {
-		viewedSet[slug] = true
-	}
-
-	return viewedSet
-}
-
 // moduleProgressData holds per-module quiz progress fetched from user-service.
 type moduleProgressData struct {
 	BestScore int
 	MaxScore  int
 	Passed    bool
 	Attempts  int
-}
-
-// fetchModuleProgress fetches quiz progress for all modules in a course.
-func (s *State) fetchModuleProgress(httpReq *http.Request, courseSlug, userID string) map[int]moduleProgressData {
-	reqURL, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/modules")
-	if err != nil {
-		return nil
-	}
-
-	q := reqURL.Query()
-	q.Set("userId", userID)
-	q.Set("courseSlug", courseSlug)
-	reqURL.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(httpReq.Context(), http.MethodGet, reqURL.String(), http.NoBody)
-	if err != nil {
-		return nil
-	}
-
-	s.setInternalHeader(req)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result struct {
-		Progress []struct {
-			ModuleIndex int  `json:"moduleIndex"`
-			BestScore   int  `json:"bestScore"`
-			MaxScore    int  `json:"maxScore"`
-			Passed      bool `json:"passed"`
-			Attempts    int  `json:"attempts"`
-		} `json:"progress"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return nil
-	}
-
-	progressByIndex := make(map[int]moduleProgressData, len(result.Progress))
-	for _, p := range result.Progress {
-		progressByIndex[p.ModuleIndex] = moduleProgressData{
-			BestScore: p.BestScore,
-			MaxScore:  p.MaxScore,
-			Passed:    p.Passed,
-			Attempts:  p.Attempts,
-		}
-	}
-
-	return progressByIndex
 }
 
 // moduleProgressRequest is the payload sent to user-service to record a quiz
@@ -289,13 +189,14 @@ type moduleProgressRequest struct {
 	Passed      bool   `json:"passed"`
 }
 
-// recordModuleProgressTimeout bounds the async POST to user-service so a
-// slow or unreachable dependency cannot leak goroutines indefinitely.
-const recordModuleProgressTimeout = 10 * time.Second
-
 // recordModuleProgress sends quiz results to user-service asynchronously.
+//
+// The call is detached from the request lifecycle on purpose: the HTTP
+// response has already been (or is about to be) sent, so it runs on a
+// fresh, independently-timed context rather than the request's, which may
+// already be canceled by the time the goroutine runs.
 func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug, moduleType string, idx, score, maxScore int, passed bool) {
-	body, err := json.Marshal(moduleProgressRequest{
+	s.postInternalDetached("/internal/progress/module", moduleProgressRequest{
 		UserID:      userID,
 		CourseSlug:  courseSlug,
 		ModuleIndex: idx,
@@ -304,33 +205,7 @@ func (s *State) recordModuleProgress(courseSlug, userID, moduleSlug, moduleType 
 		Score:       score,
 		MaxScore:    maxScore,
 		Passed:      passed,
-	})
-	if err != nil {
-		return
-	}
-
-	go func() {
-		// Detached from the request lifecycle on purpose: the HTTP response
-		// has already been (or is about to be) sent, so this uses a fresh,
-		// independently-timed context rather than the request's context,
-		// which may already be canceled by the time this goroutine runs.
-		ctx, cancel := context.WithTimeout(context.Background(), recordModuleProgressTimeout)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-			s.Config.UserServiceURL+"/internal/progress/module", bytes.NewReader(body))
-		if err != nil {
-			return
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		s.setInternalHeader(req)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-		}
-	}()
+	}, zap.String("courseSlug", courseSlug), zap.String("moduleSlug", moduleSlug))
 }
 
 // completedSlugs builds a set of module slugs the user has completed
@@ -378,56 +253,6 @@ func emptyCoursePrereqSummary() coursePrereqSummary {
 	return coursePrereqSummary{PassedModules: map[string]bool{}}
 }
 
-// fetchCoursePrereqSummary calls the user-service internal API to retrieve the
-// total accumulated score and the set of passed module slugs for the given user
-// in the given prerequisite course.
-func (s *State) fetchCoursePrereqSummary(ctx context.Context, userID, courseSlug string) coursePrereqSummary {
-	reqURL, err := url.Parse(s.Config.UserServiceURL + "/internal/progress/course-summary")
-	if err != nil {
-		return emptyCoursePrereqSummary()
-	}
-
-	q := reqURL.Query()
-	q.Set("userId", userID)
-	q.Set("courseSlug", courseSlug)
-	reqURL.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), http.NoBody)
-	if err != nil {
-		return emptyCoursePrereqSummary()
-	}
-
-	s.setInternalHeader(req)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return emptyCoursePrereqSummary()
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result struct {
-		TotalScore    int      `json:"totalScore"`
-		PassedModules []string `json:"passedModules"`
-		ViewedCount   int      `json:"viewedCount"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return emptyCoursePrereqSummary()
-	}
-
-	summary := coursePrereqSummary{
-		TotalScore:    result.TotalScore,
-		ViewedCount:   result.ViewedCount,
-		PassedModules: make(map[string]bool, len(result.PassedModules)),
-	}
-	for _, slug := range result.PassedModules {
-		summary.PassedModules[slug] = true
-	}
-
-	return summary
-}
-
 // checkCoursePrerequisites returns false if any course-level prerequisite
 // declared on the course is not yet satisfied by the user:
 //   - If MinScore > 0: the sum of the user's best scores in the prereq
@@ -436,26 +261,48 @@ func (s *State) fetchCoursePrereqSummary(ctx context.Context, userID, courseSlug
 //     in the prereq course.
 //   - If neither is set: only the existence of any score is required
 //     (any attempt).
+//
+// Every prerequisite's progress is fetched in one batched call. Asking
+// user-service once per prerequisite made the cost of opening a course
+// grow with the length of its prerequisite chain, in serial round-trips.
 func (s *State) checkCoursePrerequisites(ctx context.Context, prereqs []content.CoursePrerequisite, userID string) bool {
+	slugs := make([]string, 0, len(prereqs))
 	for _, prereq := range prereqs {
-		summary := s.fetchCoursePrereqSummary(ctx, userID, prereq.Course)
-		if prereq.MinScore > 0 && summary.TotalScore < prereq.MinScore {
-			return false
+		slugs = append(slugs, prereq.Course)
+	}
+
+	summaries := s.courseSummaries(ctx, userID, slugs)
+
+	for _, prereq := range prereqs {
+		summary, found := summaries[prereq.Course]
+		if !found {
+			summary = emptyCoursePrereqSummary()
 		}
 
-		for _, modSlug := range prereq.Modules {
-			if !summary.PassedModules[modSlug] {
-				return false
-			}
-		}
-		// If neither MinScore nor Modules are set, require at least some progress
-		// (either quiz score or viewed lessons — covers text-only courses).
-		if prereq.MinScore == 0 && len(prereq.Modules) == 0 && summary.TotalScore == 0 && summary.ViewedCount == 0 {
+		if !prerequisiteSatisfied(prereq, summary) {
 			return false
 		}
 	}
 
 	return true
+}
+
+// prerequisiteSatisfied reports whether one course prerequisite is met by
+// the learner's recorded progress in that course.
+func prerequisiteSatisfied(prereq content.CoursePrerequisite, summary coursePrereqSummary) bool {
+	if prereq.MinScore > 0 && summary.TotalScore < prereq.MinScore {
+		return false
+	}
+
+	for _, modSlug := range prereq.Modules {
+		if !summary.PassedModules[modSlug] {
+			return false
+		}
+	}
+
+	// If neither MinScore nor Modules are set, require at least some progress
+	// (either quiz score or viewed lessons — covers text-only courses).
+	return prereq.MinScore > 0 || len(prereq.Modules) > 0 || summary.TotalScore > 0 || summary.ViewedCount > 0
 }
 
 // ListModules godoc
@@ -468,42 +315,22 @@ func (s *State) checkCoursePrerequisites(ctx context.Context, prereqs []content.
 // @Failure   404   {object}  map[string]string
 // @Router    /api/courses/{slug}/modules [get].
 func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
-	courseSlug := param(req, "slug")
-
-	claims := s.claims(req)
-	if claims == nil {
-		s.Error(writer, http.StatusUnauthorized, "Unauthorized")
-
+	view, ok := s.learnerView(writer, req, "Enroll in this course to access it")
+	if !ok {
 		return
 	}
 
-	isAdmin := claims.Role == roleAdmin
+	done := completedSlugs(view.modules, view.progress.Viewed, view.progress.Modules)
 
-	course, found := s.course(writer, req, courseSlug)
-	if !found {
-		return
-	}
-
-	if !s.ensureModuleAccess(writer, req, course, courseSlug, claims, isAdmin) {
-		return
-	}
-
-	modules := s.visibleModules(course, req)
-	userID := claims.Subject
-
-	viewed := s.viewedLessons(req, courseSlug, userID)
-	progress := s.fetchModuleProgress(req, courseSlug, userID)
-	done := completedSlugs(modules, viewed, progress)
-
-	out := make([]moduleResponse, 0, len(modules))
+	out := make([]moduleResponse, 0, len(view.modules))
 	prevDone := true // first module is always available
 
-	for idx, mod := range modules {
+	for idx, mod := range view.modules {
 		explicitLocked := isLocked(mod.Prerequisites, done)
 		seqLocked := !mod.Inline && !prevDone
-		locked := !isAdmin && (explicitLocked || seqLocked)
+		locked := !view.isAdmin && (explicitLocked || seqLocked)
 
-		out = append(out, buildModuleListEntry(mod, idx, isAdmin, locked, viewed, progress))
+		out = append(out, buildModuleListEntry(mod, idx, view.isAdmin, locked, view.progress.Viewed, view.progress.Modules))
 
 		if !mod.Inline {
 			prevDone = done[mod.Slug()]
@@ -513,24 +340,80 @@ func (s *State) ListModules(writer http.ResponseWriter, req *http.Request) {
 	s.JSON(writer, http.StatusOK, map[string]any{"modules": out})
 }
 
+// learnerView is everything a module or lesson handler needs about one
+// learner and one course, loaded once per request: the course and its
+// visible modules, and the learner's progress in it.
+type learnerView struct {
+	course   *content.Course
+	modules  []content.Module
+	progress *courseProgress
+	claims   *middleware.Claims
+	isAdmin  bool
+	userID   string
+	slug     string
+}
+
+// learnerView loads the course named by the request's slug, the learner's
+// progress in it, and enforces access, writing the appropriate error
+// response and reporting ok=false when the request must not proceed.
+//
+// Loading progress up front is what collapses the four internal round-trips
+// these handlers used to make — enrollment check, viewed lessons, module
+// progress, course summary — into one. The enrollment answer arrives with
+// the progress, so checking access costs nothing extra.
+func (s *State) learnerView(writer http.ResponseWriter, req *http.Request, deniedMsg string) (*learnerView, bool) {
+	courseSlug := param(req, "slug")
+
+	claims := s.claims(req)
+	if claims == nil {
+		s.Error(writer, http.StatusUnauthorized, "Unauthorized")
+
+		return nil, false
+	}
+
+	course, found := s.course(writer, req, courseSlug)
+	if !found {
+		return nil, false
+	}
+
+	view := &learnerView{
+		course:   course,
+		modules:  s.visibleModules(course, req),
+		progress: s.courseProgress(req.Context(), courseSlug, claims.Subject),
+		claims:   claims,
+		isAdmin:  claims.Role == roleAdmin,
+		userID:   claims.Subject,
+		slug:     courseSlug,
+	}
+
+	if !s.ensureModuleAccess(writer, req, view, deniedMsg) {
+		return nil, false
+	}
+
+	return view, true
+}
+
 // ensureModuleAccess auto-enrolls the user in public courses, verifies
 // enrollment for private ones, and checks cross-course prerequisites. It
 // writes an error response and returns false if access should be denied.
 // Admins bypass all of these checks.
-func (s *State) ensureModuleAccess(writer http.ResponseWriter, req *http.Request, course *content.Course, courseSlug string, claims *middleware.Claims, isAdmin bool) bool {
-	if isAdmin {
+func (s *State) ensureModuleAccess(writer http.ResponseWriter, req *http.Request, view *learnerView, deniedMsg string) bool {
+	if view.isAdmin {
 		return true
 	}
 
-	if course.IsPublic {
-		s.autoEnroll(claims.Subject, courseSlug) //nolint:contextcheck // content.GitCache/user-service fetch helpers don't accept a context param
-	} else if !s.isEnrolled(req, courseSlug, claims.Subject) {
-		s.Error(writer, http.StatusForbidden, "Enroll in this course to access it")
+	switch {
+	case view.course.IsPublic && !view.progress.Enrolled:
+		s.autoEnroll(view.userID, view.slug) //nolint:contextcheck // fire-and-forget enrollment, deliberately detached from the request context
+	case view.course.IsPublic:
+	case !view.progress.Enrolled:
+		s.Error(writer, http.StatusForbidden, deniedMsg)
 
 		return false
 	}
 
-	if len(course.Prerequisites) > 0 && !s.checkCoursePrerequisites(req.Context(), course.Prerequisites, claims.Subject) {
+	if len(view.course.Prerequisites) > 0 &&
+		!s.checkCoursePrerequisites(req.Context(), view.course.Prerequisites, view.userID) {
 		s.Error(writer, http.StatusForbidden, "Complete prerequisite courses first")
 
 		return false
@@ -616,45 +499,27 @@ func buildModuleListEntry(mod content.Module, idx int, isAdmin, locked bool, vie
 // @Failure   404    {object}  map[string]string
 // @Router    /api/courses/{slug}/modules/{index} [get].
 func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
-	courseSlug := param(req, "slug")
-	indexStr := param(req, "index")
-
-	claims := s.claims(req)
-	if claims == nil {
-		s.Error(writer, http.StatusUnauthorized, "Unauthorized")
-
-		return
-	}
-
-	isAdmin := claims.Role == roleAdmin
-
-	course, found := s.course(writer, req, courseSlug)
-	if !found {
-		return
-	}
-
-	if !s.ensureModuleAccess(writer, req, course, courseSlug, claims, isAdmin) {
-		return
-	}
-
-	modules := s.visibleModules(course, req)
-
-	idx, ok := resolveModuleIndex(indexStr, len(modules))
+	view, ok := s.learnerView(writer, req, "Enroll in this course to access it")
 	if !ok {
+		return
+	}
+
+	idx, valid := resolveModuleIndex(param(req, "index"), len(view.modules))
+	if !valid {
 		s.Error(writer, http.StatusNotFound, moduleNotFoundMessage)
 
 		return
 	}
 
-	mod := modules[idx]
-	resp := s.buildModuleDetailResponse(req, mod, idx, courseSlug, claims.Subject)
+	mod := view.modules[idx]
+	resp := buildModuleDetailResponse(mod, idx, view.progress)
 
-	if !s.populateModuleContent(req.Context(), writer, &resp, mod, isAdmin, claims.Subject, courseSlug, idx) {
+	if !s.populateModuleContent(req.Context(), writer, &resp, mod, view.isAdmin, view.userID, view.slug, idx) {
 		return
 	}
 
 	// If the next module is an inline quiz, embed it in the response.
-	resp.InlineQuiz = s.buildInlineQuizResponse(req, modules, idx, courseSlug, claims.Subject, isAdmin)
+	resp.InlineQuiz = s.buildInlineQuizResponse(req.Context(), view, idx)
 
 	s.JSON(writer, http.StatusOK, resp)
 }
@@ -662,7 +527,7 @@ func (s *State) GetModule(writer http.ResponseWriter, req *http.Request) {
 // buildModuleDetailResponse assembles the base module detail fields — quiz
 // question count, viewed state, and check metadata — shared by GetModule
 // before type-specific content is resolved.
-func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module, idx int, courseSlug, userID string) moduleResponse {
+func buildModuleDetailResponse(mod content.Module, idx int, progress *courseProgress) moduleResponse {
 	resp := moduleResponse{
 		Index:  idx,
 		Name:   mod.Name,
@@ -671,13 +536,11 @@ func (s *State) buildModuleDetailResponse(req *http.Request, mod content.Module,
 		Hidden: mod.Hidden,
 		Inline: mod.Inline,
 		Skills: mod.Skills,
+		Viewed: progress.Viewed[mod.Slug()],
 	}
 	if mod.Type == moduleTypeQuiz && mod.HasQuestions() {
 		resp.QuestionCount = len(mod.Questions)
 	}
-
-	viewed := s.viewedLessons(req, courseSlug, userID)
-	resp.Viewed = viewed[mod.Slug()]
 
 	// Lab modules with git content support the /check endpoint.
 	if mod.Type == moduleTypeLab && mod.HasGitContent() {
@@ -847,12 +710,12 @@ func (s *State) moduleCooldowns(ctx context.Context, quizQuestions []content.Que
 // buildInlineQuizResponse embeds the following module's quiz inline in the
 // response when that module is marked Inline — this lets the frontend render
 // a lesson immediately followed by its check-for-understanding quiz.
-func (s *State) buildInlineQuizResponse(req *http.Request, modules []content.Module, idx int, courseSlug, userID string, isAdmin bool) *inlineQuizResponse {
-	if idx+1 >= len(modules) {
+func (s *State) buildInlineQuizResponse(ctx context.Context, view *learnerView, idx int) *inlineQuizResponse {
+	if idx+1 >= len(view.modules) {
 		return nil
 	}
 
-	next := modules[idx+1]
+	next := view.modules[idx+1]
 	if next.Type != moduleTypeQuiz || !next.Inline {
 		return nil
 	}
@@ -864,7 +727,7 @@ func (s *State) buildInlineQuizResponse(req *http.Request, modules []content.Mod
 		PassingScore: next.PassingScore,
 	}
 
-	quizQuestions := s.populateInlineQuizQuestions(req.Context(), inlineQuiz, next, isAdmin)
+	quizQuestions := s.populateInlineQuizQuestions(ctx, inlineQuiz, next, view.isAdmin)
 	if len(quizQuestions) == 0 {
 		return nil
 	}
@@ -878,8 +741,9 @@ func (s *State) buildInlineQuizResponse(req *http.Request, modules []content.Mod
 
 	inlineQuiz.MaxScore = maxScore
 
-	prog := s.fetchModuleProgress(req, courseSlug, userID)
-	if p, ok := prog[idx+1]; ok {
+	// The learner's progress was loaded once for the whole request; the
+	// inline quiz is just another entry in it, not a second lookup.
+	if p, ok := view.progress.Modules[idx+1]; ok {
 		inlineQuiz.BestScore = p.BestScore
 		inlineQuiz.Attempts = p.Attempts
 		inlineQuiz.Passed = p.Passed
@@ -937,39 +801,19 @@ func (s *State) populateInlineQuizQuestions(ctx context.Context, inlineQuiz *inl
 // @Failure   404    {object}  map[string]string
 // @Router    /api/courses/{slug}/modules/{index}/submit [post].
 func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
-	courseSlug := param(req, "slug")
-
-	claims := s.claims(req)
-	if claims == nil {
-		s.Error(writer, http.StatusUnauthorized, "Authentication required")
-
+	view, ok := s.learnerView(writer, req, "Enroll in this course to access it")
+	if !ok {
 		return
 	}
 
-	userID := claims.Subject
-	isAdmin := claims.Role == roleAdmin
-
-	course, found := s.course(writer, req, courseSlug)
-	if !found {
-		return
-	}
-
-	if !s.ensureModuleAccess(writer, req, course, courseSlug, claims, isAdmin) {
-		return
-	}
-
-	modules := s.visibleModules(course, req)
-
-	indexStr := param(req, "index")
-
-	idx, indexValid := resolveModuleIndex(indexStr, len(modules))
+	idx, indexValid := resolveModuleIndex(param(req, "index"), len(view.modules))
 	if !indexValid {
 		s.Error(writer, http.StatusNotFound, moduleNotFoundMessage)
 
 		return
 	}
 
-	mod := modules[idx]
+	mod := view.modules[idx]
 	if mod.Type != moduleTypeQuiz {
 		s.Error(writer, http.StatusBadRequest, "Module is not a quiz")
 
@@ -982,7 +826,7 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.finalizeSubmission(writer, req, course, mod, modules, questions, passingScore, cooldownSpec, userID, courseSlug, idx)
+	s.finalizeSubmission(writer, req, view, mod, questions, passingScore, cooldownSpec, idx)
 }
 
 // finalizeSubmission decodes a quiz submission body, rejects it if any of
@@ -991,7 +835,9 @@ func (s *State) SubmitModule(writer http.ResponseWriter, req *http.Request) {
 // resulting submitResponse to the client. When passing this quiz was the
 // last thing the course was waiting for, it also notifies user-service that
 // the course is complete.
-func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, course *content.Course, mod content.Module, modules []content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, userID, courseSlug string, idx int) {
+func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request, view *learnerView, mod content.Module, questions []content.Question, passingScore int, cooldownSpec content.CooldownSpec, idx int) {
+	userID, courseSlug := view.userID, view.slug
+
 	submission, accepted := s.acceptSubmission(writer, req, questions, userID, courseSlug, idx)
 	if !accepted {
 		return
@@ -1010,8 +856,8 @@ func (s *State) finalizeSubmission(writer http.ResponseWriter, req *http.Request
 
 	s.recordModuleProgress(courseSlug, userID, mod.Slug(), mod.Type, idx, result.TotalScore, result.MaxScore, result.Passed) //nolint:contextcheck // fire-and-forget async POST detached from the request context by design
 
-	if result.Passed && s.courseCompleted(req, modules, userID, courseSlug, mod.Slug(), "") {
-		s.notifyCourseComplete(req, course, userID)
+	if result.Passed && courseCompleted(view, mod.Slug(), "") {
+		s.notifyCourseComplete(req.Context(), view.course, userID)
 	}
 
 	s.JSON(writer, http.StatusOK, submitResponse{
@@ -1180,9 +1026,10 @@ func (s *State) recordQuestionCooldowns(
 	return respCooldowns
 }
 
-// courseCompleted returns true when userID has finished every module of the
-// course: quiz modules have to be passed, all others viewed. Hidden modules
-// are ignored — learners never see them, so they cannot hold a course back.
+// courseCompleted returns true when the learner has finished every module
+// of the course: quiz modules have to be passed, all others viewed. Hidden
+// modules are ignored — learners never see them, so they cannot hold a
+// course back.
 //
 // A course is only complete once the trailing quiz is passed, and passing it
 // completes the course whatever order the modules were taken in: neither the
@@ -1192,21 +1039,12 @@ func (s *State) recordQuestionCooldowns(
 // current request. Its progress write is either fire-and-forget
 // (recordModuleProgress) or racing this read, so it is credited here without
 // a round-trip. Pass an empty string for the kind the request did not touch.
-func (s *State) courseCompleted(
-	req *http.Request, modules []content.Module, userID, courseSlug, justPassedQuiz, justViewedLesson string,
-) bool {
-	var summary coursePrereqSummary
-
-	hasQuiz := slices.ContainsFunc(modules, func(m content.Module) bool {
-		return !m.Hidden && m.Type == moduleTypeQuiz
-	})
-	if hasQuiz {
-		summary = s.fetchCoursePrereqSummary(req.Context(), userID, courseSlug)
-	}
-
-	viewed := s.viewedLessons(req, courseSlug, userID)
-
-	for _, mod := range modules {
+//
+// It reads the progress the request already loaded rather than fetching it
+// again — which is what makes the two writes that call it (marking a lesson
+// complete, passing a quiz) cost one internal call each instead of three.
+func courseCompleted(view *learnerView, justPassedQuiz, justViewedLesson string) bool {
+	for _, mod := range view.modules {
 		if mod.Hidden {
 			continue
 		}
@@ -1214,14 +1052,14 @@ func (s *State) courseCompleted(
 		slug := mod.Slug()
 
 		if mod.Type == moduleTypeQuiz {
-			if slug != justPassedQuiz && !summary.PassedModules[slug] {
+			if slug != justPassedQuiz && !view.progress.PassedModules[slug] {
 				return false
 			}
 
 			continue
 		}
 
-		if slug != justViewedLesson && !viewed[slug] {
+		if slug != justViewedLesson && !view.progress.Viewed[slug] {
 			return false
 		}
 	}

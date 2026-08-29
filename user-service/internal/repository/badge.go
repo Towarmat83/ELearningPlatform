@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -37,6 +38,11 @@ type BadgeRepository interface {
 	UserBadges(ctx context.Context, userID string) ([]BadgeRow, error)
 	// EarnedCount returns how many distinct users have earned the badge for courseSlug.
 	EarnedCount(ctx context.Context, courseSlug string) (int64, error)
+	// EarnedCounts returns how many users have earned each of the given
+	// badges, keyed by course slug, in one grouped query. Listing a
+	// learner's badges needs every count at once, and asking for them one
+	// at a time made that list cost a query per badge.
+	EarnedCounts(ctx context.Context, courseSlugs []string) (map[string]int64, error)
 	// Leaderboard returns users ranked by badge count, most badges first.
 	Leaderboard(ctx context.Context, limit int) ([]BadgeLeaderboardRow, error)
 }
@@ -99,6 +105,35 @@ func (r *gormBadgeRepository) EarnedCount(ctx context.Context, courseSlug string
 	}
 
 	return count, nil
+}
+
+// EarnedCounts returns how many users have earned each of courseSlugs,
+// keyed by course slug. Slugs nobody has earned are absent.
+func (r *gormBadgeRepository) EarnedCounts(ctx context.Context, courseSlugs []string) (map[string]int64, error) {
+	counts := make(map[string]int64, len(courseSlugs))
+	if len(courseSlugs) == 0 {
+		return counts, nil
+	}
+
+	var rows []struct {
+		CourseSlug string `gorm:"column:courseslug"`
+		Total      int64  `gorm:"column:total"`
+	}
+
+	err := r.db.WithContext(ctx).Model(&models.UserBadge{}).
+		Select("courseslug, COUNT(*) AS total").
+		Where("courseslug = ANY(?)", pq.StringArray(courseSlugs)).
+		Group("courseslug").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("count badge earners by course: %w", err)
+	}
+
+	for _, row := range rows {
+		counts[row.CourseSlug] = row.Total
+	}
+
+	return counts, nil
 }
 
 // Leaderboard returns up to limit users ranked by badge count descending,

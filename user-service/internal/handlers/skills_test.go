@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +20,7 @@ import (
 func TestSkillIsCompleted_AllQuizzesPassed(t *testing.T) {
 	t.Parallel()
 
-	modules := []skillModuleEntry{
+	modules := []SkillModule{
 		{Slug: "quiz-1", Type: skillModuleTypeQuiz, CourseSlug: "golang"},
 		{Slug: "quiz-2", Type: skillModuleTypeQuiz, CourseSlug: "golang"},
 	}
@@ -37,7 +36,7 @@ func TestSkillIsCompleted_AllQuizzesPassed(t *testing.T) {
 func TestSkillIsCompleted_QuizNotPassed(t *testing.T) {
 	t.Parallel()
 
-	modules := []skillModuleEntry{
+	modules := []SkillModule{
 		{Slug: "quiz-1", Type: skillModuleTypeQuiz, CourseSlug: "golang"},
 		{Slug: "quiz-2", Type: skillModuleTypeQuiz, CourseSlug: "golang"},
 	}
@@ -53,7 +52,7 @@ func TestSkillIsCompleted_QuizNotPassed(t *testing.T) {
 func TestSkillIsCompleted_LabViewed(t *testing.T) {
 	t.Parallel()
 
-	modules := []skillModuleEntry{
+	modules := []SkillModule{
 		{Slug: "lab-1", Type: skillModuleTypeLab, CourseSlug: "docker"},
 	}
 	viewed := map[string]struct{}{"docker/lab-1": {}}
@@ -68,7 +67,7 @@ func TestSkillIsCompleted_LabViewed(t *testing.T) {
 func TestSkillIsCompleted_NoAssessableModules(t *testing.T) {
 	t.Parallel()
 
-	modules := []skillModuleEntry{
+	modules := []SkillModule{
 		{Slug: "intro", Type: "text", CourseSlug: "golang"},
 	}
 
@@ -335,10 +334,9 @@ func TestMySkillModules_CourseServiceError(t *testing.T) {
 func TestMySkillModules_LessonProgressError(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, `{"modules":[{"slug":"intro","type":"text","courseSlug":"golang","index":0}]}`)
-	}))
-	defer srv.Close()
+	srv, _ := newCatalogServer(t, catalogFixture{Skills: map[string][]SkillModule{
+		"golang": {{Slug: "intro", Type: "text", CourseSlug: "golang", Index: 0}},
+	}})
 
 	lp := fake.NewLessonProgressRepository()
 	lp.Err = errors.New("db down")
@@ -359,10 +357,9 @@ func TestMySkillModules_LessonProgressError(t *testing.T) {
 func TestMySkillModules_ModuleProgressError(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, `{"modules":[{"slug":"quiz-1","type":"quiz","courseSlug":"golang","index":0}]}`)
-	}))
-	defer srv.Close()
+	srv, _ := newCatalogServer(t, catalogFixture{Skills: map[string][]SkillModule{
+		"golang": {{Slug: "quiz-1", Type: "quiz", CourseSlug: "golang", Index: 0}},
+	}})
 
 	mp := fake.NewModuleProgressRepository()
 	mp.Err = errors.New("db down")
@@ -382,13 +379,12 @@ func TestMySkillModules_ModuleProgressError(t *testing.T) {
 func TestMySkillModules_HappyPath(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, `{"modules":[
-			{"slug":"quiz-1","type":"quiz","courseSlug":"golang","courseTitle":"Go","index":0},
-			{"slug":"quiz-2","type":"quiz","courseSlug":"golang","courseTitle":"Go","index":1}
-		]}`)
-	}))
-	defer srv.Close()
+	srv, _ := newCatalogServer(t, catalogFixture{Skills: map[string][]SkillModule{
+		"golang": {
+			{Slug: "quiz-1", Type: "quiz", CourseSlug: "golang", CourseTitle: "Go", Index: 0},
+			{Slug: "quiz-2", Type: "quiz", CourseSlug: "golang", CourseTitle: "Go", Index: 1},
+		},
+	}})
 
 	modSlug := "quiz-1"
 	mp := fake.NewModuleProgressRepository(models.ModuleProgress{

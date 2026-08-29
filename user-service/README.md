@@ -25,9 +25,10 @@ Database-backed micro-service for the e-learning platform. Handles all user-faci
 | **Authenticated** | GET | `/api/auth/me` | JWT |
 | | PUT | `/api/auth/profile` | JWT |
 | | PUT | `/api/auth/password` | JWT |
-| | POST | `/api/courses/{slug}/enroll` | JWT |
-| | DELETE | `/api/courses/{slug}/unenroll` | JWT |
-| | POST | `/api/courses/{slug}/lessons/{lessonSlug}/complete` | JWT |
+| | POST | `/api/enrollments/{slug}` | JWT |
+| | DELETE | `/api/enrollments/{slug}` | JWT |
+| | POST | `/api/session-bookings/{slug}/{sessionId}` | JWT |
+| | DELETE | `/api/session-bookings/{slug}/{sessionId}` | JWT |
 | | GET | `/api/my/courses` | JWT |
 | **Admin** | GET | `/api/admin/settings` | Admin |
 | | PUT | `/api/admin/settings` | Admin |
@@ -37,9 +38,9 @@ Database-backed micro-service for the e-learning platform. Handles all user-faci
 | | GET | `/api/admin/users/{userId}` | Admin |
 | | PUT | `/api/admin/users/{userId}` | Admin |
 | | DELETE | `/api/admin/users/{userId}` | Admin |
-| | GET | `/api/admin/courses/{slug}/enrollments` | Admin |
-| | POST | `/api/admin/courses/{slug}/enrollments` | Admin |
-| | DELETE | `/api/admin/courses/{slug}/enrollments/{userId}` | Admin |
+| | GET | `/api/admin/enrollments/{slug}` | Admin |
+| | POST | `/api/admin/enrollments/{slug}` | Admin |
+| | DELETE | `/api/admin/enrollments/{slug}/users/{userId}` | Admin |
 | | POST | `/api/admin/sync-progress` | Admin |
 | **Internal** | GET | `/internal/enrollments/check` | Network policy |
 | | GET | `/internal/progress/viewed` | Network policy |

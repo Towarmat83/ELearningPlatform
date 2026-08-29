@@ -14,6 +14,10 @@ import (
 // response caching.
 const routerCORSMaxAgeSeconds = 300
 
+// compressionLevel is the gzip level used for responses: level 5 is the
+// usual knee of the ratio/CPU curve for JSON and markdown.
+const compressionLevel = 5
+
 // BuildRouter constructs the course-service chi router, wiring public
 // routes, user-authenticated routes, and admin-only routes behind their
 // respective middleware, plus CORS/logging middleware.
@@ -40,6 +44,12 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	}
 
 	router.Use(chiMiddleware.Recoverer)
+
+	// Course markdown, module listings and CSV exports are all highly
+	// compressible text, and the clients are browsers on links this
+	// service does not control. Compressing costs a little CPU per
+	// response and saves the bulk of the bytes on the wire.
+	router.Use(chiMiddleware.Compress(compressionLevel))
 	router.Use(corsOptions.Handler)
 
 	// The body cap is per group rather than global: an admin importing a
@@ -85,7 +95,23 @@ func registerPublicRoutes(router chi.Router, state *State) {
 
 	router.Get("/api/skills/{slug}/modules", state.ListSkillModules)
 
+	// Batch lookups live under their own prefix rather than as a literal
+	// segment of the collection they read (/api/courses/batch), which a
+	// course slugged "batch" would have shadowed — chi matches a static
+	// segment before a wildcard, so that course would have become
+	// unreachable and this endpoint would have answered in its place.
+	registerBatchRoutes(router, state)
+
 	router.Get("/uploads/{filename}", state.ServeUpload)
+}
+
+// registerBatchRoutes wires the batch lookups. They are server-to-server
+// reads: user-service resolves whole sets of slugs through them instead of
+// issuing one request per slug.
+func registerBatchRoutes(router chi.Router, state *State) {
+	router.Get("/api/batch/courses", state.ListCoursesBatch)
+	router.Get("/api/batch/paths", state.ListPathsBatch)
+	router.Get("/api/batch/skills", state.ListSkillModulesBatch)
 }
 
 // registerAuthRoutes wires the course-content endpoints that require a valid

@@ -259,7 +259,7 @@ func TestEnrollment(t *testing.T) {
 
 	t.Run("enroll", func(t *testing.T) {
 		resp := doJSON(t, http.MethodPost,
-			fmt.Sprintf("%s/api/courses/%s/enroll", globalCfg.UserURL, slug),
+			fmt.Sprintf("%s/api/enrollments/%s", globalCfg.UserURL, slug),
 			nil, tok)
 		// 200 (enrolled) or 409 (already enrolled) are both acceptable
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
@@ -293,7 +293,7 @@ func TestEnrollment(t *testing.T) {
 
 	t.Run("unenroll", func(t *testing.T) {
 		resp := doJSON(t, http.MethodDelete,
-			fmt.Sprintf("%s/api/courses/%s/unenroll", globalCfg.UserURL, slug),
+			fmt.Sprintf("%s/api/enrollments/%s", globalCfg.UserURL, slug),
 			nil, tok)
 		mustStatus(t, resp, http.StatusOK)
 		resp.Body.Close()

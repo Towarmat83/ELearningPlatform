@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -18,60 +16,27 @@ const (
 	skillModuleTypeLab = "lab"
 )
 
-// skillModuleEntry is a module descriptor returned by course-service.
-type skillModuleEntry struct {
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Index       int    `json:"index"`
-	Type        string `json:"type"`
-	CourseSlug  string `json:"courseSlug"`
-	CourseTitle string `json:"courseTitle"`
-}
-
-// skillModuleStatus extends skillModuleEntry with the user's completion status.
+// skillModuleStatus extends a skill module with the user's completion
+// status.
 type skillModuleStatus struct {
-	skillModuleEntry
+	SkillModule
 
-	Status string `json:"status"` // "completed" | "available"
+	Status string `json:"status"` // "completed" | "available" | "locked"
 }
 
-// fetchSkillModules calls course-service to get all modules tagged with skill.
-func (s *State) fetchSkillModules(req *http.Request, skill string) ([]skillModuleEntry, error) {
+// fetchSkillModules resolves every module tagged with skill through the
+// catalog, which batches and caches the lookup.
+func (s *State) fetchSkillModules(req *http.Request, skill string) ([]SkillModule, error) {
 	if !slugRE.MatchString(skill) {
 		return nil, fmt.Errorf("invalid skill slug: %q", skill)
 	}
 
-	rawURL := fmt.Sprintf("%s/api/skills/%s/modules", s.Config.CourseServiceURL, skill)
-
-	//nolint:gosec // skill is validated against slugRE; CourseServiceURL is trusted server config
-	r, err := http.NewRequestWithContext(req.Context(), http.MethodGet, rawURL, http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("build skill modules request: %w", err)
+	modules, found := s.catalog().SkillModules(req.Context(), []string{skill})[skill]
+	if !found {
+		return nil, fmt.Errorf("fetch skill modules: %q unavailable", skill)
 	}
 
-	resp, err := http.DefaultClient.Do(r) //nolint:gosec // URL built from validated slug and trusted CourseServiceURL
-	if err != nil {
-		return nil, fmt.Errorf("fetch skill modules: %w", err)
-	}
-
-	defer resp.Body.Close() //nolint:errcheck // closing a response body never needs to be acted upon
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-
-		return nil, fmt.Errorf("course-service returned %d for skill %s: %s", resp.StatusCode, skill, body)
-	}
-
-	var body struct {
-		Modules []skillModuleEntry `json:"modules"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&body)
-	if err != nil {
-		return nil, fmt.Errorf("decode skill modules: %w", err)
-	}
-
-	return body.Modules, nil
+	return modules, nil
 }
 
 // passedModulesCtx returns the set of "courseSlug/moduleSlug" for all
@@ -103,7 +68,7 @@ func (s *State) viewedLessonsCtx(req *http.Request, userID string) map[string]st
 // skillIsCompleted returns true when all assessable (quiz/lab) modules in the
 // list have been completed by the user. Skills with no assessable modules are
 // never considered completed. Quizzes: passed in module_progress; labs: viewed.
-func skillIsCompleted(modules []skillModuleEntry, passed, viewed map[string]struct{}) bool {
+func skillIsCompleted(modules []SkillModule, passed, viewed map[string]struct{}) bool {
 	hasAssessable := false
 
 	for _, mod := range modules {
@@ -184,7 +149,7 @@ func (s *State) MySkillModules(writer http.ResponseWriter, request *http.Request
 
 		prevCompleted = isDone
 
-		result = append(result, skillModuleStatus{skillModuleEntry: mod, Status: status})
+		result = append(result, skillModuleStatus{SkillModule: mod, Status: status})
 	}
 
 	s.JSON(writer, http.StatusOK, map[string]any{pathKindSkill: skill, "modules": result})

@@ -66,7 +66,10 @@ func (r *gormXPRepository) Award(ctx context.Context, userID, source, sourceSlug
 	}
 
 	err := r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{DoNothing: true}).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: colUserID}, {Name: colSource}, {Name: "source_slug"}},
+			DoNothing: true,
+		}).
 		Create(&event).Error
 	if err != nil {
 		return fmt.Errorf("award xp: %w", err)

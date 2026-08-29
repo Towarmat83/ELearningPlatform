@@ -29,6 +29,27 @@ func remoteIP(r *http.Request) (string, error) {
 // corsMaxAgeSeconds bounds CORS preflight cache duration, in seconds.
 const corsMaxAgeSeconds = 300
 
+// compressionLevel is the gzip level used for responses: level 5 is the
+// usual knee of the ratio/CPU curve for JSON and markdown.
+const compressionLevel = 5
+
+// Routing invariant: no path registered here may sit under a prefix that
+// course-service owns (/api/courses, /api/admin/courses).
+//
+// The two services are one hostname behind a shared proxy, so whichever
+// segment decides who owns a request has to come *before* any variable
+// segment. Enrolling used to be POST /api/courses/{slug}/enroll — the owner
+// was only decided after the slug, which no prefix match can express. Every
+// front door then needed its own workaround: a Traefik-specific CRD, an
+// nginx regex annotation, and an implementation-specific Gateway API match.
+// Keying those endpoints by their own resource instead (/api/enrollments,
+// /api/session-bookings) makes plain longest-prefix routing sufficient
+// everywhere, so the platform no longer depends on what its ingress can
+// express.
+//
+// Adding a route under /api/courses or /api/admin/courses reintroduces that
+// coupling; TestRouter_NoCourseServicePrefixOverlap fails if you do.
+
 // BuildRouter assembles the HTTP router, wiring public, authenticated, admin,
 // pattern, and internal routes with their respective middleware.
 func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
@@ -48,6 +69,12 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	}
 
 	router.Use(chiMiddleware.Recoverer)
+
+	// Course markdown, module listings and CSV exports are all highly
+	// compressible text, and the clients are browsers on links this
+	// service does not control. Compressing costs a little CPU per
+	// response and saves the bulk of the bytes on the wire.
+	router.Use(chiMiddleware.Compress(compressionLevel))
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsHandler(cfg).Handler)
 
@@ -102,6 +129,12 @@ func registerPublicRoutes(router chi.Router, state *State, cfg *config.Config) {
 }
 
 // registerAuthenticatedRoutes wires routes that require a valid session.
+//
+// one middleware. Folding two of them together to satisfy the detector would
+// hide which endpoints sit behind which guard, which is the one thing this
+// file exists to make obvious.
+//
+//nolint:dupl // route tables share a shape by nature — a list of paths behind
 func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(http.Handler) http.Handler) {
 	router.Group(func(group chi.Router) {
 		group.Use(authMW)
@@ -110,10 +143,11 @@ func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(ht
 		group.Put("/api/auth/profile", state.UpdateProfile)
 		group.Put("/api/auth/password", state.ChangePassword)
 
-		group.Post("/api/courses/{slug}/enroll", state.Enroll)
-		group.Delete("/api/courses/{slug}/unenroll", state.Unenroll)
-
-		group.Post("/api/courses/{slug}/lessons/{lesson_slug}/complete", state.MarkLessonComplete)
+		// Enrolling is a user-service concern keyed by course slug, so it is
+		// its own resource rather than a verb hung off the catalog's URL —
+		// see the routing note above.
+		group.Post("/api/enrollments/{slug}", state.Enroll)
+		group.Delete("/api/enrollments/{slug}", state.Unenroll)
 
 		group.Get("/api/my/courses", state.MyCourses)
 		group.Get("/api/my/paths", state.MyPaths)
@@ -125,9 +159,9 @@ func registerAuthenticatedRoutes(router chi.Router, state *State, authMW func(ht
 		group.Get("/api/my/groups/{groupId}/members", state.MyGroupMembers)
 
 		group.Get("/api/my/session-bookings", state.MySessionBookings)
-		group.Post("/api/courses/{slug}/sessions/{sessionId}/book", state.BookSession)
-		group.Delete("/api/courses/{slug}/sessions/{sessionId}/book", state.UnbookSession)
-		group.Get("/api/courses/{slug}/sessions/{sessionId}/booking-count", state.SessionBookingCount)
+		group.Post("/api/session-bookings/{slug}/{sessionId}", state.BookSession)
+		group.Delete("/api/session-bookings/{slug}/{sessionId}", state.UnbookSession)
+		group.Get("/api/session-bookings/{slug}/{sessionId}/count", state.SessionBookingCount)
 	})
 }
 
@@ -149,15 +183,17 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 		group.Put("/api/admin/users/{userId}", state.UpdateUser)
 		group.Delete("/api/admin/users/{userId}", state.DeleteUser)
 
-		group.Get("/api/admin/courses/{slug}/sessions/{sessionId}/bookings", state.ListSessionBookings)
-		group.Patch("/api/admin/courses/{slug}/sessions/{sessionId}/bookings/{userId}/presence", state.MarkSessionPresence)
+		group.Get("/api/admin/session-bookings/{slug}/{sessionId}", state.ListSessionBookings)
+		group.Patch("/api/admin/session-bookings/{slug}/{sessionId}/{userId}/presence", state.MarkSessionPresence)
 
-		group.Get("/api/admin/courses/{slug}/enrollments", state.ListCourseEnrollments)
-		group.Post("/api/admin/courses/{slug}/enrollments", state.AdminEnrollUser)
-		group.Get("/api/admin/courses/{slug}/enrollments/groups", state.AdminListGroupEnrollments)
-		group.Post("/api/admin/courses/{slug}/enrollments/groups", state.AdminEnrollGroup)
-		group.Delete("/api/admin/courses/{slug}/enrollments/groups/{groupId}", state.AdminUnenrollGroup)
-		group.Delete("/api/admin/courses/{slug}/enrollments/{userId}", state.AdminUnenrollUser)
+		group.Get("/api/admin/enrollments/{slug}", state.ListCourseEnrollments)
+		group.Post("/api/admin/enrollments/{slug}", state.AdminEnrollUser)
+		group.Get("/api/admin/enrollments/{slug}/groups", state.AdminListGroupEnrollments)
+		group.Post("/api/admin/enrollments/{slug}/groups", state.AdminEnrollGroup)
+		group.Delete("/api/admin/enrollments/{slug}/groups/{groupId}", state.AdminUnenrollGroup)
+		// .../users/{userId} rather than .../{userId}: a bare wildcard here
+		// would be shadowed by the static "groups" segment above.
+		group.Delete("/api/admin/enrollments/{slug}/users/{userId}", state.AdminUnenrollUser)
 
 		group.Get("/api/admin/paths/{slug}/enrollments", state.AdminListPathEnrollments)
 		group.Post("/api/admin/paths/{slug}/enrollments", state.AdminEnrollUserInPath)
@@ -184,6 +220,11 @@ func registerAdminRoutes(router chi.Router, state *State, adminMW func(http.Hand
 }
 
 // registerManagerRoutes wires routes restricted to manager users.
+//
+// manager endpoints are the same resources under a narrower scope, and
+// spelling them identically is the point.
+//
+//nolint:dupl // a route table that mirrors the admin one by design: the
 func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.Handler) http.Handler) {
 	router.Group(func(group chi.Router) {
 		group.Use(managerMW)
@@ -191,8 +232,8 @@ func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.
 		group.Get("/api/manager/users", state.ManagerListUsers)
 		group.Get("/api/manager/users/{userId}/enrollments", state.ManagerGetUserEnrollments)
 		group.Get("/api/manager/users/{userId}/path-enrollments", state.ManagerGetUserPathEnrollments)
-		group.Post("/api/manager/courses/{slug}/enrollments", state.ManagerEnrollUser)
-		group.Delete("/api/manager/courses/{slug}/enrollments/{userId}", state.ManagerUnenrollUser)
+		group.Post("/api/manager/enrollments/{slug}", state.ManagerEnrollUser)
+		group.Delete("/api/manager/enrollments/{slug}/users/{userId}", state.ManagerUnenrollUser)
 
 		group.Get("/api/manager/groups", state.ManagerListGroups)
 		group.Post("/api/manager/groups", state.ManagerCreateGroup)
@@ -204,8 +245,8 @@ func registerManagerRoutes(router chi.Router, state *State, managerMW func(http.
 		group.Post("/api/manager/groups/{groupId}/subgroups", state.ManagerCreateSubgroup)
 		group.Post("/api/manager/paths/{slug}/enrollments", state.ManagerEnrollUserPath)
 		group.Delete("/api/manager/paths/{slug}/enrollments/{userId}", state.ManagerUnenrollUserPath)
-		group.Get("/api/manager/courses/{slug}/sessions/{sessionId}/bookings", state.ListSessionBookings)
-		group.Patch("/api/manager/courses/{slug}/sessions/{sessionId}/bookings/{userId}/presence", state.MarkSessionPresence)
+		group.Get("/api/manager/session-bookings/{slug}/{sessionId}", state.ListSessionBookings)
+		group.Patch("/api/manager/session-bookings/{slug}/{sessionId}/{userId}/presence", state.MarkSessionPresence)
 	})
 }
 
@@ -251,5 +292,7 @@ func registerInternalRoutes(router chi.Router, state *State, internalMW func(htt
 		group.Post("/internal/progress/module", state.InternalRecordModuleProgress)
 		group.Get("/internal/progress/modules", state.InternalGetModuleProgress)
 		group.Get("/internal/progress/course-summary", state.InternalCourseSummary)
+		group.Get("/internal/progress/course-summaries", state.InternalCourseSummaries)
+		group.Get("/internal/progress/overview", state.InternalProgressOverview)
 	})
 }

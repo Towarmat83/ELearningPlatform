@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -18,10 +19,19 @@ import (
 const maxRequestBodyBytes = 1 << 20
 
 // State holds the shared dependencies used by every HTTP handler in
-// this package: the GORM-backed repositories and application config.
+// this package: the GORM-backed repositories, application config, and the
+// batched read-through view of the course catalog.
 type State struct {
 	Repos  *repository.Repositories
 	Config *config.Config
+
+	// Catalog resolves course, path and skill metadata from
+	// course-service. Nil until catalog is first called, which builds it
+	// from Config — so a State assembled as a bare struct literal (as
+	// main and the tests both do) still gets one.
+	Catalog *Catalog
+
+	catalogOnce sync.Once
 }
 
 // Health godoc
@@ -90,4 +100,15 @@ func derefStr(s *string) string {
 	}
 
 	return *s
+}
+
+// catalog returns the shared Catalog, building it on first use.
+func (s *State) catalog() *Catalog {
+	s.catalogOnce.Do(func() {
+		if s.Catalog == nil {
+			s.Catalog = NewCatalog(s.Config.CourseServiceURL)
+		}
+	})
+
+	return s.Catalog
 }

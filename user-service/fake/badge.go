@@ -108,3 +108,29 @@ func (f *BadgeRepository) EarnedCount(_ context.Context, courseSlug string) (int
 
 	return count, nil
 }
+
+// EarnedCounts returns how many users have earned each of courseSlugs,
+// keyed by course slug.
+func (f *BadgeRepository) EarnedCounts(_ context.Context, courseSlugs []string) (map[string]int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	wanted := make(map[string]bool, len(courseSlugs))
+	for _, slug := range courseSlugs {
+		wanted[slug] = true
+	}
+
+	counts := make(map[string]int64, len(courseSlugs))
+
+	for _, b := range f.badges {
+		if wanted[b.courseSlug] {
+			counts[b.courseSlug]++
+		}
+	}
+
+	return counts, nil
+}

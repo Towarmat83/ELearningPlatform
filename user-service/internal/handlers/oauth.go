@@ -21,6 +21,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/httpx"
 	"github.com/genesary/pupitre/user-service/internal/metrics"
 	"github.com/genesary/pupitre/user-service/internal/middleware"
 	"github.com/genesary/pupitre/user-service/internal/models"
@@ -427,7 +428,10 @@ func oidcBioFromClaims(claims map[string]any) *string {
 func fetchGitHub(
 	ctx context.Context, providerCfg *config.ProviderConfig, code, redirectURI string,
 ) (string, string, *string, *string, string, error) {
-	client := &http.Client{}
+	// The shared pooled client rather than a bare one: the token exchange
+	// and the profile fetch both talk to the same host over TLS, they reuse
+	// that connection, and neither can hang a login goroutine indefinitely.
+	client := httpx.Client()
 
 	accessToken, err := githubAccessToken(ctx, client, providerCfg, code, redirectURI)
 	if err != nil {

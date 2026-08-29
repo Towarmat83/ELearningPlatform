@@ -306,13 +306,51 @@ func TestCourseRepository_ListFilters(t *testing.T) { //nolint:paralleltest // s
 		t.Errorf("want 1 course teaching docker, got %d", totals["docker"])
 	}
 
-	bySkill, err := repo.ModulesBySkill(ctx, "docker")
+	bySkill, err := repo.ModulesBySkills(ctx, []string{"docker"})
 	if err != nil {
 		t.Fatalf("modules by skill: %v", err)
 	}
 
-	if len(bySkill) != 1 || bySkill[0].CourseSlug != "docker-deep" {
-		t.Errorf("want the docker module, got %+v", bySkill)
+	docker := bySkill["docker"]
+	if len(docker) != 1 || docker[0].CourseSlug != "docker-deep" {
+		t.Errorf("want the docker module, got %+v", docker)
+	}
+}
+
+// TestCourseRepository_ModulesBySkills_BatchesEverySkill verifies the
+// batched lookup attributes each module to every requested skill it carries,
+// in one query — the property the per-skill loop it replaced could not have.
+func TestCourseRepository_ModulesBySkills_BatchesEverySkill(t *testing.T) { //nolint:paralleltest // shares one database, truncated between tests
+	gdb := newTestDB(t)
+	ctx := t.Context()
+	repo := repository.NewGormCourseRepository(gdb)
+
+	err := repo.Upsert(ctx, &content.Course{
+		Slug: "multi", Title: "Multi", IsPublic: true,
+		Modules: []content.Module{
+			{Name: "Both", Type: "text", InlineContent: "x", Skills: []string{"alpha", "beta"}},
+			{Name: "Alpha only", Type: "text", InlineContent: "x", Skills: []string{"alpha"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed course: %v", err)
+	}
+
+	bySkill, err := repo.ModulesBySkills(ctx, []string{"alpha", "beta", "absent"})
+	if err != nil {
+		t.Fatalf("modules by skills: %v", err)
+	}
+
+	if len(bySkill["alpha"]) != 2 {
+		t.Errorf("want both alpha modules, got %+v", bySkill["alpha"])
+	}
+
+	if len(bySkill["beta"]) != 1 || bySkill["beta"][0].Name != "Both" {
+		t.Errorf("want the shared module attributed to beta too, got %+v", bySkill["beta"])
+	}
+
+	if _, present := bySkill["absent"]; present {
+		t.Errorf("a skill nothing teaches should be absent, got %+v", bySkill["absent"])
 	}
 }
 

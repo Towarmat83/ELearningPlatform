@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -20,6 +21,12 @@ type ModuleProgressRepository interface {
 	TotalScore(ctx context.Context, userID, courseSlug string) (int64, error)
 	PassedModuleSlugs(ctx context.Context, userID, courseSlug string) ([]string, error)
 	ListByUserCourse(ctx context.Context, userID, courseSlug string) ([]models.ModuleProgress, error)
+
+	// ListByUserCourses returns the module progress rows of every course in
+	// courseSlugs, keyed by course slug, in one query. The batched internal
+	// progress endpoints derive total score, passed slugs and per-module
+	// state from these rows rather than issuing an aggregate query each.
+	ListByUserCourses(ctx context.Context, userID string, courseSlugs []string) (map[string][]models.ModuleProgress, error)
 
 	// PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
 	// all quiz and lab modules the user has passed, across all courses.
@@ -134,6 +141,33 @@ func (r *gormModuleProgressRepository) ListByUserCourse(ctx context.Context, use
 	}
 
 	return list, nil
+}
+
+// ListByUserCourses returns every module_progress row for userID in each
+// of courseSlugs, keyed by course slug.
+func (r *gormModuleProgressRepository) ListByUserCourses(
+	ctx context.Context, userID string, courseSlugs []string,
+) (map[string][]models.ModuleProgress, error) {
+	byCourse := make(map[string][]models.ModuleProgress, len(courseSlugs))
+	if len(courseSlugs) == 0 {
+		return byCourse, nil
+	}
+
+	var list []models.ModuleProgress
+
+	err := r.db.WithContext(ctx).
+		Where("userid = ?::uuid AND courseslug = ANY(?)", userID, pq.StringArray(courseSlugs)).
+		Order("courseslug, moduleindex").
+		Find(&list).Error
+	if err != nil {
+		return nil, fmt.Errorf("list module progress by course: %w", err)
+	}
+
+	for _, row := range list {
+		byCourse[row.CourseSlug] = append(byCourse[row.CourseSlug], row)
+	}
+
+	return byCourse, nil
 }
 
 // PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for

@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -307,19 +305,10 @@ func TestPublicUser_OK(t *testing.T) {
 func TestBadgeLeaderboard_RankedWithIcons(t *testing.T) {
 	t.Parallel()
 
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/linux-intro"):
-			_, _ = w.Write([]byte(`{"slug":"linux-intro","title":"Linux","badge":{"name":"Tux","icon":"🐧"}}`))
-		case strings.HasSuffix(r.URL.Path, "/docker-basics"):
-			_, _ = w.Write([]byte(`{"slug":"docker-basics","title":"Docker","badge":{"name":"Whale","icon":"🐳"}}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{Courses: map[string]CourseInfo{
+		"linux-intro":   courseFixture("linux-intro", "Linux", "Tux", "🐧"),
+		"docker-basics": courseFixture("docker-basics", "Docker", "Whale", "🐳"),
+	}})
 
 	avatar := "https://cdn/a.png"
 	badges := fake.NewBadgeRepository()
@@ -373,11 +362,9 @@ func TestBadgeLeaderboard_RankedWithIcons(t *testing.T) {
 func TestMyBadges_EnrichedFromCourseService(t *testing.T) {
 	t.Parallel()
 
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"slug":"linux-intro","title":"Linux Intro","badge":{"name":"Tux","icon":"🐧"}}`))
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{Courses: map[string]CourseInfo{
+		"linux-intro": courseFixture("linux-intro", "Linux Intro", "Tux", "🐧"),
+	}})
 
 	badges := fake.NewBadgeRepository()
 	awardBadge(t, badges, "user-uuid-1", "linux-intro")
@@ -418,11 +405,7 @@ func TestMyBadges_EnrichedFromCourseService(t *testing.T) {
 func TestMyBadges_CourseServiceErrorIsTolerated(t *testing.T) {
 	t.Parallel()
 
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":"boom"}`))
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{Fail: true})
 
 	badges := fake.NewBadgeRepository()
 	awardBadge(t, badges, "user-uuid-1", "linux-intro")

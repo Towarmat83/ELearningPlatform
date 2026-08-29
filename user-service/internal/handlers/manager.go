@@ -81,6 +81,15 @@ func (s *State) ManagerListUsers(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	// One membership query for every scope group, not one per group.
+	membersByGroup, err := s.Repos.Groups.ListMemberIDsByGroups(ctx, groupIDs)
+	if err != nil {
+		zap.L().Error("failed to list scope group members", zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
 	scopeGroups := make([]groupInfo, 0, len(groups))
 
 	for _, grp := range groups {
@@ -88,7 +97,7 @@ func (s *State) ManagerListUsers(writer http.ResponseWriter, request *http.Reque
 			continue
 		}
 
-		memberIDs, _ := s.Repos.Groups.ListMemberIDs(ctx, grp.ID)
+		memberIDs := membersByGroup[grp.ID]
 		if memberIDs == nil {
 			memberIDs = []string{}
 		}

@@ -416,6 +416,10 @@ type ExportRepository interface {
 	// fields and filters, plus the total matching count.
 	FetchRows(ctx context.Context, category string, fields []string, filters map[string]string, limit int) ([]string, []map[string]string, int64, error)
 
+	// StreamRows runs the same query unbounded and hands each row to visit
+	// as it is read, so a large export never has to fit in memory.
+	StreamRows(ctx context.Context, category string, fields []string, filters map[string]string, visit func(row map[string]string) error) ([]string, error)
+
 	// WriteCSV streams the full dataset for category/fields/filters into
 	// writer as CSV.
 	WriteCSV(ctx context.Context, writer io.Writer, category string, fields []string, filters map[string]string) (int, error)
@@ -597,26 +601,27 @@ func buildQuery(category string, fields []string, filters map[string]string) ([]
 	return headers, query, args, nil
 }
 
-// scanSQLRows drains sqlRows into a slice of string maps keyed by column name.
-func scanSQLRows(sqlRows *sql.Rows) ([]map[string]string, error) {
+// visitSQLRows scans sqlRows one row at a time, handing each to visit as a
+// string map keyed by column name. Only one row is ever materialized, so a
+// caller that writes rows out as they arrive uses constant memory whatever
+// the size of the result.
+func visitSQLRows(sqlRows *sql.Rows, visit func(map[string]string) error) error {
 	cols, colErr := sqlRows.Columns()
 	if colErr != nil {
-		return nil, fmt.Errorf("columns: %w", colErr)
+		return fmt.Errorf("columns: %w", colErr)
 	}
 
-	var result []map[string]string
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+
+	for idx := range vals {
+		ptrs[idx] = &vals[idx]
+	}
 
 	for sqlRows.Next() {
-		vals := make([]any, len(cols))
-		ptrs := make([]any, len(cols))
-
-		for idx := range vals {
-			ptrs[idx] = &vals[idx]
-		}
-
 		scanErr := sqlRows.Scan(ptrs...)
 		if scanErr != nil {
-			return nil, fmt.Errorf("scan: %w", scanErr)
+			return fmt.Errorf("scan: %w", scanErr)
 		}
 
 		row := make(map[string]string, len(cols))
@@ -627,15 +632,67 @@ func scanSQLRows(sqlRows *sql.Rows) ([]map[string]string, error) {
 			}
 		}
 
-		result = append(result, row)
+		visitErr := visit(row)
+		if visitErr != nil {
+			return visitErr
+		}
 	}
 
 	rowErr := sqlRows.Err()
 	if rowErr != nil {
-		return nil, fmt.Errorf("rows: %w", rowErr)
+		return fmt.Errorf("rows: %w", rowErr)
+	}
+
+	return nil
+}
+
+// scanSQLRows drains sqlRows into a slice of string maps keyed by column name.
+func scanSQLRows(sqlRows *sql.Rows) ([]map[string]string, error) {
+	var result []map[string]string
+
+	err := visitSQLRows(sqlRows, func(row map[string]string) error {
+		result = append(result, row)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
+}
+
+// StreamRows runs the query for category/fields/filters and hands each row
+// to visit as it arrives, returning the result's column headers.
+//
+// It is the unbounded counterpart of FetchRows: no LIMIT, no COUNT, and no
+// accumulated slice. An export of every enrollment on the platform is
+// written out as it is read rather than assembled in memory first.
+func (r *gormExportRepository) StreamRows(
+	ctx context.Context,
+	category string,
+	fields []string,
+	filters map[string]string,
+	visit func(row map[string]string) error,
+) ([]string, error) {
+	headers, query, args, buildErr := buildQuery(category, fields, filters)
+	if buildErr != nil {
+		return nil, buildErr
+	}
+
+	sqlRows, fetchErr := r.db.WithContext(ctx).Raw(query, args...).Rows()
+	if fetchErr != nil {
+		return nil, fmt.Errorf("fetch rows: %w", fetchErr)
+	}
+
+	defer func() { _ = sqlRows.Close() }()
+
+	err := visitSQLRows(sqlRows, visit)
+	if err != nil {
+		return nil, err
+	}
+
+	return headers, nil
 }
 
 // FetchRows returns up to limit rows for the given category/fields/filters,

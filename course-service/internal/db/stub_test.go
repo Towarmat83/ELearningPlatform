@@ -54,9 +54,9 @@ func (r *countingCourseRepository) SkillTotals(context.Context, []string) (map[s
 	return map[string]int{}, nil
 }
 
-// ModulesBySkill is unused by these tests.
-func (r *countingCourseRepository) ModulesBySkill(context.Context, string) ([]repository.SkillModule, error) {
-	return nil, nil
+// ModulesBySkills is unused by these tests.
+func (r *countingCourseRepository) ModulesBySkills(context.Context, []string) (map[string][]repository.SkillModule, error) {
+	return map[string][]repository.SkillModule{}, nil
 }
 
 // PutSession is unused by these tests.

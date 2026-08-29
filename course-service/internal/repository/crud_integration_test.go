@@ -184,13 +184,13 @@ func TestCourseRepository_ModulesAndSkills(t *testing.T) { //nolint:paralleltest
 		t.Errorf("SkillTotals missing kubernetes: %+v", totals)
 	}
 
-	bySkill, err := repo.ModulesBySkill(ctx, "kubernetes")
+	bySkill, err := repo.ModulesBySkills(ctx, []string{"kubernetes"})
 	if err != nil {
-		t.Fatalf("ModulesBySkill: %v", err)
+		t.Fatalf("ModulesBySkills: %v", err)
 	}
 
-	if len(bySkill) == 0 {
-		t.Error("ModulesBySkill(kubernetes) returned nothing")
+	if len(bySkill["kubernetes"]) == 0 {
+		t.Error("ModulesBySkills(kubernetes) returned nothing")
 	}
 
 	// Upsert with a changed module set exercises replaceCourseChildren.

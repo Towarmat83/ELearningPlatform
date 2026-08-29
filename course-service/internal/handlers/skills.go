@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
+
+	"github.com/genesary/pupitre/course-service/internal/repository"
 )
 
 // skillModuleEntry is a single module entry in a skill drill-down response.
@@ -14,6 +16,23 @@ type skillModuleEntry struct {
 	Type        string `json:"type"`
 	CourseSlug  string `json:"courseSlug"`
 	CourseTitle string `json:"courseTitle"`
+}
+
+// toSkillModuleEntries converts repository rows into their wire form.
+func toSkillModuleEntries(found []repository.SkillModule) []skillModuleEntry {
+	modules := make([]skillModuleEntry, 0, len(found))
+	for _, mod := range found {
+		modules = append(modules, skillModuleEntry{
+			Name:        mod.Name,
+			Slug:        mod.Slug,
+			Index:       mod.Index,
+			Type:        mod.Type,
+			CourseSlug:  mod.CourseSlug,
+			CourseTitle: mod.CourseTitle,
+		})
+	}
+
+	return modules
 }
 
 // ListSkillModules godoc
@@ -28,7 +47,7 @@ func (s *State) ListSkillModules(writer http.ResponseWriter, req *http.Request) 
 
 	// One indexed query over course_modules replaces scanning every module
 	// of every course in the catalog.
-	found, err := s.Repos.Courses.ModulesBySkill(req.Context(), skill)
+	bySkill, err := s.Repos.Courses.ModulesBySkills(req.Context(), []string{skill})
 	if err != nil {
 		zap.L().Error("list skill modules failed", zap.String("skill", skill), zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
@@ -36,17 +55,52 @@ func (s *State) ListSkillModules(writer http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	modules := make([]skillModuleEntry, 0, len(found))
-	for _, mod := range found {
-		modules = append(modules, skillModuleEntry{
-			Name:        mod.Name,
-			Slug:        mod.Slug,
-			Index:       mod.Index,
-			Type:        mod.Type,
-			CourseSlug:  mod.CourseSlug,
-			CourseTitle: mod.CourseTitle,
-		})
+	s.JSON(writer, http.StatusOK, map[string]any{
+		pathKindSkill:    skill,
+		modulesTypeValue: toSkillModuleEntries(bySkill[skill]),
+	})
+}
+
+// ListSkillModulesBatch godoc
+// @Summary  List the modules of several skills in one request
+// @Tags     Skills
+// @Produce  json
+// @Param    slugs  query  string  true  "Comma-separated skill slugs"
+// @Success  200    {object}  map[string]interface{}
+// @Failure  400    {object}  map[string]string
+// @Router   /api/batch/skills [get].
+//
+// A skill-kind learning path is a list of skills; rendering one used to
+// mean one request per skill, in series. This answers the whole path in a
+// single query.
+func (s *State) ListSkillModulesBatch(writer http.ResponseWriter, req *http.Request) {
+	skills := slugsParam(req)
+
+	if len(skills) > maxBatchSlugs {
+		s.Error(writer, http.StatusBadRequest, "too many slugs requested")
+
+		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string]any{"skill": skill, modulesTypeValue: modules})
+	out := make(map[string][]skillModuleEntry, len(skills))
+
+	if len(skills) == 0 {
+		s.JSON(writer, http.StatusOK, map[string]any{skillsJSONKey: out})
+
+		return
+	}
+
+	bySkill, err := s.Repos.Courses.ModulesBySkills(req.Context(), skills)
+	if err != nil {
+		zap.L().Error("batch skill modules lookup failed", zap.Int("skills", len(skills)), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, internalErrorMessage)
+
+		return
+	}
+
+	for _, skill := range skills {
+		out[skill] = toSkillModuleEntries(bySkill[skill])
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{skillsJSONKey: out})
 }

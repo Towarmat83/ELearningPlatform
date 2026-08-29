@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -25,58 +24,56 @@ type badgeDetail struct {
 	EarnedBy    int64     `json:"earnedBy"`
 }
 
-// courseBadgeInfo is the badge metadata returned by course-service.
-type courseBadgeInfo struct {
-	Slug  string `json:"slug"`
-	Title string `json:"title"`
-	Badge *struct {
-		Name string `json:"name"`
-		Icon string `json:"icon,omitempty"`
-	} `json:"badge,omitempty"`
-}
+// badgeSlugs extracts the course slugs of a badge listing, deduplicated.
+func badgeSlugs(rows []repository.BadgeRow) []string {
+	seen := make(map[string]struct{}, len(rows))
 
-// fetchCourseBadgeInfo fetches badge metadata for a course from course-service.
-func (s *State) fetchCourseBadgeInfo(req *http.Request, courseSlug string) (*courseBadgeInfo, error) {
-	if !slugRE.MatchString(courseSlug) {
-		return nil, fmt.Errorf("invalid course slug: %q", courseSlug)
+	slugs := make([]string, 0, len(rows))
+
+	for _, row := range rows {
+		if _, dup := seen[row.CourseSlug]; dup {
+			continue
+		}
+
+		seen[row.CourseSlug] = struct{}{}
+
+		slugs = append(slugs, row.CourseSlug)
 	}
 
-	var info courseBadgeInfo
-
-	err := s.fetchCourseServiceJSON(req, "/api/courses/"+courseSlug, &info)
-	if err != nil {
-		return nil, err
-	}
-
-	return &info, nil
+	return slugs
 }
 
-// enrichBadgeRows converts BadgeRows into badgeDetails by fetching metadata.
+// enrichBadgeRows converts BadgeRows into badgeDetails.
+//
+// Both enrichments are resolved for the whole listing at once — one
+// batched catalog lookup and one grouped count query — where this used to
+// issue an HTTP request and a COUNT per badge, in series. A learner with
+// thirty badges paid sixty round-trips for one page.
 func (s *State) enrichBadgeRows(req *http.Request, rows []repository.BadgeRow) []badgeDetail {
+	slugs := badgeSlugs(rows)
+
+	info := s.catalog().Courses(req.Context(), slugs)
+
+	counts, err := s.Repos.Badges.EarnedCounts(req.Context(), slugs)
+	if err != nil {
+		zap.L().Warn("failed to count badge earners", zap.Int("badges", len(slugs)), zap.Error(err))
+	}
+
 	details := make([]badgeDetail, 0, len(rows))
 
 	for _, row := range rows {
 		detail := badgeDetail{
 			CourseSlug: row.CourseSlug,
 			EarnedAt:   row.EarnedAt,
+			EarnedBy:   counts[row.CourseSlug],
 		}
 
-		info, infoErr := s.fetchCourseBadgeInfo(req, row.CourseSlug)
-		if infoErr != nil {
-			zap.L().Warn("failed to fetch course badge info", zap.String("courseSlug", row.CourseSlug), zap.Error(infoErr))
-		} else {
-			detail.CourseTitle = info.Title
-			if info.Badge != nil {
-				detail.BadgeName = info.Badge.Name
-				detail.BadgeIcon = info.Badge.Icon
+		if course, found := info[row.CourseSlug]; found {
+			detail.CourseTitle = course.Title
+			if course.Badge != nil {
+				detail.BadgeName = course.Badge.Name
+				detail.BadgeIcon = course.Badge.Icon
 			}
-		}
-
-		count, countErr := s.Repos.Badges.EarnedCount(req.Context(), row.CourseSlug)
-		if countErr != nil {
-			zap.L().Warn("failed to count badge earners", zap.String("courseSlug", row.CourseSlug), zap.Error(countErr))
-		} else {
-			detail.EarnedBy = count
 		}
 
 		details = append(details, detail)
@@ -171,19 +168,22 @@ type leaderboardEntry struct {
 	Icons     []string `json:"icons"`
 }
 
-// buildIconCache fetches badge icons for each unique slug.
+// defaultBadgeIcon stands in for a course that declares no badge icon.
+const defaultBadgeIcon = "🏅"
+
+// buildIconCache resolves the badge icon of every slug in one batched
+// catalog lookup, rather than one HTTP request per distinct course on the
+// leaderboard.
 func (s *State) buildIconCache(req *http.Request, slugs []string) map[string]string {
+	info := s.catalog().Courses(req.Context(), slugs)
+
 	cache := make(map[string]string, len(slugs))
+
 	for _, slug := range slugs {
-		if _, seen := cache[slug]; seen {
-			continue
-		}
+		icon := defaultBadgeIcon
 
-		icon := "🏅"
-
-		info, err := s.fetchCourseBadgeInfo(req, slug)
-		if err == nil && info.Badge != nil && info.Badge.Icon != "" {
-			icon = info.Badge.Icon
+		if course, found := info[slug]; found && course.Badge != nil && course.Badge.Icon != "" {
+			icon = course.Badge.Icon
 		}
 
 		cache[slug] = icon
@@ -231,7 +231,7 @@ func (s *State) BadgeLeaderboard(writer http.ResponseWriter, request *http.Reque
 		for _, slug := range row.Slugs {
 			icon := iconCache[slug]
 			if icon == "" {
-				icon = "🏅"
+				icon = defaultBadgeIcon
 			}
 
 			icons = append(icons, icon)

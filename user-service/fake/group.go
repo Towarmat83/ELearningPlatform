@@ -734,6 +734,88 @@ func (f *GroupRepository) HasChildren(_ context.Context, groupID string) (bool, 
 	return false, nil
 }
 
+// UsersInAnyGroup reports which of userIDs belong to at least one group in
+// groupIDs.
+func (f *GroupRepository) UsersInAnyGroup(_ context.Context, userIDs, groupIDs []string) (map[string]bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	wantedUser := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		wantedUser[id] = struct{}{}
+	}
+
+	wantedGroup := make(map[string]struct{}, len(groupIDs))
+	for _, id := range groupIDs {
+		wantedGroup[id] = struct{}{}
+	}
+
+	inScope := make(map[string]bool, len(userIDs))
+
+	for _, ug := range f.UserGroup {
+		_, wantUser := wantedUser[ug.UserID]
+		_, wantGroup := wantedGroup[ug.GroupID.String()]
+
+		if wantUser && wantGroup {
+			inScope[ug.UserID] = true
+		}
+	}
+
+	return inScope, nil
+}
+
+// ListMemberIDsByGroups returns the member IDs of every group in groupIDs,
+// keyed by group ID.
+func (f *GroupRepository) ListMemberIDsByGroups(_ context.Context, groupIDs []string) (map[string][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	return groupBy(groupIDs, f.UserGroup,
+		func(row models.UserGroup) (string, string) { return row.GroupID.String(), row.UserID }), nil
+}
+
+// GetGroupCoursesByGroups returns the course slugs each group in groupIDs
+// is enrolled in, keyed by group ID.
+func (f *GroupRepository) GetGroupCoursesByGroups(_ context.Context, groupIDs []string) (map[string][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	return groupBy(groupIDs, f.GroupEnrollments,
+		func(row models.GroupEnrollment) (string, string) { return row.GroupID.String(), row.CourseSlug }), nil
+}
+
+// groupBy buckets the values of rows under their group key, keeping only
+// the keys named in wanted.
+func groupBy[R any](wanted []string, rows []R, split func(R) (string, string)) map[string][]string {
+	keep := make(map[string]struct{}, len(wanted))
+	for _, key := range wanted {
+		keep[key] = struct{}{}
+	}
+
+	out := make(map[string][]string, len(wanted))
+
+	for _, row := range rows {
+		key, value := split(row)
+		if _, ok := keep[key]; ok {
+			out[key] = append(out[key], value)
+		}
+	}
+
+	return out
+}
+
 // applyGroupMembership adds userID to the group named name (creating it if
 // absent) and returns the updated userGroups slice, the (possibly updated)
 // role, and whether a group-role mapping applied.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -230,10 +231,48 @@ func (gc *GitCache) cloneAndCache(ctx context.Context, key, rawURL, branch, toke
 	gc.mu.Lock()
 	gc.repos[key] = &cachedRepo{path: repoDir, clonedAt: time.Now()}
 	delete(gc.cloning, key)
+	gc.evictLocked()
 	gc.mu.Unlock()
 	close(done)
 
 	return repoDir, nil
+}
+
+// maxCachedRepos bounds how many cloned repositories the cache keeps on
+// disk. A course catalog references a handful of repositories, so this only
+// bites on an instance that has served content from many distinct ones —
+// where, without it, the cache directory would grow forever.
+const maxCachedRepos = 64
+
+// evictLocked drops cached repositories until at most maxCachedRepos
+// remain, oldest clone first. gc.mu must be held.
+//
+// Eviction is safe at any moment: a dropped repository is re-cloned on the
+// next request for it, and a reader that is mid-read holds an open file
+// descriptor, which keeps the bytes alive until it is done.
+func (gc *GitCache) evictLocked() {
+	if len(gc.repos) <= maxCachedRepos {
+		return
+	}
+
+	keys := make([]string, 0, len(gc.repos))
+	for key := range gc.repos {
+		keys = append(keys, key)
+	}
+
+	slices.SortFunc(keys, func(a, b string) int {
+		return gc.repos[a].clonedAt.Compare(gc.repos[b].clonedAt)
+	})
+
+	for _, key := range keys[:len(gc.repos)-maxCachedRepos] {
+		if path := gc.repos[key].path; path != "" {
+			_ = os.RemoveAll(path)
+		}
+
+		delete(gc.repos, key)
+
+		zap.L().Debug("evicted cached repo", zap.String("key", key))
+	}
 }
 
 // freshCachedPath returns cached's path when present and still within

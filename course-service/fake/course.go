@@ -207,8 +207,9 @@ func (f *CourseRepository) SkillTotals(_ context.Context, skills []string) (map[
 	return totals, nil
 }
 
-// ModulesBySkill lists every module of a public course tagged with skill.
-func (f *CourseRepository) ModulesBySkill(_ context.Context, skill string) ([]repository.SkillModule, error) {
+// ModulesBySkills lists every module of a public course tagged with any of
+// skills, keyed by skill.
+func (f *CourseRepository) ModulesBySkills(_ context.Context, skills []string) (map[string][]repository.SkillModule, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -216,38 +217,46 @@ func (f *CourseRepository) ModulesBySkill(_ context.Context, skill string) ([]re
 		return nil, f.Err
 	}
 
-	var out []repository.SkillModule
+	bySkill := make(map[string][]repository.SkillModule, len(skills))
 
-	for _, course := range f.courses {
-		if !course.IsPublic {
-			continue
-		}
+	for _, skill := range skills {
+		var out []repository.SkillModule
 
-		for idx, mod := range course.Modules {
-			if !slices.Contains(mod.Skills, skill) {
+		for _, course := range f.courses {
+			if !course.IsPublic {
 				continue
 			}
 
-			out = append(out, repository.SkillModule{
-				Name:        mod.Name,
-				Slug:        mod.Slug(),
-				Index:       idx,
-				Type:        mod.Type,
-				CourseSlug:  course.Slug,
-				CourseTitle: course.Title,
-			})
+			for idx, mod := range course.Modules {
+				if !slices.Contains(mod.Skills, skill) {
+					continue
+				}
+
+				out = append(out, repository.SkillModule{
+					Name:        mod.Name,
+					Slug:        mod.Slug(),
+					Index:       idx,
+					Type:        mod.Type,
+					CourseSlug:  course.Slug,
+					CourseTitle: course.Title,
+				})
+			}
+		}
+
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].CourseTitle != out[j].CourseTitle {
+				return out[i].CourseTitle < out[j].CourseTitle
+			}
+
+			return out[i].Index < out[j].Index
+		})
+
+		if len(out) > 0 {
+			bySkill[skill] = out
 		}
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].CourseTitle != out[j].CourseTitle {
-			return out[i].CourseTitle < out[j].CourseTitle
-		}
-
-		return out[i].Index < out[j].Index
-	})
-
-	return out, nil
+	return bySkill, nil
 }
 
 // PutSession inserts or replaces one scheduled session of a course.

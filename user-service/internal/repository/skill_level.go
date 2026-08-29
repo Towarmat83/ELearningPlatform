@@ -79,7 +79,7 @@ func upsertSkillLevelTx(gormDB *gorm.DB, userID, skill, level string, order, tot
 	}
 
 	err := gormDB.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "userid"}, {Name: "skill"}},
+		Columns: []clause.Column{{Name: colUserID}, {Name: "skill"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"completed_courses": gorm.Expr("user_skill_levels.completed_courses + 1"),
 			"total_courses":     gorm.Expr("EXCLUDED.total_courses"),

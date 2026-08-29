@@ -355,9 +355,9 @@ export const coursesApi = {
   },
   get: (id: string) => api.get<Course>(`/courses/${id}`),
   enroll: (id: string, token: string) =>
-    api.post(`/courses/${id}/enroll`, {}, token),
+    api.post(`/enrollments/${id}`, {}, token),
   unenroll: (id: string, token: string) =>
-    api.delete(`/courses/${id}/unenroll`, token),
+    api.delete(`/enrollments/${id}`, token),
   myCourses: (token: string) =>
     api.get<{ courses: MyCourse[] }>("/my/courses", token),
 };
@@ -578,17 +578,17 @@ export const adminApi = {
 
   listEnrollments: (courseId: string, token: string) =>
     api.get<{ enrollments: CourseEnrollment[] }>(
-      `/admin/courses/${courseId}/enrollments`,
+      `/admin/enrollments/${courseId}`,
       token,
     ),
   enrollUser: (courseId: string, userId: string, token: string) =>
     api.post(
-      `/admin/courses/${courseId}/enrollments`,
+      `/admin/enrollments/${courseId}`,
       { userId: userId },
       token,
     ),
   unenrollUser: (courseId: string, userId: string, token: string) =>
-    api.delete(`/admin/courses/${courseId}/enrollments/${userId}`, token),
+    api.delete(`/admin/enrollments/${courseId}/users/${userId}`, token),
   listGroupEnrollments: (courseId: string, token: string) =>
     api.get<{
       groups: {
@@ -598,16 +598,16 @@ export const adminApi = {
         memberCount: number;
         enrolledAt: string;
       }[];
-    }>(`/admin/courses/${courseId}/enrollments/groups`, token),
+    }>(`/admin/enrollments/${courseId}/groups`, token),
   enrollGroup: (courseId: string, groupId: string, token: string) =>
     api.post<{ message: string; enrolled: number }>(
-      `/admin/courses/${courseId}/enrollments/groups`,
+      `/admin/enrollments/${courseId}/groups`,
       { groupId: groupId },
       token,
     ),
   unenrollGroup: (courseId: string, groupId: string, token: string) =>
     api.delete(
-      `/admin/courses/${courseId}/enrollments/groups/${groupId}`,
+      `/admin/enrollments/${courseId}/groups/${groupId}`,
       token,
     ),
 

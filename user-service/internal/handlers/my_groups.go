@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 // groupRow is the response shape for a single group in the my-groups endpoint.
@@ -35,6 +36,24 @@ func (s *State) MyGroups(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	groupIDs := make([]string, 0, len(rows))
+
+	for _, row := range rows {
+		if row.Name != defaultGroupName {
+			groupIDs = append(groupIDs, row.ID)
+		}
+	}
+
+	// One enrollment query for every group the user belongs to, rather than
+	// one per group.
+	coursesByGroup, err := s.Repos.Groups.GetGroupCoursesByGroups(ctx, groupIDs)
+	if err != nil {
+		zap.L().Error("failed to list group courses", zap.String("userID", claims.Subject), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Database error")
+
+		return
+	}
+
 	groups := make([]groupRow, 0, len(rows))
 
 	for _, row := range rows {
@@ -42,7 +61,7 @@ func (s *State) MyGroups(writer http.ResponseWriter, request *http.Request) {
 			continue
 		}
 
-		slugs, _ := s.Repos.Groups.GetGroupCourses(ctx, row.ID)
+		slugs := coursesByGroup[row.ID]
 		if slugs == nil {
 			slugs = []string{}
 		}

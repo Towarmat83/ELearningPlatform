@@ -661,8 +661,8 @@ import Admin from '../../../layouts/Admin.astro';
         render(); // show loading
         try {
           const [uRes, gRes] = await Promise.all([
-            api(`/admin/courses/${courseId}/enrollments`),
-            api(`/admin/courses/${courseId}/enrollments/groups`).catch(() => ({ groups: [] })),
+            api(`/admin/enrollments/${courseId}`),
+            api(`/admin/enrollments/${courseId}/groups`).catch(() => ({ groups: [] })),
           ]);
           panelEnrollments = uRes.enrollments || [];
           panelGroupEnrollments = gRes.groups || [];
@@ -799,7 +799,7 @@ import Admin from '../../../layouts/Admin.astro';
       const sel = document.getElementById('enroll-group-sel') as HTMLSelectElement;
       if (!sel?.value) return;
       try {
-        await api(`/admin/courses/${courseId}/enrollments/groups`, { method: 'POST', body: { groupId: sel.value } });
+        await api(`/admin/enrollments/${courseId}/groups`, { method: 'POST', body: { groupId: sel.value } });
         (window as any).showToast?.('Groupe inscrit', 'success');
         await reloadEnrollments(courseId);
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
@@ -807,7 +807,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function unenrollGroup(courseId: string, groupId: string, name: string) {
       try {
-        await api(`/admin/courses/${courseId}/enrollments/groups/${groupId}`, { method: 'DELETE' });
+        await api(`/admin/enrollments/${courseId}/groups/${groupId}`, { method: 'DELETE' });
         (window as any).showToast?.(`Groupe "${name}" retiré`, 'success');
         await reloadEnrollments(courseId);
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
@@ -860,7 +860,7 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
       try {
-        await api(`/admin/courses/${courseId}/enrollments`, { method: 'POST', body: { userId: enrollUserSelectedId } });
+        await api(`/admin/enrollments/${courseId}`, { method: 'POST', body: { userId: enrollUserSelectedId } });
         (window as any).showToast?.('Utilisateur inscrit', 'success');
         enrollUserSelectedId = '';
         const searchEl = document.getElementById('enroll-user-search') as HTMLInputElement;
@@ -871,7 +871,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function unenrollUser(courseId: string, userId: string, name: string) {
       try {
-        await api(`/admin/courses/${courseId}/enrollments/${userId}`, { method: 'DELETE' });
+        await api(`/admin/enrollments/${courseId}/users/${userId}`, { method: 'DELETE' });
         (window as any).showToast?.(`"${name}" retiré`, 'success');
         await reloadEnrollments(courseId);
       } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
@@ -880,8 +880,8 @@ import Admin from '../../../layouts/Admin.astro';
     async function reloadEnrollments(courseId: string) {
       try {
         const [uRes, gRes] = await Promise.all([
-          api(`/admin/courses/${courseId}/enrollments`),
-          api(`/admin/courses/${courseId}/enrollments/groups`).catch(() => ({ groups: [] })),
+          api(`/admin/enrollments/${courseId}`),
+          api(`/admin/enrollments/${courseId}/groups`).catch(() => ({ groups: [] })),
         ]);
         panelEnrollments = uRes.enrollments || [];
         panelGroupEnrollments = gRes.groups || [];

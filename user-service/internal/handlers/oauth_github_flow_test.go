@@ -9,6 +9,7 @@ import (
 
 	"github.com/genesary/pupitre/user-service/fake"
 	"github.com/genesary/pupitre/user-service/internal/config"
+	"github.com/genesary/pupitre/user-service/internal/httpx"
 )
 
 // githubStub is an [http.RoundTripper] that answers GitHub's OAuth token and
@@ -50,16 +51,16 @@ func (g githubStub) RoundTrip(r *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// withDefaultTransport swaps [http.DefaultTransport] for the duration of the
-// test so the GitHub client (which builds its own &http.Client{}) is
-// intercepted.
-func withDefaultTransport(t *testing.T, rt http.RoundTripper) {
+// withStubTransport swaps the transport of the shared outbound client for
+// the duration of the test, so the GitHub calls are answered by rt.
+func withStubTransport(t *testing.T, rt http.RoundTripper) {
 	t.Helper()
 
-	prev := http.DefaultTransport
-	http.DefaultTransport = rt //nolint:reassign // test-only, restored in cleanup
+	client := httpx.Client()
+	prev := client.Transport
+	client.Transport = rt
 
-	t.Cleanup(func() { http.DefaultTransport = prev }) //nolint:reassign // restore original
+	t.Cleanup(func() { client.Transport = prev })
 }
 
 // githubRouter builds a router with a single configured "github" provider.
@@ -80,8 +81,8 @@ func githubRouter() http.Handler {
 
 // TestOAuthCallback_GitHubFlow completes a GitHub login where the email
 // comes from the profile payload directly.
-func TestOAuthCallback_GitHubFlow(t *testing.T) { //nolint:paralleltest // swaps http.DefaultTransport
-	withDefaultTransport(t, githubStub{
+func TestOAuthCallback_GitHubFlow(t *testing.T) { //nolint:paralleltest // swaps the shared outbound transport
+	withStubTransport(t, githubStub{
 		token:   `{"access_token":"gho_abc","token_type":"bearer"}`,
 		profile: `{"id":42,"login":"octocat","name":"The Octocat","email":"octo@example.com","avatarUrl":"https://a/o.png","bio":"cat"}`,
 	})
@@ -116,8 +117,8 @@ func TestOAuthCallback_GitHubFlow(t *testing.T) { //nolint:paralleltest // swaps
 
 // TestOAuthCallback_GitHubEmailFromAPI completes the flow when the profile
 // has no email and it must be fetched from /user/emails.
-func TestOAuthCallback_GitHubEmailFromAPI(t *testing.T) { //nolint:paralleltest // swaps http.DefaultTransport
-	withDefaultTransport(t, githubStub{
+func TestOAuthCallback_GitHubEmailFromAPI(t *testing.T) { //nolint:paralleltest // swaps the shared outbound transport
+	withStubTransport(t, githubStub{
 		token:   `{"access_token":"gho_abc"}`,
 		profile: `{"id":7,"login":"noemail","name":"No Email"}`,
 		emails:  `[{"email":"primary@example.com","primary":true,"verified":true}]`,
@@ -135,8 +136,8 @@ func TestOAuthCallback_GitHubEmailFromAPI(t *testing.T) { //nolint:paralleltest 
 }
 
 // TestOAuthCallback_GitHubNoToken fails when GitHub returns no access token.
-func TestOAuthCallback_GitHubNoToken(t *testing.T) { //nolint:paralleltest // swaps http.DefaultTransport
-	withDefaultTransport(t, githubStub{token: `{"error":"bad_verification_code"}`})
+func TestOAuthCallback_GitHubNoToken(t *testing.T) { //nolint:paralleltest // swaps the shared outbound transport
+	withStubTransport(t, githubStub{token: `{"error":"bad_verification_code"}`})
 
 	r := githubRouter()
 	s := &State{Config: &config.Config{OAuthStateSecret: "oauth-state-secret"}}
@@ -151,8 +152,8 @@ func TestOAuthCallback_GitHubNoToken(t *testing.T) { //nolint:paralleltest // sw
 
 // TestOAuthCallback_GitHubNoVerifiedEmail fails when neither the profile nor
 // the emails API yields a usable address.
-func TestOAuthCallback_GitHubNoVerifiedEmail(t *testing.T) { //nolint:paralleltest // swaps http.DefaultTransport
-	withDefaultTransport(t, githubStub{
+func TestOAuthCallback_GitHubNoVerifiedEmail(t *testing.T) { //nolint:paralleltest // swaps the shared outbound transport
+	withStubTransport(t, githubStub{
 		token:   `{"access_token":"gho_abc"}`,
 		profile: `{"id":9,"login":"ghost"}`,
 		emails:  `[]`,

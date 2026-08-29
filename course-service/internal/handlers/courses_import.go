@@ -285,6 +285,14 @@ func (s *State) resolveImport(ctx context.Context, payload courseImportRequest) 
 		return importPlan{}, rejectf(http.StatusBadRequest, "%s", err.Error())
 	}
 
+	// The slug can come from the request, the frontmatter or the title, and
+	// none of those are constrained: hold this endpoint to the same rule as
+	// the definition endpoints so an import cannot store a course under a
+	// handle no route could address.
+	if !validSlug(parsed.Slug) {
+		return importPlan{}, rejectf(http.StatusBadRequest, "%s", invalidSlugMessage)
+	}
+
 	plan := importPlan{slug: parsed.Slug, mode: mode, spec: parsed.Spec, warnings: parsed.Warnings}
 
 	stored, err := s.Repos.Courses.Get(ctx, parsed.Slug)

@@ -52,7 +52,7 @@ func (s *State) GetCourseDefinition(writer http.ResponseWriter, req *http.Reques
 
 	s.JSON(writer, http.StatusOK, map[string]any{
 		slugJSONKey: slug,
-		"spec":      definition.FromCourse(course),
+		specJSONKey: definition.FromCourse(course),
 	})
 }
 

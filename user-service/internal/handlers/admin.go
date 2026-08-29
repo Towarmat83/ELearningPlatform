@@ -191,7 +191,7 @@ func (s *State) GetUser(writer http.ResponseWriter, request *http.Request) {
 // @Accept    json
 // @Produce   json
 // @Param     userId  path  string  true  "User UUID"
-// @Param     body  object  true  "Optional fields to update"
+// @Param     body  body  object  true  "Optional fields to update"
 // @Success   200   {object}  userPublicRow
 // @Failure   404   {object}  map[string]string
 // @Router    /api/admin/users/{userId} [put].
@@ -342,7 +342,7 @@ func (s *State) ListCourseEnrollments(writer http.ResponseWriter, request *http.
 // @Accept    json
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
-// @Param     body  object  true  "userId (UUID)"
+// @Param     body  body  object  true  "userId (UUID)"
 // @Success   200   {object}  map[string]string
 // @Router    /api/admin/courses/{slug}/enrollments [post].
 func (s *State) AdminEnrollUser(writer http.ResponseWriter, request *http.Request) {
@@ -399,7 +399,7 @@ func (s *State) AdminUnenrollUser(writer http.ResponseWriter, request *http.Requ
 // @Accept    json
 // @Produce   json
 // @Param     slug  path  string  true  "Course slug"
-// @Param     body  object  true  "groupId (UUID)"
+// @Param     body  body  object  true  "groupId (UUID)"
 // @Success   200   {object}  map[string]interface{}
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/courses/{slug}/enrollments/groups [post].
@@ -495,7 +495,7 @@ func (s *State) AdminUnenrollGroup(writer http.ResponseWriter, request *http.Req
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "userId, courseSlug, lessonSlug"
+// @Param     body  body  object  true  "userId, courseSlug, lessonSlug"
 // @Success   200   {object}  map[string]bool
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/sync-progress [post].
@@ -614,7 +614,7 @@ func (s *State) ListGroupMembers(writer http.ResponseWriter, request *http.Reque
 // @Accept    json
 // @Produce   json
 // @Param     groupId  path    string  true  "Group UUID"
-// @Param     body     object  true    "userId (UUID)"
+// @Param     body     body  object  true    "userId (UUID)"
 // @Success   200      {object}  map[string]string
 // @Failure   400      {object}  map[string]string
 // @Router    /api/admin/groups/{groupId}/members [post].

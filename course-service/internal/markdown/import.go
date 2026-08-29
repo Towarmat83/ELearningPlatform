@@ -125,10 +125,14 @@ func Import(document []byte, opts Options) (Result, error) {
 // warning, naming the shallowest heading level that would split the
 // document into more than one module.
 func splitHint(body string) []string {
+	// A level only splits the document if it appears at least twice: a
+	// single heading of that level leaves one module either way.
+	const splittingHeadings = 2
+
 	counts := headingCounts(body)
 
 	for level := 1; level <= maxHeadingLevel; level++ {
-		if counts[level] < 2 {
+		if counts[level] < splittingHeadings {
 			continue
 		}
 

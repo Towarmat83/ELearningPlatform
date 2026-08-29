@@ -101,7 +101,7 @@ func internalRespondExecResult(state *State, writer http.ResponseWriter, execErr
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "userId, courseSlug"
+// @Param    body  body  object  true  "userId, courseSlug"
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/enrollments/auto [post].
 func (s *State) InternalAutoEnroll(writer http.ResponseWriter, req *http.Request) {
@@ -207,7 +207,7 @@ func (s *State) InternalViewedLessons(writer http.ResponseWriter, req *http.Requ
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "userId, courseSlug, lessonSlug"
+// @Param    body  body  object  true  "userId, courseSlug, lessonSlug"
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/progress/complete [post].
 func (s *State) InternalMarkComplete(writer http.ResponseWriter, req *http.Request) {
@@ -226,7 +226,7 @@ func (s *State) InternalMarkComplete(writer http.ResponseWriter, req *http.Reque
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "userId, courseSlug, skills, difficulty"
+// @Param    body  body  object  true  "userId, courseSlug, skills, difficulty"
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/progress/course-complete [post].
 func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http.Request) {
@@ -267,7 +267,7 @@ func (s *State) InternalMarkCourseComplete(writer http.ResponseWriter, req *http
 // @Tags     Internal
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "see moduleProgressBody"
+// @Param    body  body  object  true  "see moduleProgressBody"
 // @Success  200   {object}  map[string]bool
 // @Router   /internal/progress/module [post].
 func (s *State) InternalRecordModuleProgress(writer http.ResponseWriter, req *http.Request) {

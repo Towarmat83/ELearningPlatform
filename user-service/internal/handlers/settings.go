@@ -158,7 +158,7 @@ func (s *State) GetSettings(writer http.ResponseWriter, request *http.Request) {
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  map[string]string  true  "Key/value settings map"
+// @Param     body  body  map[string]string  true  "Key/value settings map"
 // @Success   200   {object}  map[string]interface{}
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/settings [put].

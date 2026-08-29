@@ -58,7 +58,7 @@ func (s *State) loadLDAPSettings(ctx context.Context) (ldapSettings, error) {
 // @Tags     LDAP
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "email and password"
+// @Param    body  body  object  true  "email and password"
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/ldap/login [post].

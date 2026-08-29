@@ -6,11 +6,26 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/course-service/internal/repository"
 )
+
+// slugRE is the shape a course or path slug must have. A slug is the
+// only handle a resource has in a URL, so one holding a slash or a space
+// would create something no route could ever address again.
+var slugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// invalidSlugMessage is returned for a slug that could never appear in a
+// route, whichever endpoint the resource is being created through.
+const invalidSlugMessage = "slug must be lowercase letters, digits and dashes, starting with a letter or digit"
+
+// validSlug reports whether slug can be addressed in a URL.
+func validSlug(slug string) bool {
+	return slugRE.MatchString(slug)
+}
 
 // decodeDefinition reads a resource definition from the request body,
 // accepting either a nested "spec" object or flat top-level fields — the
@@ -81,6 +96,12 @@ func createDefinition[T any, R any](
 
 	if slug == "" {
 		state.Error(writer, http.StatusBadRequest, "slug is required")
+
+		return
+	}
+
+	if !validSlug(slug) {
+		state.Error(writer, http.StatusBadRequest, invalidSlugMessage)
 
 		return
 	}

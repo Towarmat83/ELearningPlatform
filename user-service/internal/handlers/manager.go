@@ -110,7 +110,7 @@ func (s *State) ManagerListUsers(writer http.ResponseWriter, request *http.Reque
 // @Accept    json
 // @Produce   json
 // @Param     slug  path    string  true  "Course slug"
-// @Param     body  object  true    "userId (UUID)"
+// @Param     body  body  object  true    "userId (UUID)"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
 // @Failure   403   {object}  map[string]string
@@ -268,7 +268,7 @@ func (s *State) ManagerListGroups(writer http.ResponseWriter, request *http.Requ
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "name"
+// @Param     body  body  object  true  "name"
 // @Success   201  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Failure   409  {object}  map[string]string
@@ -303,7 +303,7 @@ func (s *State) ManagerCreateGroup(writer http.ResponseWriter, request *http.Req
 // @Accept    json
 // @Produce   json
 // @Param     groupId  path    string  true  "Parent group UUID"
-// @Param     body     object  true    "name"
+// @Param     body     body  object  true    "name"
 // @Success   201  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Failure   403  {object}  map[string]string
@@ -434,7 +434,7 @@ func (s *State) ManagerListGroupMembers(writer http.ResponseWriter, request *htt
 // @Accept    json
 // @Produce   json
 // @Param     groupId  path    string  true  "Group UUID"
-// @Param     body     object  true    "userId"
+// @Param     body     body  object  true    "userId"
 // @Success   200  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Failure   403  {object}  map[string]string
@@ -620,7 +620,7 @@ func (s *State) ManagerGetUserPathEnrollments(writer http.ResponseWriter, reques
 // @Accept    json
 // @Produce   json
 // @Param     slug  path    string  true  "Path slug"
-// @Param     body  object  true    "userId (UUID)"
+// @Param     body  body  object  true    "userId (UUID)"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
 // @Failure   403   {object}  map[string]string

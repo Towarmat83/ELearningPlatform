@@ -22,7 +22,7 @@
                 "tags": [
                     "Admin"
                 ],
-                "summary": "Clear the git content cache (admin)",
+                "summary": "Clear the entire git content cache (admin)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -59,6 +59,466 @@
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Create a course (admin)",
+                "responses": {}
+            }
+        },
+        "/api/admin/courses/import": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Create or update a course from a markdown document (admin)",
+                "parameters": [
+                    {
+                        "description": "Document and options",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.courseImportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.importResponse"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.importResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/courses/import/preview": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Preview what a markdown document would import (admin)",
+                "parameters": [
+                    {
+                        "description": "Document and options",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.courseImportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.importPreviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/courses/paths": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Paths"
+                ],
+                "summary": "Create a learning path (admin)",
+                "responses": {}
+            }
+        },
+        "/api/admin/courses/paths/{slug}/definition": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Paths"
+                ],
+                "summary": "Get a learning path's full definition (admin)",
+                "responses": {}
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Paths"
+                ],
+                "summary": "Replace a learning path definition (admin)",
+                "responses": {}
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Paths"
+                ],
+                "summary": "Delete a learning path (admin)",
+                "responses": {}
+            }
+        },
+        "/api/admin/courses/{slug}/cache/clear": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Clear the git cache for all repos used by a course (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Course slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/courses/{slug}/definition": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Get a course's full definition (admin)",
+                "responses": {}
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Replace a course definition (admin)",
+                "responses": {}
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Delete a course (admin)",
+                "responses": {}
+            }
+        },
+        "/api/admin/courses/{slug}/export/markdown": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/markdown"
+                ],
+                "tags": [
+                    "Admin - Courses"
+                ],
+                "summary": "Export a course as a markdown document (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Course slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Heading level (h1…h6)",
+                        "name": "split",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/courses/{slug}/modules/{index}/cache/clear": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Clear the git cache for a specific module (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Course slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Module index (0-based)",
+                        "name": "index",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/courses/{slug}/sessions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Sessions"
+                ],
+                "summary": "Add a session to a course (admin or manager)",
+                "responses": {}
+            }
+        },
+        "/api/admin/courses/{slug}/sessions/{sessionId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Sessions"
+                ],
+                "summary": "Update a session on a course (admin or manager)",
+                "responses": {}
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin - Sessions"
+                ],
+                "summary": "Delete a session from a course (admin or manager)",
+                "responses": {}
+            }
+        },
+        "/api/admin/lab-checks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List recorded lab checks (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by course slug",
+                        "name": "course",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.labCheckRow"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/courses": {
@@ -87,6 +547,12 @@
                         "type": "string",
                         "description": "Search by title or description",
                         "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by skill (slug)",
+                        "name": "skill",
                         "in": "query"
                     }
                 ],
@@ -599,6 +1065,106 @@
                 }
             }
         },
+        "/api/paths": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Paths"
+                ],
+                "summary": "List all learning paths",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Max paths to return (0 means unlimited)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of paths to skip",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/paths/{slug}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Paths"
+                ],
+                "summary": "Get a learning path by slug",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/content.Path"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/skills/{slug}/modules": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Skills"
+                ],
+                "summary": "List all modules tagged with a given skill",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Skill slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "produces": [
@@ -623,6 +1189,308 @@
         }
     },
     "definitions": {
+        "content.Answer": {
+            "type": "object",
+            "properties": {
+                "correct": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.Badge": {
+            "type": "object",
+            "properties": {
+                "icon": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.CheckStep": {
+            "type": "object",
+            "properties": {
+                "checkParams": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "checkType": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.CooldownSpec": {
+            "type": "object",
+            "properties": {
+                "baseSeconds": {
+                    "type": "integer"
+                },
+                "maxSeconds": {
+                    "type": "integer"
+                },
+                "multiplier": {
+                    "type": "number"
+                },
+                "strategy": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.CoursePrerequisite": {
+            "type": "object",
+            "properties": {
+                "course": {
+                    "type": "string"
+                },
+                "minScore": {
+                    "type": "integer"
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "content.Feedback": {
+            "type": "object",
+            "properties": {
+                "correct": {
+                    "type": "string"
+                },
+                "sourceRefs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.SourceRef"
+                    }
+                },
+                "wrong": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.Module": {
+            "type": "object",
+            "properties": {
+                "checkParams": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "checkProvider": {
+                    "description": "\"local\" | \"gitlab\"",
+                    "type": "string"
+                },
+                "checkType": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "cooldown": {
+                    "$ref": "#/definitions/content.CooldownSpec"
+                },
+                "hidden": {
+                    "type": "boolean"
+                },
+                "inline": {
+                    "description": "quiz rendered inside the previous module",
+                    "type": "boolean"
+                },
+                "labUrl": {
+                    "type": "string"
+                },
+                "lockOnMaxAttempts": {
+                    "type": "boolean"
+                },
+                "maxAttemptsPerQuestion": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "passingScore": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "prerequisites": {
+                    "description": "module slugs that must be completed first",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.Question"
+                    }
+                },
+                "ref": {
+                    "type": "string"
+                },
+                "replication": {
+                    "type": "boolean"
+                },
+                "skills": {
+                    "description": "competency tags this module teaches",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "src": {
+                    "type": "string"
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.CheckStep"
+                    }
+                },
+                "type": {
+                    "description": "video, text, image, quiz, lab",
+                    "type": "string"
+                }
+            }
+        },
+        "content.OrderItem": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.PartialScoring": {
+            "type": "object",
+            "properties": {
+                "allowNegative": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "content.Path": {
+            "type": "object",
+            "properties": {
+                "courses": {
+                    "description": "ordered — index N+1 unlocks after N completed",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "\"course\" | \"skill\"",
+                    "type": "string"
+                },
+                "level": {
+                    "description": "\"beginner\" | \"intermediate\" | \"advanced\"",
+                    "type": "string"
+                },
+                "skills": {
+                    "description": "ordered skill tags (kind=skill paths)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.Question": {
+            "type": "object",
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.Answer"
+                    }
+                },
+                "correctAnswer": {
+                    "type": "boolean"
+                },
+                "correctOrder": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "difficulty": {
+                    "type": "string"
+                },
+                "feedback": {
+                    "$ref": "#/definitions/content.Feedback"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.OrderItem"
+                    }
+                },
+                "partialScoring": {
+                    "$ref": "#/definitions/content.PartialScoring"
+                },
+                "points": {
+                    "type": "integer"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "content.Session": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "content.SourceRef": {
             "type": "object",
             "properties": {
@@ -678,6 +1546,76 @@
                 }
             }
         },
+        "definition.Course": {
+            "type": "object",
+            "properties": {
+                "badge": {
+                    "$ref": "#/definitions/content.Badge"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "difficulty": {
+                    "type": "string"
+                },
+                "hidden": {
+                    "type": "boolean"
+                },
+                "inPerson": {
+                    "type": "boolean"
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.Module"
+                    }
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.CoursePrerequisite"
+                    }
+                },
+                "public": {
+                    "type": "boolean"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "sessions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/definition.Session"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "xpRequired": {
+                    "type": "integer"
+                }
+            }
+        },
+        "definition.Session": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.cooldown": {
             "type": "object",
             "properties": {
@@ -709,9 +1647,33 @@
                 }
             }
         },
+        "handlers.courseImportRequest": {
+            "type": "object",
+            "properties": {
+                "markdown": {
+                    "description": "Markdown is the whole document, pasted or read from a file.",
+                    "type": "string"
+                },
+                "mode": {
+                    "description": "Mode is create, replace or append. Empty means create.",
+                    "type": "string"
+                },
+                "slug": {
+                    "description": "Slug overrides the slug the document's frontmatter declares.",
+                    "type": "string"
+                },
+                "split": {
+                    "description": "Split names the heading level that starts a new module: none, h1,\nh2, h3, h4, h5 or h6. Empty falls back to the document's own\n`split` key, then to none.",
+                    "type": "string"
+                }
+            }
+        },
         "handlers.courseResponse": {
             "type": "object",
             "properties": {
+                "badge": {
+                    "$ref": "#/definitions/content.Badge"
+                },
                 "category": {
                     "type": "string"
                 },
@@ -727,13 +1689,16 @@
                 "id": {
                     "type": "string"
                 },
+                "inPerson": {
+                    "type": "boolean"
+                },
                 "isPublic": {
                     "type": "boolean"
                 },
                 "labCount": {
                     "type": "integer"
                 },
-                "module_count": {
+                "moduleCount": {
                     "type": "integer"
                 },
                 "prerequisites": {
@@ -742,14 +1707,179 @@
                         "$ref": "#/definitions/handlers.prerequisiteResponse"
                     }
                 },
-                "slug": {
+                "scope": {
                     "type": "string"
                 },
-                "source": {
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.Session"
+                    }
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "slug": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
+                },
+                "xpRequired": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.importModuleSummary": {
+            "type": "object",
+            "properties": {
+                "bytes": {
+                    "type": "integer"
+                },
+                "existing": {
+                    "description": "Existing marks a module that was already stored and is being kept,\nso an append preview shows where the new ones land.",
+                    "type": "boolean"
+                },
+                "hidden": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "src": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.importPreviewResponse": {
+            "type": "object",
+            "properties": {
+                "course": {
+                    "$ref": "#/definitions/definition.Course"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.importModuleSummary"
+                    }
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handlers.importResponse": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string"
+                },
+                "moduleCount": {
+                    "type": "integer"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handlers.inlineQuizResponse": {
+            "type": "object",
+            "properties": {
+                "attempts": {
+                    "type": "integer"
+                },
+                "bestScore": {
+                    "type": "integer"
+                },
+                "index": {
+                    "type": "integer"
+                },
+                "maxScore": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "passed": {
+                    "type": "boolean"
+                },
+                "passingScore": {
+                    "type": "integer"
+                },
+                "questionCount": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {}
+                },
+                "quizConfig": {
+                    "$ref": "#/definitions/handlers.quizConfig"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.labCheckRow": {
+            "type": "object",
+            "properties": {
+                "allow": {
+                    "type": "boolean"
+                },
+                "checkedAt": {
+                    "type": "string"
+                },
+                "courseSlug": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "moduleIndex": {
+                    "type": "integer"
+                },
+                "moduleName": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "verified": {
+                    "type": "boolean"
+                },
+                "violations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -762,6 +1892,16 @@
                 "bestScore": {
                     "type": "integer"
                 },
+                "checkParams": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "checkProvider": {
+                    "type": "string"
+                },
+                "checkType": {
+                    "type": "string"
+                },
                 "content": {
                     "type": "string"
                 },
@@ -771,11 +1911,23 @@
                         "$ref": "#/definitions/handlers.cooldownState"
                     }
                 },
+                "hasCheck": {
+                    "type": "boolean"
+                },
                 "hidden": {
                     "type": "boolean"
                 },
                 "index": {
                     "type": "integer"
+                },
+                "inline": {
+                    "type": "boolean"
+                },
+                "inlineQuiz": {
+                    "$ref": "#/definitions/handlers.inlineQuizResponse"
+                },
+                "labUrl": {
+                    "type": "string"
                 },
                 "locked": {
                     "type": "boolean"
@@ -788,6 +1940,9 @@
                 },
                 "passed": {
                     "type": "boolean"
+                },
+                "path": {
+                    "type": "string"
                 },
                 "prerequisites": {
                     "type": "array",
@@ -805,8 +1960,27 @@
                 "quizConfig": {
                     "$ref": "#/definitions/handlers.quizConfig"
                 },
+                "ref": {
+                    "type": "string"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "slug": {
                     "type": "string"
+                },
+                "src": {
+                    "description": "Admin-only fields (omitted for regular users)",
+                    "type": "string"
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/content.CheckStep"
+                    }
                 },
                 "type": {
                     "type": "string"
@@ -910,7 +2084,7 @@
     "securityDefinitions": {
         "BearerAuth": {
             "type": "apiKey",
-            "name": "Authorization",
+            "name": "Authorization.",
             "in": "header"
         }
     }

@@ -18,6 +18,11 @@ linters:
       check-alias: true
     dupl:
       threshold: 100
+    dupword:
+      # swag documents a parameter as "<name> <in> <type> …", so the
+      # request body of a JSON endpoint is legitimately "body  body".
+      ignore:
+        - body
     embeddedstructfieldcheck:
       forbid-mutex: true
     errcheck:
@@ -129,6 +134,12 @@ linters:
       - linters:
           - staticcheck
         text: "SA1019: scheme.Builder is deprecated:"
+      - linters:
+          - godoclint
+        # swag annotations are one line each by grammar — a route or a body
+        # parameter cannot be wrapped to fit the godoc width.
+        text: "godoc line is too long"
+        source: "^// @"
       - linters:
           - gosec
         text: "G101:"

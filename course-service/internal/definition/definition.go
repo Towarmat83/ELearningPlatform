@@ -141,6 +141,21 @@ func (d Path) ToPath(slug string) *content.Path {
 	}
 }
 
+// FromPath converts a stored path back into its wire definition, the
+// inverse of ToPath. The admin UI reads a path through this rather than
+// through the public endpoint, which substitutes the aggregated skills of
+// the member courses for the ones actually stored.
+func FromPath(path *content.Path) Path {
+	return Path{
+		Title:       path.Title,
+		Description: path.Description,
+		Kind:        path.Kind,
+		Level:       path.Level,
+		Courses:     path.Courses,
+		Skills:      path.Skills,
+	}
+}
+
 // errMissingSlug is returned for a definition file that names no slug.
 var errMissingSlug = errors.New("course definition has no slug")
 

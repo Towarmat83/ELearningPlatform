@@ -129,12 +129,6 @@ linters:
           - staticcheck
         text: "SA3000:"
       - linters:
-          - staticcheck
-        text: "SA1019: mgr.GetEventRecorderFor is deprecated:"
-      - linters:
-          - staticcheck
-        text: "SA1019: scheme.Builder is deprecated:"
-      - linters:
           - godoclint
         # swag annotations are one line each by grammar — a route or a body
         # parameter cannot be wrapped to fit the godoc width.

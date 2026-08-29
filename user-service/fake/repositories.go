@@ -18,5 +18,6 @@ func NewRepositories() *repository.Repositories {
 		SkillLevels:     NewSkillLevelRepository(),
 		SessionBookings: NewSessionBookingRepository(),
 		XP:              NewXPRepository(),
+		Export:          NewExportRepository(),
 	}
 }

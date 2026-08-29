@@ -17,6 +17,8 @@ type PathRepository struct {
 	// without a CourseRepository, and is seeded by WithCourseSkills.
 	paths        map[string]*content.Path
 	courseSkills map[string][]string
+	// Err, when set, is returned by every method (simulates a DB failure).
+	Err error
 }
 
 // NewPathRepository builds a fake seeded with the given paths.
@@ -50,6 +52,10 @@ func (f *PathRepository) List(_ context.Context, limit, offset int) ([]*content.
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
 	out := make([]*content.Path, 0, len(f.paths))
 	for _, path := range f.paths {
 		copied := *path
@@ -78,6 +84,10 @@ func (f *PathRepository) Get(_ context.Context, slug string) (*content.Path, err
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
 	path, ok := f.paths[slug]
 	if !ok {
 		return nil, repository.ErrNotFound
@@ -92,6 +102,10 @@ func (f *PathRepository) Get(_ context.Context, slug string) (*content.Path, err
 func (f *PathRepository) SlugsContainingCourse(_ context.Context, courseSlug string) ([]string, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
 
 	var slugs []string
 
@@ -111,6 +125,10 @@ func (f *PathRepository) SlugsContainingCourse(_ context.Context, courseSlug str
 func (f *PathRepository) SkillsOfCourses(_ context.Context, courseSlugs []string) ([]string, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
 
 	seen := make(map[string]struct{})
 
@@ -138,6 +156,10 @@ func (f *PathRepository) Upsert(_ context.Context, path *content.Path) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.Err != nil {
+		return f.Err
+	}
+
 	copied := *path
 	f.paths[copied.Slug] = &copied
 
@@ -149,6 +171,10 @@ func (f *PathRepository) Upsert(_ context.Context, path *content.Path) error {
 func (f *PathRepository) Create(_ context.Context, path *content.Path) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
 
 	if _, exists := f.paths[path.Slug]; exists {
 		return repository.ErrConflict
@@ -164,6 +190,10 @@ func (f *PathRepository) Create(_ context.Context, path *content.Path) error {
 func (f *PathRepository) Delete(_ context.Context, slug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
 
 	if _, exists := f.paths[slug]; !exists {
 		return repository.ErrNotFound

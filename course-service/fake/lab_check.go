@@ -17,6 +17,8 @@ type LabCheckRepository struct {
 	mu     sync.Mutex
 	checks []models.LabCheck
 	nextID int64
+	// Err, when set, is returned by every method (simulates a DB failure).
+	Err error
 }
 
 // NewLabCheckRepository builds a fake seeded with the given checks.
@@ -28,6 +30,10 @@ func NewLabCheckRepository(seed ...models.LabCheck) *LabCheckRepository {
 func (f *LabCheckRepository) List(_ context.Context, courseSlug string) ([]models.LabCheck, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
 
 	results := make([]models.LabCheck, 0, len(f.checks))
 
@@ -47,6 +53,10 @@ func (f *LabCheckRepository) Create(_ context.Context, check *models.LabCheck) e
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.Err != nil {
+		return f.Err
+	}
+
 	check.ID = f.nextID
 	f.nextID++
 	f.checks = append(f.checks, *check)
@@ -58,6 +68,10 @@ func (f *LabCheckRepository) Create(_ context.Context, check *models.LabCheck) e
 func (f *LabCheckRepository) ListExport(_ context.Context, filter repository.LabCheckFilter, limit int) ([]models.LabCheck, int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, 0, f.Err
+	}
 
 	results := make([]models.LabCheck, 0, len(f.checks))
 
@@ -82,6 +96,10 @@ func (f *LabCheckRepository) ListExport(_ context.Context, filter repository.Lab
 func (f *LabCheckRepository) StreamExport(_ context.Context, filter repository.LabCheckFilter, rowFn func(*models.LabCheck) error) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
 
 	for _, check := range slices.Backward(f.checks) {
 		if !matchesLabFilter(check, filter) {

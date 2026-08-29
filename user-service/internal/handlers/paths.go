@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -8,6 +9,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
 // Course-status literals shared by buildCourseStatuses and its callers,
@@ -41,16 +44,6 @@ func parsePagination(request *http.Request) (*int, int) {
 	}
 
 	return limit, offset
-}
-
-// pathDetail is the learning-path metadata fetched from course-service.
-type pathDetail struct {
-	Slug        string   `json:"slug"`
-	Title       string   `json:"title"`
-	Description string   `json:"description,omitempty"`
-	Kind        string   `json:"kind,omitempty"`
-	Courses     []string `json:"courses,omitempty"`
-	Skills      []string `json:"skills,omitempty"`
 }
 
 // courseStatus is a single course's completion state within a path.
@@ -121,16 +114,14 @@ func buildCourseStatuses(courses []string, completed map[string]struct{}) []cour
 var slugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // fetchPathDetail fetches a learning path's metadata from course-service.
-func (s *State) fetchPathDetail(request *http.Request, slug string) (*pathDetail, error) {
+func (s *State) fetchPathDetail(request *http.Request, slug string) (*PathInfo, error) {
 	if !slugRE.MatchString(slug) {
 		return nil, fmt.Errorf("invalid path slug: %q", slug)
 	}
 
-	var detail pathDetail
-
-	err := s.fetchCourseServiceJSON(request, "/api/paths/"+slug, &detail)
-	if err != nil {
-		return nil, fmt.Errorf("fetch path detail: %w", err)
+	detail, found := s.catalog().Path(request.Context(), slug)
+	if !found {
+		return nil, fmt.Errorf("fetch path detail: %q not found", slug)
 	}
 
 	return &detail, nil
@@ -160,84 +151,175 @@ func (s *State) MyPaths(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	result := make([]myPath, 0, len(rows))
+	s.JSON(writer, http.StatusOK, map[string][]myPath{"paths": s.resolveEnrollments(request, claims.Subject, rows)})
+}
+
+// resolveEnrollments turns a learner's path enrollments into their rendered
+// form, with per-course (or per-skill) completion statuses filled in.
+//
+// Every lookup it needs is done once for the whole page rather than once
+// per path: one batched path fetch, one batched skill-modules fetch, one
+// completed-courses query over the union of every path's courses, and — for
+// skill paths — a single read each of the learner's passed modules and
+// viewed lessons. Resolving each enrollment on its own turned a dashboard
+// with ten paths into dozens of serial round-trips.
+func (s *State) resolveEnrollments(
+	req *http.Request, userID string, rows []repository.PathEnrollmentRow,
+) []myPath {
+	ctx := req.Context()
+
+	pathSlugs := make([]string, 0, len(rows))
 	for _, row := range rows {
-		result = append(result, s.resolveEnrollment(request, claims.Subject, row.Slug, row.EnrolledAt))
+		pathSlugs = append(pathSlugs, row.Slug)
 	}
 
-	s.JSON(writer, http.StatusOK, map[string][]myPath{"paths": result})
-}
+	details := s.catalog().Paths(ctx, pathSlugs)
 
-// resolveEnrollment fetches path detail for a single enrollment and returns the
-// myPath struct with per-course (or per-skill) completion statuses filled in.
-func (s *State) resolveEnrollment(req *http.Request, userID, pathSlug string, enrolledAt time.Time) myPath {
-	detail, err := s.fetchPathDetail(req, pathSlug)
-	if err != nil {
-		zap.L().Warn("failed to fetch path detail", zap.String("slug", pathSlug), zap.Error(err))
+	courseSlugs, skillSlugs := pathMemberSlugs(rows, details)
 
-		return myPath{
-			Slug:       pathSlug,
-			Title:      pathSlug,
-			EnrolledAt: enrolledAt,
-			Courses:    []courseStatus{},
-		}
-	}
+	completed := s.completedCoursesCtx(req, userID, courseSlugs)
+	skillStatus := s.skillCompletion(req, userID, skillSlugs)
 
-	var courses []courseStatus
+	result := make([]myPath, 0, len(rows))
 
-	if detail.Kind == pathKindSkill {
-		courses = s.buildSkillStatuses(req, userID, detail.Skills)
-	} else {
-		completed := s.completedCoursesCtx(req, userID, detail.Courses)
-		courses = buildCourseStatuses(detail.Courses, completed)
-	}
+	for _, row := range rows {
+		detail, found := details[row.Slug]
+		if !found {
+			zap.L().Warn("failed to fetch path detail", zap.String("slug", row.Slug))
 
-	return myPath{
-		Slug:        detail.Slug,
-		Title:       detail.Title,
-		Description: detail.Description,
-		Kind:        detail.Kind,
-		EnrolledAt:  enrolledAt,
-		Courses:     courses,
-		Skills:      detail.Skills,
-	}
-}
-
-// buildSkillStatuses computes the ordered completion status for each skill in a
-// skill-kind learning path. A skill is "completed" when all its assessable
-// modules (quiz/lab) are passed; otherwise the first incomplete skill is
-// "available" and subsequent ones are "locked" (sequential ordering).
-func (s *State) buildSkillStatuses(req *http.Request, userID string, skills []string) []courseStatus {
-	passed := s.passedModulesCtx(req, userID)
-	viewed := s.viewedLessonsCtx(req, userID)
-	out := make([]courseStatus, 0, len(skills))
-	prevCompleted := true // first skill has no prerequisite
-
-	for _, skill := range skills {
-		modules, err := s.fetchSkillModules(req, skill)
-		if err != nil {
-			zap.L().Warn("failed to fetch skill modules for path", zap.String("skill", skill), zap.Error(err))
-			out = append(out, courseStatus{Slug: skill, Status: pathStatusLocked})
-			prevCompleted = false
+			result = append(result, myPath{
+				Slug:       row.Slug,
+				Title:      row.Slug,
+				EnrolledAt: row.EnrolledAt,
+				Courses:    []courseStatus{},
+			})
 
 			continue
 		}
 
-		done := skillIsCompleted(modules, passed, viewed)
+		members := buildCourseStatuses(detail.Courses, completed)
+		if detail.Kind == pathKindSkill {
+			members = orderedSkillStatuses(detail.Skills, skillStatus)
+		}
+
+		result = append(result, myPath{
+			Slug:        detail.Slug,
+			Title:       detail.Title,
+			Description: detail.Description,
+			Kind:        detail.Kind,
+			EnrolledAt:  row.EnrolledAt,
+			Courses:     members,
+			Skills:      detail.Skills,
+		})
+	}
+
+	return result
+}
+
+// pathMemberSlugs collects the deduplicated union of the courses and the
+// skills named by every resolved path, so each set can be resolved once.
+//
+//nolint:gocritic // unnamedResult conflicts with the project's nonamedreturns policy
+func pathMemberSlugs(rows []repository.PathEnrollmentRow, details map[string]PathInfo) ([]string, []string) {
+	seenCourses := make(map[string]struct{})
+	seenSkills := make(map[string]struct{})
+
+	var courses, skills []string
+
+	for _, row := range rows {
+		detail, found := details[row.Slug]
+		if !found {
+			continue
+		}
+
+		for _, slug := range detail.Courses {
+			if _, dup := seenCourses[slug]; !dup {
+				seenCourses[slug] = struct{}{}
+				courses = append(courses, slug)
+			}
+		}
+
+		if detail.Kind != pathKindSkill {
+			continue
+		}
+
+		for _, skill := range detail.Skills {
+			if _, dup := seenSkills[skill]; !dup {
+				seenSkills[skill] = struct{}{}
+				skills = append(skills, skill)
+			}
+		}
+	}
+
+	return courses, skills
+}
+
+// skillState is what one skill of a skill-kind path contributes to the
+// listing: whether the learner has finished it, and whether its module list
+// could be resolved at all.
+type skillState struct {
+	completed bool
+	// unavailable marks a skill whose modules course-service did not
+	// return. It is reported locked rather than available, so an outage
+	// cannot silently unlock the rest of a path.
+	unavailable bool
+}
+
+// skillCompletion reports, for each of skills, whether the learner has
+// completed every assessable module teaching it.
+//
+// The learner's passed modules and viewed lessons are read once, and every
+// skill's module list comes back in one batched call.
+func (s *State) skillCompletion(req *http.Request, userID string, skills []string) map[string]skillState {
+	states := make(map[string]skillState, len(skills))
+	if len(skills) == 0 {
+		return states
+	}
+
+	passed := s.passedModulesCtx(req, userID)
+	viewed := s.viewedLessonsCtx(req, userID)
+	modulesBySkill := s.catalog().SkillModules(req.Context(), skills)
+
+	for _, skill := range skills {
+		modules, resolved := modulesBySkill[skill]
+		if !resolved {
+			zap.L().Warn("failed to fetch skill modules for path", zap.String("skill", skill))
+
+			states[skill] = skillState{unavailable: true}
+
+			continue
+		}
+
+		states[skill] = skillState{completed: skillIsCompleted(modules, passed, viewed)}
+	}
+
+	return states
+}
+
+// orderedSkillStatuses applies the sequential unlock rule to a skill path:
+// a completed skill is "completed", the one after the last completed skill
+// is "available", and the rest — along with any skill whose modules could
+// not be resolved — are "locked".
+func orderedSkillStatuses(skills []string, states map[string]skillState) []courseStatus {
+	out := make([]courseStatus, 0, len(skills))
+	prevCompleted := true // the first skill has no prerequisite
+
+	for _, skill := range skills {
+		state := states[skill]
 
 		var status string
 
 		switch {
-		case done:
+		case state.completed:
 			status = pathStatusCompleted
-		case prevCompleted:
-			status = pathStatusAvailable
-		default:
+		case state.unavailable, !prevCompleted:
 			status = pathStatusLocked
+		default:
+			status = pathStatusAvailable
 		}
 
 		out = append(out, courseStatus{Slug: skill, Status: status})
-		prevCompleted = done
+		prevCompleted = state.completed
 	}
 
 	return out
@@ -298,18 +380,42 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 		return
 	}
 
+	users := s.buildEnrolledUsers(request.Context(), rows, detail)
+
+	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
+}
+
+// buildEnrolledUsers renders every enrolled user's per-course completion
+// within a path.
+//
+// Completion for the whole cohort is resolved in one query rather than one
+// per user: listing a path with a thousand learners used to run a thousand
+// queries to fill in the same handful of course slugs.
+func (s *State) buildEnrolledUsers(
+	ctx context.Context, rows []repository.PathEnrolledUserRow, detail *PathInfo,
+) []enrolledUser {
 	users := make([]enrolledUser, 0, len(rows))
+
+	var completedByUser map[string]map[string]struct{}
+
+	if detail != nil && len(detail.Courses) > 0 {
+		userIDs := make([]string, 0, len(rows))
+		for _, row := range rows {
+			userIDs = append(userIDs, row.UserID)
+		}
+
+		completedByUser = s.completedCoursesByUser(ctx, userIDs, detail.Courses)
+	}
 
 	for _, row := range rows {
 		member := enrolledUser{UserID: row.UserID, Email: row.Email, Role: row.Role, EnrolledAt: row.EnrolledAt}
 
 		if detail != nil {
-			completed := s.completedCoursesCtx(request, member.UserID, detail.Courses)
 			member.TotalCourses = len(detail.Courses)
+			member.Courses = buildCourseStatuses(detail.Courses, completedByUser[row.UserID])
 
-			member.Courses = buildCourseStatuses(detail.Courses, completed)
-			for _, cs := range member.Courses {
-				if cs.Status == pathStatusCompleted {
+			for _, status := range member.Courses {
+				if status.Status == pathStatusCompleted {
 					member.CompletedCourses++
 				}
 			}
@@ -318,7 +424,34 @@ func (s *State) AdminListPathEnrollments(writer http.ResponseWriter, request *ht
 		users = append(users, member)
 	}
 
-	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
+	return users
+}
+
+// completedCoursesByUser returns, per user, the subset of slugs that user
+// has completed.
+func (s *State) completedCoursesByUser(
+	ctx context.Context, userIDs, slugs []string,
+) map[string]map[string]struct{} {
+	byUser, err := s.Repos.LessonProgress.CompletedCourseSlugsByUsers(ctx, userIDs, slugs)
+	if err != nil {
+		zap.L().Error("failed to query completed courses for cohort",
+			zap.Int("users", len(userIDs)), zap.Error(err))
+
+		return nil
+	}
+
+	out := make(map[string]map[string]struct{}, len(byUser))
+
+	for userID, completed := range byUser {
+		set := make(map[string]struct{}, len(completed))
+		for _, slug := range completed {
+			set[slug] = struct{}{}
+		}
+
+		out[userID] = set
+	}
+
+	return out
 }
 
 // ManagerListPathEnrollments lists users enrolled in a learning path, filtered
@@ -357,32 +490,35 @@ func (s *State) ManagerListPathEnrollments(writer http.ResponseWriter, request *
 		return
 	}
 
-	users := make([]enrolledUser, 0, len(rows))
+	// One membership query for the whole cohort, not one per enrolled user.
+	inScope, err := s.Repos.Groups.UsersInAnyGroup(ctx, pathEnrollmentUserIDs(rows), groupIDs)
+	if err != nil {
+		zap.L().Error("failed to resolve manager scope", zap.String("slug", slug), zap.Error(err))
+		s.Error(writer, http.StatusInternalServerError, "Database error")
 
-	for _, row := range rows {
-		inScope, scopeErr := s.Repos.Groups.UserInAnyGroup(ctx, row.UserID, groupIDs)
-		if scopeErr != nil || !inScope {
-			continue
-		}
-
-		member := enrolledUser{UserID: row.UserID, Email: row.Email, Role: row.Role, EnrolledAt: row.EnrolledAt}
-
-		if detail != nil {
-			completed := s.completedCoursesCtx(request, member.UserID, detail.Courses)
-			member.TotalCourses = len(detail.Courses)
-			member.Courses = buildCourseStatuses(detail.Courses, completed)
-
-			for _, cs := range member.Courses {
-				if cs.Status == pathStatusCompleted {
-					member.CompletedCourses++
-				}
-			}
-		}
-
-		users = append(users, member)
+		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string][]enrolledUser{adminJSONKeyUsers: users})
+	scoped := make([]repository.PathEnrolledUserRow, 0, len(rows))
+
+	for _, row := range rows {
+		if inScope[row.UserID] {
+			scoped = append(scoped, row)
+		}
+	}
+
+	s.JSON(writer, http.StatusOK,
+		map[string][]enrolledUser{adminJSONKeyUsers: s.buildEnrolledUsers(ctx, scoped, detail)})
+}
+
+// pathEnrollmentUserIDs extracts the user IDs of a path-enrollment listing.
+func pathEnrollmentUserIDs(rows []repository.PathEnrolledUserRow) []string {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.UserID)
+	}
+
+	return ids
 }
 
 // AdminEnrollUserInPath enrolls a user in a learning path. Idempotent:

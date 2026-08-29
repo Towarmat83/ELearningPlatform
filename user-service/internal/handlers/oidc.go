@@ -13,6 +13,7 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
+	"github.com/genesary/pupitre/user-service/internal/httpx"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
@@ -96,12 +97,12 @@ func oidcContext(ctx context.Context, cfg oidcSettings) context.Context {
 		zap.L().Warn("connecting to OIDC provider with TLS certificate verification disabled",
 			zap.String("provider_url", cfg.ProviderURL))
 
-		insecureClient := &http.Client{
-			Transport: &http.Transport{
-				//nolint:gosec // operator opt-in via oidc_insecure_skip_verify setting, for internal/self-signed CAs
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
-			},
-		}
+		insecureClient := httpx.New(httpx.DefaultTimeout)
+
+		transport := httpx.NewTransport()
+		//nolint:gosec // operator opt-in via oidc_insecure_skip_verify setting, for internal/self-signed CAs
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}
+		insecureClient.Transport = transport
 		ctx = gooidc.ClientContext(ctx, insecureClient)
 	}
 

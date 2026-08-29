@@ -81,6 +81,12 @@ const labTypeInteractive = "interactive"
 // coursesJSONKey is the JSON key used for course-list response bodies.
 const coursesJSONKey = "courses"
 
+// pathsJSONKey is the JSON key used for path-list response bodies.
+const pathsJSONKey = "paths"
+
+// skillsJSONKey is the JSON key used for skill-keyed response bodies.
+const skillsJSONKey = "skills"
+
 // progressJSONKey is the JSON key used for progress response fields.
 const progressJSONKey = "progress"
 

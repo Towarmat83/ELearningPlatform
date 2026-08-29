@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/genesary/pupitre/user-service/fake"
@@ -158,12 +156,9 @@ func TestMyXP_HistoryError(t *testing.T) {
 func newXPGateRouter(t *testing.T, repos *repository.Repositories, xpRequired int) http.Handler {
 	t.Helper()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"slug":"gated-course","xpRequired":%d}`, xpRequired)
-	}))
-
-	t.Cleanup(srv.Close)
+	srv, _ := newCatalogServer(t, catalogFixture{Courses: map[string]CourseInfo{
+		"gated-course": {Slug: "gated-course", ID: "gated-course", XPRequired: xpRequired},
+	}})
 
 	cfg := &config.Config{
 		JWTSecret:        htSecret,
@@ -209,7 +204,7 @@ func TestEnroll_XPGate_Pass(t *testing.T) {
 	repos.XP = xp
 
 	r := newXPGateRouter(t, repos, repository.XPAmountCourse)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/gated-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/enrollments/gated-course", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
@@ -223,7 +218,7 @@ func TestEnroll_XPGate_Fail(t *testing.T) {
 
 	repos := fake.NewRepositories()
 	r := newXPGateRouter(t, repos, repository.XPAmountCourse)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/gated-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/enrollments/gated-course", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("want 403, got %d: %s", rec.Code, rec.Body.String())
@@ -237,7 +232,7 @@ func TestEnroll_XPGate_NoRequirement(t *testing.T) {
 
 	repos := fake.NewRepositories()
 	r := newXPGateRouter(t, repos, 0)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/gated-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/enrollments/gated-course", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
@@ -251,7 +246,7 @@ func TestEnroll_XPGate_CourseServiceDown(t *testing.T) {
 
 	repos := fake.NewRepositories()
 	r := newDeadCourseRouter(t, repos)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/any-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/enrollments/any-course", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200 (soft-fail), got %d: %s", rec.Code, rec.Body.String())

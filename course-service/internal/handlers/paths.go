@@ -38,7 +38,7 @@ func (s *State) ListPaths(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.JSON(writer, http.StatusOK, map[string][]*content.Path{"paths": paths})
+	s.JSON(writer, http.StatusOK, map[string][]*content.Path{pathsJSONKey: paths})
 }
 
 // GetPath returns a single learning path by its slug.

@@ -45,6 +45,25 @@ go build -o /dev/null .
 
 **Routes:** Public: `/health`, `/metrics`, `/api/courses`, `/api/courses/{slug}`, `/uploads/{filename}` — Authenticated: `/api/courses/{slug}/modules`, `/api/courses/{slug}/lessons`, `/api/courses/{slug}/lessons/{lesson}/complete`
 
+**Batch endpoints.** Anything that resolves a *set* of slugs uses these, never
+one request per slug:
+
+```
+GET /api/batch/courses?slugs=a,b,c   # course metadata, one query
+GET /api/batch/paths?slugs=a,b,c     # path metadata, members included
+GET /api/batch/skills?slugs=a,b      # modules per skill, keyed by skill
+```
+
+Each caps out at 500 slugs and answers in a fixed number of queries. When you
+add a consumer that needs many courses/paths/skills, extend a batch endpoint
+rather than looping over the single-slug one.
+
+They live under `/api/batch/` and **not** as a `batch` segment of the
+collection they read: chi matches a static segment before a wildcard, so
+`/api/courses/batch` made a course legitimately slugged `batch` unreachable
+and answered with a course list in its place. Keep new collection-wide
+endpoints off the `/api/{collection}/{slug}` namespace for the same reason.
+
 ### User Service (`user-service/`)
 
 ```sh
@@ -62,6 +81,41 @@ go build -o /dev/null .
 | `migrations/` | SQL migrations (embed) |
 
 **Routes:** Public auth + OAuth, Authenticated (enroll, progress, my courses), Admin (users, settings, enrollments), Internal (for Course Service): `/internal/enrollments/check`, `/internal/progress/viewed`, `/internal/progress/complete`
+
+**Routing invariant — no route may sit under a course-service prefix**
+(`/api/courses`, `/api/admin/courses`). The two services share one hostname,
+so whichever segment decides the owner has to come *before* any variable
+segment. Enrolling was once `POST /api/courses/{slug}/enroll`: the owner was
+only known after the slug, which no prefix match can express, so every front
+door needed its own workaround (a Traefik CRD, an nginx regex annotation, an
+implementation-specific Gateway API match). These are keyed by their own
+resource instead:
+
+```
+POST|DELETE /api/enrollments/{slug}
+POST|DELETE /api/session-bookings/{slug}/{sessionId}
+GET         /api/session-bookings/{slug}/{sessionId}/count
+GET|POST    /api/admin/enrollments/{slug}          + /groups, /users/{userId}
+GET|PATCH   /api/admin/session-bookings/{slug}/{sessionId}[/{userId}/presence]
+            …and the /api/manager/… equivalents
+```
+
+`TestRouter_NoCourseServicePrefixOverlap` fails if a route is added back under
+a course-service prefix.
+
+**Internal progress API.** Course-service reads a learner's state through two
+consolidated endpoints rather than one call per fact:
+
+```
+GET /internal/progress/overview?userId=&courseSlug=
+      # enrolled + viewed lessons + per-module scores + aggregates, 3 queries
+GET /internal/progress/course-summaries?userId=&courseSlugs=a,b,c
+      # prerequisite aggregates for many courses, 2 queries
+```
+
+`/internal/progress/viewed`, `/internal/progress/modules` and
+`/internal/progress/course-summary` remain for single-fact callers, but a
+handler that needs more than one of them should use `overview`.
 
 ## Course source of truth
 
@@ -155,6 +209,28 @@ questions: [...]
   `split`, so `export → import` is lossless.
 - Admin routes accept 10 MB bodies (`maxAdminRequestBodyBytes`); everything else
   stays at 1 MB.
+
+## Performance invariants
+
+These are enforced by tests (`internal/handlers/scaling_test.go` in both
+services), which assert call counts stay fixed as the data grows. Breaking
+one of them fails a test, not just a benchmark.
+
+- **No per-item I/O.** A handler rendering N things issues a number of
+  queries and HTTP calls that does not depend on N. When you need data for a
+  set, add a batched repository method or batch endpoint; never loop.
+- **One progress read per request.** Course-service loads the learner's
+  course progress once, via `learnerView`, and passes it down. Do not fetch
+  viewed lessons, module progress or the course summary separately.
+- **Outbound HTTP goes through `internal/httpx`.** It carries the timeouts
+  and the shared connection pool. `http.DefaultClient` has neither: no
+  timeout at all, and two idle connections per host.
+- **Large results stream.** CSV exports write rows as they are read
+  (`ExportRepository.StreamRows`); nothing accumulates the whole result set
+  in memory first.
+- **Caches are bounded.** The user-service catalog cache and the
+  course-service git cache both evict; an unbounded map keyed by user input
+  is a leak.
 
 ## Build notes
 

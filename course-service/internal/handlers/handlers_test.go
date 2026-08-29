@@ -108,6 +108,19 @@ func newUserServiceMockWith(overrides map[string]http.HandlerFunc) *httptest.Ser
 				"totalScore":    0,
 				"passedModules": []string{},
 			})
+		case "/internal/progress/course-summaries":
+			json.NewEncoder(w).Encode(map[string]any{"summaries": map[string]any{}})
+		case "/internal/progress/overview":
+			json.NewEncoder(w).Encode(map[string]any{
+				"enrolled":      true,
+				"viewed":        []string{},
+				"modules":       []any{},
+				"totalScore":    0,
+				"passedModules": []string{},
+				"viewedCount":   0,
+			})
+		case "/internal/paths/check":
+			json.NewEncoder(w).Encode(map[string]bool{"enrolled": false})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -639,14 +652,71 @@ func TestMetrics(t *testing.T) {
 
 // ── Helpers for cross-course lock tests ─────────────────────────────────────
 
-// courseSummaryHandler returns an HTTP handler that serves a fixed
-// /internal/progress/course-summary response.
-func courseSummaryHandler(totalScore int, passedModules []string) http.HandlerFunc {
+// courseSummariesHandler returns an HTTP handler that serves a fixed
+// /internal/progress/course-summaries response, reporting the same summary
+// for every course slug the request asks about.
+func courseSummariesHandler(totalScore int, passedModules []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		summaries := make(map[string]any)
+
+		for slug := range strings.SplitSeq(r.URL.Query().Get("courseSlugs"), ",") {
+			if slug == "" {
+				continue
+			}
+
+			summaries[slug] = map[string]any{
+				"totalScore":    totalScore,
+				"passedModules": passedModules,
+			}
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{"summaries": summaries})
+	}
+}
+
+// overviewProgress is the learner state a mocked
+// /internal/progress/overview reports.
+type overviewProgress struct {
+	Enrolled      bool
+	Viewed        []string
+	PassedModules []string
+	TotalScore    int
+	ViewedCount   int
+}
+
+// overviewHandler returns an HTTP handler serving a fixed
+// /internal/progress/overview response.
+func overviewHandler(progress overviewProgress) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		viewed := progress.Viewed
+		if viewed == nil {
+			viewed = []string{}
+		}
+
+		passed := progress.PassedModules
+		if passed == nil {
+			passed = []string{}
+		}
+
 		json.NewEncoder(w).Encode(map[string]any{
-			"totalScore":    totalScore,
-			"passedModules": passedModules,
+			"enrolled":      progress.Enrolled,
+			"viewed":        viewed,
+			"modules":       []any{},
+			"totalScore":    progress.TotalScore,
+			"passedModules": passed,
+			"viewedCount":   progress.ViewedCount,
 		})
+	}
+}
+
+// enrollmentOverrides returns the mock overrides that make every internal
+// endpoint agree on whether the learner is enrolled.
+func enrollmentOverrides(enrolled bool) map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/internal/enrollments/check": func(w http.ResponseWriter, _ *http.Request) {
+			json.NewEncoder(w).Encode(map[string]bool{"enrolled": enrolled})
+		},
+		"/internal/progress/overview": overviewHandler(overviewProgress{Enrolled: enrolled}),
 	}
 }
 
@@ -777,7 +847,7 @@ func TestCrossCourseLock_ListModules_MetScoreAndModule(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/progress/course-summary": courseSummaryHandler(35, []string{"quiz-bases-linux"}),
+		"/internal/progress/course-summaries": courseSummariesHandler(35, []string{"quiz-bases-linux"}),
 	})
 	defer mock.Close()
 
@@ -802,7 +872,7 @@ func TestCrossCourseLock_ScoreMetButModuleMissing(t *testing.T) {
 
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
 		// Score is enough but the required module slug is absent.
-		"/internal/progress/course-summary": courseSummaryHandler(40, []string{}),
+		"/internal/progress/course-summaries": courseSummariesHandler(40, []string{}),
 	})
 	defer mock.Close()
 
@@ -826,7 +896,7 @@ func TestCrossCourseLock_MinScoreOnly_Met(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/progress/course-summary": courseSummaryHandler(50, []string{}),
+		"/internal/progress/course-summaries": courseSummariesHandler(50, []string{}),
 	})
 	defer mock.Close()
 
@@ -850,7 +920,7 @@ func TestCrossCourseLock_MinScoreOnly_NotMet(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/progress/course-summary": courseSummaryHandler(20, []string{}),
+		"/internal/progress/course-summaries": courseSummariesHandler(20, []string{}),
 	})
 	defer mock.Close()
 
@@ -874,7 +944,7 @@ func TestCrossCourseLock_AnyProgress_Met(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/progress/course-summary": courseSummaryHandler(1, []string{}),
+		"/internal/progress/course-summaries": courseSummariesHandler(1, []string{}),
 	})
 	defer mock.Close()
 
@@ -944,7 +1014,7 @@ func TestCrossCourseLock_GetModule_Met(t *testing.T) {
 	t.Parallel()
 
 	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/progress/course-summary": courseSummaryHandler(35, []string{"quiz-bases-linux"}),
+		"/internal/progress/course-summaries": courseSummariesHandler(35, []string{"quiz-bases-linux"}),
 	})
 	defer mock.Close()
 
@@ -1553,11 +1623,7 @@ func TestGetLesson_CourseNotFound(t *testing.T) {
 func TestGetLesson_NonPublicEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": true})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(true))
 	defer mock.Close()
 
 	s := newTestState(t, mock)
@@ -1582,11 +1648,7 @@ func TestGetLesson_NonPublicEnrolled(t *testing.T) {
 func TestGetLesson_NonPublicNotEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": false})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(false))
 	defer mock.Close()
 
 	s := newTestState(t, mock)
@@ -1612,14 +1674,7 @@ func TestGetLesson_NonPublicNotEnrolled(t *testing.T) {
 func TestListLessons_NonPublicEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": true})
-		},
-		"/internal/progress/viewed": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]any{"viewed": []string{}})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(true))
 	defer mock.Close()
 
 	s := newTestState(t, mock)
@@ -1643,11 +1698,7 @@ func TestListLessons_NonPublicEnrolled(t *testing.T) {
 func TestListLessons_NonPublicNotEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": false})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(false))
 	defer mock.Close()
 
 	s := newTestState(t, mock)
@@ -1774,11 +1825,7 @@ func TestGetModule_CourseNotFound(t *testing.T) {
 func TestGetModule_PrivateNotEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": false})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(false))
 	defer mock.Close()
 
 	s := newTestState(t, mock)
@@ -1833,11 +1880,7 @@ func TestGetModule_ImageType(t *testing.T) {
 func TestListModules_PrivateNotEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": false})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(false))
 	defer mock.Close()
 
 	s := newTestState(t, mock)
@@ -1862,11 +1905,7 @@ func TestListModules_PrivateNotEnrolled(t *testing.T) {
 func TestMarkLessonComplete_PrivateNotEnrolled(t *testing.T) {
 	t.Parallel()
 
-	mock := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/enrollments/check": func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]bool{"enrolled": false})
-		},
-	})
+	mock := newUserServiceMockWith(enrollmentOverrides(false))
 	defer mock.Close()
 
 	s := newTestState(t, mock)

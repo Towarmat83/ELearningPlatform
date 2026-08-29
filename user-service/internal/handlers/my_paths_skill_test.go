@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -20,21 +19,15 @@ import (
 func TestMyPaths_SkillKind(t *testing.T) {
 	t.Parallel()
 
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		switch r.URL.Path {
-		case "/api/paths/skills-path":
-			_, _ = w.Write([]byte(`{"slug":"skills-path","title":"Skills Path","kind":"skill","skills":["linux","docker"]}`))
-		case "/api/skills/linux/modules":
-			_, _ = w.Write([]byte(`{"modules":[{"slug":"quiz-linux","type":"quiz","courseSlug":"linux-intro"}]}`))
-		case "/api/skills/docker/modules":
-			_, _ = w.Write([]byte(`{"modules":[]}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{
+		Paths: map[string]PathInfo{
+			"skills-path": {Slug: "skills-path", Title: "Skills Path", Kind: "skill", Skills: []string{"linux", "docker"}},
+		},
+		Skills: map[string][]SkillModule{
+			"linux":  {{Slug: "quiz-linux", Type: "quiz", CourseSlug: "linux-intro"}},
+			"docker": {},
+		},
+	})
 
 	userID := uuid.New()
 
@@ -103,17 +96,13 @@ func TestMyPaths_SkillKind(t *testing.T) {
 func TestMyPaths_SkillKind_ModuleFetchFails(t *testing.T) {
 	t.Parallel()
 
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/paths/skills-path" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"slug":"skills-path","title":"Skills","kind":"skill","skills":["linux","docker"]}`))
-
-			return
-		}
-
-		w.WriteHeader(http.StatusInternalServerError) // every /api/skills/*/modules call fails
-	}))
-	defer courseSvc.Close()
+	// The path resolves, but no skill has any module recorded, so no skill
+	// can be reported completed.
+	courseSvc, _ := newCatalogServer(t, catalogFixture{
+		Paths: map[string]PathInfo{
+			"skills-path": {Slug: "skills-path", Title: "Skills", Kind: "skill", Skills: []string{"linux", "docker"}},
+		},
+	})
 
 	userID := uuid.New()
 	repos := fake.NewRepositories()

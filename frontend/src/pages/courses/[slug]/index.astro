@@ -272,7 +272,7 @@ import App from '../../../layouts/App.astro';
             document.getElementById('enroll-btn')!.addEventListener('click', async () => {
               if (!token) { window.location.href = `/login?redirect=/courses/${slug}`; return; }
               try {
-                await apiFetch(`/courses/${slug}/enroll`, { method: 'POST', body: {}, token: token! });
+                await apiFetch(`/enrollments/${slug}`, { method: 'POST', body: {}, token: token! });
               } catch { /* ok */ }
               window.location.reload();
             });
@@ -388,9 +388,9 @@ import App from '../../../layouts/App.astro';
               const booked = (btn as HTMLElement).dataset.booked === 'true';
               try {
                 if (booked) {
-                  await apiFetch(`/courses/${slug}/sessions/${sid}/book`, { method: 'DELETE', token: token! });
+                  await apiFetch(`/session-bookings/${slug}/${sid}`, { method: 'DELETE', token: token! });
                 } else {
-                  await apiFetch(`/courses/${slug}/sessions/${sid}/book`, { method: 'POST', token: token! });
+                  await apiFetch(`/session-bookings/${slug}/${sid}`, { method: 'POST', token: token! });
                 }
                 window.location.reload();
               } catch { alert('Une erreur est survenue, veuillez réessayer.'); }

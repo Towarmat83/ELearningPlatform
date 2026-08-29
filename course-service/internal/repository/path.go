@@ -22,6 +22,10 @@ type PathRepository interface {
 	List(ctx context.Context, limit, offset int) ([]*content.Path, error)
 	// Get returns one path with its members, or ErrNotFound.
 	Get(ctx context.Context, slug string) (*content.Path, error)
+	// ListBySlugs returns the named paths with their members loaded, in
+	// title order, resolving the whole set in a fixed number of queries.
+	// Slugs that match no path are simply absent from the result.
+	ListBySlugs(ctx context.Context, slugs []string) ([]*content.Path, error)
 	// SlugsContainingCourse returns the slugs of every path that includes
 	// courseSlug. This replaces the in-memory reverse index that used to
 	// answer the same question.
@@ -29,6 +33,10 @@ type PathRepository interface {
 	// SkillsOfCourses returns the deduplicated union of the skills taught
 	// by the given courses, in a single query.
 	SkillsOfCourses(ctx context.Context, courseSlugs []string) ([]string, error)
+	// SkillsByCourse returns the skills taught by each of the given
+	// courses, keyed by course slug, in a single query. A batch listing
+	// uses it to attribute skills back to the path each course belongs to.
+	SkillsByCourse(ctx context.Context, courseSlugs []string) (map[string][]string, error)
 	// Upsert replaces a path definition wholesale, in one transaction.
 	Upsert(ctx context.Context, path *content.Path) error
 	// Create inserts a new path, returning ErrConflict if the slug is taken.
@@ -63,31 +71,18 @@ func (r *gormPathRepository) List(ctx context.Context, limit, offset int) ([]*co
 		query = query.Limit(limit)
 	}
 
-	var rows []models.Path
+	return r.collectPaths(ctx, query, "list paths")
+}
 
-	err := query.Find(&rows).Error
-	if err != nil {
-		return nil, fmt.Errorf("list paths: %w", err)
+// ListBySlugs returns the named paths with their members loaded.
+func (r *gormPathRepository) ListBySlugs(ctx context.Context, slugs []string) ([]*content.Path, error) {
+	if len(slugs) == 0 {
+		return nil, nil
 	}
 
-	paths := make([]*content.Path, 0, len(rows))
-	slugs := make([]string, 0, len(rows))
-	bySlug := make(map[string]*content.Path, len(rows))
+	query := r.db.WithContext(ctx).Where("slug IN ?", slugs).Order("title")
 
-	for i := range rows {
-		path := pathFromModel(&rows[i])
-
-		paths = append(paths, path)
-		slugs = append(slugs, path.Slug)
-		bySlug[path.Slug] = path
-	}
-
-	err = r.attachMembers(ctx, slugs, bySlug)
-	if err != nil {
-		return nil, err
-	}
-
-	return paths, nil
+	return r.collectPaths(ctx, query, "list paths by slug")
 }
 
 // Get returns one path with its members.
@@ -160,6 +155,38 @@ func (r *gormPathRepository) SkillsOfCourses(ctx context.Context, courseSlugs []
 	}
 
 	return skills, nil
+}
+
+// SkillsByCourse returns the skills of each course in courseSlugs, keyed
+// by course slug, unnesting the denormalized skills column so the whole
+// set resolves in one query rather than one per course.
+func (r *gormPathRepository) SkillsByCourse(ctx context.Context, courseSlugs []string) (map[string][]string, error) {
+	bySlug := make(map[string][]string, len(courseSlugs))
+	if len(courseSlugs) == 0 {
+		return bySlug, nil
+	}
+
+	var rows []struct {
+		Slug  string `gorm:"column:slug"`
+		Skill string `gorm:"column:skill"`
+	}
+
+	err := r.db.WithContext(ctx).
+		Table("courses").
+		Select("courses.slug, s AS skill").
+		Joins("CROSS JOIN UNNEST(courses.skills) AS s").
+		Where("courses.slug IN ?", courseSlugs).
+		Order("courses.slug, s").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list skills by course: %w", err)
+	}
+
+	for _, row := range rows {
+		bySlug[row.Slug] = append(bySlug[row.Slug], row.Skill)
+	}
+
+	return bySlug, nil
 }
 
 // Create inserts a new path definition, reporting ErrConflict when the
@@ -244,6 +271,36 @@ func (r *gormPathRepository) Delete(ctx context.Context, slug string) error {
 	}
 
 	return nil
+}
+
+// collectPaths runs a path query and loads the members of exactly the rows
+// it returned, in two further queries — never one per path.
+func (r *gormPathRepository) collectPaths(ctx context.Context, query *gorm.DB, what string) ([]*content.Path, error) {
+	var rows []models.Path
+
+	err := query.Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+
+	paths := make([]*content.Path, 0, len(rows))
+	slugs := make([]string, 0, len(rows))
+	bySlug := make(map[string]*content.Path, len(rows))
+
+	for i := range rows {
+		path := pathFromModel(&rows[i])
+
+		paths = append(paths, path)
+		slugs = append(slugs, path.Slug)
+		bySlug[path.Slug] = path
+	}
+
+	err = r.attachMembers(ctx, slugs, bySlug)
+	if err != nil {
+		return nil, err
+	}
+
+	return paths, nil
 }
 
 // pathFromModel converts a persisted path row into its domain form,

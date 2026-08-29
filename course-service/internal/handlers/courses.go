@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"go.uber.org/zap"
@@ -290,8 +289,8 @@ func (s *State) GetCourseProgress(writer http.ResponseWriter, req *http.Request)
 
 // isEnrolledViaPath returns true if userID is enrolled in any learning path
 // that contains courseSlug.
-func (s *State) isEnrolledViaPath(req *http.Request, courseSlug, userID string) bool {
-	pathSlugs, err := s.Repos.Paths.SlugsContainingCourse(req.Context(), courseSlug)
+func (s *State) isEnrolledViaPath(ctx context.Context, courseSlug, userID string) bool {
+	pathSlugs, err := s.Repos.Paths.SlugsContainingCourse(ctx, courseSlug)
 	if err != nil {
 		zap.L().Error("list paths containing course failed",
 			zap.String("courseSlug", courseSlug), zap.Error(err))
@@ -299,41 +298,7 @@ func (s *State) isEnrolledViaPath(req *http.Request, courseSlug, userID string) 
 		return false
 	}
 
-	if len(pathSlugs) == 0 {
-		return false
-	}
-
-	target, err := url.Parse(s.Config.UserServiceURL + "/internal/paths/check")
-	if err != nil {
-		return false
-	}
-
-	q := target.Query()
-	q.Set(userIDJSONKey, userID)
-	q.Set("pathSlugs", strings.Join(pathSlugs, ","))
-	target.RawQuery = q.Encode()
-
-	httpReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, target.String(), http.NoBody)
-	if err != nil {
-		return false
-	}
-
-	s.setInternalHeader(httpReq)
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort close in read-only helper
-
-	var result pathCheckResponse
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return false
-	}
-
-	return result.Enrolled
+	return s.pathEnrollmentCheck(ctx, userID, pathSlugs)
 }
 
 // canViewPrivateCourse reports whether the requester is authorized to view
@@ -361,7 +326,9 @@ func (s *State) canViewPrivateCourse(req *http.Request, slug string) bool {
 		return true
 	}
 
-	return s.isEnrolled(req, slug, claims.Subject) || s.isEnrolledViaPath(req, slug, claims.Subject)
+	ctx := req.Context()
+
+	return s.enrollmentCheck(ctx, slug, claims.Subject) || s.isEnrolledViaPath(ctx, slug, claims.Subject)
 }
 
 // GetCourse godoc

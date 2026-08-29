@@ -152,6 +152,32 @@ func (f *ExportRepository) LogDownload(_ context.Context, log *models.ExportLog)
 	return nil
 }
 
+// StreamRows hands each configured row to visit, returning the headers.
+func (f *ExportRepository) StreamRows(
+	_ context.Context, _ string, fields []string, _ map[string]string, visit func(map[string]string) error,
+) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.FetchErr != nil {
+		return nil, f.FetchErr
+	}
+
+	headers := f.Headers
+	if headers == nil {
+		headers = append([]string(nil), fields...)
+	}
+
+	for _, row := range f.cloneRows() {
+		err := visit(row)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return headers, nil
+}
+
 // cloneRows returns a deep copy of f.Rows so callers cannot mutate fixtures.
 func (f *ExportRepository) cloneRows() []map[string]string {
 	out := make([]map[string]string, len(f.Rows))

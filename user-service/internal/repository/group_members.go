@@ -169,3 +169,68 @@ func (r *gormGroupRepository) ListMembersRecursive(ctx context.Context, groupID 
 
 	return rows, nil
 }
+
+// UsersInAnyGroup reports, for each user in userIDs, whether they belong
+// to at least one of the groups listed in groupIDs. Users in none of them
+// are absent from the result.
+func (r *gormGroupRepository) UsersInAnyGroup(ctx context.Context, userIDs, groupIDs []string) (map[string]bool, error) {
+	inScope := make(map[string]bool, len(userIDs))
+	if len(userIDs) == 0 || len(groupIDs) == 0 {
+		return inScope, nil
+	}
+
+	var ids []string
+
+	err := r.db.WithContext(ctx).Table("user_groups").
+		Distinct().
+		Where("userid::text = ANY(?) AND groupid::text = ANY(?)", pq.Array(userIDs), pq.Array(groupIDs)).
+		Pluck("userid::text", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("check group membership for cohort: %w", err)
+	}
+
+	for _, id := range ids {
+		inScope[id] = true
+	}
+
+	return inScope, nil
+}
+
+// ListMemberIDsByGroups returns the member IDs of every group in groupIDs,
+// keyed by group ID.
+func (r *gormGroupRepository) ListMemberIDsByGroups(ctx context.Context, groupIDs []string) (map[string][]string, error) {
+	return r.groupedByGroupID(ctx, groupIDs, "user_groups", "userid::text", "list member ids by group")
+}
+
+// groupedByGroupID reads one value column of a group-keyed table for every
+// group in groupIDs, bucketed by group ID, in a single query.
+//
+// It backs both cohort-wide group reads — members and course enrollments —
+// which differ only in the table and the column they collect.
+func (r *gormGroupRepository) groupedByGroupID(
+	ctx context.Context, groupIDs []string, table, valueColumn, what string,
+) (map[string][]string, error) {
+	byGroup := make(map[string][]string, len(groupIDs))
+	if len(groupIDs) == 0 {
+		return byGroup, nil
+	}
+
+	var rows []struct {
+		GroupID string `gorm:"column:groupid"`
+		Value   string `gorm:"column:value"`
+	}
+
+	err := r.db.WithContext(ctx).Table(table).
+		Select("groupid::text AS groupid, "+valueColumn+" AS value").
+		Where("groupid::text = ANY(?)", pq.Array(groupIDs)).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+
+	for _, row := range rows {
+		byGroup[row.GroupID] = append(byGroup[row.GroupID], row.Value)
+	}
+
+	return byGroup, nil
+}

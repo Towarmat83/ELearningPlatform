@@ -13,6 +13,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/genesary/pupitre/user-service/internal/httpx"
 	"github.com/genesary/pupitre/user-service/internal/models"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
@@ -161,8 +162,14 @@ func (s *State) ExportDownload(writer http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// writeEnrichedCSV loads all rows, enriches virtual fields, then writes CSV.
-// Called only when at least one virtual field is in the requested fields.
+// writeEnrichedCSV streams the dataset as CSV, filling in virtual fields
+// as each row goes past. Called only when at least one virtual field is in
+// the requested fields.
+//
+// The slug→title maps the enrichment needs are fetched once up front, so
+// the rows themselves never have to be held: this used to load the entire
+// result set into memory before writing a single byte, which put the peak
+// memory of an export at the size of the export.
 func (s *State) writeEnrichedCSV(
 	ctx context.Context,
 	writer io.Writer,
@@ -172,15 +179,8 @@ func (s *State) writeEnrichedCSV(
 	virtualFields []string,
 	filters map[string]string,
 ) (int, error) {
-	fetchFields, helperFields := buildFetchFields(sqlFields, virtualFields)
-
-	_, rows, _, fetchErr := s.Repos.Export.FetchRows(ctx, category, fetchFields, filters, 0)
-	if fetchErr != nil {
-		return 0, fmt.Errorf("fetch rows: %w", fetchErr)
-	}
-
-	s.enrichRows(ctx, rows, virtualFields)
-	rows = removeHelperFields(rows, helperFields)
+	fetchFields, _ := buildFetchFields(sqlFields, virtualFields)
+	enrich := s.rowEnricher(ctx, virtualFields)
 
 	csvWriter := csv.NewWriter(writer)
 	csvWriter.Comma = ';'
@@ -190,27 +190,38 @@ func (s *State) writeEnrichedCSV(
 		return 0, fmt.Errorf("write csv header: %w", headerErr)
 	}
 
-	for _, rowData := range rows {
-		record := make([]string, 0, len(origFields))
+	rowCount := 0
+	record := make([]string, len(origFields))
 
-		for _, fieldID := range origFields {
-			record = append(record, rowData[fieldID])
-		}
+	_, streamErr := s.Repos.Export.StreamRows(ctx, category, fetchFields, filters,
+		func(rowData map[string]string) error {
+			enrich(rowData)
 
-		rowErr := csvWriter.Write(record)
-		if rowErr != nil {
-			return 0, fmt.Errorf("write csv row: %w", rowErr)
-		}
+			for idx, fieldID := range origFields {
+				record[idx] = rowData[fieldID]
+			}
+
+			rowErr := csvWriter.Write(record)
+			if rowErr != nil {
+				return fmt.Errorf("write csv row: %w", rowErr)
+			}
+
+			rowCount++
+
+			return nil
+		})
+	if streamErr != nil {
+		return rowCount, fmt.Errorf("stream rows: %w", streamErr)
 	}
 
 	csvWriter.Flush()
 
 	flushErr := csvWriter.Error()
 	if flushErr != nil {
-		return 0, fmt.Errorf("csv flush: %w", flushErr)
+		return rowCount, fmt.Errorf("csv flush: %w", flushErr)
 	}
 
-	return len(rows), nil
+	return rowCount, nil
 }
 
 // splitVirtualFields partitions fields into SQL fields (returned by the DB)
@@ -289,9 +300,13 @@ func removeHelperFields(rows []map[string]string, helperFields map[string]bool) 
 	return rows
 }
 
-// enrichRows fills in virtual field values for every row by querying
-// course-service for title maps and replacing the empty SQL placeholder values.
-func (s *State) enrichRows(ctx context.Context, rows []map[string]string, virtualFields []string) {
+// rowEnricher fetches the slug→title maps the requested virtual fields
+// need — once — and returns a function that fills them into a single row.
+//
+// Splitting the lookup from the per-row work is what lets both the preview
+// (a slice of rows) and the download (a stream) share one implementation
+// without either paying for the lookup more than once.
+func (s *State) rowEnricher(ctx context.Context, virtualFields []string) func(row map[string]string) {
 	needCourse := false
 	needPath := false
 
@@ -315,14 +330,22 @@ func (s *State) enrichRows(ctx context.Context, rows []map[string]string, virtua
 		pathTitles, _ = s.fetchPathTitles(ctx)
 	}
 
-	for rowIdx := range rows {
+	return func(row map[string]string) {
 		if needCourse {
-			rows[rowIdx][exportFieldCourseTitle] = courseTitles[rows[rowIdx]["courseslug"]]
+			row[exportFieldCourseTitle] = courseTitles[row["courseslug"]]
 		}
 
 		if needPath {
-			rows[rowIdx][exportFieldPathTitle] = pathTitles[rows[rowIdx]["path_slug"]]
+			row[exportFieldPathTitle] = pathTitles[row["path_slug"]]
 		}
+	}
+}
+
+// enrichRows fills in virtual field values for every row in a preview.
+func (s *State) enrichRows(ctx context.Context, rows []map[string]string, virtualFields []string) {
+	enrich := s.rowEnricher(ctx, virtualFields)
+	for _, row := range rows {
+		enrich(row)
 	}
 }
 
@@ -345,23 +368,11 @@ func (s *State) fetchTitleMap(ctx context.Context, endpointPath, payloadKey stri
 		return nil, fmt.Errorf("build URL for %s: %w", endpointPath, joinErr)
 	}
 
-	httpReq, buildErr := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
-	if buildErr != nil {
-		return nil, fmt.Errorf("build request for %s: %w", endpointPath, buildErr)
-	}
-
-	resp, doErr := http.DefaultClient.Do(httpReq)
-	if doErr != nil {
-		return nil, fmt.Errorf("fetch %s: %w", endpointPath, doErr)
-	}
-
-	defer resp.Body.Close() //nolint:errcheck // closing response body never needs to be acted upon
-
 	var raw map[string]json.RawMessage
 
-	decodeErr := json.NewDecoder(resp.Body).Decode(&raw)
-	if decodeErr != nil {
-		return nil, fmt.Errorf("decode response from %s: %w", endpointPath, decodeErr)
+	err := httpx.GetJSON(ctx, rawURL, nil, &raw)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", endpointPath, err)
 	}
 
 	var entries []titleEntry

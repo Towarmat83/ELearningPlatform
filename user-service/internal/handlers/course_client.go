@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/genesary/pupitre/user-service/internal/httpx"
 )
 
 // fetchCourseServiceJSON performs a GET on course-service at urlPath and
@@ -19,12 +21,12 @@ func (s *State) fetchCourseServiceJSON(req *http.Request, urlPath string, dest a
 		return fmt.Errorf("build request to %s: %w", urlPath, err)
 	}
 
-	resp, err := http.DefaultClient.Do(r) //nolint:gosec // rawURL built from trusted CourseServiceURL and pre-validated slug
+	resp, err := httpx.Do(r) //nolint:bodyclose // httpx.Drain closes it
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", urlPath, err)
 	}
 
-	defer resp.Body.Close() //nolint:errcheck // closing a response body never needs to be acted upon
+	defer httpx.Drain(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

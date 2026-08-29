@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,12 +29,12 @@ func (s *State) Enroll(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 	claims := s.claims(req)
 
-	course, err := s.fetchCourseDetails(req.Context(), slug)
-	if err != nil {
-		zap.L().Warn("could not fetch course details for xp gate", zap.String("courseSlug", slug), zap.Error(err))
+	course, found := s.catalog().Course(req.Context(), slug)
+	if !found {
+		zap.L().Warn("could not fetch course details for xp gate", zap.String("courseSlug", slug))
 	}
 
-	if err == nil && course.XPRequired > 0 {
+	if found && course.XPRequired > 0 {
 		total, xpErr := s.Repos.XP.Total(req.Context(), claims.Subject)
 		if xpErr != nil {
 			zap.L().Error("xp gate check failed", zap.String("userID", claims.Subject), zap.Error(xpErr))
@@ -51,7 +50,7 @@ func (s *State) Enroll(writer http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	err = s.Repos.Enrollments.Create(req.Context(), claims.Subject, slug)
+	err := s.Repos.Enrollments.Create(req.Context(), claims.Subject, slug)
 	if err != nil {
 		zap.L().Error("enroll failed", zap.String("userId", claims.Subject), zap.String("courseSlug", slug), zap.Error(err))
 
@@ -89,52 +88,6 @@ func (s *State) Unenroll(writer http.ResponseWriter, r *http.Request) {
 
 	metrics.EnrollmentsTotal.Dec()
 	s.JSON(writer, http.StatusOK, map[string]string{groupsRespKeyMessage: "Unenrolled successfully"})
-}
-
-// courseServiceCourse is the course payload returned by course-service's
-// GET /api/courses/{slug} endpoint.
-type courseServiceCourse struct {
-	Slug            string `json:"slug"`
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	Difficulty      string `json:"difficulty"`
-	IsPublic        bool   `json:"isPublic"`
-	LabCount        int    `json:"labCount"`
-	EnrollmentCount int    `json:"enrollmentCount"`
-	Source          string `json:"source,omitempty"`
-	XPRequired      int    `json:"xpRequired,omitempty"`
-}
-
-// fetchCourseDetails fetches a single course's metadata from course-service.
-func (s *State) fetchCourseDetails(ctx context.Context, slug string) (*courseServiceCourse, error) {
-	courseURL := fmt.Sprintf("%s/api/courses/%s", s.Config.CourseServiceURL, slug)
-
-	//nolint:gosec // courseURL is built from trusted server config (CourseServiceURL) and a validated slug
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, courseURL, http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("building course-service request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // courseURL is built from trusted server config (CourseServiceURL) and a validated slug
-	if err != nil {
-		return nil, fmt.Errorf("calling course-service: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("course-service returned %d", resp.StatusCode)
-	}
-
-	var course courseServiceCourse
-
-	err = json.NewDecoder(resp.Body).Decode(&course)
-	if err != nil {
-		return nil, fmt.Errorf("decoding course-service response: %w", err)
-	}
-
-	return &course, nil
 }
 
 // myCourse is a course enriched with the current user's progress.
@@ -178,7 +131,12 @@ func (s *State) MyCourses(writer http.ResponseWriter, req *http.Request) {
 
 	completed := s.completedCoursesCtx(req, claims.Subject, slugs)
 
-	courses := s.buildMyCourses(req.Context(), enrolled, completed)
+	// One batched catalog lookup for every enrolled course, rather than one
+	// HTTP request per course in series: a learner with fifty enrollments
+	// used to pay fifty round-trips to render this list.
+	details := s.catalog().Courses(req.Context(), slugs)
+
+	courses := buildMyCourses(enrolled, completed, details)
 
 	s.JSON(writer, http.StatusOK, map[string]any{myCoursesRespKeyCourses: courses})
 }
@@ -193,45 +151,39 @@ func (s *State) queryMyEnrollments(ctx context.Context, userID string) ([]reposi
 	return enrolled, nil
 }
 
-// buildMyCourses enriches each enrollment with course-service metadata, falling
-// back to the bare slug when course-service is unreachable.
-func (s *State) buildMyCourses(ctx context.Context, enrolled []repository.EnrollmentRow, completed map[string]struct{}) []myCourse {
+// buildMyCourses enriches each enrollment with course-service metadata,
+// falling back to the bare slug for any course the catalog could not
+// resolve (course-service unreachable, or the course since deleted).
+func buildMyCourses(
+	enrolled []repository.EnrollmentRow, completed map[string]struct{}, details map[string]CourseInfo,
+) []myCourse {
 	courses := make([]myCourse, 0, len(enrolled))
 
 	for _, row := range enrolled {
 		_, isDone := completed[row.Slug]
 
-		details, err := s.fetchCourseDetails(ctx, row.Slug)
-		if err != nil {
-			zap.L().Warn("failed to fetch course details", zap.String("slug", row.Slug), zap.Error(err))
-			courses = append(courses, myCourse{
-				Slug:          row.Slug,
-				ID:            row.Slug,
-				Title:         row.Slug,
-				CompletedLabs: row.CompletedLabs,
-				TotalScore:    row.TotalScore,
-				LastActivity:  row.LastActivity,
-				Completed:     isDone,
-			})
-
-			continue
+		course := myCourse{
+			Slug:          row.Slug,
+			ID:            row.Slug,
+			Title:         row.Slug,
+			CompletedLabs: row.CompletedLabs,
+			TotalScore:    row.TotalScore,
+			LastActivity:  row.LastActivity,
+			Completed:     isDone,
 		}
 
-		courses = append(courses, myCourse{
-			Slug:            details.Slug,
-			ID:              details.ID,
-			Title:           details.Title,
-			Description:     details.Description,
-			Category:        details.Category,
-			Difficulty:      details.Difficulty,
-			IsPublic:        details.IsPublic,
-			LabCount:        details.LabCount,
-			EnrollmentCount: details.EnrollmentCount,
-			CompletedLabs:   row.CompletedLabs,
-			TotalScore:      row.TotalScore,
-			LastActivity:    row.LastActivity,
-			Completed:       isDone,
-		})
+		if info, found := details[row.Slug]; found {
+			course.ID = info.ID
+			course.Title = info.Title
+			course.Description = info.Description
+			course.Category = info.Category
+			course.Difficulty = info.Difficulty
+			course.IsPublic = info.IsPublic
+			course.LabCount = info.LabCount
+			course.EnrollmentCount = info.EnrollmentCount
+		}
+
+		courses = append(courses, course)
 	}
 
 	return courses

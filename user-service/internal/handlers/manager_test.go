@@ -155,7 +155,7 @@ func TestManagerEnrollUser_MissingUserID(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/manager/courses/my-course/enrollments", `{"userId":""}`, htAuthHeader(t, "manager"))
+	rec := htDo(t, r, "POST", "/api/manager/enrollments/my-course", `{"userId":""}`, htAuthHeader(t, "manager"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -167,7 +167,7 @@ func TestManagerEnrollUser_InvalidJSON(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/manager/courses/my-course/enrollments", "not-json", htAuthHeader(t, "manager"))
+	rec := htDo(t, r, "POST", "/api/manager/enrollments/my-course", "not-json", htAuthHeader(t, "manager"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -183,7 +183,7 @@ func TestManagerEnrollUser_OutOfScope(t *testing.T) {
 
 	body := `{"userId":"` + htOutsideID + `"}`
 
-	rec := htDo(t, r, "POST", "/api/manager/courses/my-course/enrollments", body, htAuthHeaderForSubject(t, "manager", htManagerID))
+	rec := htDo(t, r, "POST", "/api/manager/enrollments/my-course", body, htAuthHeaderForSubject(t, "manager", htManagerID))
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("want 403 (out of scope), got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -198,7 +198,7 @@ func TestManagerEnrollUser_Success(t *testing.T) {
 
 	body := `{"userId":"` + htStudentID + `"}`
 
-	rec := htDo(t, r, "POST", "/api/manager/courses/my-course/enrollments", body, htAuthHeaderForSubject(t, "manager", htManagerID))
+	rec := htDo(t, r, "POST", "/api/manager/enrollments/my-course", body, htAuthHeaderForSubject(t, "manager", htManagerID))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -214,7 +214,7 @@ func TestManagerEnrollUser_DBError(t *testing.T) {
 
 	body := `{"userId":"` + htStudentID + `"}`
 
-	rec := htDo(t, r, "POST", "/api/manager/courses/my-course/enrollments", body, htAuthHeader(t, "manager"))
+	rec := htDo(t, r, "POST", "/api/manager/enrollments/my-course", body, htAuthHeader(t, "manager"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -230,7 +230,7 @@ func TestManagerUnenrollUser_OutOfScope(t *testing.T) {
 	repos := seedManagerRepos(t)
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/manager/courses/my-course/enrollments/"+htOutsideID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	rec := htDo(t, r, "DELETE", "/api/manager/enrollments/my-course/users/"+htOutsideID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("want 403, got %d", rec.Code)
 	}
@@ -243,7 +243,7 @@ func TestManagerUnenrollUser_Success(t *testing.T) {
 	repos := seedManagerRepos(t)
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/manager/courses/my-course/enrollments/"+htStudentID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	rec := htDo(t, r, "DELETE", "/api/manager/enrollments/my-course/users/"+htStudentID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -257,7 +257,7 @@ func TestManagerUnenrollUser_DBErrorGroups(t *testing.T) {
 	repos.Groups = &fake.GroupRepository{Err: errors.New("db down")}
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/manager/courses/my-course/enrollments/"+htStudentID, "", htAuthHeader(t, "manager"))
+	rec := htDo(t, r, "DELETE", "/api/manager/enrollments/my-course/users/"+htStudentID, "", htAuthHeader(t, "manager"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -274,7 +274,7 @@ func TestManagerUnenrollUser_DBErrorEnrollment(t *testing.T) {
 	repos.Enrollments = enrollments
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/manager/courses/my-course/enrollments/"+htStudentID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
+	rec := htDo(t, r, "DELETE", "/api/manager/enrollments/my-course/users/"+htStudentID, "", htAuthHeaderForSubject(t, "manager", htManagerID))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}

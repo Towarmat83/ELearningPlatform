@@ -22,13 +22,13 @@ func prereqCourse() *content.Course {
 	}
 }
 
-// prereqState wires a State whose user-service mock answers the
-// course-summary probe per summaryHandler.
+// prereqState wires a State whose user-service mock answers the batched
+// course-summaries probe per summaryHandler.
 func prereqState(t *testing.T, summaryHandler http.HandlerFunc) *State {
 	t.Helper()
 
 	userSrv := newUserServiceMockWith(map[string]http.HandlerFunc{
-		"/internal/progress/course-summary": summaryHandler,
+		"/internal/progress/course-summaries": summaryHandler,
 	})
 	t.Cleanup(userSrv.Close)
 
@@ -63,7 +63,7 @@ func TestPrereq_MetGrantsAccess(t *testing.T) {
 	t.Parallel()
 
 	s := prereqState(t, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"totalScore":80,"passedModules":["quiz-1"],"viewedCount":3}`))
+		_, _ = w.Write([]byte(`{"summaries":{"intro":{"totalScore":80,"passedModules":["quiz-1"],"viewedCount":3}}}`))
 	})
 
 	rec := getModules(t, s)
@@ -77,7 +77,7 @@ func TestPrereq_LowScoreDenies(t *testing.T) {
 	t.Parallel()
 
 	s := prereqState(t, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"totalScore":10,"passedModules":["quiz-1"]}`))
+		_, _ = w.Write([]byte(`{"summaries":{"intro":{"totalScore":10,"passedModules":["quiz-1"]}}}`))
 	})
 
 	rec := getModules(t, s)
@@ -92,7 +92,7 @@ func TestPrereq_MissingModuleDenies(t *testing.T) {
 	t.Parallel()
 
 	s := prereqState(t, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"totalScore":90,"passedModules":[]}`))
+		_, _ = w.Write([]byte(`{"summaries":{"intro":{"totalScore":90,"passedModules":[]}}}`))
 	})
 
 	rec := getModules(t, s)

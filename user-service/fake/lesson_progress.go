@@ -72,6 +72,34 @@ func (f *LessonProgressRepository) ViewedSlugs(_ context.Context, userID, course
 	return slugs, nil
 }
 
+// ViewedSlugsByCourses lists the lesson slugs userID has viewed in each of
+// courseSlugs, keyed by course slug.
+func (f *LessonProgressRepository) ViewedSlugsByCourses(
+	_ context.Context, userID string, courseSlugs []string,
+) (map[string][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	wanted := make(map[string]bool, len(courseSlugs))
+	for _, slug := range courseSlugs {
+		wanted[slug] = true
+	}
+
+	byCourse := make(map[string][]string, len(courseSlugs))
+
+	for _, p := range f.progress {
+		if p.UserID == userID && wanted[p.CourseSlug] {
+			byCourse[p.CourseSlug] = append(byCourse[p.CourseSlug], p.LessonSlug)
+		}
+	}
+
+	return byCourse, nil
+}
+
 // CountViewed returns the number of lessons userID has viewed in courseSlug.
 func (f *LessonProgressRepository) CountViewed(_ context.Context, userID, courseSlug string) (int64, error) {
 	f.mu.Lock()
@@ -140,4 +168,44 @@ func (f *LessonProgressRepository) CompletedCourseSlugs(_ context.Context, userI
 	}
 
 	return completed, nil
+}
+
+// CompletedCourseSlugsByUsers filters slugs down to the courses each user
+// in userIDs has completed.
+func (f *LessonProgressRepository) CompletedCourseSlugsByUsers(
+	_ context.Context, userIDs, slugs []string,
+) (map[string][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	wantedUser := make(map[string]bool, len(userIDs))
+	for _, id := range userIDs {
+		wantedUser[id] = true
+	}
+
+	wantedSlug := make(map[string]bool, len(slugs))
+	for _, slug := range slugs {
+		wantedSlug[slug] = true
+	}
+
+	byUser := make(map[string][]string, len(userIDs))
+	seen := make(map[string]bool)
+
+	for _, entry := range f.progress {
+		key := entry.UserID + "/" + entry.CourseSlug
+		if entry.LessonSlug != LessonSlugComplete || !wantedUser[entry.UserID] ||
+			!wantedSlug[entry.CourseSlug] || seen[key] {
+			continue
+		}
+
+		seen[key] = true
+
+		byUser[entry.UserID] = append(byUser[entry.UserID], entry.CourseSlug)
+	}
+
+	return byUser, nil
 }

@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
+	"github.com/genesary/pupitre/course-service/internal/httpx"
 	"github.com/genesary/pupitre/course-service/internal/models"
 )
 
@@ -306,7 +307,7 @@ func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, 
 	httpReq.Header.Set("Content-Type", "application/json")
 	s.setInternalHeader(httpReq)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := httpx.Do(httpReq) //nolint:bodyclose // httpx.Drain closes it
 	if err != nil {
 		zap.L().Error("checker-service call failed", zap.Error(err))
 		s.Error(writer, http.StatusInternalServerError, "error when reaching for checker service")
@@ -314,7 +315,7 @@ func (s *State) callCheckerRoute(writer http.ResponseWriter, req *http.Request, 
 		return CheckResponse{}, false
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer httpx.Drain(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		var errBody map[string]string

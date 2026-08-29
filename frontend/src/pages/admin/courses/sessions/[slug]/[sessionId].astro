@@ -96,7 +96,7 @@ import App from '../../../../../layouts/App.astro';
           const present = cb.checked;
 
           try {
-            await apiFetch(`${apiBase}/courses/${slug}/sessions/${sessionId}/bookings/${uid}/presence`, {
+            await apiFetch(`${apiBase}/session-bookings/${slug}/${sessionId}/${uid}/presence`, {
               method: 'PATCH',
               body: { present },
             });
@@ -114,7 +114,7 @@ import App from '../../../../../layouts/App.astro';
       try {
         const [courseResp, partResp] = await Promise.all([
           fetch(`/api/courses/${slug}`).then(r => r.json()).catch(() => null),
-          apiFetch(`${apiBase}/courses/${slug}/sessions/${sessionId}/bookings`),
+          apiFetch(`${apiBase}/session-bookings/${slug}/${sessionId}`),
         ]);
 
         // /api/courses/{slug} returns the course directly (no .course wrapper)

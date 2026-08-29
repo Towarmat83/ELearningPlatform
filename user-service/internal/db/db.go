@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -18,10 +19,23 @@ import (
 // Connect opens a GORM connection to connURL and verifies connectivity with
 // a ping before returning it. maxOpenConns and maxIdleConns cap the
 // connection pool size.
+//
+// Three settings past the pool size matter under sustained load:
+//
+//   - PrepareStmt caches a prepared statement per distinct SQL string, so
+//     the repeated queries that make up a request are parsed and planned
+//     once per connection rather than on every execution.
+//   - ConnMaxLifetime recycles connections, which keeps a long-lived pool
+//     from pinning itself to backends that a failover or a rolling restart
+//     has moved on from.
+//   - ConnMaxIdleTime returns connections the service is no longer using,
+//     so an idle replica does not hold a share of the database's
+//     connection limit away from a busy one.
 func Connect(ctx context.Context, connURL string, maxOpenConns, maxIdleConns int) (*gorm.DB, error) {
 	gdb, err := gorm.Open(postgres.Open(connURL), &gorm.Config{
 		Logger:                 gormlogger.Default.LogMode(gormlogger.Warn),
 		SkipDefaultTransaction: true,
+		PrepareStmt:            true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
@@ -34,6 +48,8 @@ func Connect(ctx context.Context, connURL string, maxOpenConns, maxIdleConns int
 
 	sqlDB.SetMaxOpenConns(maxOpenConns)
 	sqlDB.SetMaxIdleConns(maxIdleConns)
+	sqlDB.SetConnMaxLifetime(connMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime)
 
 	err = sqlDB.PingContext(ctx)
 	if err != nil {
@@ -42,6 +58,13 @@ func Connect(ctx context.Context, connURL string, maxOpenConns, maxIdleConns int
 
 	return gdb, nil
 }
+
+// connMaxLifetime bounds how long a pooled connection is reused before
+// being closed and reopened.
+const connMaxLifetime = 30 * time.Minute
+
+// connMaxIdleTime bounds how long an unused pooled connection is held.
+const connMaxIdleTime = 5 * time.Minute
 
 // allModels lists every GORM model whose table AutoMigrate manages. Order
 // doesn't matter for AutoMigrate itself (it creates all tables before
@@ -120,7 +143,40 @@ type breakingMigration struct {
 // runs at most once, tracked by Name in _schema_migrations.
 //
 //nolint:gochecknoglobals // static migration configuration, populated once at init
-var breakingMigrations = []breakingMigration{}
+var breakingMigrations = []breakingMigration{
+	{
+		// user_xp_events gained a unique index on (userid, source,
+		// source_slug). Award() always intended one — it upserts with ON
+		// CONFLICT DO NOTHING — but without the index there was nothing to
+		// conflict against, so repeat awards piled up extra rows and
+		// inflated the learner's total. AutoMigrate cannot create the index
+		// while those duplicates exist, so collapse them first, keeping the
+		// earliest event of each group.
+		Name: "20260829_dedupe_user_xp_events",
+		Apply: func(ctx context.Context, gdb *gorm.DB) error {
+			// Breaking migrations run before AutoMigrate, so on a fresh
+			// database this table does not exist yet — and there is nothing
+			// to collapse.
+			exists, err := tableExists(ctx, gdb, "user_xp_events")
+			if err != nil || !exists {
+				return err
+			}
+
+			err = gdb.WithContext(ctx).Exec(`
+				DELETE FROM user_xp_events a
+				USING user_xp_events b
+				WHERE a.userid = b.userid
+				  AND a.source = b.source
+				  AND a.source_slug = b.source_slug
+				  AND a.id > b.id`).Error
+			if err != nil {
+				return fmt.Errorf("collapse duplicate xp events: %w", err)
+			}
+
+			return nil
+		},
+	},
+}
 
 // applyBreakingMigrations runs any breakingMigrations entries not yet
 // recorded in _schema_migrations, in slice order, each in its own
@@ -157,6 +213,20 @@ func applyBreakingMigrations(ctx context.Context, gdb *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// tableExists reports whether a table of that name is present in the
+// database. Breaking migrations run before AutoMigrate has created any
+// table, so one that rewrites data has to ask.
+func tableExists(ctx context.Context, gdb *gorm.DB, name string) (bool, error) {
+	var found *string
+
+	err := gdb.WithContext(ctx).Raw("SELECT to_regclass(?)::text", name).Scan(&found).Error
+	if err != nil {
+		return false, fmt.Errorf("check table %s: %w", name, err)
+	}
+
+	return found != nil, nil
 }
 
 // ensureSchemaMigrationsTable creates the _schema_migrations bookkeeping

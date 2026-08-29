@@ -42,6 +42,18 @@ func singleChoiceCourse() *content.Course {
 	}
 }
 
+// testLearnerView builds the per-request learner view the submission
+// handlers take, for a student with no recorded progress.
+func testLearnerView(course *content.Course) *learnerView {
+	return &learnerView{
+		course:   course,
+		modules:  course.Modules,
+		progress: emptyCourseProgress(),
+		userID:   "user-1",
+		slug:     course.Slug,
+	}
+}
+
 // encodeSubmit encodes a SubmitRequest as a POST [http.Request].
 func encodeSubmit(t *testing.T, req content.SubmitRequest) *http.Request {
 	t.Helper()
@@ -76,8 +88,8 @@ func TestFinalizeSubmission_InvalidBody(t *testing.T) {
 	)
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, req, course, mod, course.Modules,
-		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
+	s.finalizeSubmission(rec, req, testLearnerView(course), mod,
+		mod.Questions, mod.PassingScore, mod.Cooldown, 0)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d: %s", rec.Code, rec.Body.String())
@@ -103,8 +115,8 @@ func TestFinalizeSubmission_Pass(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
-		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), testLearnerView(course), mod,
+		mod.Questions, mod.PassingScore, mod.Cooldown, 0)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
@@ -143,8 +155,8 @@ func TestFinalizeSubmission_Fail(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
-		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), testLearnerView(course), mod,
+		mod.Questions, mod.PassingScore, mod.Cooldown, 0)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
@@ -184,8 +196,8 @@ func submitAnswer(t *testing.T, s *State, course *content.Course, answerID strin
 	}
 
 	rec := httptest.NewRecorder()
-	s.finalizeSubmission(rec, encodeSubmit(t, submission), course, mod, course.Modules,
-		mod.Questions, mod.PassingScore, mod.Cooldown, "user-1", course.Slug, 0)
+	s.finalizeSubmission(rec, encodeSubmit(t, submission), testLearnerView(course), mod,
+		mod.Questions, mod.PassingScore, mod.Cooldown, 0)
 
 	return rec
 }
@@ -355,15 +367,12 @@ func courseCompleteWatcher(
 
 			_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 		},
-		"/internal/progress/viewed": func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(map[string]any{"viewed": viewed})
-		},
-		"/internal/progress/course-summary": func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"totalScore":    0,
-				"passedModules": passedModules,
-			})
-		},
+		"/internal/progress/overview": overviewHandler(overviewProgress{
+			Enrolled:      true,
+			Viewed:        viewed,
+			PassedModules: passedModules,
+			ViewedCount:   len(viewed),
+		}),
 	})
 
 	return mock, &completed

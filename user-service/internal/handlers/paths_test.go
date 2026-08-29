@@ -228,14 +228,9 @@ func TestMyPaths_WithCourseService(t *testing.T) {
 	t.Parallel()
 
 	// Mock course-service returns path detail
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
-			"slug":    "devops-path",
-			"title":   "Parcours DevOps",
-			"courses": []string{"lab1", "lab2", "lab3"},
-		})
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{Paths: map[string]PathInfo{
+		"devops-path": {Slug: "devops-path", Title: "Parcours DevOps", Courses: []string{"lab1", "lab2", "lab3"}},
+	}})
 
 	userID := uuid.New()
 	repos := fake.NewRepositories()
@@ -528,10 +523,9 @@ func TestFetchPathDetail_InvalidSlug(t *testing.T) {
 func TestFetchPathDetail_ValidSlug(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"slug": "my-path", "title": "My Path", "courses": []string{}})
-	}))
-	defer srv.Close()
+	srv, _ := newCatalogServer(t, catalogFixture{Paths: map[string]PathInfo{
+		"my-path": {Slug: "my-path", Title: "My Path"},
+	}})
 
 	s := &State{Config: &config.Config{CourseServiceURL: srv.URL}}
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
@@ -624,14 +618,9 @@ func TestCompletedCoursesCtx_SentinelCompletes(t *testing.T) {
 func TestAdminListPathEnrollments_WithDetail(t *testing.T) {
 	t.Parallel()
 
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
-			"slug":    "devops-path",
-			"title":   "DevOps Path",
-			"courses": []string{"linux-intro", "docker-fundamentals"},
-		})
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{Paths: map[string]PathInfo{
+		"devops-path": {Slug: "devops-path", Title: "DevOps Path", Courses: []string{"linux-intro", "docker-fundamentals"}},
+	}})
 
 	userID := uuid.New()
 	users := fake.NewUserRepository(models.User{ID: userID, Email: "user@test.com", Role: "student"})

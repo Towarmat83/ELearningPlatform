@@ -37,7 +37,7 @@ func TestBookSession_Success(t *testing.T) {
 	t.Parallel()
 
 	r := newTestRouter()
-	rec := htDo(t, r, http.MethodPost, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("want 204, got %d: %s", rec.Code, rec.Body.String())
@@ -65,7 +65,7 @@ func TestBookSession_SessionFull(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newSessionsRouter(t, repos, srv.URL)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusConflict {
 		t.Errorf("want 409, got %d: %s", rec.Code, rec.Body.String())
@@ -88,7 +88,7 @@ func TestBookSession_CountError(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newSessionsRouter(t, repos, srv.URL)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
@@ -105,7 +105,7 @@ func TestBookSession_BookError(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newTestRouterWithRepos(repos)
-	rec := htDo(t, r, http.MethodPost, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
@@ -119,7 +119,7 @@ func TestBookSession_CourseServiceDown(t *testing.T) {
 
 	repos := fake.NewRepositories()
 	r := newSessionsRouter(t, repos, "http://127.0.0.1:0")
-	rec := htDo(t, r, http.MethodPost, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodPost, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("want 204 (soft fail on capacity), got %d: %s", rec.Code, rec.Body.String())
@@ -133,7 +133,7 @@ func TestUnbookSession_Success(t *testing.T) {
 	t.Parallel()
 
 	r := newTestRouter()
-	rec := htDo(t, r, http.MethodDelete, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodDelete, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("want 204, got %d: %s", rec.Code, rec.Body.String())
@@ -150,7 +150,7 @@ func TestUnbookSession_Error(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newTestRouterWithRepos(repos)
-	rec := htDo(t, r, http.MethodDelete, "/api/courses/my-course/sessions/sess-1/book", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodDelete, "/api/session-bookings/my-course/sess-1", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
@@ -243,7 +243,7 @@ func TestListSessionBookings_Success(t *testing.T) {
 	t.Parallel()
 
 	r := newTestRouter()
-	rec := htDo(t, r, http.MethodGet, "/api/admin/courses/my-course/sessions/sess-1/bookings", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, http.MethodGet, "/api/admin/session-bookings/my-course/sess-1", "", htAuthHeader(t, "admin"))
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
@@ -260,7 +260,7 @@ func TestListSessionBookings_Error(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newTestRouterWithRepos(repos)
-	rec := htDo(t, r, http.MethodGet, "/api/admin/courses/my-course/sessions/sess-1/bookings", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, http.MethodGet, "/api/admin/session-bookings/my-course/sess-1", "", htAuthHeader(t, "admin"))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
@@ -275,7 +275,7 @@ func TestMarkSessionPresence_Success(t *testing.T) {
 
 	r := newTestRouter()
 	rec := htDo(t, r, http.MethodPatch,
-		"/api/admin/courses/my-course/sessions/sess-1/bookings/user-uuid-1/presence",
+		"/api/admin/session-bookings/my-course/sess-1/user-uuid-1/presence",
 		`{"present":true}`,
 		htAuthHeader(t, "admin"),
 	)
@@ -291,7 +291,7 @@ func TestMarkSessionPresence_BadBody(t *testing.T) {
 
 	r := newTestRouter()
 	rec := htDo(t, r, http.MethodPatch,
-		"/api/admin/courses/my-course/sessions/sess-1/bookings/user-uuid-1/presence",
+		"/api/admin/session-bookings/my-course/sess-1/user-uuid-1/presence",
 		"not-json",
 		htAuthHeader(t, "admin"),
 	)
@@ -312,7 +312,7 @@ func TestMarkSessionPresence_Error(t *testing.T) {
 
 	r := newTestRouterWithRepos(repos)
 	rec := htDo(t, r, http.MethodPatch,
-		"/api/admin/courses/my-course/sessions/sess-1/bookings/user-uuid-1/presence",
+		"/api/admin/session-bookings/my-course/sess-1/user-uuid-1/presence",
 		`{"present":true}`,
 		htAuthHeader(t, "admin"),
 	)
@@ -340,7 +340,7 @@ func TestSessionBookingCount_Success(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newTestRouterWithRepos(repos)
-	rec := htDo(t, r, http.MethodGet, "/api/courses/my-course/sessions/sess-1/booking-count", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodGet, "/api/session-bookings/my-course/sess-1/count", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", rec.Code)
@@ -368,7 +368,7 @@ func TestSessionBookingCount_Error(t *testing.T) {
 	repos.SessionBookings = sb
 
 	r := newTestRouterWithRepos(repos)
-	rec := htDo(t, r, http.MethodGet, "/api/courses/my-course/sessions/sess-1/booking-count", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, http.MethodGet, "/api/session-bookings/my-course/sess-1/count", "", htAuthHeader(t, "student"))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)

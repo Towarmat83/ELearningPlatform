@@ -1548,7 +1548,7 @@ func TestEnroll_DBError(t *testing.T) {
 	repos.Enrollments = &fake.EnrollmentRepository{Err: errors.New("db error")}
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "POST", "/api/courses/my-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, "POST", "/api/enrollments/my-course", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -1560,7 +1560,7 @@ func TestEnroll_Success(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/courses/my-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, "POST", "/api/enrollments/my-course", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1574,7 +1574,7 @@ func TestUnenroll_DBError(t *testing.T) {
 	repos.Enrollments = &fake.EnrollmentRepository{Err: errors.New("db error")}
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/courses/my-course/unenroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, "DELETE", "/api/enrollments/my-course", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -1586,7 +1586,7 @@ func TestUnenroll_Success(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "DELETE", "/api/courses/my-course/unenroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, "DELETE", "/api/enrollments/my-course", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1603,7 +1603,8 @@ func TestMarkLessonComplete_DBError(t *testing.T) {
 	repos.LessonProgress = &fake.LessonProgressRepository{Err: errors.New("db error")}
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "POST", "/api/courses/my-course/lessons/intro/complete", "", htAuthHeader(t, "student"))
+	rec := htDoInternal(t, r, "POST", "/internal/progress/complete",
+		`{"userId":"user-uuid-1","courseSlug":"my-course","lessonSlug":"intro"}`)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -1616,7 +1617,8 @@ func TestMarkLessonComplete_Success(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/courses/my-course/lessons/intro/complete", "", htAuthHeader(t, "student"))
+	rec := htDoInternal(t, r, "POST", "/internal/progress/complete",
+		`{"userId":"user-uuid-1","courseSlug":"my-course","lessonSlug":"intro"}`)
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1633,7 +1635,7 @@ func TestEnroll_ForeignKeyConstraint(t *testing.T) {
 	repos.Enrollments = &fake.EnrollmentRepository{Err: errors.New("foreign key constraint violation")}
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "POST", "/api/courses/test-course/enroll", "", htAuthHeader(t, "student"))
+	rec := htDo(t, r, "POST", "/api/enrollments/test-course", "", htAuthHeader(t, "student"))
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("want 401 (FK constraint = expired session), got %d", rec.Code)
 	}
@@ -1702,13 +1704,9 @@ func TestMyCourses_WithCourseService(t *testing.T) {
 	t.Parallel()
 
 	// Mock course service that returns valid course data
-	courseSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
-			"slug": "test-course", "id": "test-course", "title": "Test Course",
-			"isPublic": true, "labCount": 3,
-		})
-	}))
-	defer courseSvc.Close()
+	courseSvc, _ := newCatalogServer(t, catalogFixture{Courses: map[string]CourseInfo{
+		"test-course": {Slug: "test-course", ID: "test-course", Title: "Test Course", IsPublic: true, LabCount: 3},
+	}})
 
 	repos := fake.NewRepositories()
 	repos.Enrollments = fake.NewEnrollmentRepository(models.Enrollment{
@@ -1815,7 +1813,7 @@ func TestListCourseEnrollments_Empty(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "GET", "/api/admin/courses/my-course/enrollments", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "GET", "/api/admin/enrollments/my-course", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1831,7 +1829,7 @@ func TestAdminEnrollUser_DBError(t *testing.T) {
 	repos.Enrollments = enrollments
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/enrollments/my-course", `{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -1844,7 +1842,7 @@ func TestAdminEnrollUser_MissingUserID(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"userId":""}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/enrollments/my-course", `{"userId":""}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -1856,7 +1854,7 @@ func TestAdminEnrollUser_Success(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments", `{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/enrollments/my-course", `{"userId":"user-uuid-1"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1869,7 +1867,7 @@ func TestAdminUnenrollUser_Success(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "DELETE", "/api/admin/courses/my-course/enrollments/user-uuid-1", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "DELETE", "/api/admin/enrollments/my-course/users/user-uuid-1", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1882,7 +1880,7 @@ func TestAdminEnrollGroup_MissingGroupID(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", `{"groupId":""}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/enrollments/my-course/groups", `{"groupId":""}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400, got %d", rec.Code)
 	}
@@ -1895,7 +1893,7 @@ func TestAdminEnrollGroup_Success(t *testing.T) {
 	// 2 Exec calls: group_enrollments link + backfill enrollments → both from empty → OK
 	r := newTestRouter()
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", `{"groupId":"group-uuid-1"}`, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/enrollments/my-course/groups", `{"groupId":"group-uuid-1"}`, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1908,7 +1906,7 @@ func TestAdminUnenrollGroup_Success(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "DELETE", "/api/admin/courses/my-course/enrollments/groups/group-uuid-1", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "DELETE", "/api/admin/enrollments/my-course/groups/group-uuid-1", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1921,7 +1919,7 @@ func TestAdminListGroupEnrollments_Empty(t *testing.T) {
 
 	r := newTestRouter()
 
-	rec := htDo(t, r, "GET", "/api/admin/courses/my-course/enrollments/groups", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "GET", "/api/admin/enrollments/my-course/groups", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
@@ -1997,7 +1995,7 @@ func TestListCourseEnrollments_WithData(t *testing.T) {
 	)
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "GET", "/api/admin/courses/my-course/enrollments", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "GET", "/api/admin/enrollments/my-course", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -2022,7 +2020,7 @@ func TestListCourseEnrollments_DBError(t *testing.T) {
 	repos.Enrollments = enrollments
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "GET", "/api/admin/courses/my-course/enrollments", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "GET", "/api/admin/enrollments/my-course", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2039,7 +2037,7 @@ func TestAdminUnenrollUser_DBError(t *testing.T) {
 	repos.Enrollments = enrollments
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/admin/courses/my-course/enrollments/user-uuid-1", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "DELETE", "/api/admin/enrollments/my-course/users/user-uuid-1", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2057,7 +2055,7 @@ func TestAdminEnrollGroup_DBError(t *testing.T) {
 	r := newTestRouterWithRepos(repos)
 	body := `{"groupId":"group-uuid-1"}`
 
-	rec := htDo(t, r, "POST", "/api/admin/courses/my-course/enrollments/groups", body, htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "POST", "/api/admin/enrollments/my-course/groups", body, htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2118,7 +2116,7 @@ func TestAdminListGroupEnrollments_WithData(t *testing.T) {
 	repos.Groups = groups
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "GET", "/api/admin/courses/my-course/enrollments/groups", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "GET", "/api/admin/enrollments/my-course/groups", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -2143,7 +2141,7 @@ func TestAdminListGroupEnrollments_DBError(t *testing.T) {
 	repos.Groups = groups
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "GET", "/api/admin/courses/my-course/enrollments/groups", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "GET", "/api/admin/enrollments/my-course/groups", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -2160,7 +2158,7 @@ func TestAdminUnenrollGroup_DBError(t *testing.T) {
 	repos.Groups = groups
 	r := newTestRouterWithRepos(repos)
 
-	rec := htDo(t, r, "DELETE", "/api/admin/courses/my-course/enrollments/groups/group-uuid-1", "", htAuthHeader(t, "admin"))
+	rec := htDo(t, r, "DELETE", "/api/admin/enrollments/my-course/groups/group-uuid-1", "", htAuthHeader(t, "admin"))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
@@ -4492,7 +4490,7 @@ func TestInternalCourseSummary_QueryError(t *testing.T) {
 	t.Parallel()
 
 	repos := fake.NewRepositories()
-	repos.ModuleProgress = passedModuleSlugsErrRepository{
+	repos.ModuleProgress = moduleProgressListErrRepository{
 		ModuleProgressRepository: fake.NewModuleProgressRepository(),
 		err:                      errors.New("db error"),
 	}
@@ -4504,17 +4502,19 @@ func TestInternalCourseSummary_QueryError(t *testing.T) {
 	}
 }
 
-// passedModuleSlugsErrRepository wraps a fake ModuleProgressRepository so that
-// TotalScore succeeds but PassedModuleSlugs fails, exercising the second of
-// InternalCourseSummary's two sequential repository calls.
-type passedModuleSlugsErrRepository struct {
+// moduleProgressListErrRepository wraps a fake ModuleProgressRepository so
+// that the lesson-progress read succeeds but the module-progress read fails,
+// exercising the second of the summary's two batched repository calls.
+type moduleProgressListErrRepository struct {
 	*fake.ModuleProgressRepository
 
 	err error
 }
 
-// PassedModuleSlugs always fails with r.err.
-func (r passedModuleSlugsErrRepository) PassedModuleSlugs(_ context.Context, _, _ string) ([]string, error) {
+// ListByUserCourses always fails with r.err.
+func (r moduleProgressListErrRepository) ListByUserCourses(
+	_ context.Context, _ string, _ []string,
+) (map[string][]models.ModuleProgress, error) {
 	return nil, r.err
 }
 

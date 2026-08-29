@@ -48,7 +48,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 	}
 
 	err = gdb.WithContext(t.Context()).
-		Exec("TRUNCATE users, enrollments, lesson_progress, module_progress RESTART IDENTITY CASCADE").Error
+		Exec("TRUNCATE users, enrollments, lesson_progress, module_progress, " +
+			"user_badges, user_groups, groups, user_xp_events RESTART IDENTITY CASCADE").Error
 	if err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

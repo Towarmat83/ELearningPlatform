@@ -3,30 +3,35 @@ import type { APIRoute } from 'astro';
 const USER_API = process.env.USER_API ?? 'http://localhost:8081';
 const COURSE_API = process.env.COURSE_API ?? 'http://localhost:8082';
 
-function resolveTarget(path: string): string {
-  // Enrollment endpoints live in user-service (must check before generic courses/ rule)
-  if (/^courses\/[^/]+\/(enroll|unenroll)$/.test(path)) return USER_API;
-  // Session booking endpoints live in user-service
-  if (/^courses\/[^/]+\/sessions\//.test(path)) return USER_API;
-  // Admin enrollment management also lives in user-service
-  if (/^admin\/courses\/[^/]+\/enrollments/.test(path)) return USER_API;
-  // Admin/manager session participant lists also live in user-service
-  if (/^(admin|manager)\/courses\/[^/]+\/sessions\//.test(path)) return USER_API;
+/** Prefixes course-service owns. Everything else belongs to user-service. */
+const COURSE_PREFIXES = [
+  'courses',
+  'paths',
+  'skills',
+  'batch',
+  'uploads',
+  'admin/courses',
+  'admin/cache',
+  'admin/lab-checks',
+  'admin/exports/lab-checks',
+];
 
-  // Course-service paths
-  if (
-    path === 'courses' ||
-    path.startsWith('courses/') ||
-    path === 'paths' ||
-    path.startsWith('paths/') ||
-    path.startsWith('uploads/') ||
-    path.startsWith('admin/courses') ||
-    path.startsWith('admin/cache') ||
-    path.startsWith('admin/lab-checks')
-  ) {
-    return COURSE_API;
+/**
+ * Pick the backend for an /api path.
+ *
+ * A plain prefix test is enough because no service registers a route inside
+ * another's prefix — the same property the Helm chart's routing table relies
+ * on. This used to need four regexes for endpoints like
+ * `courses/{slug}/enroll`, where the owner was only decided after the slug,
+ * and one of them was wrong: it matched `admin/courses/{slug}/sessions/{id}`,
+ * course-service's own session CRUD, and sent it to user-service.
+ *
+ * Keep this list in step with `pupitre.routeTable` in the Helm chart.
+ */
+function resolveTarget(path: string): string {
+  for (const prefix of COURSE_PREFIXES) {
+    if (path === prefix || path.startsWith(prefix + '/')) return COURSE_API;
   }
-  // Everything else (auth, settings, my, admin/users, admin/groups, admin/settings, etc.)
   return USER_API;
 }
 
@@ -40,6 +45,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
   for (const [k, v] of request.headers.entries()) {
     const lower = k.toLowerCase();
     if (lower === 'host' || lower === 'connection' || lower === 'transfer-encoding') continue;
+    // Not forwarded: fetch() negotiates its own encoding with the upstream and
+    // hands back a decoded body. Passing the browser's Accept-Encoding through
+    // would ask the upstream to gzip a response this hop immediately gunzips —
+    // wasted work on a hop that is localhost or intra-cluster.
+    if (lower === 'accept-encoding') continue;
     headers.set(k, v);
   }
 
@@ -67,6 +77,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
   for (const [k, v] of res.headers.entries()) {
     const lower = k.toLowerCase();
     if (lower === 'transfer-encoding' || lower === 'connection') continue;
+    // `res.body` is the *decoded* stream: fetch() gunzips a compressed
+    // upstream response but leaves Content-Encoding and the compressed
+    // Content-Length on the header list. Forwarding either describes the body
+    // we are about to send incorrectly — the browser would try to gunzip
+    // plain JSON and fail with ERR_CONTENT_DECODING_FAILED. Both are dropped
+    // and left for this server to set for the hop it actually controls.
+    if (lower === 'content-encoding' || lower === 'content-length') continue;
     resHeaders.set(k, v);
   }
 

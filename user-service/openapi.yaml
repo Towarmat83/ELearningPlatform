@@ -350,7 +350,7 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
 
   # ── Enrollments ───────────────────────────────────────────────────────────────
-  /api/courses/{slug}/enroll:
+  /api/enrollments/{slug}:
     post:
       summary: Enroll in a course
       tags: [Enrollments]
@@ -368,8 +368,6 @@ paths:
                 properties:
                   message:
                     type: string
-
-  /api/courses/{slug}/unenroll:
     delete:
       summary: Unenroll from a course
       tags: [Enrollments]
@@ -388,28 +386,6 @@ paths:
                   message:
                     type: string
 
-  # ── Progress ──────────────────────────────────────────────────────────────────
-  /api/courses/{slug}/lessons/{lessonSlug}/complete:
-    post:
-      summary: Mark a lesson as complete
-      tags: [Progress]
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/courseSlug"
-        - $ref: "#/components/parameters/lessonSlug"
-      responses:
-        "200":
-          description: Lesson marked as complete
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-
-  # ── My Courses ────────────────────────────────────────────────────────────────
   /api/my/courses:
     get:
       summary: Get enrolled courses with progress stats
@@ -674,7 +650,7 @@ paths:
                     type: string
 
   # ── Admin: Course Enrollments ─────────────────────────────────────────────────
-  /api/admin/courses/{slug}/enrollments:
+  /api/admin/enrollments/{slug}:
     get:
       summary: List course enrollments (admin)
       tags: [Admin]
@@ -732,7 +708,7 @@ paths:
                   message:
                     type: string
 
-  /api/admin/courses/{slug}/enrollments/{userId}:
+  /api/admin/enrollments/{slug}/users/{userId}:
     delete:
       summary: Unenroll a user from a course (admin)
       tags: [Admin]

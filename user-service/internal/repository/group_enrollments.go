@@ -95,3 +95,9 @@ func (r *gormGroupRepository) GetGroupCourses(ctx context.Context, groupID strin
 
 	return slugs, nil
 }
+
+// GetGroupCoursesByGroups returns the course slugs each group in groupIDs
+// is enrolled in, keyed by group ID.
+func (r *gormGroupRepository) GetGroupCoursesByGroups(ctx context.Context, groupIDs []string) (map[string][]string, error) {
+	return r.groupedByGroupID(ctx, groupIDs, "group_enrollments", "courseslug", "get group courses by group")
+}

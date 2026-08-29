@@ -338,7 +338,7 @@ import App from '../layouts/App.astro';
           const sid = (btn as HTMLElement).dataset.sid!;
           const isBooked = (btn as HTMLElement).dataset.booked === 'true';
           try {
-            await apiFetch(`/courses/${slug}/sessions/${sid}/book`, {
+            await apiFetch(`/session-bookings/${slug}/${sid}`, {
               method: isBooked ? 'DELETE' : 'POST', token: token!
             });
             if (isBooked) booked.delete(`${slug}|${sid}`);

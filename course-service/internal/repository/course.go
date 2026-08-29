@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -23,6 +24,10 @@ type CourseFilter struct {
 	Search string
 	// PublicOnly restricts the result to courses in the public catalog.
 	PublicOnly bool
+	// Slugs, when non-empty, restricts the result to those exact courses.
+	// It is what lets a caller resolve a set of course slugs in one query
+	// instead of one request per slug.
+	Slugs []string
 }
 
 // SkillModule identifies one module tagged with a given skill, together
@@ -58,8 +63,9 @@ type CourseRepository interface {
 	Delete(ctx context.Context, slug string) error
 	// SkillTotals counts how many courses teach each of the given skills.
 	SkillTotals(ctx context.Context, skills []string) (map[string]int, error)
-	// ModulesBySkill lists every module in the public catalog tagged with skill.
-	ModulesBySkill(ctx context.Context, skill string) ([]SkillModule, error)
+	// ModulesBySkills lists every module in the public catalog tagged with
+	// any of skills, keyed by skill.
+	ModulesBySkills(ctx context.Context, skills []string) (map[string][]SkillModule, error)
 	// PutSession inserts or replaces one scheduled session of a course.
 	PutSession(ctx context.Context, courseSlug string, session content.Session) error
 	// DeleteSession removes one scheduled session, returning ErrNotFound
@@ -139,6 +145,10 @@ func (r *gormCourseRepository) List(ctx context.Context, filter CourseFilter) ([
 func applyCourseFilter(query *gorm.DB, filter CourseFilter) *gorm.DB {
 	if filter.PublicOnly {
 		query = query.Where("courses.public = ?", true)
+	}
+
+	if len(filter.Slugs) > 0 {
+		query = query.Where("courses.slug IN ?", filter.Slugs)
 	}
 
 	if filter.Category != "" {
@@ -413,11 +423,22 @@ func (r *gormCourseRepository) SkillTotals(ctx context.Context, skills []string)
 	return totals, nil
 }
 
-// ModulesBySkill lists every module in the public catalog tagged with
-// skill, in course-then-position order. Index is the module's position
-// within its course.
-func (r *gormCourseRepository) ModulesBySkill(ctx context.Context, skill string) ([]SkillModule, error) {
+// ModulesBySkills lists every module in the public catalog tagged with any
+// of skills, keyed by skill, in course-then-position order. Index is the
+// module's position within its course.
+//
+// The whole set resolves in one query: the intersection of the requested
+// skills with each module's own skill array is unnested, so a module
+// tagged with several of them is attributed to each without the caller
+// having to ask once per skill.
+func (r *gormCourseRepository) ModulesBySkills(ctx context.Context, skills []string) (map[string][]SkillModule, error) {
+	bySkill := make(map[string][]SkillModule, len(skills))
+	if len(skills) == 0 {
+		return bySkill, nil
+	}
+
 	var rows []struct {
+		Skill       string `gorm:"column:skill"`
 		Name        string `gorm:"column:name"`
 		Slug        string `gorm:"column:slug"`
 		Position    int    `gorm:"column:position"`
@@ -428,20 +449,20 @@ func (r *gormCourseRepository) ModulesBySkill(ctx context.Context, skill string)
 
 	err := r.db.WithContext(ctx).
 		Table("course_modules").
-		Select(`course_modules.name, course_modules.slug, course_modules.position,
+		Select(`matched.skill, course_modules.name, course_modules.slug, course_modules.position,
 			course_modules.type, course_modules.course_slug, courses.title AS course_title`).
 		Joins("JOIN courses ON courses.slug = course_modules.course_slug").
+		Joins("CROSS JOIN LATERAL UNNEST(course_modules.skills) AS matched(skill)").
 		Where("courses.public = ?", true).
-		Where("? = ANY (course_modules.skills)", skill).
-		Order("courses.title, course_modules.position").
+		Where("matched.skill = ANY(?)", pq.StringArray(skills)).
+		Order("matched.skill, courses.title, course_modules.position").
 		Scan(&rows).Error
 	if err != nil {
-		return nil, fmt.Errorf("list modules for skill %s: %w", skill, err)
+		return nil, fmt.Errorf("list modules for %d skills: %w", len(skills), err)
 	}
 
-	out := make([]SkillModule, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, SkillModule{
+		bySkill[row.Skill] = append(bySkill[row.Skill], SkillModule{
 			Name:        row.Name,
 			Slug:        row.Slug,
 			Index:       row.Position,
@@ -451,7 +472,7 @@ func (r *gormCourseRepository) ModulesBySkill(ctx context.Context, skill string)
 		})
 	}
 
-	return out, nil
+	return bySkill, nil
 }
 
 // PutSession inserts or replaces one scheduled session of a course.

@@ -115,10 +115,21 @@ type GroupRepository interface {
 	// Manager scope queries (manager.go)
 	GetGroupsByUserID(ctx context.Context, userID string) ([]GroupRow, error)
 	UserInAnyGroup(ctx context.Context, userID string, groupIDs []string) (bool, error)
+	// UsersInAnyGroup answers UserInAnyGroup for a whole cohort in one
+	// query, keyed by user ID. Filtering a listing to a manager's scope
+	// needs the answer for every row, and asking per row made that
+	// listing cost a query per user.
+	UsersInAnyGroup(ctx context.Context, userIDs, groupIDs []string) (map[string]bool, error)
 	ListMemberIDs(ctx context.Context, groupID string) ([]string, error)
+	// ListMemberIDsByGroups returns the member IDs of every group in
+	// groupIDs, keyed by group ID, in one query.
+	ListMemberIDsByGroups(ctx context.Context, groupIDs []string) (map[string][]string, error)
 
 	// User-facing group queries (my_groups.go)
 	GetGroupCourses(ctx context.Context, groupID string) ([]string, error)
+	// GetGroupCoursesByGroups returns the enrolled course slugs of every
+	// group in groupIDs, keyed by group ID, in one query.
+	GetGroupCoursesByGroups(ctx context.Context, groupIDs []string) (map[string][]string, error)
 }
 
 // gormGroupRepository is the GORM-backed GroupRepository implementation.

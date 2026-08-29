@@ -154,6 +154,34 @@ func (f *ModuleProgressRepository) ListByUserCourse(_ context.Context, userID, c
 	return list, nil
 }
 
+// ListByUserCourses returns all module progress rows for userID in each of
+// courseSlugs, keyed by course slug.
+func (f *ModuleProgressRepository) ListByUserCourses(
+	_ context.Context, userID string, courseSlugs []string,
+) (map[string][]models.ModuleProgress, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	wanted := make(map[string]bool, len(courseSlugs))
+	for _, slug := range courseSlugs {
+		wanted[slug] = true
+	}
+
+	byCourse := make(map[string][]models.ModuleProgress, len(courseSlugs))
+
+	for _, p := range f.progress {
+		if p.UserID == userID && wanted[p.CourseSlug] {
+			byCourse[p.CourseSlug] = append(byCourse[p.CourseSlug], p)
+		}
+	}
+
+	return byCourse, nil
+}
+
 // PassedKeys returns the set of "courseSlug/moduleSlug" composite keys for
 // all modules the user has passed, across all courses.
 func (f *ModuleProgressRepository) PassedKeys(_ context.Context, userID string) (map[string]struct{}, error) {

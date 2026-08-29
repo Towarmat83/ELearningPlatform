@@ -194,54 +194,77 @@ logs:
 # Prerequisites:
 #   go install github.com/swaggo/swag/cmd/swag@latest
 
-.PHONY: openapi-gen openapi-gen-course-service openapi-gen-user-service
+.PHONY: openapi/gen openapi/gen/course-service openapi/gen/user-service
 
-openapi-gen: openapi-gen-course-service openapi-gen-user-service
+openapi/gen: openapi/gen/course-service openapi/gen/user-service
 	@echo "OpenAPI JSON files regenerated from code."
 
-openapi-gen-course-service:
+openapi/gen/course-service:
 	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
 	@echo "Generating course-service/openapi.json from code..."
 	@cd course-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
 
-openapi-gen-user-service:
+openapi/gen/user-service:
 	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
 	@echo "Generating user-service/openapi.json from code..."
 	@cd user-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
 
 # ── Go Tests ────────────────────────────────────────────────────────────────
 
-.PHONY: go/test go/test-course go/test-user
+.PHONY: go/test go/test/course go/test/user go/test/checker
 
-go/test: go/test-course go/test-user go/test-checker
+go/test: go/test/course go/test/user go/test/checker
 
-go/test-course:
+go/test/course:
 	@echo "=== course-service tests ==="
-	@cd course-service && CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+	@cd course-service && CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out
 
-go/test-user:
+go/test/user:
 	@echo "=== user-service tests ==="
-	@cd user-service && CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+	@cd user-service && CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out
 
-go/test-checker:
+go/test/checker:
 	@echo "=== checker-service tests ==="
-	@cd checker-service && CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
+	@cd checker-service && CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out
+
+# ── Go Integration Tests ───────────────────────────────────────────────────
+#
+# The `internal/repository` and `internal/db` packages of course-service and
+# user-service are GORM/Postgres code; their tests are behind the `integration`
+# build tag and need a live Postgres. Point TEST_DATABASE_URL at one, e.g.:
+#
+#   docker run -d --rm -e POSTGRES_PASSWORD=pupitre -e POSTGRES_USER=pupitre \
+#     -e POSTGRES_DB=pupitre -p 55432:5432 postgres:18-alpine
+#   TEST_DATABASE_URL=postgres://pupitre:pupitre@localhost:55432/pupitre?sslmode=disable \
+#     make go/test/integration
+
+.PHONY: go/test/integration go/test/integration/course go/test/integration/user
+
+go/test/integration: go/test/integration/course go/test/integration/user
+
+go/test/integration/course:
+	@echo "=== course-service integration tests ==="
+	@cd course-service && CGO_ENABLED=1 go test -tags=integration -p 1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.integration.out ./... -count=1 && go tool cover -func=coverage.integration.out | tail -1
+
+go/test/integration/user:
+	@echo "=== user-service integration tests ==="
+	@cd user-service && CGO_ENABLED=1 go test -tags=integration -p 1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.integration.out ./... -count=1 && go tool cover -func=coverage.integration.out | tail -1
 
 # ── Go Lint ─────────────────────────────────────────────────────────────────
 
 .PHONY: go/lint go/lint-course go/lint-user go/lint-checker
 
-go/lint: go/lint-course go/lint-user go/lint-checker
+go/lint: go/lint/course go/lint/user go/lint/checker
 
-go/lint-course:
+go/lint/course:
 	@echo "=== Linting course-service ==="
 	@cd course-service && golangci-lint run ./...
 
-go/lint-user:
+go/lint/user:
 	@echo "=== Linting user-service ==="
 	@cd user-service && golangci-lint run ./...
 
-go/lint-checker:
+go/lint/checker:
 	@echo "=== Linting checker-service ==="
 	@cd checker-service && golangci-lint run ./...
 

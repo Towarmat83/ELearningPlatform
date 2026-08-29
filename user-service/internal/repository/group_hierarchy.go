@@ -197,8 +197,12 @@ func (r *gormGroupRepository) MoveGroup(ctx context.Context, groupID string, new
 		updateErr := txDB.Model(&models.Group{}).
 			Where("path LIKE ?", oldPrefix+"/%").
 			Updates(map[string]any{
-				colPath:  gorm.Expr("? || substring(path FROM ?)::text", newPath, len(oldPrefix)+1),
-				colDepth: gorm.Expr("depth + ?", depthDelta),
+				// The FROM offset must be cast to int explicitly: with the pgx
+				// driver an untyped placeholder in substring(... FROM $n) is
+				// inferred as text and the bind fails ("unable to encode N
+				// into text format").
+				colPath:  gorm.Expr("? || substring(path FROM ?::int)::text", newPath, len(oldPrefix)+1),
+				colDepth: gorm.Expr("depth + ?::int", depthDelta),
 			}).Error
 		if updateErr != nil {
 			return fmt.Errorf("update descendants paths: %w", updateErr)

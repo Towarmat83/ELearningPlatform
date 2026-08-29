@@ -15,6 +15,8 @@ import (
 type CourseRepository struct {
 	mu      sync.RWMutex
 	courses map[string]*content.Course
+	// Err, when set, is returned by every method (simulates a DB failure).
+	Err error
 }
 
 // NewCourseRepository builds a fake seeded with the given courses.
@@ -31,6 +33,10 @@ func NewCourseRepository(seed ...*content.Course) *CourseRepository {
 func (f *CourseRepository) List(_ context.Context, filter repository.CourseFilter) ([]*content.Course, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
 
 	out := make([]*content.Course, 0, len(f.courses))
 
@@ -92,6 +98,10 @@ func (f *CourseRepository) Get(_ context.Context, slug string) (*content.Course,
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
 	course, ok := f.courses[slug]
 	if !ok {
 		return nil, repository.ErrNotFound
@@ -107,6 +117,10 @@ func (f *CourseRepository) Modules(_ context.Context, slug string) ([]content.Mo
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
 	course, ok := f.courses[slug]
 	if !ok {
 		return nil, repository.ErrNotFound
@@ -120,6 +134,10 @@ func (f *CourseRepository) Upsert(_ context.Context, course *content.Course) err
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.Err != nil {
+		return f.Err
+	}
+
 	f.put(course)
 
 	return nil
@@ -130,6 +148,10 @@ func (f *CourseRepository) Upsert(_ context.Context, course *content.Course) err
 func (f *CourseRepository) Create(_ context.Context, course *content.Course) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return f.Err
+	}
 
 	if _, exists := f.courses[course.Slug]; exists {
 		return repository.ErrConflict
@@ -145,6 +167,10 @@ func (f *CourseRepository) Delete(_ context.Context, slug string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.Err != nil {
+		return f.Err
+	}
+
 	if _, exists := f.courses[slug]; !exists {
 		return repository.ErrNotFound
 	}
@@ -158,6 +184,10 @@ func (f *CourseRepository) Delete(_ context.Context, slug string) error {
 func (f *CourseRepository) SkillTotals(_ context.Context, skills []string) (map[string]int, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
 
 	wanted := make(map[string]struct{}, len(skills))
 	for _, skill := range skills {
@@ -181,6 +211,10 @@ func (f *CourseRepository) SkillTotals(_ context.Context, skills []string) (map[
 func (f *CourseRepository) ModulesBySkill(_ context.Context, skill string) ([]repository.SkillModule, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
 
 	var out []repository.SkillModule
 
@@ -221,6 +255,10 @@ func (f *CourseRepository) PutSession(_ context.Context, courseSlug string, sess
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.Err != nil {
+		return f.Err
+	}
+
 	course, ok := f.courses[courseSlug]
 	if !ok {
 		return repository.ErrNotFound
@@ -255,6 +293,10 @@ func (f *CourseRepository) DeleteSession(_ context.Context, courseSlug, sessionI
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.Err != nil {
+		return f.Err
+	}
+
 	course, ok := f.courses[courseSlug]
 	if !ok {
 		return repository.ErrNotFound
@@ -283,6 +325,10 @@ func (f *CourseRepository) DeleteSession(_ context.Context, courseSlug, sessionI
 func (f *CourseRepository) SessionExists(_ context.Context, courseSlug, sessionID string) (bool, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.Err != nil {
+		return false, f.Err
+	}
 
 	course, ok := f.courses[courseSlug]
 	if !ok {

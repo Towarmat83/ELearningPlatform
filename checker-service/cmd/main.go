@@ -3,10 +3,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -24,16 +27,32 @@ const (
 	writeTimeout = 30 * time.Second
 	// idleTimeout bounds how long an idle keep-alive connection is kept open.
 	idleTimeout = 60 * time.Second
+	// shutdownTimeout bounds how long graceful shutdown waits for in-flight
+	// requests to finish before the server is forced closed.
+	shutdownTimeout = 15 * time.Second
 )
 
-// main starts the checker-service HTTP server.
+// main starts the checker-service HTTP server and exits non-zero on a fatal
+// startup or serving error.
 func main() {
 	logger := initLogger()
 	zap.ReplaceGlobals(logger)
 
+	err := run()
+
+	_ = logger.Sync()
+
+	if err != nil {
+		zap.L().Error("fatal", zap.Error(err))
+		os.Exit(1)
+	}
+}
+
+// run loads configuration, builds the router and serves until an
+// interrupt/terminate signal arrives, then shuts the server down gracefully.
+func run() error {
 	zap.L().Info("starting checker-service")
 
-	// ── Configuration ────────────────────────────────────────────────────────
 	zap.L().Info("loading configuration")
 
 	cfg := config.Load()
@@ -47,14 +66,12 @@ func main() {
 		zap.Int("corsOriginsCount", len(cfg.CORSOrigins)),
 	)
 
-	// ── Handler & router ─────────────────────────────────────────────────────
 	zap.L().Info("building HTTP router")
 
 	handler := handlers.New(cfg)
 
-	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := &http.Server{
-		Addr:              addr,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           handler.BuildRouter(),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
@@ -62,18 +79,50 @@ func main() {
 		IdleTimeout:       idleTimeout,
 	}
 
-	zap.L().Info("API listening", zap.String("addr", addr))
+	return serve(srv)
+}
 
-	err := srv.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		zap.L().Error("server error", zap.Error(err))
+// serve starts srv in the background, blocks until an interrupt/terminate
+// signal is received or the server exits unexpectedly, then gracefully
+// shuts srv down.
+func serve(srv *http.Server) error {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-		_ = logger.Sync()
+	serveErr := make(chan error, 1)
 
-		os.Exit(1)
+	go func() {
+		zap.L().Info("API listening", zap.String("addr", srv.Addr))
+
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- fmt.Errorf("server error: %w", err)
+
+			return
+		}
+
+		serveErr <- nil
+	}()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-quit:
 	}
 
-	_ = logger.Sync()
+	zap.L().Info("shutting down")
+
+	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	err := srv.Shutdown(shutCtx)
+	if err != nil {
+		return fmt.Errorf("forced shutdown: %w", err)
+	}
+
+	zap.L().Info("server stopped")
+
+	return nil
 }
 
 // initLogger builds a zap logger driven by two environment variables:

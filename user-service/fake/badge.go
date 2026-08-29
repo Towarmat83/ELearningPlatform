@@ -14,6 +14,9 @@ type BadgeRepository struct {
 	badges []badgeEntry
 	// Err, when set, is returned by every method call (simulates a DB failure).
 	Err error
+	// LeaderboardRows, when non-nil, is returned verbatim by Leaderboard so
+	// tests can exercise the handler's ranking/enrichment loop.
+	LeaderboardRows []repository.BadgeLeaderboardRow
 }
 
 // badgeEntry holds a single in-memory badge award.
@@ -82,7 +85,7 @@ func (f *BadgeRepository) Leaderboard(_ context.Context, _ int) ([]repository.Ba
 		return nil, f.Err
 	}
 
-	return nil, nil
+	return f.LeaderboardRows, nil
 }
 
 // EarnedCount returns how many distinct users have earned the badge

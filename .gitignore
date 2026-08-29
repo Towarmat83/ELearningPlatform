@@ -17,6 +17,7 @@ Thumbs.db
 
 # Go test coverage
 coverage.out
+coverage.integration.out
 
 # Logs
 *.log

@@ -220,7 +220,7 @@ func (s *State) createUser(ctx context.Context, req registerRequest) (userPublic
 // @Tags     Auth
 // @Accept   json
 // @Produce  json
-// @Param    body  registerRequest  true  "Registration details"
+// @Param    body  body  registerRequest  true  "Registration details"
 // @Success  200   {object}  authResponse
 // @Failure  400   {object}  map[string]string
 // @Failure  409   {object}  map[string]string
@@ -300,7 +300,7 @@ func (s *State) loginLookup(ctx context.Context, email string) (loginUserRow, er
 // @Tags     Auth
 // @Accept   json
 // @Produce  json
-// @Param    body  loginRequest  true  "Login credentials"
+// @Param    body  body  loginRequest  true  "Login credentials"
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/login [post].
@@ -415,7 +415,7 @@ func (s *State) usernameChangeCheck(ctx context.Context, uname, currentUserID st
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "username, bio, avatarUrl (all optional)"
+// @Param     body  body  object  true  "username, bio, avatarUrl (all optional)"
 // @Success   200   {object}  userPublicRow
 // @Failure   400   {object}  map[string]string
 // @Router    /api/auth/profile [put].
@@ -496,7 +496,7 @@ func (s *State) verifyCurrentPassword(ctx context.Context, userID, candidate str
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "oldPassword and newPassword"
+// @Param     body  body  object  true  "oldPassword and newPassword"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
 // @Failure   401   {object}  map[string]string

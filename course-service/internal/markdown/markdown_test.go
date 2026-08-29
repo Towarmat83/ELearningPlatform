@@ -403,6 +403,7 @@ func TestImportNoSplitHintForSingleSection(t *testing.T) {
 	}
 }
 
+// hasWarningContaining reports whether any warning contains substr.
 func hasWarningContaining(warnings []string, substr string) bool {
 	for _, warning := range warnings {
 		if strings.Contains(warning, substr) {

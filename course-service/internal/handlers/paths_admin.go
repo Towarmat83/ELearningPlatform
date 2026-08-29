@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"go.uber.org/zap"
+
 	"github.com/genesary/pupitre/course-service/internal/definition"
 )
 
@@ -30,6 +32,31 @@ var pathMessages = definitionMessages{
 // @Router   /api/admin/courses/paths [post].
 func (s *State) CreatePath(writer http.ResponseWriter, req *http.Request) {
 	createDefinition(s, writer, req, pathMessages, definition.Path.ToPath, s.Repos.Paths.Create)
+}
+
+// GetPathDefinition godoc
+// @Summary  Get a learning path's full definition (admin)
+// @Tags     Admin - Paths
+// @Security BearerAuth
+// @Router   /api/admin/courses/paths/{slug}/definition [get].
+func (s *State) GetPathDefinition(writer http.ResponseWriter, req *http.Request) {
+	slug := param(req, "slug")
+
+	// Read through the repository rather than through GetPath: that handler
+	// replaces a course-kind path's stored skills with the aggregate of its
+	// members' skills, which an edit form would then write back as if an
+	// author had typed them.
+	path, err := s.Repos.Paths.Get(req.Context(), slug)
+	if err != nil {
+		s.writeRepoError(writer, err, pathNotFoundMessage, "load path", zap.String("slug", slug))
+
+		return
+	}
+
+	s.JSON(writer, http.StatusOK, map[string]any{
+		slugJSONKey: slug,
+		specJSONKey: definition.FromPath(path),
+	})
 }
 
 // UpdatePath godoc

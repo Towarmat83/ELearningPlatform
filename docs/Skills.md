@@ -86,7 +86,7 @@ slug: devops-path
 spec:
   title: "Parcours DevOps"
   kind: skill
-  level: 2
+  level: intermediate
   skills: [linux, docker, kubernetes, ci-cd]
 ```
 
@@ -98,19 +98,28 @@ spec:
 
 ### Champ `level` sur les parcours
 
-| Valeur | Signification |
-|--------|---------------|
-| `1`    | Débutant      |
-| `2`    | Intermédiaire |
-| `3`    | Avancé        |
+| Valeur           | Signification |
+|------------------|---------------|
+| `beginner`       | Débutant      |
+| `intermediate`   | Intermédiaire |
+| `advanced`       | Avancé        |
 
 Le niveau est affiché comme badge sur la page `/my-paths`.
 
 ## Définition d'un parcours
 
-Créé via `POST /api/admin/courses/paths`, remplacé via
+Depuis l'interface d'administration, l'onglet **Parcours** de `/admin/paths`
+crée, modifie, réordonne et supprime les parcours ; l'onglet **Inscriptions**
+gère les utilisateurs inscrits.
+
+Les mêmes opérations en API : créé via `POST /api/admin/courses/paths`, lu via
+`GET /api/admin/courses/paths/{slug}/definition`, remplacé via
 `PUT /api/admin/courses/paths/{slug}/definition`, supprimé via
 `DELETE /api/admin/courses/paths/{slug}/definition`.
+
+`GET /api/paths/{slug}` sert aussi un parcours, mais y substitue les
+compétences agrégées de ses cours membres : pour relire une définition telle
+qu'elle a été écrite, passer par l'endpoint admin.
 
 ```yaml
 slug: security-path
@@ -118,7 +127,7 @@ spec:
   title: "Parcours Sécurité"
   description: "Maîtrisez les bases de la sécurité informatique"
   kind: skill          # "course" (défaut) ou "skill"
-  level: 3             # 1=débutant, 2=intermédiaire, 3=avancé (optionnel)
+  level: advanced      # beginner | intermediate | advanced (optionnel)
   skills:              # pour kind=skill : liste ordonnée de compétences
     - linux
     - networking

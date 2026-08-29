@@ -188,8 +188,7 @@ func (s *State) ListSessionBookings(writer http.ResponseWriter, req *http.Reques
 // @Param    sessionId  path  string  true  "Session ID"
 // @Param    userId     path  string  true  "User ID"
 // @Success  200  {object}  map[string]bool
-// @Router   /api/admin/courses/{slug}/sessions/{sessionId}/bookings
-// /{userId}/presence [patch].
+// @Router   /api/admin/courses/{slug}/sessions/{sessionId}/bookings/{userId}/presence [patch].
 func (s *State) MarkSessionPresence(writer http.ResponseWriter, req *http.Request) {
 	slug := param(req, "slug")
 	sessionID := param(req, "sessionId")

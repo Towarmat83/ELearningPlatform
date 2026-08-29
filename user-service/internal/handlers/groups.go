@@ -66,7 +66,7 @@ func syncGroupsAndDeriveRole(
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "name"
+// @Param     body  body  object  true  "name"
 // @Success   201  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Failure   409  {object}  map[string]string
@@ -155,7 +155,7 @@ func (s *State) DeleteGroup(writer http.ResponseWriter, req *http.Request) {
 // @Accept    json
 // @Produce   json
 // @Param     groupId  path    string  true  "Group UUID"
-// @Param     body     object  true    "name"
+// @Param     body     body  object  true    "name"
 // @Success   200  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Failure   404  {object}  map[string]string
@@ -198,7 +198,7 @@ func (s *State) UpdateGroup(writer http.ResponseWriter, req *http.Request) {
 // @Accept    json
 // @Produce   json
 // @Param     groupId  path    string  true  "Parent group UUID"
-// @Param     body     object  true    "name"
+// @Param     body     body  object  true    "name"
 // @Success   201  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Failure   409  {object}  map[string]string
@@ -297,7 +297,7 @@ func (s *State) ListDescendants(writer http.ResponseWriter, r *http.Request) {
 // @Accept    json
 // @Produce   json
 // @Param     groupId  path    string  true  "Group UUID to move"
-// @Param     body     object  true    "parentId (UUID or null)"
+// @Param     body     body  object  true    "parentId (UUID or null)"
 // @Success   200  {object}  map[string]string
 // @Failure   400  {object}  map[string]string
 // @Router    /api/admin/groups/{groupId}/parent [patch].
@@ -397,7 +397,7 @@ func (s *State) ListGroupMappings(writer http.ResponseWriter, r *http.Request) {
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     body  object  true  "groupName and platformRole"
+// @Param     body  body  object  true  "groupName and platformRole"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/groups/mappings [post].

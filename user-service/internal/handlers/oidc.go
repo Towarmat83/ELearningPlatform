@@ -277,7 +277,7 @@ func (s *State) exchangeOIDCToken(
 // @Tags     OIDC
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "code and state"
+// @Param    body  body  object  true  "code and state"
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/oidc/callback [post].

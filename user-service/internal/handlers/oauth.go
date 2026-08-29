@@ -205,7 +205,7 @@ func (s *State) OAuthAuthorize(writer http.ResponseWriter, request *http.Request
 // @Tags     OAuth
 // @Accept   json
 // @Produce  json
-// @Param    body  object  true  "code and state from provider"
+// @Param    body  body  object  true  "code and state from provider"
 // @Success  200   {object}  authResponse
 // @Failure  401   {object}  map[string]string
 // @Router   /api/auth/oauth/callback [post].

@@ -78,6 +78,21 @@ POST   /api/admin/courses/import/preview       # same, but stores nothing
 GET    /api/admin/courses/{slug}/export/markdown
 ```
 
+Learning paths are managed the same way, under `courses/paths` (the admin UI
+for them is the "Parcours" tab of `/admin/paths`):
+
+```
+POST   /api/admin/courses/paths                       # create  {slug, spec}
+GET    /api/admin/courses/paths/{slug}/definition     # read
+PUT    /api/admin/courses/paths/{slug}/definition     # replace {spec}
+DELETE /api/admin/courses/paths/{slug}/definition     # delete
+```
+
+Read a path through the admin endpoint, not the public `GET /api/paths/{slug}`:
+that one replaces a course-kind path's stored `skills` with the aggregate of
+its members' skills, so an editor round-tripping through it would write the
+aggregate back as if an author had typed it.
+
 The `spec` body (shown as YAML for readability; the API takes JSON):
 
 ```yaml

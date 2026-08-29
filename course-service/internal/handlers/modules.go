@@ -931,7 +931,7 @@ func (s *State) populateInlineQuizQuestions(ctx context.Context, inlineQuiz *inl
 // @Produce   json
 // @Param     slug   path  string                true  "Course slug"
 // @Param     index  path  int                   true  "Module index (0-based)"
-// @Param     body   content.SubmitRequest true  "Quiz answers"
+// @Param     body   body  content.SubmitRequest  true  "Quiz answers"
 // @Success   200    {object}  submitResponse
 // @Failure   400    {object}  map[string]string
 // @Failure   404    {object}  map[string]string

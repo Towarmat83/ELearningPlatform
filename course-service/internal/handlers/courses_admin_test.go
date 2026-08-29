@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -300,6 +301,89 @@ func TestAdminPath_CreateReadUpdateDelete(t *testing.T) {
 	rec = adminRequest(t, router, http.MethodGet, "/api/paths/devops", "")
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("read after delete: want 404, got %d", rec.Code)
+	}
+}
+
+// TestAdminPath_ReadDefinition verifies the admin definition endpoint serves
+// a path back in the shape the create endpoint accepts, with the stored
+// skills rather than the aggregate the public endpoint substitutes.
+func TestAdminPath_ReadDefinition(t *testing.T) {
+	t.Parallel()
+
+	_, router := newAdminState(t)
+
+	body := `{"slug": "linux-skills", "spec": {"title": "Linux Skills", "kind": "skill",
+	          "description": "Skill by skill", "level": "beginner",
+	          "skills": ["shell", "systemd"]}}`
+
+	rec := adminRequest(t, router, http.MethodPost, "/api/admin/courses/paths", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: want 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = adminRequest(t, router, http.MethodGet, "/api/admin/courses/paths/linux-skills/definition", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("read: want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var read struct {
+		Slug string          `json:"slug"`
+		Spec definition.Path `json:"spec"`
+	}
+
+	err := json.NewDecoder(rec.Body).Decode(&read)
+	if err != nil {
+		t.Fatalf("decode definition: %v", err)
+	}
+
+	if read.Slug != "linux-skills" || read.Spec.Title != "Linux Skills" || read.Spec.Kind != "skill" {
+		t.Errorf("definition not round-tripped: %+v", read)
+	}
+
+	if read.Spec.Level != "beginner" || read.Spec.Description != "Skill by skill" {
+		t.Errorf("metadata not round-tripped: %+v", read.Spec)
+	}
+
+	if len(read.Spec.Skills) != 2 || read.Spec.Skills[0] != "shell" {
+		t.Errorf("skills not round-tripped: %+v", read.Spec.Skills)
+	}
+}
+
+// TestAdminPath_ReadUnknownDefinition verifies an unknown slug is a 404.
+func TestAdminPath_ReadUnknownDefinition(t *testing.T) {
+	t.Parallel()
+
+	_, router := newAdminState(t)
+
+	rec := adminRequest(t, router, http.MethodGet, "/api/admin/courses/paths/ghost/definition", "")
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("want 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAdminDefinition_RejectsUnroutableSlug verifies a slug that could never
+// appear in a URL is refused rather than stored out of reach.
+func TestAdminDefinition_RejectsUnroutableSlug(t *testing.T) {
+	t.Parallel()
+
+	for _, slug := range []string{"Not Lowercase", "with/slash", "-leading-dash", "accentué"} {
+		t.Run(slug, func(t *testing.T) {
+			t.Parallel()
+
+			_, router := newAdminState(t)
+
+			body := `{"slug": ` + strconv.Quote(slug) + `, "spec": {"title": "Nope"}}`
+
+			rec := adminRequest(t, router, http.MethodPost, "/api/admin/courses", body)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("course: want 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			rec = adminRequest(t, router, http.MethodPost, "/api/admin/courses/paths", body)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("path: want 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 

@@ -395,7 +395,7 @@ func (s *State) ManagerListPathEnrollments(writer http.ResponseWriter, request *
 // @Accept    json
 // @Produce   json
 // @Param     slug  path  string                   true  "Path slug"
-// @Param     body  map[string]string  true  "userId"
+// @Param     body  body  map[string]string  true  "userId"
 // @Success   200   {object}  map[string]string
 // @Failure   400   {object}  map[string]string
 // @Router    /api/admin/paths/{slug}/enrollments [post].

@@ -126,6 +126,7 @@ func registerAdminRoutes(router chi.Router, state *State) {
 	router.Put("/api/admin/courses/{slug}/definition", state.UpdateCourse)
 	router.Delete("/api/admin/courses/{slug}/definition", state.DeleteCourse)
 	router.Post("/api/admin/courses/paths", state.CreatePath)
+	router.Get("/api/admin/courses/paths/{slug}/definition", state.GetPathDefinition)
 	router.Put("/api/admin/courses/paths/{slug}/definition", state.UpdatePath)
 	router.Delete("/api/admin/courses/paths/{slug}/definition", state.DeletePath)
 	router.Get("/api/admin/lab-checks", state.GetLabResults)

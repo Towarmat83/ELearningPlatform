@@ -93,6 +93,10 @@ const courseSlugJSONKey = "courseSlug"
 // slugJSONKey is the JSON key used for course-slug response fields.
 const slugJSONKey = "slug"
 
+// specJSONKey is the JSON key carrying a resource definition on the admin
+// endpoints.
+const specJSONKey = "spec"
+
 // messageJSONKey is the JSON key used for human-readable message fields.
 const messageJSONKey = "message"
 

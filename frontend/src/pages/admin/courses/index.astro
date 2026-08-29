@@ -10,6 +10,7 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <div class="flex gap-2">
       <button class="btn btn-primary btn-sm" id="new-course-btn">+ Nouveau cours</button>
+      <button class="btn btn-secondary btn-sm" id="import-md-btn">⬆ Importer du markdown</button>
       <button class="btn btn-secondary btn-sm" id="clear-all-cache">🗑 Vider tout le cache</button>
     </div>
   </div>
@@ -64,6 +65,61 @@ import Admin from '../../../layouts/Admin.astro';
   <!-- Course list -->
   <div id="loading" class="loading-state"><div class="spinner"></div><span class="text-soft text-sm">Chargement…</span></div>
   <div id="courses-list"></div>
+
+  <!-- Markdown import modal -->
+  <div class="modal-overlay" id="import-modal">
+    <div class="modal-box modal-box-wide">
+      <div class="modal-head">
+        <h3>Importer depuis du markdown</h3>
+        <button class="btn btn-ghost btn-sm" id="im-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="import-grid">
+          <div>
+            <label class="label" for="im-mode">Destination</label>
+            <select class="input" id="im-mode">
+              <option value="create">Créer un cours</option>
+              <option value="append">Ajouter des modules à un cours</option>
+              <option value="replace">Remplacer les modules d'un cours</option>
+            </select>
+          </div>
+          <div id="im-slug-row">
+            <label class="label" for="im-slug">Slug</label>
+            <input class="input font-mono" id="im-slug" type="text" placeholder="depuis le frontmatter" />
+          </div>
+          <div id="im-course-row" style="display:none">
+            <label class="label" for="im-course">Cours cible</label>
+            <select class="input" id="im-course"></select>
+          </div>
+          <div>
+            <label class="label" for="im-split">Découpage</label>
+            <select class="input" id="im-split">
+              <option value="">Auto (frontmatter, sinon un seul module)</option>
+              <option value="none">Un seul module</option>
+              <option value="h1"># — un module par titre de niveau 1</option>
+              <option value="h2">## — un module par titre de niveau 2</option>
+              <option value="h3">### — un module par titre de niveau 3</option>
+            </select>
+          </div>
+        </div>
+        <label class="label" for="im-markdown">Document</label>
+        <p class="label-hint">
+          Collez le markdown, déposez un fichier dessus, ou choisissez-en un.
+          Un en-tête <code>---</code> optionnel décrit le cours (title, description, category, difficulty, public…).
+        </p>
+        <textarea class="input import-editor" id="im-markdown" rows="14" spellcheck="false" placeholder="---&#10;title: Introduction à Linux&#10;category: linux&#10;---&#10;&#10;## Qu'est-ce que Linux ?&#10;&#10;Un noyau…"></textarea>
+        <div class="flex items-center gap-3 mt-2">
+          <input type="file" id="im-file" accept=".md,.markdown,.txt,text/markdown,text/plain" class="text-[.78rem]" />
+          <span class="text-soft text-[.75rem]" id="im-size"></span>
+        </div>
+        <div id="im-preview" class="mt-4"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary btn-sm" id="im-preview-btn">Prévisualiser</button>
+        <button class="btn btn-primary btn-sm" id="im-submit">Importer</button>
+      </div>
+    </div>
+  </div>
 
   <!-- YAML modal -->
   <div class="modal-overlay" id="yaml-modal">
@@ -164,6 +220,7 @@ import Admin from '../../../layouts/Admin.astro';
             </div>
             <div class="course-actions">
               <button class="link-btn violet" data-action="yaml" data-id="${c.id}" data-title="${escHtml(c.title)}">⎈ YAML</button>
+              <button class="link-btn violet" data-action="export-md" data-id="${c.id}" title="Télécharger le cours en markdown">↓ MD</button>
               ${isEditing
                 ? `<button class="link-btn gray" data-action="course-edit-cancel">Annuler</button>`
                 : `<button class="link-btn gray" data-action="edit" data-id="${c.id}">Modifier</button>`}
@@ -267,20 +324,33 @@ import Admin from '../../../layouts/Admin.astro';
             </select>
           </div>
         </div>
-        <div class="mod-form-grid">
-          <div>
-            <label class="label text-[.78rem]">URL repo Git</label>
-            <input class="input text-[.78rem] font-mono" id="mf-src" type="text" value="${escHtml(moduleDraft.src || '')}" placeholder="https://github.com/org/repo" />
-          </div>
-          <div>
-            <label class="label text-[.78rem]">Branche / tag</label>
-            <input class="input text-[.82rem] font-mono" id="mf-ref" type="text" value="${escHtml(moduleDraft.ref || 'main')}" placeholder="main" />
+        <div id="mf-content-row" class="mb-2.5" style="display:${modTakesMarkdown(moduleDraft.type) ? 'block' : 'none'}">
+          <label class="label text-[.78rem]">Contenu (markdown)</label>
+          <p class="label-hint">Le contenu du module. Laissez vide pour le lire depuis un dépôt git à la place.</p>
+          <textarea class="input import-editor" id="mf-content" rows="10" spellcheck="false" placeholder="## Introduction&#10;&#10;Du **markdown**…">${escHtml(moduleDraft.content || '')}</textarea>
+          <div class="flex items-center gap-3 mt-1.5">
+            <input type="file" id="mf-content-file" accept=".md,.markdown,.txt,text/markdown,text/plain" class="text-[.75rem]" />
           </div>
         </div>
-        <div class="mb-2.5">
-          <label class="label text-[.78rem]">Chemin dans le repo</label>
-          <input class="input text-[.78rem] font-mono" id="mf-path" type="text" value="${escHtml(moduleDraft.path || '')}" placeholder="modules/01-intro/index.md" />
-        </div>
+        <details class="mod-git-source" ${moduleDraft.src || !modTakesMarkdown(moduleDraft.type) ? 'open' : ''}>
+          <summary>${modTakesMarkdown(moduleDraft.type)
+            ? 'Source git — alternative au contenu markdown ci-dessus'
+            : 'Source git / URL de la ressource'}</summary>
+          <div class="mod-form-grid">
+            <div>
+              <label class="label text-[.78rem]">URL repo Git</label>
+              <input class="input text-[.78rem] font-mono" id="mf-src" type="text" value="${escHtml(moduleDraft.src || '')}" placeholder="https://github.com/org/repo" />
+            </div>
+            <div>
+              <label class="label text-[.78rem]">Branche / tag</label>
+              <input class="input text-[.82rem] font-mono" id="mf-ref" type="text" value="${escHtml(moduleDraft.ref || 'main')}" placeholder="main" />
+            </div>
+          </div>
+          <div>
+            <label class="label text-[.78rem]">Chemin dans le repo</label>
+            <input class="input text-[.78rem] font-mono" id="mf-path" type="text" value="${escHtml(moduleDraft.path || '')}" placeholder="modules/01-intro/index.md" />
+          </div>
+        </details>
         <div id="mf-quizref-row" class="mb-2.5" style="display:${moduleDraft.type === 'quiz' ? 'block' : 'none'}">
           <label class="label text-[.78rem]">Quiz ref</label>
           <input class="input text-[.78rem] font-mono" id="mf-quizref" type="text" value="${escHtml(moduleDraft.quizRef || '')}" placeholder="quizzes/01-intro.yaml" />
@@ -420,6 +490,12 @@ import Admin from '../../../layouts/Admin.astro';
       `;
     }
 
+    // Types whose body is markdown stored on the module itself; everything
+    // else takes its content from a URL, a git file or inline questions.
+    function modTakesMarkdown(type: string) {
+      return type === 'text' || type === 'lab';
+    }
+
     function modTypeBadge(type: string) {
       const m: Record<string, string> = { text: 'badge-blue', video: 'badge-orange', quiz: 'badge-green', image: 'badge-gray', modules: 'badge-gray' };
       return m[type] || 'badge-gray';
@@ -493,11 +569,22 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('courses-list')!.addEventListener('change', (e: Event) => {
       const target = e.target as HTMLElement;
       if (target.id === 'mf-type') {
-        const isQuiz = (target as HTMLSelectElement).value === 'quiz';
+        const type = (target as HTMLSelectElement).value;
+        const isQuiz = type === 'quiz';
         const row = document.getElementById('mf-quizref-row');
         if (row) row.style.display = isQuiz ? 'block' : 'none';
         const inlineRow = document.getElementById('mf-inline-row');
         if (inlineRow) inlineRow.style.display = isQuiz ? 'block' : 'none';
+        const contentRow = document.getElementById('mf-content-row');
+        if (contentRow) contentRow.style.display = modTakesMarkdown(type) ? 'block' : 'none';
+      }
+      // Load a .md file straight into the module's content field.
+      if (target.id === 'mf-content-file') {
+        const file = (target as HTMLInputElement).files?.[0];
+        if (file) readTextFile(file).then(text => {
+          const area = document.getElementById('mf-content') as HTMLTextAreaElement | null;
+          if (area) area.value = text;
+        }).catch(() => (window as any).showToast?.('Lecture du fichier impossible', 'error'));
       }
     });
 
@@ -517,9 +604,10 @@ import Admin from '../../../layouts/Admin.astro';
         else if (action === 'course-edit-save') await saveCourseEdit(courseId);
         else if (action === 'course-edit-cancel') { editingCourseId = null; editingCourseSpec = null; render(); }
         else if (action === 'delete')           await deleteCourse(actionBtn.dataset.id!, actionBtn.dataset.title!);
+        else if (action === 'export-md')        await exportCourseMarkdown(actionBtn.dataset.id!);
         else if (action === 'cache')            await clearCourseCache(actionBtn.dataset.id!);
         else if (action === 'course-cache')     await clearCourseCache(courseId);
-        else if (action === 'mod-add')      { moduleDraft = { name:'',type:'text',src:'',ref:'main',path:'',hidden:false,inline:false,quizRef:'' }; moduleDraftIdx = null; moduleDraftCourseId = courseId; render(); }
+        else if (action === 'mod-add')      { moduleDraft = { name:'',type:'text',src:'',ref:'',path:'',content:'',hidden:false,inline:false,quizRef:'' }; moduleDraftIdx = null; moduleDraftCourseId = courseId; render(); }
         else if (action === 'mod-edit')     await startEditModule(courseId, parseInt(actionBtn.dataset.idx!));
         else if (action === 'mod-delete')   await deleteModule(courseId, parseInt(actionBtn.dataset.idx!), actionBtn.dataset.modname!);
         else if (action === 'mod-cache')    await clearModuleCache(courseId, parseInt(actionBtn.dataset.idx!));
@@ -588,7 +676,24 @@ import Admin from '../../../layouts/Admin.astro';
     async function startEditModule(courseId: string, idx: number) {
       const mod = panelModules?.find((m: any) => m.index === idx);
       if (!mod) return;
-      moduleDraft = { name: mod.name, type: mod.type, src: mod.src || '', ref: mod.ref || 'main', path: mod.path || '', hidden: !!mod.hidden, inline: !!mod.inline, quizRef: mod.quizRef || '' };
+      // The module list never carries inline bodies, so read the stored
+      // definition for the markdown this module was authored with. If that
+      // read fails we must not open the form: saving from it would write
+      // the empty content editor back over the stored body.
+      let stored: any = {};
+      try {
+        const definition = await api(`/admin/courses/${courseId}/definition`);
+        stored = (definition.spec?.modules || [])[idx] ?? {};
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Impossible de charger le module', 'error');
+        return;
+      }
+      moduleDraft = {
+        name: mod.name, type: mod.type,
+        src: stored.src ?? mod.src ?? '', ref: stored.ref ?? mod.ref ?? '', path: stored.path ?? mod.path ?? '',
+        content: stored.content ?? '',
+        hidden: !!mod.hidden, inline: !!mod.inline, quizRef: mod.quizRef || '',
+      };
       moduleDraftIdx = idx;
       moduleDraftCourseId = courseId;
       render();
@@ -597,12 +702,19 @@ import Admin from '../../../layouts/Admin.astro';
     async function saveModuleDraft(courseId: string) {
       const name = (document.getElementById('mf-name') as HTMLInputElement)?.value.trim() || '';
       const type = (document.getElementById('mf-type') as HTMLSelectElement)?.value || 'text';
-      const src  = (document.getElementById('mf-src')  as HTMLInputElement)?.value.trim() || '';
-      const ref  = (document.getElementById('mf-ref')  as HTMLInputElement)?.value.trim() || 'main';
       const path = (document.getElementById('mf-path') as HTMLInputElement)?.value.trim() || '';
       const hidden = (document.getElementById('mf-hidden') as HTMLInputElement)?.checked || false;
       const inline = (document.getElementById('mf-inline') as HTMLInputElement)?.checked || false;
       const quizRef = (document.getElementById('mf-quizref') as HTMLInputElement)?.value.trim() || '';
+      // Inline markdown and a git source are mutually exclusive: the service
+      // always prefers git, so writing one clears the other rather than
+      // leaving a module whose form no longer describes what it serves.
+      const body = modTakesMarkdown(type)
+        ? ((document.getElementById('mf-content') as HTMLTextAreaElement)?.value.trim() || '')
+        : '';
+      const src  = body ? '' : ((document.getElementById('mf-src') as HTMLInputElement)?.value.trim() || '');
+      const rawRef = (document.getElementById('mf-ref') as HTMLInputElement)?.value.trim() || '';
+      const ref  = body || !src ? '' : (rawRef || 'main');
       if (!name) { (window as any).showToast?.('Le nom est requis', 'error'); return; }
 
       const saveBtn = document.querySelector<HTMLButtonElement>('[data-action="mf-save"]');
@@ -618,18 +730,20 @@ import Admin from '../../../layouts/Admin.astro';
           // Preserve existing definition fields not shown in the form (passingScore, cooldown, prerequisites, etc.)
           const existing = mods[moduleDraftIdx!] ?? {};
           const modSpec: any = { ...existing, name, type };
+          if (body) modSpec.content = body; else delete modSpec.content;
           if (src) modSpec.src = src; else delete modSpec.src;
           if (ref) modSpec.ref = ref; else delete modSpec.ref;
-          if (path) modSpec.path = path; else delete modSpec.path;
+          if (path && !body) modSpec.path = path; else delete modSpec.path;
           if (hidden) modSpec.hidden = true; else delete modSpec.hidden;
           if (inline && type === 'quiz') modSpec.inline = true; else delete modSpec.inline;
           if (quizRef && type === 'quiz') modSpec.quizRef = quizRef; else delete modSpec.quizRef;
           mods[moduleDraftIdx!] = modSpec;
         } else {
           const modSpec: any = { name, type };
+          if (body) modSpec.content = body;
           if (src) modSpec.src = src;
           if (ref) modSpec.ref = ref;
-          if (path) modSpec.path = path;
+          if (path && !body) modSpec.path = path;
           if (hidden) modSpec.hidden = true;
           if (inline && type === 'quiz') modSpec.inline = true;
           if (quizRef && type === 'quiz') modSpec.quizRef = quizRef;
@@ -642,7 +756,7 @@ import Admin from '../../../layouts/Admin.astro';
           const savedInline = !!(inline && type === 'quiz');
           panelModules = panelModules.map((pm: any) =>
             pm.index === moduleDraftIdx
-              ? { ...pm, name, type, src: src || pm.src || '', ref: ref || pm.ref || 'main', path: path || pm.path || '', hidden: !!hidden, inline: savedInline }
+              ? { ...pm, name, type, src, ref, path: body ? '' : path, hidden: !!hidden, inline: savedInline }
               : pm
           );
         }
@@ -916,6 +1030,195 @@ import Admin from '../../../layouts/Admin.astro';
         btn.disabled = false;
         btn.textContent = editingSlug ? 'Enregistrer' : 'Créer le cours';
       }
+    });
+
+    // ── Markdown import / export ──
+    // Reads a picked or dropped file as text, so the same handler serves
+    // the import modal and the per-module content field.
+    function readTextFile(file: File): Promise<string> {
+      return file.text();
+    }
+
+    function importEl<T extends HTMLElement>(id: string) {
+      return document.getElementById(id) as T;
+    }
+
+    function importMode() {
+      return importEl<HTMLSelectElement>('im-mode').value;
+    }
+
+    // Slug the document targets: a free-text field when creating, the
+    // picked course otherwise.
+    function importTargetSlug() {
+      return importMode() === 'create'
+        ? importEl<HTMLInputElement>('im-slug').value.trim()
+        : importEl<HTMLSelectElement>('im-course').value;
+    }
+
+    function syncImportMode() {
+      const creating = importMode() === 'create';
+      importEl('im-slug-row').style.display = creating ? 'block' : 'none';
+      importEl('im-course-row').style.display = creating ? 'none' : 'block';
+      importEl<HTMLButtonElement>('im-submit').textContent =
+        creating ? 'Créer le cours' : importMode() === 'append' ? 'Ajouter les modules' : 'Remplacer les modules';
+    }
+
+    function syncImportSize() {
+      const bytes = new TextEncoder().encode(importEl<HTMLTextAreaElement>('im-markdown').value).length;
+      importEl('im-size').textContent = bytes ? `${(bytes / 1024).toFixed(1)} Ko` : '';
+    }
+
+    function openImportModal() {
+      const select = importEl<HTMLSelectElement>('im-course');
+      select.innerHTML = allCourses.map(c => `<option value="${escHtml(c.id)}">${escHtml(c.title)} — ${escHtml(c.id)}</option>`).join('');
+      importEl('im-preview').innerHTML = '';
+      syncImportMode();
+      syncImportSize();
+      importEl('import-modal').classList.add('open');
+      importEl('im-markdown').focus();
+    }
+
+    function closeImportModal() {
+      importEl('import-modal').classList.remove('open');
+    }
+
+    function importPayload() {
+      const markdown = importEl<HTMLTextAreaElement>('im-markdown').value;
+      return {
+        markdown,
+        mode: importMode(),
+        split: importEl<HTMLSelectElement>('im-split').value,
+        slug: importTargetSlug(),
+      };
+    }
+
+    function renderImportPreview(preview: any) {
+      const course = preview.course || {};
+      const meta = [
+        course.title ? `<strong>${escHtml(course.title)}</strong>` : '',
+        course.category ? `<span class="badge badge-blue text-[.7rem]">${escHtml(course.category)}</span>` : '',
+        course.difficulty ? `<span class="badge ${DIFF[course.difficulty] || 'badge-gray'} text-[.7rem]">${escHtml(course.difficulty)}</span>` : '',
+        `<span class="badge ${course.public ? 'badge-green' : 'badge-gray'} text-[.7rem]">${course.public ? 'Public' : 'Privé'}</span>`,
+      ].filter(Boolean).join(' ');
+
+      const mods = (preview.modules || []).map((m: any, i: number) => `
+        <div class="import-mod${m.existing ? ' existing' : ''}">
+          <span class="import-mod-idx">${i}</span>
+          <span class="import-mod-name">${escHtml(m.name)}</span>
+          <span class="badge ${modTypeBadge(m.type)} text-[.7rem]">${escHtml(m.type)}</span>
+          ${m.existing ? '<span class="badge badge-gray text-[.7rem]">existant</span>' : ''}
+          ${m.hidden ? '<span class="badge badge-red text-[.7rem]">masqué</span>' : ''}
+          ${m.path ? `<span class="text-[.72rem] text-ink-soft font-mono">${escHtml(m.path)}</span>` : ''}
+          <span class="text-[.72rem] text-ink-soft">${m.bytes ? `${m.bytes} c.` : '—'}</span>
+        </div>`).join('');
+
+      const warnings = (preview.warnings || []).map((w: string) => `<div class="import-warn">⚠ ${escHtml(w)}</div>`).join('');
+
+      importEl('im-preview').innerHTML = `
+        <div class="import-preview">
+          <p class="section-label">Résultat — <span class="font-mono">${escHtml(preview.slug)}</span></p>
+          <p class="mb-2 text-[.85rem]">${meta || '<span class="text-soft">Aucune métadonnée de cours dans le document.</span>'}</p>
+          <p class="section-label">${(preview.modules || []).length} module(s)</p>
+          ${mods || '<p class="text-soft text-sm">Aucun module.</p>'}
+          ${warnings}
+        </div>`;
+    }
+
+    async function previewImport() {
+      const payload = importPayload();
+      if (!payload.markdown.trim()) { (window as any).showToast?.('Collez ou chargez un document', 'error'); return; }
+      const btn = importEl<HTMLButtonElement>('im-preview-btn');
+      btn.disabled = true; btn.textContent = 'Analyse…';
+      try {
+        renderImportPreview(await api('/admin/courses/import/preview', { method: 'POST', body: payload }));
+      } catch (e: any) {
+        importEl('im-preview').innerHTML = `<div class="import-warn">⚠ ${escHtml(e.message || 'Erreur')}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Prévisualiser';
+      }
+    }
+
+    async function submitImport() {
+      const payload = importPayload();
+      if (!payload.markdown.trim()) { (window as any).showToast?.('Collez ou chargez un document', 'error'); return; }
+      if (payload.mode === 'replace' && !confirm(`Remplacer tous les modules de "${payload.slug}" par ce document ?`)) return;
+
+      const btn = importEl<HTMLButtonElement>('im-submit');
+      const label = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Import…';
+      try {
+        const res = await api('/admin/courses/import', { method: 'POST', body: payload });
+        (window as any).showToast?.(`${res.moduleCount} module(s) importé(s) dans "${res.slug}"`, 'success');
+        (res.warnings || []).forEach((w: string) => (window as any).showToast?.(w, 'error'));
+        closeImportModal();
+        importEl<HTMLTextAreaElement>('im-markdown').value = '';
+        importEl<HTMLInputElement>('im-slug').value = '';
+        await load();
+        if (openId === res.slug) { openId = null; await toggle(res.slug); }
+      } catch (e: any) {
+        (window as any).showToast?.(e.message || 'Erreur', 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = label;
+      }
+    }
+
+    // Downloads a course as the markdown document the import endpoint reads
+    // back, so a course can be edited outside the admin UI and returned.
+    async function exportCourseMarkdown(courseId: string) {
+      try {
+        const res = await fetch(`/api/admin/courses/${courseId}/export/markdown`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error((e as any).error || `HTTP ${res.status}`);
+        }
+        const url = URL.createObjectURL(new Blob([await res.text()], { type: 'text/markdown' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${courseId}.md`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (e: any) { (window as any).showToast?.(e.message || 'Erreur', 'error'); }
+    }
+
+    importEl('import-md-btn').addEventListener('click', openImportModal);
+    importEl('im-close').addEventListener('click', closeImportModal);
+    importEl('import-modal').addEventListener('click', e => {
+      if (e.target === importEl('import-modal')) closeImportModal();
+    });
+    importEl('im-mode').addEventListener('change', syncImportMode);
+    importEl('im-markdown').addEventListener('input', syncImportSize);
+    importEl('im-preview-btn').addEventListener('click', previewImport);
+    importEl('im-submit').addEventListener('click', submitImport);
+
+    importEl('im-file').addEventListener('change', async e => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        importEl<HTMLTextAreaElement>('im-markdown').value = await readTextFile(file);
+        syncImportSize();
+      } catch { (window as any).showToast?.('Lecture du fichier impossible', 'error'); }
+    });
+
+    // Drag a .md file straight onto the editor.
+    const importEditor = importEl<HTMLTextAreaElement>('im-markdown');
+    ['dragenter', 'dragover'].forEach(type => importEditor.addEventListener(type, e => {
+      e.preventDefault();
+      importEditor.classList.add('dragging');
+    }));
+    importEditor.addEventListener('dragleave', () => importEditor.classList.remove('dragging'));
+    importEditor.addEventListener('drop', async e => {
+      e.preventDefault();
+      importEditor.classList.remove('dragging');
+      const file = (e as DragEvent).dataTransfer?.files?.[0];
+      if (!file) return;
+      try {
+        importEditor.value = await readTextFile(file);
+        syncImportSize();
+      } catch { (window as any).showToast?.('Lecture du fichier impossible', 'error'); }
     });
 
     // ── YAML modal ──

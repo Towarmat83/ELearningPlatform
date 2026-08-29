@@ -10,11 +10,15 @@ import (
 	"github.com/genesary/pupitre/course-service/internal/definition"
 )
 
+// courseKind names the course resource in error messages, log lines and
+// the filename an export falls back to.
+const courseKind = "course"
+
 // courseMessages is the client-facing wording for course definitions.
 //
 //nolint:gochecknoglobals // static response wording, read-only
 var courseMessages = definitionMessages{
-	Kind:         "course",
+	Kind:         courseKind,
 	InvalidSpec:  "Invalid course spec",
 	Conflict:     "Course already exists",
 	NotFound:     courseNotFoundMessage,

@@ -26,6 +26,12 @@ import (
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).
 const maxRequestBodyBytes = 1 << 20
 
+// maxAdminRequestBodyBytes caps the size of bodies accepted on the admin
+// endpoints (10 MB). A course definition carries every module's markdown
+// inline, and a markdown import is one document holding the whole course,
+// so both run well past what a learner request is allowed.
+const maxAdminRequestBodyBytes = 10 << 20
+
 // statusOKValue is the JSON value reported for successful status fields.
 const statusOKValue = "ok"
 

@@ -23,7 +23,9 @@ func TestHandler_ReturnsMetrics(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "pupitre_active_users_total") {
-		t.Error("expected pupitre_active_users_total in metrics output")
+	for _, name := range []string{"pupitre_active_users_total", "pupitre_active_courses_total", "pupitre_enrollments_total"} {
+		if !strings.Contains(body, name) {
+			t.Errorf("expected %s in metrics output", name)
+		}
 	}
 }

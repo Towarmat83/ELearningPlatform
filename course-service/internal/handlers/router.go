@@ -6,8 +6,8 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
-	"github.com/genesary/pupitre/course-service/internal/metrics"
-	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
+	"github.com/genesary/pupitre/internal/metrics"
+	apimiddleware "github.com/genesary/pupitre/internal/middleware"
 )
 
 // routerCORSMaxAgeSeconds is the max-age advertised for CORS preflight
@@ -24,7 +24,7 @@ const compressionLevel = 5
 func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	authMW := apimiddleware.Auth(cfg.JWTSecret)
 	adminMW := apimiddleware.Admin(cfg.JWTSecret)
-	trainerMW := apimiddleware.AdminOrManager(cfg.JWTSecret)
+	trainerMW := apimiddleware.ManagerOrAdmin(cfg.JWTSecret)
 
 	corsOptions := cors.New(cors.Options{
 		AllowedOrigins:   cfg.CORSOrigins,

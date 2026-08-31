@@ -10,9 +10,10 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 
+	"github.com/genesary/pupitre/internal/internalauth"
+	"github.com/genesary/pupitre/internal/metrics"
+	apimiddleware "github.com/genesary/pupitre/internal/middleware"
 	"github.com/genesary/pupitre/user-service/internal/config"
-	"github.com/genesary/pupitre/user-service/internal/metrics"
-	apimiddleware "github.com/genesary/pupitre/user-service/internal/middleware"
 )
 
 // remoteIP extracts the IP from r.RemoteAddr (already set to the real client
@@ -57,7 +58,7 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	adminMW := apimiddleware.Admin(cfg.JWTSecret)
 	managerMW := apimiddleware.Manager(cfg.JWTSecret)
 	exportMW := apimiddleware.ManagerOrAdmin(cfg.JWTSecret)
-	internalMW := apimiddleware.InternalAuth(cfg.InternalSecret)
+	internalMW := internalauth.Middleware(cfg.InternalSecret)
 
 	router := chi.NewRouter()
 	router.Use(chiMiddleware.RequestID)

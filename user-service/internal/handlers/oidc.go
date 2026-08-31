@@ -13,7 +13,7 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/genesary/pupitre/user-service/internal/httpx"
+	"github.com/genesary/pupitre/internal/httpx"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 

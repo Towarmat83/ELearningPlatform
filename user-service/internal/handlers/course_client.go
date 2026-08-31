@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/genesary/pupitre/user-service/internal/httpx"
+	"github.com/genesary/pupitre/internal/httpx"
 )
 
 // fetchCourseServiceJSON performs a GET on course-service at urlPath and

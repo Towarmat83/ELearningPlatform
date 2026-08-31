@@ -1,0 +1,21 @@
+# The Go images build from the repository root, so keep everything that is not
+# part of a Go build out of the context.
+.git
+.github
+.scannerwork
+.tokensave
+docs
+examples
+infra
+helm
+frontend
+pupitre-desktop
+e2e
+*.md
+lab-checker-design.html
+sonar-project.properties
+cliff.toml
+renovate.json
+Makefile
+local.mk
+coverage*.out

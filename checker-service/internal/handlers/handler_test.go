@@ -10,6 +10,7 @@ import (
 
 	"github.com/genesary/pupitre/checker-service/internal/checker"
 	"github.com/genesary/pupitre/checker-service/internal/config"
+	"github.com/genesary/pupitre/internal/httperr"
 )
 
 // baseConfig returns a Config with sane defaults for handler tests.
@@ -450,7 +451,7 @@ func TestHTTPErr(t *testing.T) {
 	t.Parallel()
 
 	w := httptest.NewRecorder()
-	httpErr(w, http.StatusTeapot, "nope")
+	httperr.Write(w, http.StatusTeapot, "nope")
 
 	if w.Code != http.StatusTeapot {
 		t.Errorf("code = %d", w.Code)

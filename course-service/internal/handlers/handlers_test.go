@@ -11,8 +11,8 @@ import (
 	"github.com/genesary/pupitre/course-service/fake"
 	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
-	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
 	"github.com/genesary/pupitre/course-service/internal/repository"
+	apimiddleware "github.com/genesary/pupitre/internal/middleware"
 )
 
 // newStateWith builds a State backed by in-memory repository fakes seeded
@@ -135,6 +135,7 @@ func authHeader(t *testing.T, secret string) string {
 		"00000000-0000-0000-0000-000000000001",
 		"test@test.com",
 		"student",
+		"testuser",
 		secret,
 		24,
 	)
@@ -153,6 +154,7 @@ func adminAuthHeader(t *testing.T, secret string) string {
 		"00000000-0000-0000-0000-000000000000",
 		"admin@test.com",
 		"admin",
+		"testadmin",
 		secret,
 		24,
 	)

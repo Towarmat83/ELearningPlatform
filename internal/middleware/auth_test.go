@@ -225,16 +225,9 @@ func TestAuth_InvalidToken(t *testing.T) {
 func TestAuth_MissingSubject(t *testing.T) {
 	t.Parallel()
 
-	// Token without subject.
-	claims := Claims{
-		Email: "user@example.com",
-		Role:  "student",
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-		},
-	}
-	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+	// Valid issuer, audience and expiry, but no subject: the token must be
+	// rejected by the subject guard rather than by claim validation.
+	tok := signedClaims(t, "student", "")
 
 	mw := Auth(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -362,15 +355,7 @@ func TestAdmin_InvalidToken(t *testing.T) {
 func TestAdmin_MissingSubject(t *testing.T) {
 	t.Parallel()
 
-	claims := Claims{
-		Email: "user@example.com",
-		Role:  "admin",
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-		},
-	}
-	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+	tok := signedClaims(t, "admin", "")
 	mw := Admin(testSecret)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
@@ -485,5 +470,93 @@ func TestManager_InvalidToken(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("Manager invalid token: want 401, got %d", rec.Code)
+	}
+}
+
+// signedClaims signs claims with the test secret, filling in the issuer,
+// audience and expiry that VerifyToken requires. Tests that probe a single
+// claim must otherwise pass iss/aud/exp validation first, or they assert a
+// 401 that never reaches the code under test.
+func signedClaims(t *testing.T, role, subject string) string {
+	t.Helper()
+
+	claims := Claims{
+		Email: "user@example.com",
+		Role:  role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   subject,
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			Issuer:    jwtIssuer,
+			Audience:  jwt.ClaimStrings{jwtAudience},
+		},
+	}
+
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+	if err != nil {
+		t.Fatalf("sign claims: %v", err)
+	}
+
+	return tok
+}
+
+// TestVerifyToken_Empty rejects an empty token string.
+func TestVerifyToken_Empty(t *testing.T) {
+	t.Parallel()
+
+	_, err := VerifyToken("", testSecret)
+	if err == nil {
+		t.Error("expected error for empty token")
+	}
+}
+
+// TestVerifyToken_MissingExpiry rejects a correctly-signed token that carries
+// no exp claim, which the parser would otherwise treat as never expiring.
+func TestVerifyToken_MissingExpiry(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{
+		Role: "student",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:  "user-1",
+			IssuedAt: jwt.NewNumericDate(time.Now()),
+			Issuer:   jwtIssuer,
+			Audience: jwt.ClaimStrings{jwtAudience},
+		},
+	}
+
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+	if err != nil {
+		t.Fatalf("sign claims: %v", err)
+	}
+
+	_, err = VerifyToken(tok, testSecret)
+	if err == nil {
+		t.Error("expected error for token without exp claim")
+	}
+}
+
+// TestVerifyToken_MissingIssuerAudience rejects a token that omits the iss
+// and aud claims rather than accepting it as unconstrained.
+func TestVerifyToken_MissingIssuerAudience(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{
+		Role: "student",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "user-1",
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}
+
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+	if err != nil {
+		t.Fatalf("sign claims: %v", err)
+	}
+
+	_, err = VerifyToken(tok, testSecret)
+	if err == nil {
+		t.Error("expected error for token without iss/aud claims")
 	}
 }

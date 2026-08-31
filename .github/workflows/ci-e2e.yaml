@@ -5,15 +5,15 @@ on:
     branches:
       - main
     paths:
-      - "user-service/**"
-      - "checker-service/**"
-      - "e2e/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/ci-e2e.yaml"
   pull_request:
     paths:
-      - "user-service/**"
-      - "checker-service/**"
-      - "e2e/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/ci-e2e.yaml"
 
 concurrency:
@@ -56,21 +56,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.26"
-          cache-dependency-path: |
-            user-service/go.sum
-            checker-service/go.sum
-            e2e/go.mod
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
-      - name: Build user-service
-        working-directory: user-service
-        run: go build -o ../bin/user-service .
-        env:
-          CGO_ENABLED: "0"
-
-      - name: Build checker-service
-        working-directory: checker-service
-        run: go build -o ../bin/checker-service ./cmd/
+      - name: Build services
+        run: |
+          go build -o bin/user-service ./user-service
+          go build -o bin/checker-service ./checker-service/cmd
         env:
           CGO_ENABLED: "0"
 
@@ -86,9 +78,8 @@ jobs:
           echo "CHECKER_SERVICE_PID=$!" >> "$GITHUB_ENV"
 
       - name: Run e2e tests
-        working-directory: e2e
         run: |
-          go test -tags e2e -v -timeout 120s ./...
+          go test -tags e2e -v -timeout 120s ./e2e/...
         env:
           USER_SERVICE_URL: http://localhost:8081
           CHECKER_SERVICE_URL: http://localhost:8083

@@ -34,17 +34,19 @@ kind-delete:
 
 docker-build: docker-build-course docker-build-user docker-build-frontend docker-build-checker
 
+# The Go services share the root go.mod and internal/, so they build from the
+# repository root with an explicit Dockerfile path. The frontend is unchanged.
 docker-build-course:
-	$(DOCKER) build -t $(IMAGE_COURSE) course-service
+	$(DOCKER) build -f course-service/Dockerfile -t $(IMAGE_COURSE) .
 
 docker-build-user:
-	$(DOCKER) build -t $(IMAGE_USER) user-service
+	$(DOCKER) build -f user-service/Dockerfile -t $(IMAGE_USER) .
 
 docker-build-frontend:
 	$(DOCKER) build -t $(IMAGE_FRONTEND) frontend
 
 docker-build-checker:
-	$(DOCKER) build -t $(IMAGE_CHECKER) checker-service
+	$(DOCKER) build -f checker-service/Dockerfile -t $(IMAGE_CHECKER) .
 
 # ── Kind load ───────────────────────────────────────────────────────────────
 
@@ -202,30 +204,22 @@ openapi/gen: openapi/gen/course-service openapi/gen/user-service
 openapi/gen/course-service:
 	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
 	@echo "Generating course-service/openapi.json from code..."
-	@cd course-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
+	@swag init -g main.go -d ./course-service,./internal --output ./course-service --outputTypes json --parseInternal --quiet && mv course-service/swagger.json course-service/openapi.json
 
 openapi/gen/user-service:
 	@which swag > /dev/null 2>&1 || (echo "swag not found — run: go install github.com/swaggo/swag/cmd/swag@latest" && exit 1)
 	@echo "Generating user-service/openapi.json from code..."
-	@cd user-service && swag init -g main.go --output . --outputTypes json --parseInternal --quiet && mv swagger.json openapi.json
+	@swag init -g main.go -d ./user-service,./internal --output ./user-service --outputTypes json --parseInternal --quiet && mv user-service/swagger.json user-service/openapi.json
 
 # ── Go Tests ────────────────────────────────────────────────────────────────
 
-.PHONY: go/test go/test/course go/test/user go/test/checker
+.PHONY: go/test
 
-go/test: go/test/course go/test/user go/test/checker
-
-go/test/course:
-	@echo "=== course-service tests ==="
-	@cd course-service && CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out
-
-go/test/user:
-	@echo "=== user-service tests ==="
-	@cd user-service && CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out
-
-go/test/checker:
-	@echo "=== checker-service tests ==="
-	@cd checker-service && CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out
+# One root module: a single run covers every service and the shared packages
+# under internal/.
+go/test:
+	@echo "=== go tests ==="
+	@CGO_ENABLED=1 go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -count=1 && go tool cover -func=coverage.out | tail -1
 
 # ── Go Integration Tests ───────────────────────────────────────────────────
 #
@@ -238,35 +232,19 @@ go/test/checker:
 #   TEST_DATABASE_URL=postgres://pupitre:pupitre@localhost:55432/pupitre?sslmode=disable \
 #     make go/test/integration
 
-.PHONY: go/test/integration go/test/integration/course go/test/integration/user
+.PHONY: go/test/integration
 
-go/test/integration: go/test/integration/course go/test/integration/user
-
-go/test/integration/course:
-	@echo "=== course-service integration tests ==="
-	@cd course-service && CGO_ENABLED=1 go test -tags=integration -p 1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.integration.out ./... -count=1 && go tool cover -func=coverage.integration.out | tail -1
-
-go/test/integration/user:
-	@echo "=== user-service integration tests ==="
-	@cd user-service && CGO_ENABLED=1 go test -tags=integration -p 1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.integration.out ./... -count=1 && go tool cover -func=coverage.integration.out | tail -1
+go/test/integration:
+	@echo "=== integration tests ==="
+	@CGO_ENABLED=1 go test -tags=integration -p 1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.integration.out ./... -count=1 && go tool cover -func=coverage.integration.out | tail -1
 
 # ── Go Lint ─────────────────────────────────────────────────────────────────
 
-.PHONY: go/lint go/lint-course go/lint-user go/lint-checker
+.PHONY: go/lint
 
-go/lint: go/lint/course go/lint/user go/lint/checker
-
-go/lint/course:
-	@echo "=== Linting course-service ==="
-	@cd course-service && golangci-lint run ./...
-
-go/lint/user:
-	@echo "=== Linting user-service ==="
-	@cd user-service && golangci-lint run ./...
-
-go/lint/checker:
-	@echo "=== Linting checker-service ==="
-	@cd checker-service && golangci-lint run ./...
+go/lint:
+	@echo "=== Linting ==="
+	@golangci-lint run ./...
 
 # ── E2E Tests ───────────────────────────────────────────────────────────────
 #
@@ -283,7 +261,7 @@ go/lint/checker:
 .PHONY: e2e/test
 e2e/test:
 	@echo "=== E2E tests ==="
-	@cd e2e && go test -tags e2e -v -timeout 120s ./...
+	@go test -tags e2e -v -timeout 120s ./e2e/...
 
 # ── Status ──────────────────────────────────────────────────────────────────
 

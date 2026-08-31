@@ -13,8 +13,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/genesary/pupitre/user-service/internal/metrics"
-	"github.com/genesary/pupitre/user-service/internal/middleware"
+	"github.com/genesary/pupitre/internal/metrics"
+	"github.com/genesary/pupitre/internal/middleware"
 	"github.com/genesary/pupitre/user-service/internal/models"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )

@@ -208,7 +208,7 @@ This deletes the old cluster, creates a new one, builds images, loads them, runs
 
 ```bash
 # Build and reload course-service
-docker build -t localhost/pupitre-course-service:latest course-service/
+docker build -f course-service/Dockerfile -t localhost/pupitre-course-service:latest .
 kind load docker-image localhost/pupitre-course-service:latest --name pupitre
 kubectl rollout restart deploy/pupitre-course-service
 ```

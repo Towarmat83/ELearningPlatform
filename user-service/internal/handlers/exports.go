@@ -13,7 +13,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/genesary/pupitre/user-service/internal/httpx"
+	"github.com/genesary/pupitre/internal/httpx"
 	"github.com/genesary/pupitre/user-service/internal/models"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )

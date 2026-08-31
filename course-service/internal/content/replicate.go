@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/genesary/pupitre/course-service/internal/httpx"
+	"github.com/genesary/pupitre/internal/httpx"
 )
 
 // replicatedPrefix is the URL path prefix under which replicated module

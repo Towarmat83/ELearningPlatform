@@ -19,8 +19,8 @@ import (
 
 	"github.com/genesary/pupitre/course-service/internal/config"
 	"github.com/genesary/pupitre/course-service/internal/content"
-	"github.com/genesary/pupitre/course-service/internal/middleware"
 	"github.com/genesary/pupitre/course-service/internal/repository"
+	"github.com/genesary/pupitre/internal/middleware"
 )
 
 // maxRequestBodyBytes caps the size of accepted request bodies (1 MB).

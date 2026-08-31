@@ -16,9 +16,9 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	apimiddleware "github.com/genesary/pupitre/internal/middleware"
 	"github.com/genesary/pupitre/user-service/fake"
 	"github.com/genesary/pupitre/user-service/internal/config"
-	apimiddleware "github.com/genesary/pupitre/user-service/internal/middleware"
 	"github.com/genesary/pupitre/user-service/internal/models"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )

@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/genesary/pupitre/user-service/internal/httpx"
+	"github.com/genesary/pupitre/internal/httpx"
 )
 
 // catalogTTL is how long a course or path definition fetched from

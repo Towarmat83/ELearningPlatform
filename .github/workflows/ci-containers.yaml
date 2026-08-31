@@ -56,14 +56,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The Go services share the root go.mod and internal/, so they build
+          # from the repository root with an explicit Dockerfile path.
           - service: course-service
-            context: ./course-service
+            context: .
+            dockerfile: ./course-service/Dockerfile
           - service: user-service
-            context: ./user-service
+            context: .
+            dockerfile: ./user-service/Dockerfile
+          - service: checker-service
+            context: .
+            dockerfile: ./checker-service/Dockerfile
           - service: frontend
             context: ./frontend
-          - service: checker-service
-            context: ./checker-service
+            dockerfile: ./frontend/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -107,6 +113,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: ${{ steps.vars.outputs.push == 'true' }}
           tags: ${{ steps.vars.outputs.tags }}
           labels: |

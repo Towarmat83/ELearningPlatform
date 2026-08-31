@@ -5,15 +5,15 @@ on:
     branches:
       - main
     paths:
-      - "course-service/**"
-      - "user-service/**"
-      - "checker-service/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/ci-golang.yaml"
   pull_request:
     paths:
-      - "course-service/**"
-      - "user-service/**"
-      - "checker-service/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/ci-golang.yaml"
 
 concurrency:
@@ -23,17 +23,12 @@ concurrency:
 permissions:
   contents: read
 
+# The services share a single root module, so lint, test and build each run
+# once over the whole tree rather than once per service.
 jobs:
   lint:
-    name: Lint (${{ matrix.service }})
+    name: Lint
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - course-service
-          - user-service
-          - checker-service
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,30 +40,19 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: ${{ matrix.service }}/go.mod
-          cache-dependency-path: ${{ matrix.service }}/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          working-directory: ${{ matrix.service }}
           args: --timeout=5m
           only-new-issues: false
 
   test:
-    name: Test (${{ matrix.service }})
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - course-service
-          - user-service
-          - checker-service
-    defaults:
-      run:
-        working-directory: ${{ matrix.service }}
     env:
       CGO_ENABLED: "1"
     steps:
@@ -77,8 +61,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: ${{ matrix.service }}/go.mod
-          cache-dependency-path: ${{ matrix.service }}/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Run tests
         run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
@@ -86,23 +70,13 @@ jobs:
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.service }}
-          path: ${{ matrix.service }}/coverage.out
+          name: coverage
+          path: coverage.out
           if-no-files-found: warn
 
   build:
-    name: Build (${{ matrix.service }})
+    name: Build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - course-service
-          - user-service
-          - checker-service
-    defaults:
-      run:
-        working-directory: ${{ matrix.service }}
     env:
       CGO_ENABLED: "0"
       GO111MODULE: "on"
@@ -112,8 +86,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: ${{ matrix.service }}/go.mod
-          cache-dependency-path: ${{ matrix.service }}/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Build
         run: go build ./...

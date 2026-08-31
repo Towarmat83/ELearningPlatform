@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
-	"github.com/genesary/pupitre/course-service/internal/httpx"
+	"github.com/genesary/pupitre/internal/httpx"
 )
 
 // courseProgress is one learner's state in one course, as course-service

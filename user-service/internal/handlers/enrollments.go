@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/genesary/pupitre/user-service/internal/metrics"
+	"github.com/genesary/pupitre/internal/metrics"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 

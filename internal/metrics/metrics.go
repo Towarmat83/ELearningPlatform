@@ -1,5 +1,7 @@
-// Package metrics defines and exposes the Prometheus metrics collected by
-// course-service.
+// Package metrics defines and exposes the Prometheus metrics collectors
+// shared by the pupitre services. Every collector is registered in each
+// binary that imports this package, so a service reports zero for the
+// gauges it does not own.
 package metrics
 
 import (
@@ -10,44 +12,42 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	// labelMethod is the Prometheus label name for the HTTP method.
-	labelMethod = "method"
-	// labelEndpoint is the Prometheus label name for the request endpoint.
-	labelEndpoint = "endpoint"
-	// labelStatus is the Prometheus label name for the HTTP status code.
-	labelStatus = "status"
-)
+// httpEndpointLabel is the label name used to record the request route.
+const httpEndpointLabel = "endpoint"
 
+// httpMethodLabel is the label name used to record the HTTP method.
+const httpMethodLabel = "method"
+
+// singletons registered once at init time; used by internal/handlers.
 var (
-	// HTTPRequestsTotal counts HTTP requests handled by course-service,
-	// labeled by method, endpoint, and status code.
+	// HTTPRequestsTotal counts HTTP requests by method, endpoint and
+	// status.
 	HTTPRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{ //nolint:gochecknoglobals // promauto collectors must be package-level
 		Name: "http_requests_total",
 		Help: "Total HTTP requests",
-	}, []string{labelMethod, labelEndpoint, labelStatus})
+	}, []string{httpMethodLabel, httpEndpointLabel, "status"})
 
-	// HTTPRequestDuration observes HTTP request durations, labeled by
-	// method and endpoint.
+	// HTTPRequestDuration records HTTP request latency by method and
+	// endpoint.
 	HTTPRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{ //nolint:gochecknoglobals // promauto collectors must be package-level
 		Name:    "http_request_duration_seconds",
 		Help:    "HTTP request duration in seconds",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0},
-	}, []string{labelMethod, labelEndpoint})
+	}, []string{httpMethodLabel, httpEndpointLabel})
 
-	// ActiveUsers reports the current number of registered users.
+	// ActiveUsers is a gauge of currently registered users.
 	ActiveUsers = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
 		Name: "pupitre_active_users_total",
 		Help: "Total number of registered users",
 	})
 
-	// ActiveCourses reports the current number of published courses.
+	// ActiveCourses is a gauge of currently published courses.
 	ActiveCourses = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
 		Name: "pupitre_active_courses_total",
 		Help: "Total number of published courses",
 	})
 
-	// EnrollmentsTotal reports the current number of course enrollments.
+	// EnrollmentsTotal is a gauge of current course enrollments.
 	EnrollmentsTotal = promauto.NewGauge(prometheus.GaugeOpts{ //nolint:gochecknoglobals,promlinter // promauto collectors must be package-level; deployed metric name, see dashboards
 		Name: "pupitre_enrollments_total",
 		Help: "Total course enrollments",

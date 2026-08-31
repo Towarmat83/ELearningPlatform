@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/genesary/pupitre/course-service/internal/config"
-	apimiddleware "github.com/genesary/pupitre/course-service/internal/middleware"
+	apimiddleware "github.com/genesary/pupitre/internal/middleware"
 )
 
 // managerAuthHeader returns a Bearer token header for a manager user.
@@ -18,6 +18,7 @@ func managerAuthHeader(t *testing.T, secret string) string {
 		"00000000-0000-0000-0000-000000000002",
 		"manager@test.com",
 		"manager",
+		"testmanager",
 		secret,
 		24,
 	)

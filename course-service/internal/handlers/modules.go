@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/genesary/pupitre/course-service/internal/content"
-	"github.com/genesary/pupitre/course-service/internal/middleware"
 	"github.com/genesary/pupitre/course-service/internal/repository"
+	"github.com/genesary/pupitre/internal/middleware"
 )
 
 // publicAnswer is the client-facing representation of a quiz answer option;

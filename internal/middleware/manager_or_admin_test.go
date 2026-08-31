@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // moaRun drives the ManagerOrAdmin middleware with the given Authorization
@@ -87,13 +84,7 @@ func TestManagerOrAdmin_InvalidToken(t *testing.T) {
 func TestManagerOrAdmin_MissingSubject(t *testing.T) {
 	t.Parallel()
 
-	claims := Claims{
-		Role: "admin",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-		},
-	}
-	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+	tok := signedClaims(t, "admin", "")
 
 	if code := moaRun(t, "Bearer "+tok); code != http.StatusUnauthorized {
 		t.Errorf("missing subject: want 401, got %d", code)

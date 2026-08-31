@@ -1,18 +1,23 @@
 // Package middleware provides HTTP middleware for authentication and
-// authorization using JWT bearer tokens.
+// authorization using JWT bearer tokens. It is shared by every service that
+// accepts end-user tokens, so that the token contract is defined exactly
+// once: user-service mints the tokens here, and every service verifies them
+// with the same code.
 package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/genesary/pupitre/internal/httperr"
 )
 
 // roleAdmin is the role name granted administrative access.
@@ -27,6 +32,14 @@ const jwtIssuer = "user-service"
 // jwtAudience is the aud claim set on every session token and required on
 // parse.
 const jwtAudience = "pupitre-api"
+
+// signingAlg is the only JOSE algorithm accepted on parse. Pinning it means
+// a token header advertising another algorithm is rejected before the
+// signature is even considered.
+const signingAlg = "HS256"
+
+// bearerPrefix is the required prefix of the Authorization header value.
+const bearerPrefix = "Bearer "
 
 // Claims are the JWT claims embedded in issued access tokens.
 type Claims struct {
@@ -66,7 +79,10 @@ func CreateToken(userID, email, role, username, secret string, expiryHours int) 
 	return token, nil
 }
 
-// VerifyToken parses and validates a JWT, returning its Claims.
+// VerifyToken parses and validates a JWT, returning its Claims. The parser
+// is pinned to a single symmetric algorithm and requires iss, aud and exp,
+// so a token that omits any of them is rejected rather than treated as
+// unconstrained.
 func VerifyToken(tokenStr, secret string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -74,7 +90,12 @@ func VerifyToken(tokenStr, secret string) (*Claims, error) {
 		}
 
 		return []byte(secret), nil
-	}, jwt.WithAudience(jwtAudience), jwt.WithIssuer(jwtIssuer))
+	},
+		jwt.WithValidMethods([]string{signingAlg}),
+		jwt.WithAudience(jwtAudience),
+		jwt.WithIssuer(jwtIssuer),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("parse token: %w", err)
 	}
@@ -95,133 +116,70 @@ func GetClaims(req *http.Request) *Claims {
 	return nil
 }
 
-// httpErr writes a JSON error response with the given status and message.
-func httpErr(writer http.ResponseWriter, status int, msg string) {
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(status)
+// guard is the single authentication path used by every exported middleware
+// in this package: it verifies the bearer token, rejects a token that
+// carries no subject, and optionally enforces that the token's role is one
+// of allowedRoles. Keeping one implementation is deliberate — the previous
+// per-service copies of this logic drifted, and only some of them checked
+// the subject. An empty allowedRoles means authentication only.
+func guard(secret, forbiddenMsg string, allowedRoles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			auth := req.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, bearerPrefix) {
+				httperr.Write(resp, http.StatusUnauthorized, "Missing Authorization header")
 
-	err := json.NewEncoder(writer).Encode(map[string]string{"error": msg})
-	if err != nil {
-		return
+				return
+			}
+
+			claims, err := VerifyToken(strings.TrimPrefix(auth, bearerPrefix), secret)
+			if err != nil {
+				zap.L().Error("token verification failed", zap.Error(err))
+				httperr.Write(resp, http.StatusUnauthorized, "Invalid token")
+
+				return
+			}
+
+			// Handlers read Subject as the authenticated user ID and pass it
+			// straight into ownership and enrollment queries, so an empty
+			// one must never reach them.
+			if claims.Subject == "" {
+				httperr.Write(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
+
+				return
+			}
+
+			if len(allowedRoles) > 0 && !slices.Contains(allowedRoles, claims.Role) {
+				httperr.Write(resp, http.StatusForbidden, forbiddenMsg)
+
+				return
+			}
+
+			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
+			next.ServeHTTP(resp, req.WithContext(ctx))
+		})
 	}
 }
 
 // Auth returns middleware that requires a valid bearer token.
 func Auth(secret string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-			auth := req.Header.Get("Authorization")
-			if !strings.HasPrefix(auth, "Bearer ") {
-				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
-
-				return
-			}
-
-			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
-			if err != nil {
-				zap.L().Error("token verification failed", zap.Error(err))
-				httpErr(resp, http.StatusUnauthorized, "Invalid token")
-
-				return
-			}
-
-			if claims.Subject == "" {
-				httpErr(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
-
-				return
-			}
-
-			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
-			next.ServeHTTP(resp, req.WithContext(ctx))
-		})
-	}
-}
-
-// requireRole builds middleware that validates a bearer token and enforces
-// that its claims carry the expected role value. The forbidden message is
-// role-specific so callers get a clear error.
-func requireRole(secret, role, forbiddenMsg string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-			auth := req.Header.Get("Authorization")
-			if !strings.HasPrefix(auth, "Bearer ") {
-				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
-
-				return
-			}
-
-			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
-			if err != nil {
-				zap.L().Error("token verification failed", zap.Error(err))
-				httpErr(resp, http.StatusUnauthorized, "Invalid token")
-
-				return
-			}
-
-			if claims.Subject == "" {
-				httpErr(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
-
-				return
-			}
-
-			if claims.Role != role {
-				httpErr(resp, http.StatusForbidden, forbiddenMsg)
-
-				return
-			}
-
-			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
-			next.ServeHTTP(resp, req.WithContext(ctx))
-		})
-	}
+	return guard(secret, "")
 }
 
 // Manager returns middleware that requires a valid bearer token whose
 // claims carry the manager role.
 func Manager(secret string) func(http.Handler) http.Handler {
-	return requireRole(secret, roleManager, "Manager access required")
+	return guard(secret, "Manager access required", roleManager)
 }
 
 // Admin returns middleware that requires a valid bearer token whose
 // claims carry the admin role.
 func Admin(secret string) func(http.Handler) http.Handler {
-	return requireRole(secret, roleAdmin, "Admin access required")
+	return guard(secret, "Admin access required", roleAdmin)
 }
 
 // ManagerOrAdmin returns middleware that requires a valid bearer token whose
 // claims carry either the manager or admin role.
 func ManagerOrAdmin(secret string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-			auth := req.Header.Get("Authorization")
-			if !strings.HasPrefix(auth, "Bearer ") {
-				httpErr(resp, http.StatusUnauthorized, "Missing Authorization header")
-
-				return
-			}
-
-			claims, err := VerifyToken(strings.TrimPrefix(auth, "Bearer "), secret)
-			if err != nil {
-				zap.L().Error("token verification failed", zap.Error(err))
-				httpErr(resp, http.StatusUnauthorized, "Invalid token")
-
-				return
-			}
-
-			if claims.Subject == "" {
-				httpErr(resp, http.StatusUnauthorized, "Invalid token: missing user ID")
-
-				return
-			}
-
-			if claims.Role != roleManager && claims.Role != roleAdmin {
-				httpErr(resp, http.StatusForbidden, "Manager or admin access required")
-
-				return
-			}
-
-			ctx := context.WithValue(req.Context(), ClaimsKey, claims)
-			next.ServeHTTP(resp, req.WithContext(ctx))
-		})
-	}
+	return guard(secret, "Manager or admin access required", roleManager, roleAdmin)
 }

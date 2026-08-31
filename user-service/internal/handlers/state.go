@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/genesary/pupitre/internal/middleware"
 	"github.com/genesary/pupitre/user-service/internal/config"
-	"github.com/genesary/pupitre/user-service/internal/middleware"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 

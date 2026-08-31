@@ -1,4 +1,4 @@
-package middleware
+package internalauth
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// iaRun drives the InternalAuth middleware with the given secret header value
+// iaRun drives the Middleware guard with the given secret header value
 // (empty means the header is omitted) and returns the recorded status code
 // plus whether the wrapped handler ran.
 func iaRun(t *testing.T, configured, header string, sendHeader bool) (int, bool) {
@@ -15,7 +15,7 @@ func iaRun(t *testing.T, configured, header string, sendHeader bool) (int, bool)
 
 	var called bool
 
-	mw := InternalAuth(configured)
+	mw := Middleware(configured)
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 
@@ -24,7 +24,7 @@ func iaRun(t *testing.T, configured, header string, sendHeader bool) (int, bool)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/internal/x", http.NoBody)
 	if sendHeader {
-		req.Header.Set("X-Internal-Secret", header)
+		req.Header.Set(HeaderName, header)
 	}
 
 	rec := httptest.NewRecorder()

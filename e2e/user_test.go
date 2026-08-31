@@ -314,8 +314,10 @@ func TestPathEnrollment(t *testing.T) {
 	mustStatus(t, resp, http.StatusCreated)
 
 	var reg struct {
-		User  struct{ ID string `json:"id"` } `json:"user"`
-		Token string                           `json:"token"`
+		User struct {
+			ID string `json:"id"`
+		} `json:"user"`
+		Token string `json:"token"`
 	}
 
 	decodeBody(t, resp, &reg)

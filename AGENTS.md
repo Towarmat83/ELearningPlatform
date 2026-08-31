@@ -24,11 +24,50 @@ Two micro-services (see `docs/ARCHITECTURE.md`):
 
 ## Codebase
 
+### One module, shared packages
+
+The repository is a **single Go module** rooted at `github.com/genesary/pupitre`.
+There is one `go.mod`, one `.golangci.yml`, and one test/lint/build invocation
+for the whole tree:
+
+```sh
+go build ./...
+go test ./... -race
+golangci-lint run ./...
+```
+
+Each service still owns its own `internal/` tree, and Go's internal-package
+rule still enforces that boundary: `course-service/internal/...` is
+importable only from under `course-service/`, so services cannot reach into
+each other. Cross-cutting code lives in the **root** `internal/`, which every
+service may import:
+
+| Package | Role |
+|---|---|
+| `internal/middleware/` | The JWT contract — `Claims`, `CreateToken`, `VerifyToken`, and the `Auth`/`Manager`/`Admin`/`ManagerOrAdmin` guards. user-service mints tokens; every service verifies them with this code. |
+| `internal/internalauth/` | Shared-secret guard for service-to-service routes (`X-Internal-Secret`). Kept separate from `internal/middleware` so checker-service does not link the JWT machinery. |
+| `internal/httperr/` | The JSON error envelope (`httperr.Write`) every service returns. |
+| `internal/httpx/` | Outbound HTTP client with the shared timeouts and connection pool. |
+| `internal/metrics/` | Prometheus collectors and the `/metrics` handler. |
+
+**Do not copy anything out of the root `internal/` into a service.** These
+packages exist because the per-service copies drifted: the JWT middleware was
+duplicated in two services and only one of them rejected a token with an empty
+`sub`, while the shared-secret guard existed in three places. Authentication
+has exactly one implementation now — change it there.
+
+Container images build from the **repository root** with an explicit
+Dockerfile path, because the build needs the root `go.mod` and `internal/`:
+
+```sh
+docker build -f user-service/Dockerfile -t pupitre-user-service .
+```
+
+
 ### Course Service (`course-service/`)
 
 ```sh
-cd course-service
-go build -o /dev/null .
+go build -o /dev/null ./course-service
 ```
 
 | Package | Role |
@@ -39,9 +78,7 @@ go build -o /dev/null .
 | `internal/definition/` | Wire shape of a course/path definition, shared by the admin API and the seeder |
 | `internal/markdown/` | Course ⇄ single markdown document: frontmatter, heading splitting, module directives |
 | `internal/handlers/` | HTTP handlers (chi router) — courses, modules, lessons |
-| `internal/middleware/` | JWT auth middleware (validates only) |
 | `internal/config/` | Env-based config (port, JWT, DATABASE_URL, UserServiceURL) |
-| `internal/metrics/` | Prometheus metrics |
 
 **Routes:** Public: `/health`, `/metrics`, `/api/courses`, `/api/courses/{slug}`, `/uploads/{filename}` — Authenticated: `/api/courses/{slug}/modules`, `/api/courses/{slug}/lessons`, `/api/courses/{slug}/lessons/{lesson}/complete`
 
@@ -67,17 +104,14 @@ endpoints off the `/api/{collection}/{slug}` namespace for the same reason.
 ### User Service (`user-service/`)
 
 ```sh
-cd user-service
-go build -o /dev/null .
+go build -o /dev/null ./user-service
 ```
 
 | Package | Role |
 |---|---|
 | `internal/db/` | PG connection + migration runner |
 | `internal/handlers/` | HTTP handlers — auth, oauth, settings, admin, enrollments, progress |
-| `internal/middleware/` | JWT auth middleware (create + validate) |
 | `internal/config/` | Env-based config (DB, JWT, OAuth) |
-| `internal/metrics/` | Prometheus metrics |
 | `migrations/` | SQL migrations (embed) |
 
 **Routes:** Public auth + OAuth, Authenticated (enroll, progress, my courses), Admin (users, settings, enrollments), Internal (for Course Service): `/internal/enrollments/check`, `/internal/progress/viewed`, `/internal/progress/complete`
@@ -222,7 +256,7 @@ one of them fails a test, not just a benchmark.
 - **One progress read per request.** Course-service loads the learner's
   course progress once, via `learnerView`, and passes it down. Do not fetch
   viewed lessons, module progress or the course summary separately.
-- **Outbound HTTP goes through `internal/httpx`.** It carries the timeouts
+- **Outbound HTTP goes through the shared `internal/httpx`.** It carries the timeouts
   and the shared connection pool. `http.DefaultClient` has neither: no
   timeout at all, and two idle connections per host.
 - **Large results stream.** CSV exports write rows as they are read

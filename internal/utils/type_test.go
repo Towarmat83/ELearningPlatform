@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestSplitTrimmedCommaList verifies comma splitting, whitespace trimming,
+// and empty-entry removal.
 func TestSplitTrimmedCommaList(t *testing.T) {
 	t.Parallel()
 

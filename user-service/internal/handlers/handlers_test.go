@@ -4874,3 +4874,193 @@ func TestRemoveGroupMember_DBError(t *testing.T) {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
 }
+
+// ── splitNonEmpty ─────────────────────────────────────────────────────────────
+
+// TestSplitNonEmpty_Empty verifies that an empty string returns nil.
+func TestSplitNonEmpty_Empty(t *testing.T) {
+	t.Parallel()
+
+	if got := splitNonEmpty(""); got != nil {
+		t.Errorf("want nil, got %v", got)
+	}
+}
+
+// TestSplitNonEmpty_Single verifies that a single token is returned correctly.
+func TestSplitNonEmpty_Single(t *testing.T) {
+	t.Parallel()
+
+	got := splitNonEmpty("admins")
+	if len(got) != 1 || got[0] != "admins" {
+		t.Errorf("want [admins], got %v", got)
+	}
+}
+
+// TestSplitNonEmpty_Multiple verifies multiple tokens are split and trimmed.
+func TestSplitNonEmpty_Multiple(t *testing.T) {
+	t.Parallel()
+
+	got := splitNonEmpty("admins,seanergy-admins, ops ")
+	want := []string{"admins", "seanergy-admins", "ops"}
+
+	if len(got) != len(want) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+
+	for i, v := range want {
+		if got[i] != v {
+			t.Errorf("index %d: want %q, got %q", i, v, got[i])
+		}
+	}
+}
+
+// TestSplitNonEmpty_OnlyCommas verifies that a string of commas returns nil.
+func TestSplitNonEmpty_OnlyCommas(t *testing.T) {
+	t.Parallel()
+
+	if got := splitNonEmpty(",,,"); got != nil {
+		t.Errorf("want nil, got %v", got)
+	}
+}
+
+// ── isMemberOfAny ─────────────────────────────────────────────────────────────
+
+// TestIsMemberOfAny_Match verifies a match is found when groups overlap.
+func TestIsMemberOfAny_Match(t *testing.T) {
+	t.Parallel()
+
+	if !isMemberOfAny([]string{"dev", "admins"}, []string{"admins", "ops"}) {
+		t.Error("expected match")
+	}
+}
+
+// TestIsMemberOfAny_NoMatch verifies no match when groups are disjoint.
+func TestIsMemberOfAny_NoMatch(t *testing.T) {
+	t.Parallel()
+
+	if isMemberOfAny([]string{"dev", "qa"}, []string{"admins", "ops"}) {
+		t.Error("expected no match")
+	}
+}
+
+// TestIsMemberOfAny_EmptyGroups verifies that nil groups never match.
+func TestIsMemberOfAny_EmptyGroups(t *testing.T) {
+	t.Parallel()
+
+	if isMemberOfAny(nil, []string{"admins"}) {
+		t.Error("expected no match with empty groups")
+	}
+}
+
+// TestIsMemberOfAny_EmptyTargets verifies that nil targets never match.
+func TestIsMemberOfAny_EmptyTargets(t *testing.T) {
+	t.Parallel()
+
+	if isMemberOfAny([]string{"admins"}, nil) {
+		t.Error("expected no match with empty targets")
+	}
+}
+
+// ── completeSSOLogin admin group mapping ──────────────────────────────────────
+
+// TestCompleteSSOLogin_AdminGroupGrantsAdminRole verifies a user in an admin
+// SSO group receives the admin role on login.
+func TestCompleteSSOLogin_AdminGroupGrantsAdminRole(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"admin-grp@test.com", "Admin Grp", nil, nil,
+		"oidc", "oidc-sub-admingrp",
+		[]string{"seanergy-admins"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role != groupsRoleAdmin {
+		t.Errorf("want role %q, got %q", groupsRoleAdmin, resp.User.Role)
+	}
+}
+
+// TestCompleteSSOLogin_NonAdminGroupKeepsStudentRole verifies student role
+// is kept when groups do not match any admin group.
+func TestCompleteSSOLogin_NonAdminGroupKeepsStudentRole(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"dev-grp@test.com", "Dev Grp", nil, nil,
+		"oidc", "oidc-sub-devgrp",
+		[]string{"dev"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role == groupsRoleAdmin {
+		t.Errorf("expected non-admin role, got admin")
+	}
+}
+
+// TestCompleteSSOLogin_NilGroupAdminsHasNoEffect verifies nil groupAdmins
+// leaves role assignment unaffected.
+func TestCompleteSSOLogin_NilGroupAdminsHasNoEffect(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"nilgrp@test.com", "Nil Grp", nil, nil,
+		"oidc", "oidc-sub-nilgrp",
+		[]string{"seanergy-admins"},
+		nil,
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role == groupsRoleAdmin {
+		t.Errorf("expected no admin promotion when groupAdmins is nil")
+	}
+}

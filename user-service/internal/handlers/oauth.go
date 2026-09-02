@@ -764,15 +764,15 @@ func sanitizeUsername(name string) string {
 	return builder.String()
 }
 
-// splitNonEmpty splits str by sep and returns only non-empty trimmed tokens.
-func splitNonEmpty(str, sep string) []string {
+// splitNonEmpty splits str by comma and returns only non-empty trimmed tokens.
+func splitNonEmpty(str string) []string {
 	if str == "" {
 		return nil
 	}
 
 	var out []string
 
-	for part := range strings.SplitSeq(str, sep) {
+	for part := range strings.SplitSeq(str, ",") {
 		if t := strings.TrimSpace(part); t != "" {
 			out = append(out, t)
 		}

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/genesary/pupitre/internal/httpx"
+	"github.com/genesary/pupitre/internal/utils"
 	"github.com/genesary/pupitre/user-service/internal/repository"
 )
 
@@ -47,7 +48,7 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 		ClientID:           repository.ReadSetting(ctx, s.Repos.Settings, "oidc_client_id", ""),
 		ClientSecret:       repository.ReadSetting(ctx, s.Repos.Settings, "oidc_client_secret", ""),
 		GroupClaim:         repository.ReadSetting(ctx, s.Repos.Settings, "oidc_group_claim", "groups"),
-		GroupAdmins:        splitNonEmpty(repository.ReadSetting(ctx, s.Repos.Settings, "oidc_group_admins", "")),
+		GroupAdmins:        utils.SplitTrimmedCommaList(repository.ReadSetting(ctx, s.Repos.Settings, "oidc_group_admins", "")),
 		RedirectBase:       repository.ReadSetting(ctx, s.Repos.Settings, "oidc_redirect_base", s.Config.OAuthRedirectBase),
 		BrowserBaseURL:     repository.ReadSetting(ctx, s.Repos.Settings, "oidc_browser_base_url", ""),
 		InsecureSkipVerify: repository.ReadSetting(ctx, s.Repos.Settings, "oidc_insecure_skip_verify", "false") == authSettingTrue,
@@ -198,11 +199,7 @@ func oidcGroupsFromClaims(claims map[string]any, groupClaim string) []string {
 			}
 		}
 	case string:
-		for group := range strings.SplitSeq(rawValue, ",") {
-			if group = strings.TrimSpace(group); group != "" {
-				groups = append(groups, group)
-			}
-		}
+		groups = utils.SplitTrimmedCommaList(rawValue)
 	}
 
 	return groups

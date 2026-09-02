@@ -4875,54 +4875,6 @@ func TestRemoveGroupMember_DBError(t *testing.T) {
 	}
 }
 
-// ── splitNonEmpty ─────────────────────────────────────────────────────────────
-
-// TestSplitNonEmpty_Empty verifies that an empty string returns nil.
-func TestSplitNonEmpty_Empty(t *testing.T) {
-	t.Parallel()
-
-	if got := splitNonEmpty(""); got != nil {
-		t.Errorf("want nil, got %v", got)
-	}
-}
-
-// TestSplitNonEmpty_Single verifies that a single token is returned correctly.
-func TestSplitNonEmpty_Single(t *testing.T) {
-	t.Parallel()
-
-	got := splitNonEmpty("admins")
-	if len(got) != 1 || got[0] != "admins" {
-		t.Errorf("want [admins], got %v", got)
-	}
-}
-
-// TestSplitNonEmpty_Multiple verifies multiple tokens are split and trimmed.
-func TestSplitNonEmpty_Multiple(t *testing.T) {
-	t.Parallel()
-
-	got := splitNonEmpty("admins,seanergy-admins, ops ")
-	want := []string{"admins", "seanergy-admins", "ops"}
-
-	if len(got) != len(want) {
-		t.Fatalf("want %v, got %v", want, got)
-	}
-
-	for i, v := range want {
-		if got[i] != v {
-			t.Errorf("index %d: want %q, got %q", i, v, got[i])
-		}
-	}
-}
-
-// TestSplitNonEmpty_OnlyCommas verifies that a string of commas returns nil.
-func TestSplitNonEmpty_OnlyCommas(t *testing.T) {
-	t.Parallel()
-
-	if got := splitNonEmpty(",,,"); got != nil {
-		t.Errorf("want nil, got %v", got)
-	}
-}
-
 // ── isMemberOfAny ─────────────────────────────────────────────────────────────
 
 // TestIsMemberOfAny_Match verifies a match is found when groups overlap.

@@ -764,23 +764,6 @@ func sanitizeUsername(name string) string {
 	return builder.String()
 }
 
-// splitNonEmpty splits str by comma and returns only non-empty trimmed tokens.
-func splitNonEmpty(str string) []string {
-	if str == "" {
-		return nil
-	}
-
-	var out []string
-
-	for part := range strings.SplitSeq(str, ",") {
-		if t := strings.TrimSpace(part); t != "" {
-			out = append(out, t)
-		}
-	}
-
-	return out
-}
-
 // isMemberOfAny reports whether any element of groups appears in targets.
 func isMemberOfAny(groups, targets []string) bool {
 	for _, g := range groups {

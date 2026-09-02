@@ -29,6 +29,7 @@ const (
 	settingKeyOIDCClientID               = "oidc_client_id"
 	settingKeyOIDCScopes                 = "oidc_scopes"
 	settingKeyOIDCGroupClaim             = "oidc_group_claim"
+	settingKeyOIDCGroupAdmins            = "oidc_group_admins"
 	settingKeyLDAPServerURL              = "ldap_server_url"
 	settingKeyLDAPBindDN                 = "ldap_bind_dn"
 	settingKeyLDAPUserBaseDN             = "ldap_user_base_dn"
@@ -74,6 +75,7 @@ var allowedSettingKeys = &keySet{ //nolint:gochecknoglobals // handler-wide allo
 		settingKeyOIDCClientSecret:   {},
 		settingKeyOIDCScopes:         {},
 		settingKeyOIDCGroupClaim:     {},
+		settingKeyOIDCGroupAdmins:    {},
 		// LDAP
 		settingKeyLDAPEnabled:      {},
 		settingKeyLDAPServerURL:    {},

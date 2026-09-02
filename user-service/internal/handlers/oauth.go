@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -646,9 +647,12 @@ func upsertSSOUser(
 // completeSSOLogin provisions/refreshes the local user for an SSO identity,
 // syncs their group membership and role, issues a JWT, and writes the auth
 // response. Shared by every SSO login flow (OIDC, LDAP, ...).
+// groupAdmins is an optional list of SSO group names that automatically
+// grant the admin role; only applied when GroupClaim is configured.
 func (s *State) completeSSOLogin(
 	ctx context.Context, writer http.ResponseWriter,
 	email, displayName string, avatarURL, bio *string, provider, providerUserID string, groups []string,
+	groupAdmins []string,
 ) {
 	user, err := upsertSSOUser(ctx, s.Repos.Users, email, displayName, avatarURL, bio, provider, providerUserID)
 	if err != nil {
@@ -661,6 +665,10 @@ func (s *State) completeSSOLogin(
 	role, err := syncGroupsAndDeriveRole(ctx, s.Repos.Groups, user.ID, groups, provider)
 	if err != nil {
 		role = user.Role
+	}
+
+	if len(groupAdmins) > 0 && isMemberOfAny(groups, groupAdmins) {
+		role = groupsRoleAdmin
 	}
 
 	addToDefaultGroup(ctx, s.Repos.Groups, user.ID)
@@ -754,4 +762,32 @@ func sanitizeUsername(name string) string {
 	}
 
 	return builder.String()
+}
+
+// splitNonEmpty splits str by sep and returns only non-empty trimmed tokens.
+func splitNonEmpty(str, sep string) []string {
+	if str == "" {
+		return nil
+	}
+
+	var out []string
+
+	for part := range strings.SplitSeq(str, sep) {
+		if t := strings.TrimSpace(part); t != "" {
+			out = append(out, t)
+		}
+	}
+
+	return out
+}
+
+// isMemberOfAny reports whether any element of groups appears in targets.
+func isMemberOfAny(groups, targets []string) bool {
+	for _, g := range groups {
+		if slices.Contains(targets, g) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -31,9 +31,10 @@ type oidcSettings struct {
 	ClientSecret       string
 	Scopes             []string
 	GroupClaim         string
-	RedirectBase       string // overrides config.OAuthRedirectBase for redirect_uri sent to the provider
-	BrowserBaseURL     string // optional: rewrite internal base URL to this for browser redirects
-	InsecureSkipVerify bool   // skip TLS verification for custom CA / self-signed OIDC provider
+	GroupAdmins        []string // SSO groups that automatically grant admin role
+	RedirectBase       string   // overrides config.OAuthRedirectBase for redirect_uri sent to the provider
+	BrowserBaseURL     string   // optional: rewrite internal base URL to this for browser redirects
+	InsecureSkipVerify bool     // skip TLS verification for custom CA / self-signed OIDC provider
 }
 
 // loadOIDCSettings reads OIDC configuration from platform settings and
@@ -46,6 +47,7 @@ func (s *State) loadOIDCSettings(ctx context.Context) (oidcSettings, error) {
 		ClientID:           repository.ReadSetting(ctx, s.Repos.Settings, "oidc_client_id", ""),
 		ClientSecret:       repository.ReadSetting(ctx, s.Repos.Settings, "oidc_client_secret", ""),
 		GroupClaim:         repository.ReadSetting(ctx, s.Repos.Settings, "oidc_group_claim", "groups"),
+		GroupAdmins:        splitNonEmpty(repository.ReadSetting(ctx, s.Repos.Settings, "oidc_group_admins", ""), ","),
 		RedirectBase:       repository.ReadSetting(ctx, s.Repos.Settings, "oidc_redirect_base", s.Config.OAuthRedirectBase),
 		BrowserBaseURL:     repository.ReadSetting(ctx, s.Repos.Settings, "oidc_browser_base_url", ""),
 		InsecureSkipVerify: repository.ReadSetting(ctx, s.Repos.Settings, "oidc_insecure_skip_verify", "false") == authSettingTrue,
@@ -334,5 +336,5 @@ func (s *State) OIDCCallback(writer http.ResponseWriter, request *http.Request) 
 	bio := oidcBioFromClaims(claims)
 	groups := oidcGroupsFromClaims(claims, cfg.GroupClaim)
 
-	s.completeSSOLogin(ctx, writer, email, name, avatarURL, bio, oidcProviderKey, sub, groups)
+	s.completeSSOLogin(ctx, writer, email, name, avatarURL, bio, oidcProviderKey, sub, groups, cfg.GroupAdmins)
 }

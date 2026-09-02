@@ -48,6 +48,7 @@ func SeedOIDC(ctx context.Context, settings repository.SettingRepository, cfg *c
 		settingKeyOIDCClientSecret: oidcCfg.ResolveClientSecret(),
 		"oidc_scopes":              oidcCfg.Scopes,
 		"oidc_group_claim":         oidcCfg.GroupClaim,
+		"oidc_group_admins":        oidcCfg.GroupAdmins,
 		"oidc_redirect_base":       oidcCfg.RedirectBase,
 		"oidc_browser_base_url":    oidcCfg.BrowserBaseURL,
 	}

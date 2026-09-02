@@ -72,6 +72,7 @@ type OIDCBootstrap struct {
 	ClientSecretFile   string // path to a mounted secret file (takes priority)
 	Scopes             string
 	GroupClaim         string
+	GroupAdmins        string // comma-separated list of SSO groups that map to admin role
 	RedirectBase       string
 	BrowserBaseURL     string
 	InsecureSkipVerify bool // skip TLS certificate verification (custom CA / self-signed)
@@ -326,6 +327,7 @@ func loadOIDCBootstrap() OIDCBootstrap {
 		ClientSecretFile:   os.Getenv("OIDC_CLIENT_SECRET_FILE"),
 		Scopes:             os.Getenv("OIDC_SCOPES"),
 		GroupClaim:         os.Getenv("OIDC_GROUP_CLAIM"),
+		GroupAdmins:        os.Getenv("OIDC_GROUP_ADMINS"),
 		RedirectBase:       os.Getenv("OIDC_REDIRECT_BASE"),
 		BrowserBaseURL:     os.Getenv("OIDC_BROWSER_BASE_URL"),
 		InsecureSkipVerify: os.Getenv("OIDC_INSECURE_SKIP_VERIFY") == envValueTrue,

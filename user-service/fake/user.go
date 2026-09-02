@@ -43,6 +43,10 @@ type UserRepository struct {
 	// only, on top of Err — kept separate so tests can simulate FindByEmail
 	// succeeding right before LinkProviderIdentity fails.
 	LinkProviderIdentityErr error
+	// UpdateSSORoleErr, when set, is returned by UpdateSSORole only, on top of
+	// Err — kept separate so tests can simulate the SSO upsert succeeding right
+	// before the group-admin role synchronization fails.
+	UpdateSSORoleErr error
 }
 
 // NewUserRepository builds a fake UserRepository seeded with users.
@@ -356,6 +360,31 @@ func (f *UserRepository) LinkProviderIdentity(
 
 	f.users[idx].UpdatedAt = time.Now()
 
+	cp := f.users[idx]
+
+	return &cp, nil
+}
+
+// UpdateSSORole synchronizes a role derived from an SSO identity provider.
+func (f *UserRepository) UpdateSSORole(_ context.Context, userID uuid.UUID, role string) (*models.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.Err != nil {
+		return nil, f.Err
+	}
+
+	if f.UpdateSSORoleErr != nil {
+		return nil, f.UpdateSSORoleErr
+	}
+
+	idx := f.findIndexByID(userID)
+	if idx < 0 {
+		return nil, repository.ErrUserNotFound
+	}
+
+	f.users[idx].Role = role
+	f.users[idx].UpdatedAt = time.Now()
 	cp := f.users[idx]
 
 	return &cp, nil

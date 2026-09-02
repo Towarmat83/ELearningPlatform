@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -646,9 +647,13 @@ func upsertSSOUser(
 // completeSSOLogin provisions/refreshes the local user for an SSO identity,
 // syncs their group membership and role, issues a JWT, and writes the auth
 // response. Shared by every SSO login flow (OIDC, LDAP, ...).
+// groupAdmins is an optional list of SSO group names that authoritatively
+// determines the role for this login. When configured, an identity outside
+// those groups is a student even if its stored role was previously admin.
 func (s *State) completeSSOLogin(
 	ctx context.Context, writer http.ResponseWriter,
 	email, displayName string, avatarURL, bio *string, provider, providerUserID string, groups []string,
+	groupAdmins []string,
 ) {
 	user, err := upsertSSOUser(ctx, s.Repos.Users, email, displayName, avatarURL, bio, provider, providerUserID)
 	if err != nil {
@@ -661,6 +666,32 @@ func (s *State) completeSSOLogin(
 	role, err := syncGroupsAndDeriveRole(ctx, s.Repos.Groups, user.ID, groups, provider)
 	if err != nil {
 		role = user.Role
+	}
+
+	if len(groupAdmins) > 0 {
+		role = groupsRoleStudent
+		if isMemberOfAny(groups, groupAdmins) {
+			role = groupsRoleAdmin
+		}
+
+		userID, parseErr := uuid.Parse(user.ID)
+		if parseErr != nil {
+			zap.L().Error("parse SSO user ID for role synchronization", zap.Error(parseErr))
+			s.Error(writer, http.StatusInternalServerError, "failed to synchronize user role from SSO")
+
+			return
+		}
+
+		updatedUser, updateErr := s.Repos.Users.UpdateSSORole(ctx, userID, role)
+		if updateErr != nil {
+			zap.L().Error("synchronize OIDC group-admin role failed", zap.Error(updateErr))
+			s.Error(writer, http.StatusInternalServerError, "failed to synchronize user role from SSO")
+
+			return
+		}
+
+		updatedRow := toUserPublicRow(updatedUser)
+		user = &updatedRow
 	}
 
 	addToDefaultGroup(ctx, s.Repos.Groups, user.ID)
@@ -754,4 +785,15 @@ func sanitizeUsername(name string) string {
 	}
 
 	return builder.String()
+}
+
+// isMemberOfAny reports whether any element of groups appears in targets.
+func isMemberOfAny(groups, targets []string) bool {
+	for _, g := range groups {
+		if slices.Contains(targets, g) {
+			return true
+		}
+	}
+
+	return false
 }

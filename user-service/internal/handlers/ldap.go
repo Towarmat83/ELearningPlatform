@@ -106,7 +106,7 @@ func (s *State) LDAPLogin(writer http.ResponseWriter, httpReq *http.Request) {
 	name := ldapDisplayName(entry, req.Email)
 	groups := ldapUserGroups(conn, cfg, entry.DN)
 
-	s.completeSSOLogin(ctx, writer, req.Email, name, nil, nil, "ldap", entry.DN, groups)
+	s.completeSSOLogin(ctx, writer, req.Email, name, nil, nil, "ldap", entry.DN, groups, nil)
 }
 
 // dialLDAPServer connects to the LDAP server and binds the service account

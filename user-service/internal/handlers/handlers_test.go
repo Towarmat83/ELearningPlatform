@@ -4874,3 +4874,254 @@ func TestRemoveGroupMember_DBError(t *testing.T) {
 		t.Errorf("want 500, got %d", rec.Code)
 	}
 }
+
+// ── isMemberOfAny ─────────────────────────────────────────────────────────────
+
+// TestIsMemberOfAny_Match verifies a match is found when groups overlap.
+func TestIsMemberOfAny_Match(t *testing.T) {
+	t.Parallel()
+
+	if !isMemberOfAny([]string{"dev", "admins"}, []string{"admins", "ops"}) {
+		t.Error("expected match")
+	}
+}
+
+// TestIsMemberOfAny_NoMatch verifies no match when groups are disjoint.
+func TestIsMemberOfAny_NoMatch(t *testing.T) {
+	t.Parallel()
+
+	if isMemberOfAny([]string{"dev", "qa"}, []string{"admins", "ops"}) {
+		t.Error("expected no match")
+	}
+}
+
+// TestIsMemberOfAny_EmptyGroups verifies that nil groups never match.
+func TestIsMemberOfAny_EmptyGroups(t *testing.T) {
+	t.Parallel()
+
+	if isMemberOfAny(nil, []string{"admins"}) {
+		t.Error("expected no match with empty groups")
+	}
+}
+
+// TestIsMemberOfAny_EmptyTargets verifies that nil targets never match.
+func TestIsMemberOfAny_EmptyTargets(t *testing.T) {
+	t.Parallel()
+
+	if isMemberOfAny([]string{"admins"}, nil) {
+		t.Error("expected no match with empty targets")
+	}
+}
+
+// ── completeSSOLogin admin group mapping ──────────────────────────────────────
+
+// TestCompleteSSOLogin_AdminGroupGrantsAdminRole verifies a user in an admin
+// SSO group receives the admin role on login.
+func TestCompleteSSOLogin_AdminGroupGrantsAdminRole(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"admin-grp@test.com", "Admin Grp", nil, nil,
+		"oidc", "oidc-sub-admingrp",
+		[]string{"seanergy-admins"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role != groupsRoleAdmin {
+		t.Errorf("want role %q, got %q", groupsRoleAdmin, resp.User.Role)
+	}
+
+	persisted, err := repos.Users.FindByEmail(ctx, "admin-grp@test.com")
+	if err != nil {
+		t.Fatalf("find persisted user: %v", err)
+	}
+
+	if persisted.Role != groupsRoleAdmin {
+		t.Errorf("persisted role = %q, want %q", persisted.Role, groupsRoleAdmin)
+	}
+}
+
+// TestCompleteSSOLogin_NonAdminGroupRevokesStoredAdminRole verifies an OIDC
+// group-admin configuration is authoritative and revokes a prior admin role.
+func TestCompleteSSOLogin_NonAdminGroupRevokesStoredAdminRole(t *testing.T) {
+	t.Parallel()
+
+	providerUserID := "oidc-sub-devgrp"
+	repos := fake.NewRepositories()
+	repos.Users = fake.NewUserRepository(models.User{
+		ID:             uuid.New(),
+		Username:       "dev-grp",
+		Email:          "dev-grp@test.com",
+		Role:           groupsRoleAdmin,
+		IsActive:       true,
+		AuthProvider:   oidcProviderKey,
+		ProviderUserID: &providerUserID,
+	})
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"dev-grp@test.com", "Dev Grp", nil, nil,
+		"oidc", "oidc-sub-devgrp",
+		[]string{"dev"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role != groupsRoleStudent {
+		t.Errorf("response role = %q, want %q", resp.User.Role, groupsRoleStudent)
+	}
+
+	persisted, err := repos.Users.FindByEmail(ctx, "dev-grp@test.com")
+	if err != nil {
+		t.Fatalf("find persisted user: %v", err)
+	}
+
+	if persisted.Role != groupsRoleStudent {
+		t.Errorf("persisted role = %q, want %q", persisted.Role, groupsRoleStudent)
+	}
+}
+
+// TestCompleteSSOLogin_NilGroupAdminsHasNoEffect verifies nil groupAdmins
+// leaves role assignment unaffected.
+func TestCompleteSSOLogin_NilGroupAdminsHasNoEffect(t *testing.T) {
+	t.Parallel()
+
+	repos := fake.NewRepositories()
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"nilgrp@test.com", "Nil Grp", nil, nil,
+		"oidc", "oidc-sub-nilgrp",
+		[]string{"seanergy-admins"},
+		nil,
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role == groupsRoleAdmin {
+		t.Errorf("expected no admin promotion when groupAdmins is nil")
+	}
+}
+
+// TestCompleteSSOLogin_AdminGroupPromotesStoredStudent verifies an existing
+// student whose OIDC groups now match an admin group is promoted and the new
+// role is persisted, not just reflected in the response.
+func TestCompleteSSOLogin_AdminGroupPromotesStoredStudent(t *testing.T) {
+	t.Parallel()
+
+	providerUserID := "oidc-sub-promote"
+	repos := fake.NewRepositories()
+	repos.Users = fake.NewUserRepository(models.User{
+		ID:             uuid.New(),
+		Username:       "promote-me",
+		Email:          "promote-me@test.com",
+		Role:           groupsRoleStudent,
+		IsActive:       true,
+		AuthProvider:   oidcProviderKey,
+		ProviderUserID: &providerUserID,
+	})
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"promote-me@test.com", "Promote Me", nil, nil,
+		oidcProviderKey, providerUserID,
+		[]string{"seanergy-admins"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role != groupsRoleAdmin {
+		t.Errorf("response role = %q, want %q", resp.User.Role, groupsRoleAdmin)
+	}
+
+	persisted, err := repos.Users.FindByEmail(ctx, "promote-me@test.com")
+	if err != nil {
+		t.Fatalf("find persisted user: %v", err)
+	}
+
+	if persisted.Role != groupsRoleAdmin {
+		t.Errorf("persisted role = %q, want %q", persisted.Role, groupsRoleAdmin)
+	}
+}
+
+// TestCompleteSSOLogin_RoleSyncFailureReturns500 verifies a failure while
+// persisting the group-admin role aborts the login with a 500 rather than
+// issuing a token with an unsynchronized role.
+func TestCompleteSSOLogin_RoleSyncFailureReturns500(t *testing.T) {
+	t.Parallel()
+
+	users := fake.NewUserRepository()
+	users.UpdateSSORoleErr = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.Users = users
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"sync-fail@test.com", "Sync Fail", nil, nil,
+		oidcProviderKey, "oidc-sub-syncfail",
+		[]string{"seanergy-admins"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

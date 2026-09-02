@@ -8,6 +8,7 @@
 package repository_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -110,6 +111,23 @@ func TestUserRepository_SSOLinking(t *testing.T) { //nolint:paralleltest // shar
 
 	if refreshed.AvatarURL == nil || *refreshed.AvatarURL != avatar {
 		t.Errorf("avatar should be preserved as %q, got %v", avatar, refreshed.AvatarURL)
+	}
+
+	// UpdateSSORole overwrites the stored role (group-admin sync is
+	// authoritative) and returns the updated row.
+	promoted, err := repo.UpdateSSORole(ctx, id, "admin")
+	if err != nil || promoted.Role != "admin" {
+		t.Fatalf("UpdateSSORole = %+v, %v", promoted, err)
+	}
+
+	reloaded, err := repo.FindByEmail(ctx, "dave@t.test")
+	if err != nil || reloaded.Role != "admin" {
+		t.Fatalf("role not persisted: %+v, %v", reloaded, err)
+	}
+
+	_, err = repo.UpdateSSORole(ctx, uuid.New(), "admin")
+	if !errors.Is(err, repository.ErrUserNotFound) {
+		t.Errorf("UpdateSSORole unknown id = %v, want ErrUserNotFound", err)
 	}
 }
 

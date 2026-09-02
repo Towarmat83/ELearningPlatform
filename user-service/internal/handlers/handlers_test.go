@@ -4947,14 +4947,33 @@ func TestCompleteSSOLogin_AdminGroupGrantsAdminRole(t *testing.T) {
 	if resp.User.Role != groupsRoleAdmin {
 		t.Errorf("want role %q, got %q", groupsRoleAdmin, resp.User.Role)
 	}
+
+	persisted, err := repos.Users.FindByEmail(ctx, "admin-grp@test.com")
+	if err != nil {
+		t.Fatalf("find persisted user: %v", err)
+	}
+
+	if persisted.Role != groupsRoleAdmin {
+		t.Errorf("persisted role = %q, want %q", persisted.Role, groupsRoleAdmin)
+	}
 }
 
-// TestCompleteSSOLogin_NonAdminGroupKeepsStudentRole verifies student role
-// is kept when groups do not match any admin group.
-func TestCompleteSSOLogin_NonAdminGroupKeepsStudentRole(t *testing.T) {
+// TestCompleteSSOLogin_NonAdminGroupRevokesStoredAdminRole verifies an OIDC
+// group-admin configuration is authoritative and revokes a prior admin role.
+func TestCompleteSSOLogin_NonAdminGroupRevokesStoredAdminRole(t *testing.T) {
 	t.Parallel()
 
+	providerUserID := "oidc-sub-devgrp"
 	repos := fake.NewRepositories()
+	repos.Users = fake.NewUserRepository(models.User{
+		ID:             uuid.New(),
+		Username:       "dev-grp",
+		Email:          "dev-grp@test.com",
+		Role:           groupsRoleAdmin,
+		IsActive:       true,
+		AuthProvider:   oidcProviderKey,
+		ProviderUserID: &providerUserID,
+	})
 	s := newStateWithRepos(repos)
 	ctx := context.Background()
 
@@ -4978,8 +4997,17 @@ func TestCompleteSSOLogin_NonAdminGroupKeepsStudentRole(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.User.Role == groupsRoleAdmin {
-		t.Errorf("expected non-admin role, got admin")
+	if resp.User.Role != groupsRoleStudent {
+		t.Errorf("response role = %q, want %q", resp.User.Role, groupsRoleStudent)
+	}
+
+	persisted, err := repos.Users.FindByEmail(ctx, "dev-grp@test.com")
+	if err != nil {
+		t.Fatalf("find persisted user: %v", err)
+	}
+
+	if persisted.Role != groupsRoleStudent {
+		t.Errorf("persisted role = %q, want %q", persisted.Role, groupsRoleStudent)
 	}
 }
 
@@ -5014,5 +5042,86 @@ func TestCompleteSSOLogin_NilGroupAdminsHasNoEffect(t *testing.T) {
 
 	if resp.User.Role == groupsRoleAdmin {
 		t.Errorf("expected no admin promotion when groupAdmins is nil")
+	}
+}
+
+// TestCompleteSSOLogin_AdminGroupPromotesStoredStudent verifies an existing
+// student whose OIDC groups now match an admin group is promoted and the new
+// role is persisted, not just reflected in the response.
+func TestCompleteSSOLogin_AdminGroupPromotesStoredStudent(t *testing.T) {
+	t.Parallel()
+
+	providerUserID := "oidc-sub-promote"
+	repos := fake.NewRepositories()
+	repos.Users = fake.NewUserRepository(models.User{
+		ID:             uuid.New(),
+		Username:       "promote-me",
+		Email:          "promote-me@test.com",
+		Role:           groupsRoleStudent,
+		IsActive:       true,
+		AuthProvider:   oidcProviderKey,
+		ProviderUserID: &providerUserID,
+	})
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"promote-me@test.com", "Promote Me", nil, nil,
+		oidcProviderKey, providerUserID,
+		[]string{"seanergy-admins"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp authResponse
+
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.User.Role != groupsRoleAdmin {
+		t.Errorf("response role = %q, want %q", resp.User.Role, groupsRoleAdmin)
+	}
+
+	persisted, err := repos.Users.FindByEmail(ctx, "promote-me@test.com")
+	if err != nil {
+		t.Fatalf("find persisted user: %v", err)
+	}
+
+	if persisted.Role != groupsRoleAdmin {
+		t.Errorf("persisted role = %q, want %q", persisted.Role, groupsRoleAdmin)
+	}
+}
+
+// TestCompleteSSOLogin_RoleSyncFailureReturns500 verifies a failure while
+// persisting the group-admin role aborts the login with a 500 rather than
+// issuing a token with an unsynchronized role.
+func TestCompleteSSOLogin_RoleSyncFailureReturns500(t *testing.T) {
+	t.Parallel()
+
+	users := fake.NewUserRepository()
+	users.UpdateSSORoleErr = errors.New("db down")
+	repos := fake.NewRepositories()
+	repos.Users = users
+	s := newStateWithRepos(repos)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	s.completeSSOLogin(
+		ctx, rec,
+		"sync-fail@test.com", "Sync Fail", nil, nil,
+		oidcProviderKey, "oidc-sub-syncfail",
+		[]string{"seanergy-admins"},
+		[]string{"seanergy-admins"},
+	)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

@@ -647,8 +647,9 @@ func upsertSSOUser(
 // completeSSOLogin provisions/refreshes the local user for an SSO identity,
 // syncs their group membership and role, issues a JWT, and writes the auth
 // response. Shared by every SSO login flow (OIDC, LDAP, ...).
-// groupAdmins is an optional list of SSO group names that automatically
-// grant the admin role; only applied when GroupClaim is configured.
+// groupAdmins is an optional list of SSO group names that authoritatively
+// determines the role for this login. When configured, an identity outside
+// those groups is a student even if its stored role was previously admin.
 func (s *State) completeSSOLogin(
 	ctx context.Context, writer http.ResponseWriter,
 	email, displayName string, avatarURL, bio *string, provider, providerUserID string, groups []string,
@@ -667,8 +668,30 @@ func (s *State) completeSSOLogin(
 		role = user.Role
 	}
 
-	if len(groupAdmins) > 0 && isMemberOfAny(groups, groupAdmins) {
-		role = groupsRoleAdmin
+	if len(groupAdmins) > 0 {
+		role = groupsRoleStudent
+		if isMemberOfAny(groups, groupAdmins) {
+			role = groupsRoleAdmin
+		}
+
+		userID, parseErr := uuid.Parse(user.ID)
+		if parseErr != nil {
+			zap.L().Error("parse SSO user ID for role synchronization", zap.Error(parseErr))
+			s.Error(writer, http.StatusInternalServerError, "failed to synchronize user role from SSO")
+
+			return
+		}
+
+		updatedUser, updateErr := s.Repos.Users.UpdateSSORole(ctx, userID, role)
+		if updateErr != nil {
+			zap.L().Error("synchronize OIDC group-admin role failed", zap.Error(updateErr))
+			s.Error(writer, http.StatusInternalServerError, "failed to synchronize user role from SSO")
+
+			return
+		}
+
+		updatedRow := toUserPublicRow(updatedUser)
+		user = &updatedRow
 	}
 
 	addToDefaultGroup(ctx, s.Repos.Groups, user.ID)

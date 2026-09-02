@@ -104,6 +104,7 @@ type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 	RefreshSSOProfile(ctx context.Context, id uuid.UUID, avatarURL, bio *string) (*models.User, error)
 	LinkProviderIdentity(ctx context.Context, id uuid.UUID, provider, providerUserID string, avatarURL, bio *string) (*models.User, error)
+	UpdateSSORole(ctx context.Context, id uuid.UUID, role string) (*models.User, error)
 
 	// Admin
 	CountByRole(ctx context.Context, role string) (int64, error)
@@ -436,6 +437,23 @@ func (r *gormUserRepository) GetForAdmin(ctx context.Context, userID uuid.UUID) 
 	}
 
 	return &row, nil
+}
+
+// UpdateSSORole synchronizes a role derived from an SSO identity provider.
+func (r *gormUserRepository) UpdateSSORole(ctx context.Context, userID uuid.UUID, role string) (*models.User, error) {
+	var user models.User
+
+	err := r.db.WithContext(ctx).Model(&user).Clauses(returningAll).
+		Where("id = ?", userID).Update("role", role).Error
+	if err != nil {
+		return nil, fmt.Errorf("update SSO role: %w", err)
+	}
+
+	if user.ID == uuid.Nil {
+		return nil, ErrUserNotFound
+	}
+
+	return &user, nil
 }
 
 // UpdateAdminFields updates the non-nil fields of the user identified by id

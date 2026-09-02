@@ -150,6 +150,8 @@ sso:
     clientSecret: "yyy"          # dev: rendered into the release Secret
     scopes: "openid email profile groups"
     groupClaim: "groups"
+    # Optional comma-separated groups authorized as platform admins.
+    groupAdmins: "pupitre-admins"
     # issuerURL: ""              # split-horizon: set when discovery URL ≠ token issuer
     # browserBaseURL: ""         # split-horizon: rewrite internal URL for browser redirects
     # redirectBase: ""           # per-OIDC override (defaults to sso.redirectBase)
@@ -178,6 +180,10 @@ ConfigMap.
   reset on the next restart/upgrade. Leave `sso.oidc.enabled=false` to manage OIDC
   purely from the admin UI.
 - Rotating the client secret requires a pod restart so the new value is re-seeded.
+- When `groupAdmins` is non-empty, it is authoritative for OIDC users: every
+  OIDC login synchronizes the stored role to `admin` for a matching group and
+  `student` otherwise. Removing a user from an admin group takes effect on
+  their next OIDC login; existing JWTs remain valid until they expire.
 
 **Keycloak client setup** (Clients → Create):
 

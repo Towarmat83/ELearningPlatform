@@ -2114,49 +2114,6 @@
                 }
             }
         },
-        "/api/courses/{slug}/lessons/{lessonSlug}/complete": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Progress"
-                ],
-                "summary": "Mark a lesson as complete",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Course slug",
-                        "name": "slug",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Lesson slug",
-                        "name": "lessonSlug",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/courses/{slug}/patterns": {
             "get": {
                 "security": [
@@ -3859,6 +3816,42 @@
                 }
             }
         },
+        "/internal/progress/course-summaries": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Internal"
+                ],
+                "summary": "Get aggregate progress for several courses at once (internal)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated course slugs",
+                        "name": "courseSlugs",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/internal/progress/course-summary": {
             "get": {
                 "produces": [
@@ -3967,6 +3960,41 @@
                 }
             }
         },
+        "/internal/progress/overview": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Internal"
+                ],
+                "summary": "Get a learner's full progress for one course (internal)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Course slug",
+                        "name": "courseSlug",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.progressOverviewResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/internal/progress/viewed": {
             "get": {
                 "produces": [
@@ -4070,6 +4098,58 @@
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.moduleProgressRow": {
+            "type": "object",
+            "properties": {
+                "attempts": {
+                    "type": "integer"
+                },
+                "bestScore": {
+                    "type": "integer"
+                },
+                "maxScore": {
+                    "type": "integer"
+                },
+                "moduleIndex": {
+                    "type": "integer"
+                },
+                "passed": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.progressOverviewResponse": {
+            "type": "object",
+            "properties": {
+                "enrolled": {
+                    "type": "boolean"
+                },
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.moduleProgressRow"
+                    }
+                },
+                "passedModules": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "totalScore": {
+                    "type": "integer"
+                },
+                "viewed": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "viewedCount": {
+                    "type": "integer"
                 }
             }
         },

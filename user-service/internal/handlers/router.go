@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"compress/gzip"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,6 +36,75 @@ const corsMaxAgeSeconds = 300
 // compressionLevel is the gzip level used for responses: level 5 is the
 // usual knee of the ratio/CPU curve for JSON and markdown.
 const compressionLevel = 5
+
+// minCompressBytes is the threshold below which responses are sent without
+// compression. Compressing tiny JSON payloads costs more than it saves and
+// can cause Content-Encoding mismatches in some dev proxies (e.g. Vite).
+const minCompressBytes = 1024
+
+// compressMW returns a middleware that gzip-compresses responses whose body
+// exceeds minCompressBytes. Smaller responses are forwarded as plain text so
+// that the Content-Encoding header is never set on them.
+func compressMW(level int) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+			if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+				next.ServeHTTP(writer, req)
+
+				return
+			}
+
+			bw := &bufResponseWriter{inner: writer, level: level}
+			next.ServeHTTP(bw, req)
+			bw.flush()
+		})
+	}
+}
+
+// bufResponseWriter buffers the response body so compressMW can decide
+// whether to gzip-compress it after seeing the full size.
+type bufResponseWriter struct {
+	inner  http.ResponseWriter
+	level  int
+	status int
+	buf    []byte
+}
+
+// Header returns the header map of the underlying ResponseWriter.
+func (b *bufResponseWriter) Header() http.Header { return b.inner.Header() }
+
+// WriteHeader records the HTTP status code; the actual write is deferred.
+func (b *bufResponseWriter) WriteHeader(status int) { b.status = status }
+
+// Write appends p to the internal buffer; the actual write to the wire is
+// deferred to flush so the total size is known before choosing compression.
+func (b *bufResponseWriter) Write(p []byte) (int, error) {
+	b.buf = append(b.buf, p...)
+
+	return len(p), nil
+}
+
+// flush writes the buffered response to the underlying writer, compressing it
+// when the body exceeds minCompressBytes.
+func (b *bufResponseWriter) flush() {
+	code := b.status
+	if code == 0 {
+		code = http.StatusOK
+	}
+
+	if len(b.buf) >= minCompressBytes {
+		b.inner.Header().Set("Content-Encoding", "gzip")
+		b.inner.Header().Del("Content-Length")
+		b.inner.WriteHeader(code)
+		gz, _ := gzip.NewWriterLevel(b.inner, b.level)
+		_, _ = gz.Write(b.buf)
+		_ = gz.Close()
+	} else {
+		b.inner.Header().Set("Content-Length", strconv.Itoa(len(b.buf)))
+		b.inner.WriteHeader(code)
+		_, _ = b.inner.Write(b.buf)
+	}
+}
 
 // Routing invariant: no path registered here may sit under a prefix that
 // course-service owns (/api/courses, /api/admin/courses).
@@ -74,8 +146,10 @@ func BuildRouter(state *State, cfg *config.Config, withLogger bool) *chi.Mux {
 	// Course markdown, module listings and CSV exports are all highly
 	// compressible text, and the clients are browsers on links this
 	// service does not control. Compressing costs a little CPU per
-	// response and saves the bulk of the bytes on the wire.
-	router.Use(chiMiddleware.Compress(compressionLevel))
+	// response and saves the bulk of the bytes on the wire. Responses
+	// below minCompressBytes are sent plain to avoid Content-Encoding
+	// mismatches in proxies that decompress but keep the header.
+	router.Use(compressMW(compressionLevel))
 	router.Use(chiMiddleware.RequestSize(maxRequestBodyBytes))
 	router.Use(corsHandler(cfg).Handler)
 
